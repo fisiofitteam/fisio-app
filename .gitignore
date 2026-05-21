@@ -1,0 +1,30 @@
+# Dependencias
+node_modules
+
+# Build
+.next
+out
+
+# Variables de entorno (NUNCA subir credenciales a git)
+.env
+.env.local
+.env.*.local
+
+# Bases de datos locales
+*.db
+*.db-journal
+prisma/dev.db
+prisma/dev.db-journal
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode
+.idea
+*.swp
+
+# Logs
+*.log
+npm-debug.log*

@@ -1,0 +1,6 @@
+{
+  "buildCommand": "npm run build:prod",
+  "installCommand": "npm install --include=dev",
+  "framework": "nextjs",
+  "regions": ["fra1"]
+}

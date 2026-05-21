@@ -1,0 +1,816 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Patient {
+  id              String   @id @default(cuid())
+  fullName        String
+  email           String?  @unique                  // para login con código de 6 dígitos
+  sport           String   @default("CrossFit")
+  diagnosis       String?
+  startedAt       DateTime @default(now())
+
+  subscriptionStartDate    DateTime?
+  subscriptionPeriodMonths Int       @default(4)
+  subscriptionTotalMonths  Int       @default(4)
+
+  whatsappGroupUrl         String?
+
+  // Parche de bienvenida (regalo del setter al iniciar el programa)
+  patchSent                Boolean   @default(false)
+  patchSentAt              DateTime?
+  shippingAddress          String?    // dirección de envío para parches
+  shippingCity             String?
+  shippingPostalCode       String?
+  shippingPhone            String?
+
+  // Tipo de programa contratado y dificultad percibida (etiquetas visibles)
+  programType String?                                   // "RECUPERA" | "CONSOLIDA" | "ADVANCE"
+  difficulty  String?                                   // "FACIL" | "MEDIO" | "DIFICIL"
+
+  // Perfil clínico aplicado (opcional)
+  appliedLevelId  String?
+  appliedLevel    ClinicalLevel? @relation(fields: [appliedLevelId], references: [id])
+
+  // Fisio asignado (null = sin asignar todavía)
+  assignedProfessionalId String?
+  assignedProfessional   Professional? @relation(fields: [assignedProfessionalId], references: [id])
+
+  adaptations     PatientAdaptation[]
+  wodLogs         WodLog[]
+  programAssignments ProgramAssignment[]
+  metrics         PatientMetric[]
+  fisioTasks      FisioTask[]
+  scheduledCalls  ScheduledCall[]
+  renewals        SubscriptionRenewal[]
+  transactions    Transaction[]
+  leadsConverted  Lead[]
+  sessions        Session[]
+}
+
+// ============================================================================
+// EQUIPO INTERNO (profesionales con rol)
+// ============================================================================
+
+model Professional {
+  id        String   @id @default(cuid())
+  fullName  String
+  email     String?  @unique
+  role      String                                     // "ceo" | "head_success" | "fisio" | "setter" | "closer"
+  createdAt DateTime @default(now())
+
+  // Auth: hash de contraseña bcrypt; null si aún no la ha establecido (recién invitado)
+  passwordHash         String?
+  // Token de invitación / reseteo de contraseña (one-time)
+  passwordResetToken   String?  @unique
+  passwordResetExpires DateTime?
+  passwordSetAt        DateTime?
+  lastLoginAt          DateTime?
+  // Si está marcado como inactivo, no puede iniciar sesión (pero conservamos su historial)
+  active               Boolean  @default(true)
+
+  patients          Patient[]
+  assignedTasks     FisioTask[]  @relation("AssignedToFisio")
+  authoredTasks     FisioTask[]  @relation("AssignedByFisio")
+  transactions      Transaction[]
+  leadsAsSetter     Lead[]       @relation("LeadsAsSetter")
+  leadsAsCloser     Lead[]       @relation("LeadsAsCloser")
+  sessions          Session[]
+}
+
+// ============================================================================
+// FINANZAS (transacciones manuales + renovaciones cuentan automáticamente)
+// ============================================================================
+
+model Transaction {
+  id          String   @id @default(cuid())
+  // type: "income_new" (nueva alta) | "income_renewal" (renovación)
+  //       | "income_other" (afiliados/formaciones/etc) | "expense"
+  type        String
+  // Solo para expense: "software" | "sueldos" | "marketing" | "otros"
+  // Para ingresos puede ser null o el nombre del producto
+  category    String?
+  amount      Float                                      // € (positivo siempre; el signo viene del type)
+  description String?
+  occurredAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  professionalId String?
+  professional   Professional? @relation(fields: [professionalId], references: [id], onDelete: SetNull)
+
+  patientId      String?
+  patient        Patient?      @relation(fields: [patientId], references: [id], onDelete: SetNull)
+
+  @@index([occurredAt])
+  @@index([type])
+}
+
+// ============================================================================
+// LEADS / PIPELINE COMERCIAL
+// ============================================================================
+
+model Lead {
+  id              String    @id @default(cuid())
+  fullName        String
+  contactType     String                                     // "phone" | "instagram" | "email"
+  contactValue    String                                     // ej. "+34 600 123 456" o "@usuario"
+  aiSummary       String?                                    // resumen breve de la conversación de la IA setter
+  callScheduledAt DateTime                                   // fecha/hora de la llamada
+  // status: "scheduled" (agendada) | "won" (venta) | "lost" (perdida)
+  //       | "cancelled" (cancela antes) | "no_show" (no acude)
+  status          String    @default("scheduled")
+  inFollowUp      Boolean   @default(false)                  // vista aparte de follow-up
+  followUpNote    String?
+  followUpDate    DateTime?                                   // se mantiene por compat (puede usarse como fecha custom)
+
+  // Sistema de follow-up automático: 4 fechas predefinidas con checkbox cada una
+  followUpStartedAt DateTime?                                 // momento en que el closer marcó "follow-up"
+  followUp24hDate    DateTime?
+  followUp24hDone    Boolean @default(false)
+  followUp48hDate    DateTime?
+  followUp48hDone    Boolean @default(false)
+  followUp30dDate    DateTime?
+  followUp30dDone    Boolean @default(false)
+  followUp90dDate    DateTime?
+  followUp90dDone    Boolean @default(false)
+
+  // Setter que registró el lead (solo informativo, hay uno solo por ahora)
+  setterId        String?
+  setter          Professional? @relation("LeadsAsSetter", fields: [setterId], references: [id], onDelete: SetNull)
+
+  // Closer asignado
+  closerId        String?
+  closer          Professional? @relation("LeadsAsCloser", fields: [closerId], references: [id], onDelete: SetNull)
+
+  // Si se gana, se convierte en Patient
+  convertedPatientId String?
+  convertedPatient   Patient? @relation(fields: [convertedPatientId], references: [id], onDelete: SetNull)
+
+  // Si se pierde, razón
+  lostReason      String?                                    // "precio" | "no_encaja" | "ghosting" | "otro"
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  decidedAt       DateTime?                                   // cuándo se marcó won/lost/postponed
+
+  @@index([status])
+  @@index([callScheduledAt])
+  @@index([closerId])
+  @@index([inFollowUp])
+}
+
+model ClinicalProfile {
+  id          String          @id @default(cuid())
+  name        String                              // "Hombro: Impingement subacromial"
+  bodyZone    String                              // "hombro", "lumbar", "rodilla"
+  description String?
+  createdAt   DateTime        @default(now())
+
+  levels      ClinicalLevel[]
+}
+
+model ClinicalLevel {
+  id          String          @id @default(cuid())
+  profileId   String
+  profile     ClinicalProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  name        String                              // "Nivel 1 - Fase aguda"
+  order       Int                                 // 1, 2, 3, 4, 5
+  description String?
+
+  rules       ClinicalLevelRule[]
+  patients    Patient[]
+
+  @@unique([profileId, order])
+}
+
+model ClinicalLevelRule {
+  id              String        @id @default(cuid())
+  levelId         String
+  level           ClinicalLevel @relation(fields: [levelId], references: [id], onDelete: Cascade)
+
+  movementId      String
+  movement        Movement      @relation(fields: [movementId], references: [id])
+
+  state           String        // "OK", "CONDITIONAL", "BLOCKED"
+  substitutionText String?
+  loadConstraint  String?
+  physioWarning   String?
+
+  @@unique([levelId, movementId])
+}
+
+model MovementCategory {
+  id          String     @id @default(cuid())
+  name        String     @unique
+  slug        String     @unique
+  description String?
+
+  movements   Movement[]
+}
+
+model Movement {
+  id            String           @id @default(cuid())
+  categoryId    String
+  category      MovementCategory @relation(fields: [categoryId], references: [id])
+
+  canonicalName String           @unique
+  displayName   String
+  aliases       String           // CSV: "thr,thrusters,th"
+
+  isOverhead    Boolean          @default(false)
+  isImpact      Boolean          @default(false)
+  isKipping     Boolean          @default(false)
+
+  adaptations   PatientAdaptation[]
+  clinicalRules ClinicalLevelRule[]
+}
+
+model PatientAdaptation {
+  id               String   @id @default(cuid())
+  patientId        String
+  patient          Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  movementId       String
+  movement         Movement @relation(fields: [movementId], references: [id])
+
+  state            String   // "OK", "CONDITIONAL", "BLOCKED"
+  substitutionText String?
+  loadConstraint   String?
+  physioWarning    String?
+
+  updatedAt        DateTime @updatedAt
+
+  @@unique([patientId, movementId])
+}
+
+model WodLog {
+  id              String   @id @default(cuid())
+  patientId       String
+  patient         Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  rawText         String
+  adaptedText     String
+  rpe             Int?
+  painScore       Int?
+  notes           String?
+  completedAt     DateTime?
+  submittedAt     DateTime @default(now())
+}
+
+// ============================================================================
+// BIBLIOTECA DE EJERCICIOS (con vídeos del fisio)
+// ============================================================================
+
+model ExerciseLibrary {
+  id          String   @id @default(cuid())
+  name        String                                // "Cat-camel", "Strict press"
+  bodyZone    String   @default("otros")            // "hombro" | "lumbar" | "rodilla" | "otros"
+  category    String                                // "Movilidad", "Activación", "Fuerza"...
+  tags        String   @default("")                 // CSV: "hombro,escapular,activación"
+  youtubeUrl  String?                                // URL completa o ID
+  description String?                                // cues técnicos
+  createdAt   DateTime @default(now())
+
+  workoutLinks WorkoutExercise[]
+}
+
+// ============================================================================
+// PROGRAMAS (estructura: semanas × 7 días × N tareas)
+// ============================================================================
+
+model Program {
+  id          String   @id @default(cuid())
+  name        String
+  bodyZone    String   @default("otros")                // "hombro" | "lumbar" | "rodilla" | "otros"
+  type        String                                    // sub-etiqueta: "Movilidad", "Tendinoso", "Exposición"...
+  level       Int      @default(1)
+  description String?
+  weeksCount  Int      @default(4)
+  isStandalone Boolean @default(false)                  // true = sesión suelta, no aparece en biblioteca
+  createdAt   DateTime @default(now())
+
+  weeks       ProgramWeek[]
+  assignments ProgramAssignment[]
+}
+
+model ProgramWeek {
+  id          String  @id @default(cuid())
+  programId   String
+  program     Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  weekNumber  Int                                   // 1, 2, 3, 4...
+  notes       String?
+
+  days        ProgramDay[]
+
+  @@unique([programId, weekNumber])
+}
+
+model ProgramDay {
+  id          String      @id @default(cuid())
+  weekId      String
+  week        ProgramWeek @relation(fields: [weekId], references: [id], onDelete: Cascade)
+
+  dayOfWeek   Int                                   // 1=lunes, 7=domingo
+
+  tasks       ProgramTask[]
+
+  @@unique([weekId, dayOfWeek])
+}
+
+// Una tarea genérica. type indica qué subtabla mirar.
+model ProgramTask {
+  id        String     @id @default(cuid())
+  dayId     String
+  day       ProgramDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
+
+  type      String                                  // "WORKOUT", "VIDEO", "FORM", "EVOLUTION"
+  order     Int        @default(0)
+  title     String                                  // título visible al paciente
+
+  // Una tarea tiene una y solo una de estas:
+  workout      TaskWorkout?
+  video        TaskVideo?
+  form         TaskForm?
+  evolution    TaskEvolution?
+
+  @@index([dayId, order])
+}
+
+model TaskWorkout {
+  id        String      @id @default(cuid())
+  taskId    String      @unique
+  task      ProgramTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  bodyText  String                                  // bloque de texto libre con el WOD
+
+  exercises WorkoutExercise[]
+}
+
+model WorkoutExercise {
+  id          String          @id @default(cuid())
+  workoutId   String
+  workout     TaskWorkout     @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+
+  exerciseId  String
+  exercise    ExerciseLibrary @relation(fields: [exerciseId], references: [id])
+
+  order       Int             @default(0)
+
+  @@unique([workoutId, exerciseId])
+}
+
+model TaskVideo {
+  id          String      @id @default(cuid())
+  taskId      String      @unique
+  task        ProgramTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  youtubeUrl  String
+  description String?
+}
+
+model TaskForm {
+  id        String      @id @default(cuid())
+  taskId    String      @unique
+  task      ProgramTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  questions String                                  // JSON: [{id, text, type, options?}]
+}
+
+model TaskEvolution {
+  id          String      @id @default(cuid())
+  taskId      String      @unique
+  task        ProgramTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  instructions String?                              // texto opcional al paciente
+}
+
+// ============================================================================
+// MÉTRICAS DE EVOLUCIÓN POR PACIENTE
+// ============================================================================
+
+model PatientMetric {
+  id          String   @id @default(cuid())
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  key         String                                 // "pain", "rpe", "stiffness", "strength" o custom
+  name        String                                 // "Dolor", "RPE percibido"...
+  unit        String?                                // "0-10", "kg", "cm"...
+  isPreset    Boolean  @default(false)               // true para las 4 precargadas
+  isVisible   Boolean  @default(true)
+  order       Int      @default(0)
+
+  createdAt   DateTime @default(now())
+  entries     MetricEntry[]
+
+  @@unique([patientId, key])
+  @@index([patientId])
+}
+
+model MetricEntry {
+  id         String        @id @default(cuid())
+  metricId   String
+  metric     PatientMetric @relation(fields: [metricId], references: [id], onDelete: Cascade)
+
+  value      Float
+  recordedAt DateTime      @default(now())
+  source     String        @default("manual")        // "manual" | "session" | "form"
+  sessionId  String?                                  // si vino de completar una sesión
+
+  @@index([metricId, recordedAt])
+}
+
+// ============================================================================
+// ASIGNACIONES Y SESIONES
+// ============================================================================
+
+model ProgramAssignment {
+  id          String   @id @default(cuid())
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  programId   String
+  program     Program  @relation(fields: [programId], references: [id])
+
+  startDate   DateTime                              // un lunes
+  weeksCount  Int                                   // duración real
+  isActive    Boolean  @default(true)
+
+  createdAt   DateTime @default(now())
+  sessions    ProgramSession[]
+
+  @@index([patientId])
+}
+
+model ProgramSession {
+  id            String   @id @default(cuid())
+  assignmentId  String
+  assignment    ProgramAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  scheduledDate DateTime
+  weekNumber    Int
+  dayOfWeek     Int                                 // 1-7
+
+  // Snapshot de las tareas del día (JSON estructurado)
+  tasksSnapshot String                              // JSON: [{id, type, title, ...payload}]
+
+  // Estado completado por el paciente: JSON con respuestas por tarea
+  completedAt   DateTime?
+  responses     String?                              // JSON: {taskId: {...respuestas}}
+
+  // Revisión por el fisio (solo aplica si la sesión tenía formularios completados)
+  formReviewedAt DateTime?
+
+  @@index([scheduledDate])
+  @@index([assignmentId, scheduledDate])
+}
+
+// ============================================================================
+// TAREAS DEL FISIO
+// ============================================================================
+
+model FisioTask {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  patientId   String?
+  patient     Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull)
+
+  source      String   @default("own")               // "own" | "team"
+  // El campo assignedBy puede ser texto libre o un ID de Professional (lo decidimos en la UI)
+  assignedBy  String?
+  assignedByProfessionalId String?
+  assignedByProfessional   Professional? @relation("AssignedByFisio", fields: [assignedByProfessionalId], references: [id])
+
+  // assignedTo: CSV de IDs de Professional cuando es tarea de equipo
+  assignedTo  String?
+  // Para queries: relación con UN profesional principal (si solo hay uno)
+  assignedToProfessionalId String?
+  assignedToProfessional   Professional? @relation("AssignedToFisio", fields: [assignedToProfessionalId], references: [id])
+
+  priority    String   @default("medium")             // "low" | "medium" | "high"
+
+  // Recurrencia
+  recurrenceType  String   @default("none")           // "none" | "daily" | "weekly" | "monthly"
+  recurrenceDay   Int?                                // si weekly: 1-7; si monthly: 1-31
+  parentTaskId    String?
+
+  dueDate     DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([completedAt])
+  @@index([dueDate])
+  @@index([source])
+}
+
+// ============================================================================
+// LLAMADAS PROGRAMADAS CON PACIENTES
+// ============================================================================
+
+model ScheduledCall {
+  id          String   @id @default(cuid())
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  scheduledAt DateTime                              // fecha y hora
+  type        String   @default("optimizacion")     // "optimizacion" | "renovacion"
+  notes       String?
+  completedAt DateTime?
+  outcome     String?                                // notas posteriores al cumplir
+  createdAt   DateTime @default(now())
+
+  @@index([scheduledAt])
+  @@index([patientId])
+}
+
+// ============================================================================
+// BIBLIOTECAS REUTILIZABLES (formularios y vídeos sueltos)
+// ============================================================================
+
+model FormLibrary {
+  id        String   @id @default(cuid())
+  name      String
+  description String?
+  questions String                                  // JSON: [{id, text, type, options?}]
+  createdAt DateTime @default(now())
+}
+
+model VideoLibrary {
+  id          String   @id @default(cuid())
+  title       String
+  youtubeUrl  String
+  description String?
+  category    String   @default("Educacional")      // "Educacional", "Anatomía", "Técnica"...
+  tags        String   @default("")
+  createdAt   DateTime @default(now())
+}
+
+// ============================================================================
+// HISTORIAL DE RENOVACIONES
+// ============================================================================
+
+model SubscriptionRenewal {
+  id           String   @id @default(cuid())
+  patientId    String
+  patient      Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  outcome      String                                  // "renewed" | "lost" | "pending"
+  decidedAt    DateTime @default(now())
+  amountPaid   Float?                                  // importe pagado en la renovación (€)
+  notes        String?
+
+  @@index([patientId])
+  @@index([decidedAt])
+}
+
+// ============================================================================
+// MENSAJES PREFIJADOS (recursos)
+// ============================================================================
+
+model MessageTemplate {
+  id          String   @id @default(cuid())
+  name        String                                  // "Bienvenida", "Recordatorio renovación"
+  category    String   @default("Otros")              // "Bienvenida", "Seguimiento", "Renovación", "Alta", "Otros"
+  body        String                                  // contenido del mensaje
+  createdAt   DateTime @default(now())
+}
+
+// ============================================================================
+// CONTENIDO PARA INSTAGRAM (planificación + ejecución + métricas)
+// ============================================================================
+
+model ContentWeek {
+  id              String   @id @default(cuid())
+  weekNumber      Int                                 // semana del año (1-53)
+  year            Int
+  startDate       DateTime                            // lunes
+  endDate         DateTime                            // domingo
+
+  // Briefing estratégico
+  centralTheme    String                              // tema central
+  bodyZone        String                              // "hombro" | "rodilla" | "lumbar" | "mixta"
+  weekType        String                              // "educativa" | "objeciones" | "lanzamiento" | "recuperacion"
+  limitingBeliefs String   @default("[]")             // JSON: array de strings
+  leadMagnetName  String?                             // nombre del lead magnet activo (entidad propia en Entrega F)
+  leadMagnetKeyword String?                           // palabra clave de DM
+  commercialTrigger String?
+  previousWeekConnection String?
+  nextWeekSetup   String?
+
+  // Mix objetivo (suma 100%)
+  mixValue        Int      @default(50)               // % piezas de valor
+  mixBeliefs      Int      @default(30)               // % piezas de creencias
+  mixConversion   Int      @default(20)               // % piezas de conversión
+
+  // KPI
+  kpiName         String?                             // "DMs con palabra clave"
+  kpiTarget       Float?                              // valor objetivo
+
+  status          String   @default("planning")       // "planning" | "production" | "publishing" | "closed"
+
+  // Aprendizajes (se rellenan al cerrar)
+  closingNotes    String?                             // qué funcionó, qué no
+  winningHooks    String?                             // hooks ganadores en texto libre
+  ideasEmerged    String?                             // ideas surgidas
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  closedAt        DateTime?
+
+  pieces          ContentPiece[]
+
+  @@index([year, weekNumber])
+  @@index([status])
+}
+
+model ContentPiece {
+  id              String   @id @default(cuid())
+  weekId          String
+  week            ContentWeek @relation(fields: [weekId], references: [id], onDelete: Cascade)
+
+  dayOfWeek       Int                                 // 1=Lun ... 7=Dom
+  format          String                              // ver content-templates.ts: "belief_carousel" | "case_reel" | "value_carousel" | "value_reel" | "exercises_carousel" | "infographic" | "closing_reel"
+  goal            String                              // autopoblado por formato
+  ctaType         String                              // autopoblado por formato
+  dmKeyword       String?                             // palabra clave de DM si aplica
+
+  hook            String?                             // hook principal
+  blocks          String   @default("[]")             // JSON: [{id, label, content, order}]
+  caption         String?
+
+  // Producción
+  recordingLocation String?
+  recordingOutfit   String?
+  recordingMaterial String?
+  consentSigned     Boolean @default(false)
+  assignedCaseId    String?                           // entidad propia más adelante
+  finalFileUrl      String?
+  editorNotes       String?
+
+  // Estado de la pieza
+  status          String   @default("idea")           // "idea" | "script" | "recorded" | "edited" | "scheduled" | "published"
+  scheduledAt     DateTime?                           // hora de publicación
+
+  // Métricas (rellenadas tras publicar)
+  metricsReach           Int?
+  metricsSaves           Int?
+  metricsShares          Int?
+  metricsComments        Int?
+  metricsDmKeyword       Int?                         // DMs recibidos con la palabra clave
+  metricsConversions     Int?                         // conversiones a cliente atribuidas
+  metricsFilledAt        DateTime?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  supportStories  ContentStory[]
+
+  @@index([weekId, dayOfWeek])
+  @@index([status])
+  @@index([scheduledAt])
+}
+
+model ContentStory {
+  id          String   @id @default(cuid())
+  pieceId     String
+  piece       ContentPiece @relation(fields: [pieceId], references: [id], onDelete: Cascade)
+
+  order       Int
+  description String                              // "Caja de preguntas sobre el tema"
+  published   Boolean  @default(false)
+
+  createdAt   DateTime @default(now())
+
+  @@index([pieceId, order])
+}
+
+// ============================================================================
+// BANCO DE RECURSOS: lead magnets, casos clínicos, hooks ganadores
+// ============================================================================
+
+model LeadMagnet {
+  id           String   @id @default(cuid())
+  name         String                                  // "Guía hombro CrossFit"
+  keyword      String?                                 // palabra clave DM (ej "HOMBRO")
+  description  String?
+  url          String?                                 // dónde se descarga
+  active       Boolean  @default(true)
+  lastPromotedAt DateTime?                             // última vez que se usó en una semana
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([active])
+}
+
+model ClinicalCase {
+  id              String   @id @default(cuid())
+  athleteName     String
+  injury          String                                // "Impingement subacromial derecho"
+  insight         String?                               // qué aprendí clínicamente
+  consentSigned   Boolean  @default(false)
+  consentSignedAt DateTime?
+  videoUrls       String   @default("[]")               // JSON array de URLs
+  notes           String?
+  patientId       String?                               // relación opcional al paciente real si existe
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([patientId])
+}
+
+model WinningHook {
+  id              String   @id @default(cuid())
+  text            String                                // el hook en sí
+  format          String?                               // formato donde funcionó: belief_carousel, etc.
+  bodyZone        String?                               // zona corporal
+  weekId          String?                               // de qué semana salió (opcional)
+  // Métricas que justifican que sea "ganador" (se copian al añadirlo al banco)
+  reach           Int?
+  saves           Int?
+  dmKeyword       Int?
+  conversions     Int?
+  notes           String?                               // por qué funcionó / cuándo reutilizarlo
+  createdAt       DateTime @default(now())
+
+  @@index([format])
+  @@index([bodyZone])
+}
+
+// Ideas sueltas de contenido: para apuntar cosas que se te ocurren y luego usarlas.
+// Las etiquetas siguen el embudo: Atraer (top funnel) / Educar (mid) / Convertir (bottom)
+model ContentIdea {
+  id          String   @id @default(cuid())
+  title       String                                  // título corto descriptivo
+  description String?                                 // detalle de la idea
+  funnelStage String   @default("educate")            // "attract" | "educate" | "convert"
+  bodyZone    String?                                 // opcional: hombro/rodilla/lumbar/mixta
+  suggestedFormat String?                             // opcional: belief_carousel, value_reel, etc.
+  used        Boolean  @default(false)                // ya se usó en una pieza
+  usedPieceId String?                                 // referencia a la pieza donde se usó
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([funnelStage])
+  @@index([used])
+}
+
+// Eventos custom del calendario de contenido (masterclasses, workshops, aperturas de plazas...).
+// Son anotaciones libres por fecha, no afectan a las piezas ni a las semanas.
+model CalendarEvent {
+  id        String   @id @default(cuid())
+  date      DateTime                          // día del evento (00:00 UTC)
+  title     String                            // "Masterclass hombro", "Workshop lumbar", "Apertura plazas"
+  notes     String?                           // detalle opcional
+  color     String   @default("neutral")      // "neutral" | "amber" | "blue" | "emerald" | "purple" | "rose"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
+}
+
+// ============================================================================
+// AUTH: sesiones + códigos de login (paciente)
+// ============================================================================
+
+// Una Session = un usuario logueado en un dispositivo. La cookie del navegador
+// guarda el token, que apunta aquí. Si la fila se borra → cierre de sesión.
+model Session {
+  id           String   @id @default(cuid())
+  token        String   @unique                       // valor de la cookie
+  // Solo uno de los dos: o profesional o paciente
+  professionalId String?
+  professional   Professional? @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  patientId    String?
+  patient      Patient? @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  lastUsedAt   DateTime @default(now())
+  // Metadata para auditoría
+  userAgent    String?
+  ipAddress    String?
+
+  @@index([professionalId])
+  @@index([patientId])
+  @@index([expiresAt])
+}
+
+// Códigos de un solo uso para login del paciente (6 dígitos numéricos)
+model LoginCode {
+  id        String   @id @default(cuid())
+  email     String                                    // a quién va dirigido
+  codeHash  String                                    // hash del código (nunca guardamos el plano)
+  expiresAt DateTime
+  consumed  Boolean  @default(false)
+  attempts  Int      @default(0)                      // intentos fallidos antes de invalidar
+  createdAt DateTime @default(now())
+
+  @@index([email, expiresAt])
+}

@@ -1,0 +1,132 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body {
+  -webkit-tap-highlight-color: transparent;
+  font-family: 'Geist', -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  letter-spacing: -0.011em;
+}
+
+/* Títulos con tracking más apretado al estilo Vercel/Linear */
+h1, h2, h3, h4, h5 {
+  letter-spacing: -0.025em;
+}
+
+@layer components {
+  .btn {
+    @apply px-4 py-2 rounded-lg text-sm font-medium border transition-all;
+  }
+  .btn-primary {
+    @apply bg-neutral-900 text-white border-neutral-900 hover:bg-neutral-800;
+  }
+  .btn-accent {
+    @apply bg-amber-400 text-neutral-900 border-amber-400 hover:bg-amber-500 hover:border-amber-500 font-semibold;
+  }
+  .btn-ghost {
+    @apply bg-transparent border-neutral-200 hover:bg-neutral-50;
+  }
+  .card {
+    @apply bg-white border border-neutral-200 rounded-xl p-4;
+  }
+  .input {
+    @apply w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-900;
+  }
+  .pill-ok {
+    @apply bg-emerald-50 text-emerald-800 text-xs px-2 py-0.5 rounded-full font-medium;
+  }
+  .pill-warn {
+    @apply bg-amber-50 text-amber-800 text-xs px-2 py-0.5 rounded-full font-medium;
+  }
+  .pill-block {
+    @apply bg-red-50 text-red-800 text-xs px-2 py-0.5 rounded-full font-medium;
+  }
+}
+
+/* Gradiente amarillo de marca reutilizable */
+.brand-gradient {
+  background: linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%);
+}
+.brand-gradient-text {
+  background: linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* App de paciente: fondo oscuro + cards blancas con borde amarillo */
+.patient-scope {
+  color: #FAFAFA;
+}
+/* Las cards dentro del scope paciente: blancas con borde amarillo y texto oscuro de nuevo */
+.patient-scope .card {
+  background: #FFFFFF;
+  color: #0A0A0A;
+  border: 1.5px solid rgba(252, 211, 77, 0.6);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+/* Inputs dentro de cards mantienen su look claro original */
+.patient-scope .card input,
+.patient-scope .card textarea,
+.patient-scope .card select {
+  color: #0A0A0A;
+}
+/* Botones primary mantienen */
+.patient-scope .btn-primary {
+  background: #0A0A0A;
+  color: #FAFAFA;
+  border-color: #0A0A0A;
+}
+/* Links genéricos (los "← Volver" etc.) en amarillo suave para verlos sobre el fondo oscuro */
+.patient-scope > main > header a {
+  color: rgba(252, 211, 77, 0.85) !important;
+}
+.patient-scope > main > header a:hover {
+  color: #FCD34D !important;
+}
+
+/* Headers/textos fuera de cards: legibles sobre fondo oscuro */
+.patient-scope > main > header .text-neutral-500,
+.patient-scope > main > header .text-neutral-400,
+.patient-scope > main > header .text-neutral-600,
+.patient-scope > main > .text-neutral-500,
+.patient-scope > main > .text-neutral-400 {
+  color: #A3A3A3 !important;
+}
+.patient-scope > main > header h1,
+.patient-scope > main > header h2,
+.patient-scope > main > h1,
+.patient-scope > main > h2 {
+  color: #FAFAFA;
+}
+/* h2 sueltos (los que sirven de label de sección fuera de card) */
+.patient-scope > main > h2.font-medium {
+  color: #FAFAFA;
+}
+
+/* Estilos para impresión / exportar PDF en métricas */
+@media print {
+  /* Ocultar elementos no relevantes */
+  aside, nav, .print\:hidden { display: none !important; }
+
+  /* Layout fluido para impresión */
+  body { background: white !important; }
+  main { padding: 0 !important; max-width: none !important; }
+
+  /* Forzar fondo de cards y badges para que se vea */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Quitar sombras */
+  .card, [class*="shadow"] {
+    box-shadow: none !important;
+    border: 1px solid #e5e5e5 !important;
+  }
+
+  /* Evitar cortar bloques a mitad */
+  section.card { break-inside: avoid; page-break-inside: avoid; }
+  table { break-inside: auto; }
+  tr { break-inside: avoid; }
+}

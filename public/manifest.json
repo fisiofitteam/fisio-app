@@ -1,0 +1,22 @@
+{
+  "name": "Fisio App",
+  "short_name": "Fisio",
+  "description": "Readaptación deportiva online",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fafafa",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}
