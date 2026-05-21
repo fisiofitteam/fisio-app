@@ -15,8 +15,7 @@
     "bootstrap:admin": "tsx prisma/bootstrap-admin.ts",
     "schema:dev": "node scripts/use-schema.js dev",
     "schema:prod": "node scripts/use-schema.js prod",
-    "setup": "prisma db push && tsx prisma/seed.ts",
-    "postinstall": "prisma generate"
+    "setup": "prisma db push && tsx prisma/seed.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.1.0",
