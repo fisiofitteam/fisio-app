@@ -55,6 +55,7 @@ export function PatientsList({
 }) {
   const router = useRouter();
   const [reassigning, setReassigning] = useState<Patient | null>(null);
+  const [creating, setCreating] = useState(false);
 
   function switchTab(newTab: string) {
     const url = new URL(window.location.href);
@@ -66,8 +67,17 @@ export function PatientsList({
 
   return (
     <main>
-      <header className="mb-4">
+      <header className="mb-4 flex items-start justify-between gap-3">
         <h1 className="text-xl font-semibold">Pacientes</h1>
+        {currentUser.isManager && (
+          <button
+            onClick={() => setCreating(true)}
+            className="text-sm font-medium px-3 py-2 rounded-lg whitespace-nowrap"
+            style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+          >
+            + Nuevo paciente
+          </button>
+        )}
       </header>
 
       {currentUser.isManager && (
@@ -105,13 +115,24 @@ export function PatientsList({
       )}
 
       {patients.length === 0 ? (
-        <p className="text-sm text-neutral-500 text-center py-12 italic">
-          {tab === "unassigned"
-            ? "No hay pacientes por asignar. ¡Bien!"
-            : tab === "mine"
-            ? "No tienes pacientes asignados todavía."
-            : "Sin pacientes en esta vista."}
-        </p>
+        <div className="text-center py-12">
+          <p className="text-sm text-neutral-500 italic mb-4">
+            {tab === "unassigned"
+              ? "No hay pacientes por asignar. ¡Bien!"
+              : tab === "mine"
+              ? "No tienes pacientes asignados todavía."
+              : "Sin pacientes en esta vista."}
+          </p>
+          {currentUser.isManager && tab !== "unassigned" && (
+            <button
+              onClick={() => setCreating(true)}
+              className="text-sm font-medium px-4 py-2 rounded-lg"
+              style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+            >
+              + Crear primer paciente
+            </button>
+          )}
+        </div>
       ) : (
         <div className="space-y-3">
           {patients.map((p) => (
@@ -133,6 +154,17 @@ export function PatientsList({
           onSaved={() => {
             setReassigning(null);
             router.refresh();
+          }}
+        />
+      )}
+
+      {creating && currentUser.isManager && (
+        <CreatePatientModal
+          professionals={professionals}
+          onClose={() => setCreating(false)}
+          onCreated={(patientId) => {
+            setCreating(false);
+            router.push(`/fisio/paciente/${patientId}`);
           }}
         />
       )}
@@ -392,5 +424,222 @@ function FisioSummary({ patients, isManager }: { patients: Patient[]; isManager:
         )}
       </div>
     </section>
+  );
+}
+
+function CreatePatientModal({
+  professionals,
+  onClose,
+  onCreated,
+}: {
+  professionals: ProInfo[];
+  onClose: () => void;
+  onCreated: (patientId: string) => void;
+}) {
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [diagnosis, setDiagnosis] = useState("");
+  const [assignedProfessionalId, setAssignedProfessionalId] = useState("");
+  const [programType, setProgramType] = useState("RECUPERA");
+  const [subscriptionPeriodMonths, setSubscriptionPeriodMonths] = useState("4");
+  const [amountPaid, setAmountPaid] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function save() {
+    setError("");
+    if (!fullName.trim()) {
+      setError("El nombre es obligatorio");
+      return;
+    }
+    if (!email.trim()) {
+      setError("El email es obligatorio para que el paciente pueda entrar a la app");
+      return;
+    }
+    setSaving(true);
+    const res = await fetch("/api/patients", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fullName: fullName.trim(),
+        email: email.trim(),
+        shippingPhone: phone.trim() || null,
+        diagnosis: diagnosis.trim() || null,
+        assignedProfessionalId: assignedProfessionalId || null,
+        programType,
+        subscriptionPeriodMonths,
+        amountPaid: amountPaid || null,
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      onCreated(data.patientId);
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "No se ha podido crear el paciente");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl max-w-md w-full max-h-[92vh] overflow-y-auto p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-1">
+          <h3 className="font-semibold text-base">Nuevo paciente</h3>
+          <button onClick={onClose} className="text-neutral-400 text-xl leading-none">✕</button>
+        </div>
+        <p className="text-xs text-neutral-500 mb-4">
+          Crea un paciente nuevo. Le llegará un código por email cuando intente entrar a la app.
+        </p>
+
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Nombre completo *</label>
+            <input
+              type="text"
+              required
+              autoFocus
+              className="input text-sm w-full"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="Ej. Marta García"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Email * (para acceso a la app)</label>
+            <input
+              type="email"
+              required
+              className="input text-sm w-full"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="atleta@email.com"
+            />
+            <p className="text-[10px] text-neutral-500 mt-1 italic">
+              Es el email con el que recibirá el código de acceso.
+            </p>
+          </div>
+
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Teléfono / WhatsApp (opcional)</label>
+            <input
+              type="tel"
+              className="input text-sm w-full"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="+34 600 123 456"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Diagnóstico breve (opcional)</label>
+            <input
+              type="text"
+              className="input text-sm w-full"
+              value={diagnosis}
+              onChange={(e) => setDiagnosis(e.target.value)}
+              placeholder="Ej. Dolor lumbar tras intensidad alta"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Fisio asignado</label>
+            <select
+              className="input text-sm w-full"
+              value={assignedProfessionalId}
+              onChange={(e) => setAssignedProfessionalId(e.target.value)}
+            >
+              <option value="">— Sin asignar (asignar luego) —</option>
+              {professionals.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.role === "head_success" ? "⭐ " : "🩺 "}{p.fullName}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Programa contratado</label>
+            <div className="flex gap-1">
+              {["RECUPERA", "CONSOLIDA", "ADVANCE"].map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setProgramType(p)}
+                  className={`flex-1 text-xs px-2 py-2 rounded border font-medium ${
+                    programType === p ? "bg-neutral-900 text-white border-neutral-900" : "bg-white border-neutral-200"
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">Duración (meses)</label>
+              <select
+                className="input text-sm w-full"
+                value={subscriptionPeriodMonths}
+                onChange={(e) => setSubscriptionPeriodMonths(e.target.value)}
+              >
+                <option value="1">1 mes</option>
+                <option value="2">2 meses</option>
+                <option value="3">3 meses</option>
+                <option value="4">4 meses</option>
+                <option value="6">6 meses</option>
+                <option value="12">12 meses</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">Importe (€) (opcional)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                className="input text-sm w-full"
+                value={amountPaid}
+                onChange={(e) => setAmountPaid(e.target.value)}
+                placeholder="0,00"
+              />
+            </div>
+          </div>
+
+          {amountPaid && Number(amountPaid) > 0 && (
+            <p className="text-[11px] text-neutral-500 italic">
+              💰 Se registrará automáticamente como ingreso "Nueva alta" en Finanzas.
+            </p>
+          )}
+
+          {error && (
+            <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              {error}
+            </div>
+          )}
+
+          <button
+            onClick={save}
+            disabled={saving || !fullName.trim() || !email.trim()}
+            className="btn btn-accent w-full disabled:opacity-50"
+            style={{
+              background: "#0A0A0A",
+              color: "#FAFAFA",
+              padding: "11px",
+              borderRadius: 10,
+              fontWeight: 500,
+              fontSize: 14,
+              border: "none",
+              cursor: saving ? "wait" : "pointer",
+              width: "100%",
+            }}
+          >
+            {saving ? "Creando..." : "Crear paciente"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
