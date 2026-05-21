@@ -5,6 +5,14 @@ export const metadata: Metadata = {
   title: "FisioFit App",
   description: "Readaptación para atletas de CrossFit",
   manifest: "/manifest.json",
+  icons: {
+    icon: [
+      { url: "/icon-192.svg", type: "image/svg+xml" },
+    ],
+    apple: [
+      { url: "/icon-192.svg" },
+    ],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",

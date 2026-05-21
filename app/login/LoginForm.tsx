@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { FieldLabel, fieldInputStyle, primaryButtonStyle } from "@/components/PublicShell";
 
 export function LoginForm({ redirectTo }: { redirectTo?: string }) {
   const router = useRouter();
@@ -23,8 +24,6 @@ export function LoginForm({ redirectTo }: { redirectTo?: string }) {
       body: JSON.stringify({ email, password }),
     });
     if (res.ok) {
-      const data = await res.json();
-      // Redirige según rol o al destino solicitado
       router.push(redirectTo || "/fisio");
       router.refresh();
     } else {
@@ -50,13 +49,22 @@ export function LoginForm({ redirectTo }: { redirectTo?: string }) {
   if (forgotMode) {
     if (forgotSent) {
       return (
-        <div className="text-center py-6">
+        <div className="text-center py-2">
           <div className="text-4xl mb-3">📬</div>
-          <h2 className="font-semibold mb-1">Email enviado</h2>
-          <p className="text-sm text-neutral-600 mb-4">
+          <h3 className="font-semibold mb-1" style={{ letterSpacing: "-0.02em" }}>
+            Email enviado
+          </h3>
+          <p className="text-sm mb-5" style={{ color: "#737373" }}>
             Si tu email está registrado, recibirás en un minuto un enlace para restablecer tu contraseña.
           </p>
-          <button onClick={() => { setForgotMode(false); setForgotSent(false); }} className="text-sm text-blue-600 hover:underline">
+          <button
+            onClick={() => {
+              setForgotMode(false);
+              setForgotSent(false);
+            }}
+            className="text-sm hover:underline"
+            style={{ color: "#0A0A0A" }}
+          >
             ← Volver al login
           </button>
         </div>
@@ -65,23 +73,32 @@ export function LoginForm({ redirectTo }: { redirectTo?: string }) {
 
     return (
       <form onSubmit={requestReset} className="space-y-3">
-        <h2 className="font-semibold mb-1">Restablecer contraseña</h2>
-        <p className="text-sm text-neutral-600 mb-3">Te enviaremos un enlace por email.</p>
-        <input
-          type="email"
-          required
-          placeholder="Tu email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="w-full px-3 py-2 border border-neutral-200 rounded-lg outline-none focus:border-neutral-400"
-          autoFocus
-          autoComplete="email"
-        />
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <button type="submit" disabled={loading || !email} className="w-full bg-neutral-900 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-neutral-800 disabled:opacity-50">
+        <p className="text-sm mb-4" style={{ color: "#525252" }}>
+          Te enviaremos un enlace por email para que la cambies.
+        </p>
+        <div>
+          <FieldLabel>Correo</FieldLabel>
+          <input
+            type="email"
+            required
+            placeholder="tu@fisiofitteam.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            style={fieldInputStyle}
+            autoFocus
+            autoComplete="email"
+          />
+        </div>
+        {error && <p className="text-sm" style={{ color: "#DC2626" }}>{error}</p>}
+        <button type="submit" disabled={loading || !email} style={{ ...primaryButtonStyle, marginTop: 6, opacity: loading || !email ? 0.5 : 1 }}>
           {loading ? "Enviando..." : "Enviar enlace"}
         </button>
-        <button type="button" onClick={() => setForgotMode(false)} className="w-full text-sm text-neutral-500 hover:text-neutral-900">
+        <button
+          type="button"
+          onClick={() => setForgotMode(false)}
+          className="block w-full text-sm hover:underline"
+          style={{ color: "#737373", paddingTop: 4 }}
+        >
           ← Volver al login
         </button>
       </form>
@@ -91,36 +108,43 @@ export function LoginForm({ redirectTo }: { redirectTo?: string }) {
   return (
     <form onSubmit={submit} className="space-y-3">
       <div>
-        <label className="text-xs text-neutral-500 block mb-1">Email</label>
+        <FieldLabel>Correo</FieldLabel>
         <input
           type="email"
           required
+          placeholder="tu@fisiofitteam.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full px-3 py-2 border border-neutral-200 rounded-lg outline-none focus:border-neutral-400"
+          style={fieldInputStyle}
           autoComplete="email"
           autoFocus
         />
       </div>
       <div>
-        <div className="flex justify-between items-baseline mb-1">
-          <label className="text-xs text-neutral-500">Contraseña</label>
-          <button type="button" onClick={() => setForgotMode(true)} className="text-[11px] text-blue-600 hover:underline">
-            ¿Olvidaste?
+        <div className="flex justify-between items-baseline mb-1.5">
+          <FieldLabel>Contraseña</FieldLabel>
+          <button
+            type="button"
+            onClick={() => setForgotMode(true)}
+            className="text-[11px] hover:underline"
+            style={{ color: "#525252", marginBottom: 6 }}
+          >
+            ¿La olvidaste?
           </button>
         </div>
         <input
           type="password"
           required
+          placeholder="••••••••"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full px-3 py-2 border border-neutral-200 rounded-lg outline-none focus:border-neutral-400"
+          style={fieldInputStyle}
           autoComplete="current-password"
         />
       </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <button type="submit" disabled={loading} className="w-full bg-neutral-900 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-neutral-800 disabled:opacity-50 mt-2">
-        {loading ? "Entrando..." : "Entrar"}
+      {error && <p className="text-sm" style={{ color: "#DC2626" }}>{error}</p>}
+      <button type="submit" disabled={loading} style={{ ...primaryButtonStyle, marginTop: 14, opacity: loading ? 0.5 : 1 }}>
+        {loading ? "Entrando..." : "Entrar →"}
       </button>
     </form>
   );

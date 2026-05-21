@@ -3,6 +3,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { LoginLanding } from "@/components/LoginLanding";
+import { PublicShell } from "@/components/PublicShell";
 
 export default async function HomePage() {
   const user = await getSessionUser();
@@ -25,40 +26,84 @@ export default async function HomePage() {
     );
   }
 
-  // Producción: pantalla minimalista que ofrece login equipo o paciente
+  // Producción: dos puertas (equipo / paciente) con el chrome de marca
   return (
-    <main className="min-h-screen flex items-center justify-center px-4 py-8" style={{ background: "linear-gradient(135deg, #FEF3C7 0%, #FCD34D 100%)" }}>
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-neutral-900 rounded-2xl mb-3">
-            <span className="text-2xl">💪</span>
+    <PublicShell title="¿Quién entra?" subtitle="Elige tu tipo de acceso para continuar." heroSubtitle="App interna · Equipo y pacientes.">
+      <div className="space-y-3">
+        <Link
+          href="/login"
+          className="block transition-all hover:scale-[1.01]"
+          style={{
+            padding: 18,
+            background: "#FFFFFF",
+            border: "1px solid #E5E5E5",
+            borderRadius: 12,
+            textDecoration: "none",
+            color: "#0A0A0A",
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className="inline-flex items-center justify-center"
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 10,
+                background: "linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)",
+                fontSize: 22,
+              }}
+            >
+              👥
+            </div>
+            <div className="flex-1">
+              <div className="font-semibold text-[15px]" style={{ letterSpacing: "-0.01em" }}>
+                Acceso del equipo
+              </div>
+              <div className="text-xs" style={{ color: "#737373" }}>
+                Profesionales · Email + contraseña
+              </div>
+            </div>
+            <span style={{ color: "#A3A3A3", fontSize: 18 }}>→</span>
           </div>
-          <h1 className="text-2xl font-bold text-neutral-900">FisioFit App</h1>
-          <p className="text-sm text-neutral-700 mt-1">Selecciona cómo quieres acceder</p>
-        </div>
+        </Link>
 
-        <div className="space-y-3">
-          <Link href="/login" className="block bg-white rounded-2xl shadow-md hover:shadow-lg p-5 transition-shadow">
-            <div className="flex items-center gap-3">
-              <div className="text-3xl">👥</div>
-              <div>
-                <div className="font-semibold">Acceso del equipo</div>
-                <div className="text-xs text-neutral-500">Profesionales con email + contraseña</div>
+        <Link
+          href="/paciente/login"
+          className="block transition-all hover:scale-[1.01]"
+          style={{
+            padding: 18,
+            background: "#FFFFFF",
+            border: "1px solid #E5E5E5",
+            borderRadius: 12,
+            textDecoration: "none",
+            color: "#0A0A0A",
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className="inline-flex items-center justify-center"
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 10,
+                background: "#0A0A0A",
+                fontSize: 22,
+              }}
+            >
+              🏋️
+            </div>
+            <div className="flex-1">
+              <div className="font-semibold text-[15px]" style={{ letterSpacing: "-0.01em" }}>
+                Acceso de paciente
+              </div>
+              <div className="text-xs" style={{ color: "#737373" }}>
+                Atleta · Email + código
               </div>
             </div>
-          </Link>
-
-          <Link href="/paciente/login" className="block bg-white rounded-2xl shadow-md hover:shadow-lg p-5 transition-shadow">
-            <div className="flex items-center gap-3">
-              <div className="text-3xl">🏋️</div>
-              <div>
-                <div className="font-semibold">Acceso de paciente</div>
-                <div className="text-xs text-neutral-500">Con tu email y código de acceso</div>
-              </div>
-            </div>
-          </Link>
-        </div>
+            <span style={{ color: "#A3A3A3", fontSize: 18 }}>→</span>
+          </div>
+        </Link>
       </div>
-    </main>
+    </PublicShell>
   );
 }

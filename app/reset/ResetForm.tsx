@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { FieldLabel, fieldInputStyle, primaryButtonStyle } from "@/components/PublicShell";
 
 export function ResetForm({ token, isWelcome }: { token?: string; isWelcome: boolean }) {
   const router = useRouter();
@@ -57,17 +58,27 @@ export function ResetForm({ token, isWelcome }: { token?: string; isWelcome: boo
     }
   }
 
-  if (checking) return <p className="text-center text-sm text-neutral-500 py-4">Comprobando enlace...</p>;
+  if (checking) {
+    return (
+      <p className="text-center text-sm py-2" style={{ color: "#737373" }}>
+        Comprobando enlace...
+      </p>
+    );
+  }
 
   if (!token || !valid) {
     return (
-      <div className="text-center py-4">
+      <div className="text-center py-2">
         <div className="text-4xl mb-3">⚠️</div>
-        <h2 className="font-semibold mb-1">Enlace inválido o caducado</h2>
-        <p className="text-sm text-neutral-600 mb-4">
+        <h3 className="font-semibold mb-1" style={{ letterSpacing: "-0.02em" }}>
+          Enlace inválido o caducado
+        </h3>
+        <p className="text-sm mb-5" style={{ color: "#737373" }}>
           Pide a tu CEO que te reenvíe la invitación, o usa "¿Olvidaste tu contraseña?" en el login.
         </p>
-        <a href="/login" className="text-sm text-blue-600 hover:underline">← Volver al login</a>
+        <a href="/login" className="text-sm hover:underline" style={{ color: "#0A0A0A", fontWeight: 600 }}>
+          ← Volver al login
+        </a>
       </div>
     );
   }
@@ -75,39 +86,44 @@ export function ResetForm({ token, isWelcome }: { token?: string; isWelcome: boo
   return (
     <form onSubmit={submit} className="space-y-3">
       {fullName && (
-        <p className="text-sm text-neutral-600 mb-3">
-          Hola <strong>{fullName.split(" ")[0]}</strong>, vas a establecer la contraseña para <span className="font-mono text-xs">{email}</span>.
+        <p className="text-sm mb-2" style={{ color: "#525252" }}>
+          Hola <strong style={{ color: "#0A0A0A" }}>{fullName.split(" ")[0]}</strong>, vas a establecer la contraseña
+          para <span className="font-mono text-xs">{email}</span>.
         </p>
       )}
       <div>
-        <label className="text-xs text-neutral-500 block mb-1">Nueva contraseña</label>
+        <FieldLabel>{isWelcome ? "Tu nueva contraseña" : "Nueva contraseña"}</FieldLabel>
         <input
           type="password"
           required
           minLength={8}
+          placeholder="••••••••"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full px-3 py-2 border border-neutral-200 rounded-lg outline-none focus:border-neutral-400"
+          style={fieldInputStyle}
           autoComplete="new-password"
           autoFocus
         />
-        <p className="text-[10px] text-neutral-500 mt-1">Mínimo 8 caracteres. Usa el gestor de contraseñas para generar una fuerte.</p>
+        <p className="text-[10px] mt-1.5" style={{ color: "#737373" }}>
+          Mínimo 8 caracteres. Usa el gestor de contraseñas para generar una fuerte y guardarla.
+        </p>
       </div>
       <div>
-        <label className="text-xs text-neutral-500 block mb-1">Repítela</label>
+        <FieldLabel>Repítela</FieldLabel>
         <input
           type="password"
           required
           minLength={8}
+          placeholder="••••••••"
           value={password2}
           onChange={(e) => setPassword2(e.target.value)}
-          className="w-full px-3 py-2 border border-neutral-200 rounded-lg outline-none focus:border-neutral-400"
+          style={fieldInputStyle}
           autoComplete="new-password"
         />
       </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <button type="submit" disabled={loading} className="w-full bg-neutral-900 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-neutral-800 disabled:opacity-50 mt-2">
-        {loading ? "Guardando..." : isWelcome ? "Establecer y entrar" : "Restablecer y entrar"}
+      {error && <p className="text-sm" style={{ color: "#DC2626" }}>{error}</p>}
+      <button type="submit" disabled={loading} style={{ ...primaryButtonStyle, marginTop: 14, opacity: loading ? 0.5 : 1 }}>
+        {loading ? "Guardando..." : isWelcome ? "Establecer y entrar →" : "Restablecer y entrar →"}
       </button>
     </form>
   );
