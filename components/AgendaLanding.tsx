@@ -280,8 +280,15 @@ export function AgendaLanding() {
       <div className="relative max-w-2xl mx-auto px-5 py-10 pb-20">
         {/* Header */}
         <header className="mb-8 text-center">
-          <h1 className="text-2xl sm:text-3xl font-semibold leading-tight mb-2" style={{ letterSpacing: "-0.02em" }}>
-            Vuelve a entrenar sin dolor
+          <h1
+            className="font-bold leading-none mb-4"
+            style={{
+              fontSize: "clamp(36px, 6vw, 56px)",
+              letterSpacing: "-0.035em",
+            }}
+          >
+            Vuelve a entrenar<br />
+            <span className="brand-gradient-text">sin dolor.</span>
           </h1>
           <p className="text-sm sm:text-base" style={{ color: "#A3A3A3" }}>
             Reserva una <strong style={{ color: "#FAFAFA" }}>videoconsulta gratuita</strong> de valoración con el equipo

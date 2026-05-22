@@ -54,7 +54,13 @@ export function AgendaGracias({
           >
             <span style={{ fontSize: 32 }}>✓</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-semibold leading-tight mb-3" style={{ letterSpacing: "-0.02em" }}>
+          <h1
+            className="font-bold leading-none mb-4"
+            style={{
+              fontSize: "clamp(32px, 5vw, 48px)",
+              letterSpacing: "-0.035em",
+            }}
+          >
             {firstName ? `Listo, ${firstName}.` : "Reserva confirmada"}
           </h1>
           <p className="text-sm sm:text-base" style={{ color: "#D4D4D4" }}>
