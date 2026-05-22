@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createEventWithMeet, getMeetLink, listEvents } from "@/lib/googleCalendar";
 import { whoseSlot } from "@/lib/scheduleResolver";
+import { notifySetters } from "@/lib/notifications";
 
 type BookBody = {
   fullName: string;
@@ -154,6 +155,30 @@ export async function POST(req: NextRequest) {
       aiSummary: `Reservado desde landing. Motivo: ${body.motivo.trim().slice(0, 200)}`,
     },
   });
+
+  // ─── Notificación in-app a setters ───
+  // Flujo: el setter ve la notificación, contacta al lead por WhatsApp y le
+  // dice quién es su closer. Cuando marca "avisado", se dispara la
+  // notificación al closer (en /api/leads/notify-closer).
+  try {
+    const dateLabel = startDate.toLocaleDateString("es-ES", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    await notifySetters({
+      type: "lead_new",
+      title: `Lead nuevo · ${fullName}`,
+      body: `Llamada el ${dateLabel}. Contáctale por WhatsApp y dile quién le atenderá.`,
+      leadId: lead.id,
+      actionUrl: "/fisio/llamadas-venta",
+    });
+  } catch (notifyError) {
+    // Loggeamos pero no rompemos el flujo de booking
+    console.error("Notification error:", notifyError);
+  }
 
   return NextResponse.json({ ok: true, leadId: lead.id });
 }

@@ -30,6 +30,10 @@ type Lead = {
   impactoCrossfit: string | null;
   meetingUrl: string | null;
   source: string | null;
+  // Workflow comercial (v55)
+  setterNotifiedAt: string | null;
+  closerContactedAt: string | null;
+  reminderSentAt: string | null;
 };
 
 const STATUS_TABS = [
@@ -311,6 +315,34 @@ function CallRow({
                 LANDING
               </span>
             )}
+            {/* Etiquetas de estado de workflow comercial */}
+            {lead.status === "scheduled" && lead.source === "landing" && !lead.setterNotifiedAt && (
+              <span className="text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded" style={{ background: "#FEE2E2", color: "#991B1B" }}>
+                SIN CONTACTAR
+              </span>
+            )}
+            {lead.status === "scheduled" && lead.setterNotifiedAt && !lead.closerContactedAt && currentUser.role !== "setter" && (
+              <span className="text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded" style={{ background: "#FEF3C7", color: "#78350F" }}>
+                PENDIENTE CASO ÉXITO
+              </span>
+            )}
+            {lead.status === "scheduled" && lead.closerContactedAt && !lead.reminderSentAt && currentUser.role !== "setter" && (() => {
+              // Si la llamada es mañana, mostrar etiqueta "pendiente recordatorio"
+              const callDate = new Date(lead.callScheduledAt);
+              const tomorrow = new Date();
+              tomorrow.setDate(tomorrow.getDate() + 1);
+              tomorrow.setHours(0, 0, 0, 0);
+              const tomorrowEnd = new Date(tomorrow);
+              tomorrowEnd.setHours(23, 59, 59, 999);
+              if (callDate >= tomorrow && callDate <= tomorrowEnd) {
+                return (
+                  <span className="text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded" style={{ background: "#FED7AA", color: "#9A3412" }}>
+                    PENDIENTE RECORDATORIO
+                  </span>
+                );
+              }
+              return null;
+            })()}
             <span className="text-xs text-neutral-500">
               {CONTACT_ICON[lead.contactType] ?? "·"} {lead.contactValue}
             </span>
@@ -335,6 +367,11 @@ function CallRow({
               → Ver ficha de {lead.convertedPatient.fullName}
             </Link>
           )}
+
+          {/* Botones de acción rápida de workflow (no abren el modal, son inline) */}
+          {lead.status === "scheduled" && (
+            <WorkflowActionButtons lead={lead} currentUser={currentUser} />
+          )}
         </div>
         <div className="text-right flex-shrink-0">
           <div className="text-xs font-medium text-blue-700 whitespace-nowrap">
@@ -344,6 +381,115 @@ function CallRow({
       </div>
     </button>
   );
+}
+
+// ============================================================================
+// Botones de acción rápida del workflow comercial
+// ============================================================================
+function WorkflowActionButtons({
+  lead,
+  currentUser,
+}: {
+  lead: Lead;
+  currentUser: { id: string; fullName: string; role: string };
+}) {
+  const [loading, setLoading] = useState(false);
+
+  async function markSetterNotified(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (loading) return;
+    setLoading(true);
+    await fetch(`/api/leads/${lead.id}/mark-setter-notified`, { method: "POST" });
+    window.location.reload();
+  }
+
+  async function markCloserContacted(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (loading) return;
+    setLoading(true);
+    await fetch(`/api/leads/${lead.id}/mark-closer-contacted`, { method: "POST" });
+    window.location.reload();
+  }
+
+  async function markReminderSent(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (loading) return;
+    setLoading(true);
+    await fetch(`/api/leads/${lead.id}/mark-reminder-sent`, { method: "POST" });
+    window.location.reload();
+  }
+
+  // Setter: ve botón "Avisado" cuando aún no se ha marcado
+  if (
+    (currentUser.role === "setter" || currentUser.role === "ceo" || currentUser.role === "head_success") &&
+    lead.source === "landing" &&
+    !lead.setterNotifiedAt
+  ) {
+    return (
+      <div className="mt-2">
+        <button
+          onClick={markSetterNotified}
+          disabled={loading}
+          className="text-xs font-medium px-2.5 py-1 rounded-md"
+          style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+        >
+          ✓ Avisado (notificar al closer)
+        </button>
+      </div>
+    );
+  }
+
+  // Closer asignado: ve "Caso enviado" cuando ya está avisado pero no contactado
+  if (
+    (currentUser.role === "closer" || currentUser.role === "ceo") &&
+    lead.closer?.id === currentUser.id &&
+    lead.setterNotifiedAt &&
+    !lead.closerContactedAt
+  ) {
+    return (
+      <div className="mt-2">
+        <button
+          onClick={markCloserContacted}
+          disabled={loading}
+          className="text-xs font-medium px-2.5 py-1 rounded-md"
+          style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+        >
+          ✓ Caso de éxito enviado
+        </button>
+      </div>
+    );
+  }
+
+  // Closer asignado: ve "Recordatorio enviado" si está contactado, sin recordatorio, y cita es mañana
+  if (
+    (currentUser.role === "closer" || currentUser.role === "ceo") &&
+    lead.closer?.id === currentUser.id &&
+    lead.closerContactedAt &&
+    !lead.reminderSentAt
+  ) {
+    const callDate = new Date(lead.callScheduledAt);
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+    const tomorrowEnd = new Date(tomorrow);
+    tomorrowEnd.setHours(23, 59, 59, 999);
+    if (callDate >= tomorrow && callDate <= tomorrowEnd) {
+      return (
+        <div className="mt-2">
+          <button
+            onClick={markReminderSent}
+            disabled={loading}
+            className="text-xs font-medium px-2.5 py-1 rounded-md"
+            style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+          >
+            ✓ Recordatorio enviado
+          </button>
+        </div>
+      );
+    }
+  }
+
+  return null;
 }
 
 // ============================================================================

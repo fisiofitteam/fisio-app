@@ -1,6 +1,6 @@
 "use client";
 
-// Vídeo pre-llamada (lo dejamos aquí; si cambias el vídeo, edita esta constante)
+// Vídeo pre-llamada (si cambias el vídeo, edita esta constante)
 const PRE_CALL_VIDEO_ID = "DnEAQXs09BI";
 
 function formatDateLong(iso: string): string {
@@ -31,7 +31,7 @@ export function AgendaGracias({
       }}
     >
       <div className="max-w-2xl mx-auto px-5 py-10 pb-20">
-        {/* Confirmación */}
+        {/* ━━━ Confirmación inicial ━━━ */}
         <section className="text-center mb-8">
           <div
             className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4"
@@ -52,14 +52,98 @@ export function AgendaGracias({
               "Tu videoconsulta está reservada."
             )}
           </p>
-          <p className="text-sm mt-2" style={{ color: "#A3A3A3" }}>
-            Recibirás un email con el link de Google Meet en unos minutos.
+        </section>
+
+        {/* ━━━ Cómo será la llamada ━━━ */}
+        <section
+          className="rounded-2xl p-5 sm:p-6 mb-4"
+          style={{ background: "#141414", border: "1px solid #262626" }}
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <span style={{ fontSize: 20 }}>📋</span>
+            <h2 className="text-base sm:text-lg font-semibold">Cómo será tu videoconsulta</h2>
+          </div>
+          <p className="text-sm leading-relaxed mb-3" style={{ color: "#D4D4D4" }}>
+            Será una llamada de <strong style={{ color: "#FAFAFA" }}>45-60 minutos</strong>. Un especialista de FisioFit
+            te atenderá.
+          </p>
+          <p className="text-sm leading-relaxed" style={{ color: "#A3A3A3" }}>
+            Hablaremos para <strong style={{ color: "#FAFAFA" }}>conocer tu problema a fondo</strong> y saber qué
+            errores te mantienen en el bucle. Luego te daremos{" "}
+            <strong style={{ color: "#FAFAFA" }}>claridad sobre cómo puedes volver a disfrutar de CrossFit sin dolor</strong>.
           </p>
         </section>
 
-        {/* Vídeo pre-llamada */}
+        {/* ━━━ Cómo prepararte ━━━ */}
         <section
-          className="rounded-2xl p-5 sm:p-6 mb-6"
+          className="rounded-2xl p-5 sm:p-6 mb-4"
+          style={{ background: "#141414", border: "1px solid #262626" }}
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <span style={{ fontSize: 20 }}>📍</span>
+            <h2 className="text-base sm:text-lg font-semibold">Cómo prepararte</h2>
+          </div>
+          <p className="text-sm leading-relaxed" style={{ color: "#A3A3A3" }}>
+            Busca un <strong style={{ color: "#FAFAFA" }}>sitio tranquilo</strong>, sin distracciones. Evita
+            conectarte por la calle o conduciendo:{" "}
+            <strong style={{ color: "#FAFAFA" }}>necesitamos toda tu atención</strong> para sacar el máximo
+            partido de la llamada.
+          </p>
+        </section>
+
+        {/* ━━━ Qué pasará entre ahora y la llamada ━━━ */}
+        <section
+          className="rounded-2xl p-5 sm:p-6 mb-4"
+          style={{ background: "#141414", border: "1px solid #262626" }}
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <span style={{ fontSize: 20 }}>⏱</span>
+            <h2 className="text-base sm:text-lg font-semibold">Qué pasará antes de la llamada</h2>
+          </div>
+
+          <ol className="space-y-4 text-sm">
+            <li className="flex items-start gap-3">
+              <span
+                className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold"
+                style={{ background: "#262626", color: "#FAFAFA" }}
+              >
+                1
+              </span>
+              <div style={{ color: "#A3A3A3" }}>
+                <strong style={{ color: "#FAFAFA" }}>En breve recibirás un mensaje por WhatsApp</strong> para
+                presentarte al especialista que te atenderá y resolver cualquier duda inicial.
+              </div>
+            </li>
+            <li className="flex items-start gap-3">
+              <span
+                className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold"
+                style={{ background: "#262626", color: "#FAFAFA" }}
+              >
+                2
+              </span>
+              <div style={{ color: "#A3A3A3" }}>
+                <strong style={{ color: "#FAFAFA" }}>24 horas antes de la llamada</strong> te enviaremos un
+                recordatorio con el link de Google Meet para conectarte.
+              </div>
+            </li>
+            <li className="flex items-start gap-3">
+              <span
+                className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold"
+                style={{ background: "#262626", color: "#FAFAFA" }}
+              >
+                3
+              </span>
+              <div style={{ color: "#A3A3A3" }}>
+                <strong style={{ color: "#FAFAFA" }}>Mira el vídeo de abajo cuando puedas</strong>. Te ayudará a
+                llegar a la llamada con contexto y aprovecharla al máximo.
+              </div>
+            </li>
+          </ol>
+        </section>
+
+        {/* ━━━ Vídeo pre-llamada ━━━ */}
+        <section
+          className="rounded-2xl p-5 sm:p-6 mb-4"
           style={{ background: "#141414", border: "1px solid #262626" }}
         >
           <div className="flex items-center gap-2 mb-3">
@@ -72,8 +156,8 @@ export function AgendaGracias({
             <h2 className="text-base sm:text-lg font-semibold">Mira esto antes de la llamada</h2>
           </div>
           <p className="text-sm mb-4" style={{ color: "#A3A3A3" }}>
-            Hemos preparado un vídeo corto para que llegues a la videoconsulta con todo el contexto. Es la mejor forma
-            de aprovechar al máximo nuestra sesión:
+            Hemos preparado un vídeo corto para que llegues a la videoconsulta con todo el contexto. Es la mejor
+            forma de aprovechar al máximo nuestra sesión:
           </p>
           <div
             className="rounded-lg overflow-hidden mb-4"
@@ -93,71 +177,68 @@ export function AgendaGracias({
             </li>
             <li className="flex items-start gap-2">
               <span style={{ color: "#86EFAC" }}>✓</span>
-              <span>Aprovecharás cada minuto de la videoconsulta</span>
+              <span>Llegarás con las preguntas correctas</span>
             </li>
             <li className="flex items-start gap-2">
               <span style={{ color: "#86EFAC" }}>✓</span>
-              <span>Llegarás con las preguntas correctas que necesitas hacer</span>
+              <span>Aprovecharás cada minuto de la videoconsulta</span>
             </li>
           </ul>
         </section>
 
-        {/* Qué pasa ahora */}
+        {/* ━━━ Política de cancelación ━━━ */}
         <section
-          className="rounded-2xl p-5 sm:p-6 mb-6"
-          style={{ background: "#141414", border: "1px solid #262626" }}
+          className="rounded-2xl p-5 sm:p-6 mb-4"
+          style={{
+            background: "rgba(252, 165, 165, 0.05)",
+            border: "1px solid rgba(252, 165, 165, 0.2)",
+          }}
         >
-          <h2 className="text-base font-semibold mb-3">¿Qué pasa ahora?</h2>
-          <ol className="space-y-3 text-sm" style={{ color: "#A3A3A3" }}>
-            <li className="flex items-start gap-3">
-              <span
-                className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold"
-                style={{ background: "#262626", color: "#FAFAFA" }}
-              >
-                1
-              </span>
-              <span>
-                <strong style={{ color: "#FAFAFA" }}>Recibirás un email</strong> con la invitación a Google Calendar y
-                el link de Google Meet.
-              </span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span
-                className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold"
-                style={{ background: "#262626", color: "#FAFAFA" }}
-              >
-                2
-              </span>
-              <span>
-                <strong style={{ color: "#FAFAFA" }}>Mira el vídeo de arriba</strong> con tranquilidad. Hazlo cuando
-                tengas 10 minutos. Será la primera parte de tu proceso.
-              </span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span
-                className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold"
-                style={{ background: "#262626", color: "#FAFAFA" }}
-              >
-                3
-              </span>
-              <span>
-                <strong style={{ color: "#FAFAFA" }}>Te llamamos a la hora reservada.</strong> Conecta unos minutos
-                antes desde el link del email para que no se te escape nada.
-              </span>
-            </li>
-          </ol>
+          <div className="flex items-center gap-2 mb-3">
+            <span style={{ fontSize: 20 }}>🚫</span>
+            <h2 className="text-base sm:text-lg font-semibold">Política de cancelación</h2>
+          </div>
+          <p className="text-sm leading-relaxed mb-3" style={{ color: "#D4D4D4" }}>
+            Atendemos a un <strong style={{ color: "#FAFAFA" }}>número muy limitado de personas cada semana</strong>.
+            Si reservas, comprométete con tu cita.
+          </p>
+          <p className="text-sm leading-relaxed mb-3" style={{ color: "#D4D4D4" }}>
+            <strong style={{ color: "#FAFAFA" }}>Si necesitas cancelar o reprogramar</strong>, avísanos con
+            la mayor antelación posible. Liberamos tu hueco para otra persona que también lo está esperando.
+          </p>
+          <div
+            className="rounded-lg p-3 mt-3"
+            style={{
+              background: "rgba(252, 165, 165, 0.12)",
+              border: "1px solid rgba(252, 165, 165, 0.35)",
+            }}
+          >
+            <p className="text-sm leading-relaxed" style={{ color: "#FCA5A5" }}>
+              <strong>⚠️ Importante:</strong> si no acudes sin avisar,{" "}
+              <strong>no podrás volver a agendar</strong> con nosotros. Nuestro tiempo es limitado y solo
+              trabajamos con personas verdaderamente comprometidas con su recuperación.
+            </p>
+          </div>
         </section>
 
-        {/* Reprogramar */}
+        {/* ━━━ Contacto / reprogramar ━━━ */}
         <section
           className="rounded-2xl p-4 text-sm text-center"
           style={{ background: "transparent", border: "1px dashed #404040", color: "#A3A3A3" }}
         >
-          ¿Te ha surgido un imprevisto?{" "}
+          ¿Te ha surgido un imprevisto o tienes dudas?{" "}
           <strong style={{ color: "#FAFAFA" }}>
-            Escríbenos por Instagram <a href="https://www.instagram.com/fisiofitteam" target="_blank" rel="noopener noreferrer" className="underline">@fisiofitteam</a>
+            Escríbenos por Instagram{" "}
+            <a
+              href="https://www.instagram.com/fisiofitteam"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline"
+            >
+              @fisiofitteam
+            </a>
           </strong>{" "}
-          y lo movemos sin problema.
+          o responde al WhatsApp que te enviaremos en breve.
         </section>
 
         <footer className="mt-10 text-center text-xs" style={{ color: "#525252" }}>

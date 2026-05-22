@@ -11,27 +11,55 @@ type Slot = {
 };
 
 const DAY_LABELS = ["", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
-const DAY_LABELS_SHORT = ["", "L", "M", "X", "J", "V", "S", "D"];
 
 function formatDateLabel(iso: string): string {
+  // Mostrar la fecha en hora de Madrid usando Intl
   const d = new Date(iso);
-  const dayName = DAY_LABELS[d.getDay() === 0 ? 7 : d.getDay()];
-  const day = d.getDate();
-  const month = d.toLocaleDateString("es-ES", { month: "long" });
+  const dayName = d.toLocaleDateString("es-ES", { weekday: "long", timeZone: "Europe/Madrid" });
+  const day = d.toLocaleDateString("es-ES", { day: "numeric", timeZone: "Europe/Madrid" });
+  const month = d.toLocaleDateString("es-ES", { month: "long", timeZone: "Europe/Madrid" });
   return `${dayName} ${day} de ${month}`;
 }
 
 function dateKey(iso: string): string {
-  // YYYY-MM-DD para agrupar slots por día
+  // YYYY-MM-DD en Madrid para agrupar slots por día
   const d = new Date(iso);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const parts = d.toLocaleDateString("sv-SE", { timeZone: "Europe/Madrid" }); // YYYY-MM-DD
+  return parts;
+}
+
+function formatHHMM(iso: string): string {
+  // HH:MM en Madrid
+  const d = new Date(iso);
+  return d.toLocaleTimeString("es-ES", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/Madrid",
+  });
+}
+
+function formatHHMMLocal(iso: string): string {
+  // HH:MM en zona local del navegador
+  const d = new Date(iso);
+  return d.toLocaleTimeString("es-ES", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getUserTimezone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return null;
+  }
 }
 
 export function AgendaLanding() {
   const router = useRouter();
   const [step, setStep] = useState<1 | 2>(1);
 
-  // Step 1 — Datos personales y cuestionario
+  // Step 1
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -39,7 +67,7 @@ export function AgendaLanding() {
   const [tratamientosPrevios, setTratamientosPrevios] = useState("");
   const [impactoCrossfit, setImpactoCrossfit] = useState("");
 
-  // Step 2 — Slots
+  // Step 2
   const [slots, setSlots] = useState<Slot[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
@@ -47,6 +75,13 @@ export function AgendaLanding() {
   // Booking
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  // Huso horario del usuario (calculado en cliente)
+  const [userTz, setUserTz] = useState<string | null>(null);
+  useEffect(() => {
+    setUserTz(getUserTimezone());
+  }, []);
+  const isUserInMadrid = userTz === "Europe/Madrid";
 
   function step1Valid(): boolean {
     return (
@@ -113,7 +148,6 @@ export function AgendaLanding() {
       });
       const data = await res.json();
       if (data.ok) {
-        // Redirección con datos en query para mostrar en /gracias
         const params = new URLSearchParams({
           lead: data.leadId,
           start: selectedSlot.startISO,
@@ -122,7 +156,6 @@ export function AgendaLanding() {
         router.push(`/agenda/gracias?${params.toString()}`);
       } else {
         setError(data.error || "No se pudo reservar. Inténtalo de nuevo.");
-        // Si fue conflicto de slot, recargar huecos
         if (res.status === 409) {
           setSelectedSlot(null);
           loadSlots();
@@ -135,7 +168,7 @@ export function AgendaLanding() {
     }
   }
 
-  // Agrupar slots por día
+  // Agrupar slots por día (clave: YYYY-MM-DD en Madrid)
   const slotsByDay = new Map<string, Slot[]>();
   for (const s of slots) {
     const k = dateKey(s.startISO);
@@ -328,9 +361,25 @@ export function AgendaLanding() {
               </button>
 
               <h2 className="text-lg font-semibold mb-1">Elige cuándo te llamamos</h2>
-              <p className="text-xs mb-4" style={{ color: "#A3A3A3" }}>
-                Videoconsulta de 60 minutos. Necesitarás 24h de antelación mínimo.
+              <p className="text-xs mb-3" style={{ color: "#A3A3A3" }}>
+                Videoconsulta de 45-60 minutos. Necesitamos al menos 24 horas de antelación.
               </p>
+
+              {/* Aviso de huso horario */}
+              <div
+                className="rounded-lg px-3 py-2 mb-4 text-xs flex items-start gap-2"
+                style={{ background: "rgba(252, 211, 77, 0.08)", border: "1px solid rgba(252, 211, 77, 0.25)", color: "#FCD34D" }}
+              >
+                <span className="flex-shrink-0">🕒</span>
+                <div>
+                  Las horas se muestran en <strong>horario de Madrid (España)</strong>.
+                  {!isUserInMadrid && userTz && (
+                    <>
+                      {" "}Tu zona horaria detectada es <strong>{userTz}</strong>. Verás también la hora local equivalente.
+                    </>
+                  )}
+                </div>
+              </div>
 
               {loadingSlots && (
                 <p className="text-sm text-center py-8" style={{ color: "#A3A3A3" }}>
@@ -348,27 +397,38 @@ export function AgendaLanding() {
               )}
 
               {!loadingSlots && slots.length > 0 && (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {Array.from(slotsByDay.entries()).map(([dayKey, daySlots]) => (
-                    <div key={dayKey}>
-                      <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#A3A3A3" }}>
+                    <div
+                      key={dayKey}
+                      className="rounded-lg p-3"
+                      style={{ background: "#1A1A1A", border: "1px solid #262626" }}
+                    >
+                      <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#D4D4D4" }}>
                         {formatDateLabel(daySlots[0].startISO)}
                       </h3>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
                         {daySlots.map((s) => {
                           const isSelected = selectedSlot?.startISO === s.startISO;
+                          const madridTime = formatHHMM(s.startISO);
+                          const localTime = !isUserInMadrid ? formatHHMMLocal(s.startISO) : null;
                           return (
                             <button
                               key={s.startISO}
                               onClick={() => setSelectedSlot(s)}
-                              className="px-3 py-2 rounded-lg text-sm font-medium tabular-nums"
+                              className="px-2 py-2 rounded-md text-sm font-medium tabular-nums leading-tight"
                               style={{
-                                background: isSelected ? "#FAFAFA" : "#1F1F1F",
+                                background: isSelected ? "#FAFAFA" : "#262626",
                                 color: isSelected ? "#0A0A0A" : "#FAFAFA",
                                 border: "1px solid " + (isSelected ? "#FAFAFA" : "#404040"),
                               }}
                             >
-                              {s.hhmm}
+                              <div>{madridTime}</div>
+                              {localTime && (
+                                <div className="text-[10px] mt-0.5" style={{ opacity: 0.6 }}>
+                                  {localTime} local
+                                </div>
+                              )}
                             </button>
                           );
                         })}
@@ -393,7 +453,12 @@ export function AgendaLanding() {
                   style={{ background: "rgba(34, 197, 94, 0.1)", border: "1px solid #14532D", color: "#86EFAC" }}
                 >
                   ✓ Has elegido el <strong>{formatDateLabel(selectedSlot.startISO)}</strong> a las{" "}
-                  <strong>{selectedSlot.hhmm}</strong>
+                  <strong>{formatHHMM(selectedSlot.startISO)}</strong> (hora Madrid)
+                  {!isUserInMadrid && (
+                    <>
+                      {" "}· {formatHHMMLocal(selectedSlot.startISO)} en tu hora local
+                    </>
+                  )}
                 </div>
               )}
 

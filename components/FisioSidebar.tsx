@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { LogoFull } from "./Logo";
+import { NotificationsBell } from "./NotificationsBell";
 import {
   LayoutDashboard,
   Users,
@@ -82,11 +84,38 @@ export function FisioSidebar({
   user: { id: string; fullName: string; role: string } | null;
 }) {
   const pathname = usePathname() ?? "";
+  const [notifCount, setNotifCount] = useState(0);
+
+  // Polling notificaciones para mostrar badge en sidebar
+  useEffect(() => {
+    if (!user) return;
+    async function fetchCount() {
+      try {
+        const res = await fetch("/api/notifications", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        setNotifCount(data.count || 0);
+      } catch {}
+    }
+    fetchCount();
+    const id = setInterval(fetchCount, 30_000);
+    return () => clearInterval(id);
+  }, [user]);
 
   if (pathname.startsWith("/fisio/paciente/")) return null;
 
   const items = user ? itemsForRole(user.role) : [PANEL, PACIENTES, BIBLIOTECA, TAREAS, LLAMADAS, RECURSOS];
   const initials = user ? getInitials(user.fullName) : "??";
+
+  // ¿Qué items deben mostrar el badge de notificaciones?
+  // - Setters: ven el badge en el item LEADS (es donde está su workflow)
+  // - Closers / CEO con franjas: ven el badge en LLAMADAS_VENTA
+  function badgeFor(itemId: string): number | null {
+    if (!user || notifCount === 0) return null;
+    if (user.role === "setter" && itemId === "leads") return notifCount;
+    if ((user.role === "closer" || user.role === "ceo") && itemId === "llamadas-venta") return notifCount;
+    return null;
+  }
 
   return (
     <>
@@ -95,19 +124,33 @@ export function FisioSidebar({
         <Link href="/" className="px-3 py-2 text-xs rounded-lg whitespace-nowrap bg-white border border-neutral-200 text-neutral-500">
           ← Inicio
         </Link>
+        {user && (
+          <div className="px-1 flex items-center">
+            <NotificationsBell />
+          </div>
+        )}
         {items.map((it) => {
           const active = it.match(pathname);
           const Icon = it.Icon;
+          const badge = badgeFor(it.id);
           return (
             <Link
               key={it.id}
               href={it.href}
-              className={`px-3 py-2 text-xs rounded-lg whitespace-nowrap flex items-center gap-1.5 ${
+              className={`px-3 py-2 text-xs rounded-lg whitespace-nowrap flex items-center gap-1.5 relative ${
                 active ? "bg-neutral-900 text-white" : "bg-white border border-neutral-200"
               }`}
             >
               <Icon size={14} strokeWidth={2} />
               {it.label}
+              {badge !== null && badge > 0 && (
+                <span
+                  className="ml-1 min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-bold flex items-center justify-center"
+                  style={{ background: "#DC2626", color: "#FFFFFF" }}
+                >
+                  {badge > 99 ? "99+" : badge}
+                </span>
+              )}
             </Link>
           );
         })}
@@ -115,8 +158,9 @@ export function FisioSidebar({
 
       {/* Desktop */}
       <aside className="hidden md:block w-52 flex-shrink-0">
-        <div className="px-3 mb-3">
+        <div className="px-3 mb-3 flex items-center justify-between">
           <LogoFull size={28} />
+          {user && <NotificationsBell />}
         </div>
 
         {user && (
@@ -151,6 +195,7 @@ export function FisioSidebar({
           {items.map((it) => {
             const active = it.match(pathname);
             const Icon = it.Icon;
+            const badge = badgeFor(it.id);
             return (
               <Link
                 key={it.id}
@@ -160,7 +205,15 @@ export function FisioSidebar({
                 }`}
               >
                 <Icon size={17} strokeWidth={active ? 2.25 : 2} />
-                <span style={{ letterSpacing: "-0.015em" }}>{it.label}</span>
+                <span style={{ letterSpacing: "-0.015em" }} className="flex-1">{it.label}</span>
+                {badge !== null && badge > 0 && (
+                  <span
+                    className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center"
+                    style={{ background: "#DC2626", color: "#FFFFFF" }}
+                  >
+                    {badge > 99 ? "99+" : badge}
+                  </span>
+                )}
               </Link>
             );
           })}

@@ -190,6 +190,14 @@ model Lead {
   source          String?                                    // "landing" | "manual" | (futuros: "ads_meta", "ads_google", ...)
   bookedAt        DateTime?                                  // momento exacto en que se hizo la reserva pública
 
+  // ─── Etapas comerciales (workflow setter → closer) ───
+  // Cuándo el setter marcó "avisado" (paso 1 hecho)
+  setterNotifiedAt    DateTime?
+  // Cuándo el closer marcó "contactado" (caso de éxito enviado, paso 2 hecho)
+  closerContactedAt   DateTime?
+  // Cuándo el closer marcó "recordatorio enviado" (paso 3 hecho, día antes de la cita)
+  reminderSentAt      DateTime?
+
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   decidedAt       DateTime?                                   // cuándo se marcó won/lost/postponed
@@ -1124,4 +1132,53 @@ model ClosingShift {
 
   @@index([weekStartDate, dayOfWeek])
   @@index([closerId])
+}
+
+// ============================================================================
+// NOTIFICACIONES IN-APP PARA EL EQUIPO
+// ============================================================================
+// Cuando un lead agenda desde la landing, o cuando se dispara una etapa del
+// flujo comercial (avisado, recordatorio del día siguiente, etc), se generan
+// notificaciones para los miembros del equipo correspondientes.
+//
+// Flujo de etapas:
+//  1. Lead agenda → notificación "lead_new" para todos los SETTERS
+//  2. Setter marca "avisado" → notificación "lead_assigned" para el CLOSER asignado
+//  3. Cron 09:00 día anterior → notificación "call_reminder" para el CLOSER
+//
+// Las notificaciones se marcan como leídas (readAt) cuando el destinatario
+// pulsa "OK" en su campanita o cuando completa la acción asociada.
+// ============================================================================
+
+model TeamNotification {
+  id              String   @id @default(cuid())
+
+  // A quién va dirigida. Si es a un rol completo (ej. todos los setters),
+  // se rellena targetRole. Si es a un profesional concreto, targetProfessionalId.
+  // Pueden ir ambos rellenos: "para el rol setter PERO concretamente Niki".
+  targetRole          String?    // "setter" | "closer" | "ceo" | etc.
+  targetProfessionalId String?   // FK Professional (si va a uno concreto)
+
+  // Tipo de notificación (clave estable para el código)
+  // - "lead_new": lead nuevo entró por landing, esperando primer contacto
+  // - "lead_assigned": el setter ya avisó, el closer debe contactar
+  // - "call_reminder": recordatorio del día anterior para enviar recordatorio + video
+  type            String
+
+  // Lead relacionado (todas las notificaciones actuales van ligadas a un Lead)
+  leadId          String?
+
+  // Texto visible
+  title           String
+  body            String
+
+  // Acción CTA opcional (URL relativa a la que el botón redirige)
+  actionUrl       String?
+
+  readAt          DateTime?
+  createdAt       DateTime @default(now())
+
+  @@index([targetRole, readAt])
+  @@index([targetProfessionalId, readAt])
+  @@index([leadId])
 }
