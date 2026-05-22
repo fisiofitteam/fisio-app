@@ -176,6 +176,9 @@ export function SubscriptionPeriodsBlock({ patientId, isManager }: { patientId: 
                 </div>
 
                 <div className="text-xs flex items-baseline gap-3 flex-wrap" style={{ color: "#737373" }}>
+                  <span className="font-medium" style={{ color: "#0A0A0A" }}>
+                    {r.periodMonths} {r.periodMonths === 1 ? "mes" : "meses"}
+                  </span>
                   <span>
                     {formatDate(r.startDate)} → {formatDate(r.endDate)}
                   </span>

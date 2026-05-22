@@ -97,6 +97,28 @@ export async function sanitizePatientRenewals(patientId: string) {
     }
   }
 
+  // 4b. Si NO hay activo pero hay un periodo cuyo rango incluye hoy → activarlo.
+  // Esto recupera la situación cuando, por algún motivo, todos quedaron en
+  // "finished" pero realmente el más reciente debería estar vigente.
+  if (stillActive.length === 0) {
+    const candidate = await prisma.subscriptionRenewal.findFirst({
+      where: {
+        patientId,
+        status: { not: "scheduled" },
+        startDate: { lte: today },
+        endDate: { gte: today },
+      },
+      orderBy: { startDate: "desc" },
+    });
+    if (candidate) {
+      await prisma.subscriptionRenewal.update({
+        where: { id: candidate.id },
+        data: { status: "active" },
+      });
+      actions.push(`Reactivado periodo vigente por fechas: ${candidate.programType || "—"}`);
+    }
+  }
+
   // 5. Si hay scheduled cuyo startDate ya llegó, activarlos (lógica del cron en demanda)
   const scheduledReady = await prisma.subscriptionRenewal.findMany({
     where: {
