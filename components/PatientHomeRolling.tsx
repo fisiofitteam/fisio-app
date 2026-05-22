@@ -3,23 +3,42 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
+type RollingTask = {
+  id: string;
+  type: string;
+  title: string;
+  bodyText: string | null;
+  youtubeUrl: string | null;
+};
+
+type RollingDay = {
+  dayOfWeek: number;
+  tasks: RollingTask[];
+};
+
+const DAY_NAMES = ["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
+
+const TYPE_LABELS: Record<string, string> = {
+  WORKOUT: "Workout",
+  VIDEO: "Vídeo",
+  FORM: "Formulario",
+  EVOLUTION: "Evolución",
+};
+
+const TYPE_ICONS: Record<string, string> = {
+  WORKOUT: "💪",
+  VIDEO: "🎥",
+  FORM: "📝",
+  EVOLUTION: "📊",
+};
+
 function formatWeekLabel(iso: string): string {
   const d = new Date(iso);
   const end = new Date(d);
-  end.setDate(d.getDate() + 6);
+  end.setDate(d.getDate() + 4);
   const startStr = d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
   const endStr = end.toLocaleDateString("es-ES", { day: "numeric", month: "long" });
   return `${startStr} – ${endStr}`;
-}
-
-function extractMarkdown(contentJson: string | null | undefined): string {
-  if (!contentJson) return "";
-  try {
-    const parsed = JSON.parse(contentJson);
-    return parsed.markdown || "";
-  } catch {
-    return contentJson || "";
-  }
 }
 
 export function PatientHomeRolling({
@@ -27,7 +46,7 @@ export function PatientHomeRolling({
   mode,
   weekStartIso,
   title,
-  contentJson,
+  days,
   daysToExpire,
 }: {
   firstName: string;
@@ -35,11 +54,10 @@ export function PatientHomeRolling({
   mode: "ready" | "pending" | "expired";
   weekStartIso: string;
   title?: string | null;
-  contentJson?: string | null;
+  days: RollingDay[];
   daysToExpire?: number | null;
 }) {
   const initial = firstName[0]?.toUpperCase() ?? "?";
-  const content = extractMarkdown(contentJson);
 
   if (mode === "expired") {
     return (
@@ -60,6 +78,14 @@ export function PatientHomeRolling({
     );
   }
 
+  // Construir mapa dow → tasks (para mostrar 5 días aunque algunos estén vacíos)
+  const daysByDow: Record<number, RollingTask[]> = {};
+  for (let i = 1; i <= 5; i++) daysByDow[i] = [];
+  for (const d of days) daysByDow[d.dayOfWeek] = d.tasks;
+
+  const today = new Date();
+  const todayDow = today.getDay() === 0 ? 7 : today.getDay(); // 1-7
+
   return (
     <main className="min-h-screen" style={{ color: "#FAFAFA" }}>
       <div className="relative max-w-md mx-auto px-5 py-7 pb-28">
@@ -75,7 +101,6 @@ export function PatientHomeRolling({
             </div>
           </div>
 
-          {/* Avatar + saludo */}
           <div className="flex items-center gap-3 mb-5">
             <div
               className="flex items-center justify-center font-bold flex-shrink-0"
@@ -99,7 +124,6 @@ export function PatientHomeRolling({
             </div>
           </div>
 
-          {/* Aviso de caducidad si <=14 días */}
           {daysToExpire !== null && daysToExpire !== undefined && daysToExpire <= 14 && daysToExpire >= 0 && (
             <div
               className="rounded-xl px-4 py-3 mb-3 text-sm"
@@ -117,48 +141,103 @@ export function PatientHomeRolling({
           )}
         </header>
 
-        {/* Semana actual */}
-        <section
-          className="rounded-2xl p-5 mb-6"
-          style={{ background: "#171717", border: "1px solid #262626" }}
-        >
-          <div className="text-[11px] font-medium mb-1 tracking-wider" style={{ color: "#737373" }}>
-            SEMANA · {formatWeekLabel(weekStartIso).toUpperCase()}
-          </div>
-          {title && (
-            <h2 className="text-xl font-bold mb-3" style={{ letterSpacing: "-0.025em" }}>
-              {title}
-            </h2>
-          )}
+        <div className="text-[11px] font-medium mb-1 tracking-wider" style={{ color: "#737373" }}>
+          SEMANA · {formatWeekLabel(weekStartIso).toUpperCase()}
+        </div>
+        {title && (
+          <h2 className="text-xl font-bold mb-5" style={{ letterSpacing: "-0.025em" }}>
+            {title}
+          </h2>
+        )}
 
-          {mode === "pending" && (
-            <div className="py-6 text-center">
-              <div className="text-3xl mb-2">⚒️</div>
-              <p className="text-sm" style={{ color: "#A3A3A3" }}>
-                Tu coach está preparando la semana.
-              </p>
-              <p className="text-xs mt-1" style={{ color: "#737373" }}>
-                Vuelve pronto.
-              </p>
-            </div>
-          )}
-
-          {mode === "ready" && content && (
-            <div
-              className="text-sm whitespace-pre-wrap leading-relaxed"
-              style={{ color: "#E5E5E5" }}
-            >
-              {content}
-            </div>
-          )}
-
-          {mode === "ready" && !content && (
-            <p className="text-sm italic" style={{ color: "#737373" }}>
-              Tu coach ha programado esta semana pero aún no ha añadido el contenido.
+        {mode === "pending" && (
+          <section
+            className="rounded-2xl p-5 text-center py-10"
+            style={{ background: "#171717", border: "1px solid #262626" }}
+          >
+            <div className="text-3xl mb-2">⚒️</div>
+            <p className="text-sm" style={{ color: "#A3A3A3" }}>
+              Tu coach está preparando la semana.
             </p>
-          )}
-        </section>
+          </section>
+        )}
+
+        {mode === "ready" && (
+          <div className="space-y-3">
+            {[1, 2, 3, 4, 5].map((dow) => {
+              const tasks = daysByDow[dow];
+              const isToday = dow === todayDow;
+              const isPast = dow < todayDow;
+              return (
+                <section
+                  key={dow}
+                  className="rounded-2xl p-4"
+                  style={{
+                    background: isToday ? "rgba(252, 211, 77, 0.08)" : "#171717",
+                    border: `1px solid ${isToday ? "rgba(252, 211, 77, 0.25)" : "#262626"}`,
+                    opacity: isPast ? 0.6 : 1,
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-[11px] font-bold tracking-wider" style={{ color: isToday ? "#FCD34D" : "#737373" }}>
+                      {DAY_NAMES[dow].toUpperCase()}{isToday ? " · HOY" : ""}
+                    </div>
+                  </div>
+
+                  {tasks.length === 0 ? (
+                    <p className="text-xs italic" style={{ color: "#525252" }}>Día de descanso</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {tasks.map((t) => (
+                        <RollingTaskCard key={t.id} task={t} />
+                      ))}
+                    </div>
+                  )}
+                </section>
+              );
+            })}
+          </div>
+        )}
       </div>
     </main>
+  );
+}
+
+function RollingTaskCard({ task }: { task: RollingTask }) {
+  return (
+    <div
+      className="rounded-xl p-3"
+      style={{ background: "#0F0F0F", border: "1px solid #262626" }}
+    >
+      <div className="flex items-start gap-2 mb-1">
+        <div className="text-base">{TYPE_ICONS[task.type] || "•"}</div>
+        <div className="flex-1 min-w-0">
+          <div className="font-medium text-sm" style={{ letterSpacing: "-0.01em" }}>
+            {task.title}
+          </div>
+          <div className="text-[10px] mt-0.5" style={{ color: "#737373" }}>
+            {TYPE_LABELS[task.type] || task.type}
+          </div>
+        </div>
+      </div>
+
+      {task.bodyText && (
+        <div className="text-xs whitespace-pre-wrap mt-2 leading-relaxed" style={{ color: "#A3A3A3" }}>
+          {task.bodyText}
+        </div>
+      )}
+
+      {task.youtubeUrl && (
+        <a
+          href={task.youtubeUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-xs mt-2 hover:underline"
+          style={{ color: "#FCD34D" }}
+        >
+          Abrir vídeo →
+        </a>
+      )}
+    </div>
   );
 }

@@ -18,7 +18,6 @@ import {
   Sparkles,
   UserCog,
   LogOut,
-  Activity,
   LucideIcon,
 } from "lucide-react";
 
@@ -41,16 +40,15 @@ const BIBLIOTECA: Item = { id: "biblioteca", label: "Biblioteca", Icon: BookOpen
 const TAREAS: Item = { id: "tareas", label: "Tareas", Icon: CheckSquare, href: "/fisio/tareas", match: (p) => p.startsWith("/fisio/tareas") };
 const LLAMADAS: Item = { id: "llamadas", label: "Llamadas", Icon: Phone, href: "/fisio/llamadas", match: (p) => p.startsWith("/fisio/llamadas") };
 const RECURSOS: Item = { id: "recursos", label: "Recursos", Icon: Package, href: "/fisio/recursos", match: (p) => p.startsWith("/fisio/recursos") };
-const ROLLING: Item = { id: "rolling", label: "Rolling", Icon: Activity, href: "/fisio/rolling", match: (p) => p.startsWith("/fisio/rolling") };
 const FINANZAS: Item = { id: "finanzas", label: "Finanzas", Icon: Wallet, href: "/fisio/finanzas", match: (p) => p.startsWith("/fisio/finanzas") };
 const EQUIPO: Item = { id: "equipo", label: "Equipo", Icon: UserCog, href: "/fisio/equipo", match: (p) => p.startsWith("/fisio/equipo") };
 
 function itemsForRole(role: string): Item[] {
   if (role === "ceo") {
-    return [PANEL, PACIENTES, LLAMADAS_VENTA, FOLLOWUP, CONTENIDO, BIBLIOTECA, TAREAS, ROLLING, RECURSOS, FINANZAS, EQUIPO];
+    return [PANEL, PACIENTES, LLAMADAS_VENTA, FOLLOWUP, CONTENIDO, BIBLIOTECA, TAREAS, RECURSOS, FINANZAS, EQUIPO];
   }
   if (role === "head_success") {
-    return [PANEL, PACIENTES, BIBLIOTECA, TAREAS, LLAMADAS, ROLLING, RECURSOS];
+    return [PANEL, PACIENTES, BIBLIOTECA, TAREAS, LLAMADAS, RECURSOS];
   }
   if (role === "setter") {
     return [LEADS, PARCHES, CONTENIDO];
@@ -60,7 +58,7 @@ function itemsForRole(role: string): Item[] {
     return [PANEL, LLAMADAS_VENTA, FOLLOWUP];
   }
   // fisio normal
-  return [PANEL, PACIENTES, BIBLIOTECA, TAREAS, LLAMADAS, ROLLING, RECURSOS];
+  return [PANEL, PACIENTES, BIBLIOTECA, TAREAS, LLAMADAS, RECURSOS];
 }
 
 const ROLE_LABEL: Record<string, string> = {

@@ -11,6 +11,12 @@ const SECTIONS = [
     desc: "Plantillas multi-semana",
   },
   {
+    id: "rolling",
+    label: "Rolling",
+    icon: "⚡",
+    desc: "Programas \"a tiempo corrido\"",
+  },
+  {
     id: "perfiles",
     label: "Controles de cargas",
     icon: "🏋️",

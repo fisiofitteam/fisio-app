@@ -64,6 +64,12 @@ export default async function PatientHome({ params }: { params: { id: string } }
           weekStartDate: thisMonday,
         },
       },
+      include: {
+        days: {
+          include: { tasks: { orderBy: { order: "asc" } } },
+          orderBy: { dayOfWeek: "asc" },
+        },
+      },
     });
 
     return (
@@ -73,7 +79,16 @@ export default async function PatientHome({ params }: { params: { id: string } }
         mode={week && week.publishedAt ? "ready" : "pending"}
         weekStartIso={thisMonday.toISOString()}
         title={week?.title || null}
-        contentJson={week?.contentJson || null}
+        days={week?.days.map((d) => ({
+          dayOfWeek: d.dayOfWeek,
+          tasks: d.tasks.map((t) => ({
+            id: t.id,
+            type: t.type,
+            title: t.title,
+            bodyText: t.bodyText,
+            youtubeUrl: t.youtubeUrl,
+          })),
+        })) || []}
         daysToExpire={daysToExpire}
       />
     );

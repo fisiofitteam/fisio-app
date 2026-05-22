@@ -654,7 +654,7 @@ function CreatePatientModal({
           {programType === "ADVANCE" && rollingPrograms.length === 0 && (
             <div className="rounded-lg p-3 text-xs" style={{ background: "#FEF3C7", border: "1px solid #FCD34D", color: "#7C2D12" }}>
               Aún no has creado programas rolling.{" "}
-              <a href="/fisio/rolling" className="font-medium underline">Crear el primero</a> para poder enchufar pacientes ADVANCE a rolling.
+              <a href="/fisio/biblioteca/rolling" className="font-medium underline">Crear el primero</a> para poder enchufar pacientes ADVANCE a rolling.
             </div>
           )}
 

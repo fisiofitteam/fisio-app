@@ -139,7 +139,7 @@ export function RollingAssignmentBlock({
                 <p className="text-xs text-neutral-500 italic">Cargando programas...</p>
               ) : programs.length === 0 ? (
                 <div className="text-xs p-2 rounded" style={{ background: "#FEF3C7", color: "#7C2D12" }}>
-                  No hay programas rolling activos. <a href="/fisio/rolling" className="underline font-medium">Crear uno primero</a>.
+                  No hay programas rolling activos. <a href="/fisio/biblioteca/rolling" className="underline font-medium">Crear uno primero</a>.
                 </div>
               ) : (
                 <select

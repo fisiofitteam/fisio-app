@@ -880,10 +880,37 @@ model RollingWeek {
   weekStartDate    DateTime                   // lunes 00:00 de esa semana
   title            String?                    // "Semana del 19 mayo · Foco fuerza"
   notes            String?                    // notas internas del fisio (no visibles al paciente)
-  contentJson      String   @default("{}")    // estructura libre con las sesiones de la semana (formato similar a ProgramAssignment)
   publishedAt      DateTime?                  // null = borrador; con fecha = visible para pacientes
   createdAt        DateTime @default(now())
 
-  @@unique([programId, weekStartDate])         // una semana única por programa
+  days             RollingDay[]
+
+  @@unique([programId, weekStartDate])
   @@index([weekStartDate])
+}
+
+model RollingDay {
+  id          String   @id @default(cuid())
+  weekId      String
+  week        RollingWeek @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  dayOfWeek   Int                              // 1 (lunes) a 5 (viernes)
+  tasks       RollingTask[]
+
+  @@unique([weekId, dayOfWeek])
+}
+
+model RollingTask {
+  id          String   @id @default(cuid())
+  dayId       String
+  day         RollingDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  type        String                          // "WORKOUT" | "VIDEO" | "FORM" | "EVOLUTION"
+  title       String   @default("")
+  order       Int      @default(0)
+
+  // Payload inline según `type`. Mantenemos simple: una tabla, sin sub-tablas.
+  bodyText    String?                         // WORKOUT: texto libre (markdown ligero); VIDEO/FORM: descripción opcional
+  youtubeUrl  String?                         // VIDEO: URL del vídeo
+  formId      String?                         // FORM: referencia al Form de Biblioteca
+
+  @@index([dayId])
 }

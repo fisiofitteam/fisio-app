@@ -1,22 +1,64 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-
-type Week = {
-  id: string;
-  weekStartDate: string;
-  title: string | null;
-  notes: string | null;
-  contentJson: string;
-  publishedAt: string | null;
-};
+import { useEffect, useState } from "react";
+import {
+  DndContext,
+  DragEndEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+  DragOverlay,
+} from "@dnd-kit/core";
 
 type Program = {
   id: string;
   name: string;
   description: string | null;
   isActive: boolean;
+};
+
+type Task = {
+  id: string;
+  type: string;
+  title: string;
+  order: number;
+  bodyText: string | null;
+  youtubeUrl: string | null;
+  formId: string | null;
+};
+
+type Day = {
+  id: string;
+  dayOfWeek: number;
+  tasks: Task[];
+};
+
+type WeekFull = {
+  id: string;
+  weekStartDate: string;
+  title: string | null;
+  notes: string | null;
+  publishedAt: string | null;
+  days: Day[];
+};
+
+const DAY_HEADERS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
+
+const TYPE_LABELS: Record<string, string> = {
+  WORKOUT: "Workout",
+  VIDEO: "Vídeo",
+  FORM: "Formulario",
+  EVOLUTION: "Registrar evolución",
+};
+
+const TYPE_COLORS: Record<string, string> = {
+  WORKOUT: "bg-amber-100 text-amber-900 border-amber-200",
+  VIDEO: "bg-rose-100 text-rose-900 border-rose-200",
+  FORM: "bg-emerald-100 text-emerald-900 border-emerald-200",
+  EVOLUTION: "bg-sky-100 text-sky-900 border-sky-200",
 };
 
 function weekStartOfDate(date: Date): Date {
@@ -31,51 +73,152 @@ function weekStartOfDate(date: Date): Date {
 function formatWeekLabel(iso: string): string {
   const d = new Date(iso);
   const end = new Date(d);
-  end.setDate(d.getDate() + 6);
+  end.setDate(d.getDate() + 4); // L-V = 5 días
   const startStr = d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
   const endStr = end.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
   return `${startStr} – ${endStr}`;
 }
 
+function addDays(d: Date, n: number): Date {
+  const x = new Date(d);
+  x.setDate(d.getDate() + n);
+  return x;
+}
+
 export function RollingProgramDetail({
   program,
-  weeks,
   patients,
   isManager,
 }: {
   program: Program;
-  weeks: Week[];
   patients: { id: string; fullName: string }[];
   isManager: boolean;
 }) {
-  const [editing, setEditing] = useState<Week | "new" | null>(null);
-  const [archiving, setArchiving] = useState(false);
+  const today = new Date();
+  const thisMonday = weekStartOfDate(today);
 
-  const thisMonday = weekStartOfDate(new Date());
-  const thisMondayIso = thisMonday.toISOString();
+  const [currentMonday, setCurrentMonday] = useState<Date>(thisMonday);
+  const [week, setWeek] = useState<WeekFull | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Buscar la semana actual (si existe)
-  const currentWeek = weeks.find((w) => {
-    const wIso = weekStartOfDate(new Date(w.weekStartDate)).toISOString();
-    return wIso === thisMondayIso;
-  });
+  // Drag & drop state
+  const [dragging, setDragging] = useState<{ task: Task; dayOfWeek: number } | null>(null);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const [moveModal, setMoveModal] = useState<{ task: Task; targetDayOfWeek: number } | null>(null);
 
-  async function toggleArchive() {
-    if (!isManager) return;
-    if (!confirm(program.isActive ? `¿Archivar "${program.name}"? Los pacientes seguirán viéndolo pero no aparecerá como activo.` : `¿Reactivar "${program.name}"?`)) return;
-    setArchiving(true);
-    await fetch("/api/rolling-programs", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: program.id, isActive: !program.isActive }),
-    });
-    window.location.reload();
+  // Modales add/edit task
+  const [typeModal, setTypeModal] = useState<{ dayOfWeek: number } | null>(null);
+  const [editTask, setEditTask] = useState<Task | null>(null);
+
+  // Cargar semana
+  async function loadWeek(monday: Date) {
+    setLoading(true);
+    const res = await fetch(
+      `/api/rolling-weeks?programId=${program.id}&weekDate=${monday.toISOString()}`
+    );
+    if (res.ok) {
+      const data = await res.json();
+      setWeek(data.week);
+    }
+    setLoading(false);
   }
+
+  useEffect(() => {
+    loadWeek(currentMonday);
+  }, [currentMonday.toISOString()]);
+
+  // Si la semana no existe en BD, ofrecemos crearla
+  async function startThisWeek() {
+    const res = await fetch("/api/rolling-weeks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        programId: program.id,
+        weekStartDate: currentMonday.toISOString(),
+      }),
+    });
+    if (res.ok) await loadWeek(currentMonday);
+  }
+
+  // Publicar / despublicar
+  async function togglePublish() {
+    if (!week) return;
+    await fetch("/api/rolling-weeks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        programId: program.id,
+        weekStartDate: currentMonday.toISOString(),
+        publish: !week.publishedAt,
+      }),
+    });
+    await loadWeek(currentMonday);
+  }
+
+  // Crear tarea
+  async function addTaskOfType(type: string) {
+    if (!typeModal || !week) return;
+    const res = await fetch("/api/rolling-tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ weekId: week.id, dayOfWeek: typeModal.dayOfWeek, type }),
+    });
+    const task = await res.json();
+    setTypeModal(null);
+    setEditTask(task);
+    await loadWeek(currentMonday);
+  }
+
+  async function deleteTask(taskId: string) {
+    if (!confirm("¿Eliminar esta tarea?")) return;
+    await fetch(`/api/rolling-tasks?id=${taskId}`, { method: "DELETE" });
+    await loadWeek(currentMonday);
+  }
+
+  // Drag & drop
+  function onDragStart(e: any) {
+    const data = e.active.data.current;
+    setDragging({ task: data.task, dayOfWeek: data.dayOfWeek });
+  }
+
+  async function onDragEnd(e: DragEndEvent) {
+    const current = dragging;
+    setDragging(null);
+    if (!e.over || !current) return;
+    const dropData = e.over.data.current as { dayOfWeek: number };
+    if (!dropData || dropData.dayOfWeek === current.dayOfWeek) return;
+    setMoveModal({ task: current.task, targetDayOfWeek: dropData.dayOfWeek });
+  }
+
+  async function executeMoveOrDuplicate(action: "move" | "duplicate") {
+    if (!moveModal || !week) return;
+    await fetch("/api/rolling-tasks", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        taskId: moveModal.task.id,
+        action,
+        targetWeekId: week.id,
+        targetDayOfWeek: moveModal.targetDayOfWeek,
+      }),
+    });
+    setMoveModal(null);
+    await loadWeek(currentMonday);
+  }
+
+  // Mapear días por dayOfWeek para facilitar render
+  const daysByDow: Record<number, Day | null> = {};
+  for (let i = 1; i <= 5; i++) daysByDow[i] = null;
+  if (week) {
+    for (const d of week.days) daysByDow[d.dayOfWeek] = d;
+  }
+
+  const isCurrentWeek = currentMonday.getTime() === thisMonday.getTime();
 
   return (
     <main>
       <header className="mb-5">
-        <Link href="/fisio/rolling" className="text-xs text-neutral-500 hover:underline mb-2 inline-block">
+        <Link href="/fisio/biblioteca/rolling" className="text-xs text-neutral-500 hover:underline mb-2 inline-block">
           ← Volver a programas rolling
         </Link>
         <div className="flex items-start justify-between gap-3">
@@ -91,280 +234,399 @@ export function RollingProgramDetail({
             {program.description && (
               <p className="text-sm text-neutral-500 mt-1">{program.description}</p>
             )}
-            <div className="flex gap-3 text-xs text-neutral-500 mt-2">
-              <span>{patients.length} {patients.length === 1 ? "paciente" : "pacientes"} activos</span>
-              <span>·</span>
-              <span>{weeks.length} {weeks.length === 1 ? "semana" : "semanas"} programada{weeks.length === 1 ? "" : "s"}</span>
+            <div className="text-xs text-neutral-500 mt-2">
+              {patients.length} {patients.length === 1 ? "paciente activo" : "pacientes activos"}
             </div>
           </div>
-          {isManager && (
-            <button
-              onClick={toggleArchive}
-              disabled={archiving}
-              className="text-xs px-3 py-1.5 rounded-md"
-              style={{ background: "#FFFFFF", border: "1px solid #E5E5E5", color: "#525252" }}
-            >
-              {program.isActive ? "Archivar" : "Reactivar"}
-            </button>
-          )}
         </div>
       </header>
 
-      <section className="mb-6">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-sm font-medium uppercase tracking-wider" style={{ color: "#737373" }}>Semanas</h2>
+      {/* Navegación de semana */}
+      <section className="mb-4">
+        <div className="flex items-center justify-between gap-3 mb-3">
           <button
-            onClick={() => setEditing("new")}
-            className="text-sm font-medium px-3 py-1.5 rounded-md"
-            style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+            onClick={() => setCurrentMonday(addDays(currentMonday, -7))}
+            className="text-sm px-3 py-2 rounded-lg"
+            style={{ background: "#FFFFFF", border: "1px solid #E5E5E5" }}
           >
-            + Programar semana
+            ← Semana anterior
+          </button>
+
+          <div className="text-center flex-1 min-w-0">
+            <div className="text-[11px] font-medium tracking-wider" style={{ color: "#737373" }}>
+              {isCurrentWeek ? "⏰ ESTA SEMANA" : currentMonday < thisMonday ? "SEMANA PASADA" : "PRÓXIMA SEMANA"}
+            </div>
+            <div className="font-semibold text-base" style={{ letterSpacing: "-0.015em" }}>
+              {formatWeekLabel(currentMonday.toISOString())}
+            </div>
+          </div>
+
+          <button
+            onClick={() => setCurrentMonday(addDays(currentMonday, 7))}
+            className="text-sm px-3 py-2 rounded-lg"
+            style={{ background: "#FFFFFF", border: "1px solid #E5E5E5" }}
+          >
+            Semana siguiente →
           </button>
         </div>
 
-        {!currentWeek && (
-          <div className="rounded-xl px-4 py-3 mb-3" style={{ background: "#FEF3C7", border: "1px solid #FCD34D" }}>
-            <div className="text-sm font-medium" style={{ color: "#7C2D12" }}>
-              ⚠️ Sin contenido para esta semana ({formatWeekLabel(thisMondayIso)})
+        <div className="flex items-center justify-between text-xs">
+          <button
+            onClick={() => setCurrentMonday(thisMonday)}
+            className="text-neutral-500 hover:underline"
+          >
+            Volver a hoy
+          </button>
+          {week && (
+            <div className="flex items-center gap-3">
+              {week.publishedAt ? (
+                <span className="text-emerald-600 font-medium">● Publicada</span>
+              ) : (
+                <span className="text-amber-700 font-medium">● Borrador</span>
+              )}
+              <button onClick={togglePublish} className="text-neutral-700 hover:underline">
+                {week.publishedAt ? "Despublicar" : "Publicar"}
+              </button>
             </div>
-            <div className="text-xs mt-1" style={{ color: "#92400E" }}>
-              Los pacientes ven "Tu coach está preparando la semana". Programa el contenido.
-            </div>
-          </div>
-        )}
+          )}
+        </div>
+      </section>
 
-        {weeks.length === 0 ? (
-          <p className="text-sm text-neutral-500 italic text-center py-8">
-            Aún no hay semanas programadas. Crea la primera con el botón de arriba.
+      {/* Contenido de la semana */}
+      {loading ? (
+        <p className="text-sm text-neutral-500 italic text-center py-10">Cargando...</p>
+      ) : !week ? (
+        <div className="text-center py-10">
+          <p className="text-sm text-neutral-500 mb-4 italic">
+            Esta semana aún no tiene contenido.
           </p>
-        ) : (
-          <div className="space-y-2">
-            {weeks.map((w) => {
-              const wIso = weekStartOfDate(new Date(w.weekStartDate)).toISOString();
-              const isCurrent = wIso === thisMondayIso;
-              const isFuture = wIso > thisMondayIso;
-              const isPast = wIso < thisMondayIso;
+          <button
+            onClick={startThisWeek}
+            className="text-sm font-medium px-4 py-2 rounded-lg"
+            style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+          >
+            + Empezar a programar esta semana
+          </button>
+        </div>
+      ) : (
+        <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
+          <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
+            {[1, 2, 3, 4, 5].map((dow) => {
+              const day = daysByDow[dow];
+              const tasks: Task[] = day?.tasks ?? [];
               return (
-                <button
-                  key={w.id}
-                  onClick={() => setEditing(w)}
-                  className="block w-full text-left rounded-xl px-4 py-3 hover:bg-neutral-50 transition"
-                  style={{
-                    background: isCurrent ? "#FEF3C7" : "#FFFFFF",
-                    border: `1px solid ${isCurrent ? "#FCD34D" : "#E5E5E5"}`,
-                    opacity: isPast ? 0.7 : 1,
-                  }}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-xs font-medium" style={{ color: isCurrent ? "#7C2D12" : "#737373" }}>
-                          {isCurrent ? "⏰ ESTA SEMANA · " : isFuture ? "PRÓXIMA · " : ""}
-                          {formatWeekLabel(w.weekStartDate)}
-                        </span>
-                        {!w.publishedAt && (
-                          <span className="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded" style={{ background: "#F5F5F5", color: "#737373" }}>
-                            BORRADOR
-                          </span>
-                        )}
-                      </div>
-                      <div className="font-medium text-sm" style={{ letterSpacing: "-0.01em" }}>
-                        {w.title || "Sin título"}
-                      </div>
-                    </div>
-                    <span className="text-neutral-400">→</span>
-                  </div>
-                </button>
+                <DroppableDayCell key={dow} dayOfWeek={dow} title={DAY_HEADERS[dow - 1]}>
+                  {tasks.map((t) => (
+                    <DraggableTask
+                      key={t.id}
+                      task={t}
+                      dayOfWeek={dow}
+                      onEdit={() => setEditTask(t)}
+                      onDelete={() => deleteTask(t.id)}
+                    />
+                  ))}
+                  <button
+                    onClick={() => setTypeModal({ dayOfWeek: dow })}
+                    className="text-xs text-neutral-400 border border-dashed border-neutral-300 rounded py-1.5 hover:bg-white hover:text-neutral-700 w-full"
+                  >
+                    + tarea
+                  </button>
+                </DroppableDayCell>
               );
             })}
           </div>
-        )}
-      </section>
 
-      {patients.length > 0 && (
-        <section className="mb-6">
-          <h2 className="text-sm font-medium uppercase tracking-wider mb-2" style={{ color: "#737373" }}>
-            Pacientes en este programa
-          </h2>
-          <div className="rounded-xl px-4 py-3" style={{ background: "#FFFFFF", border: "1px solid #E5E5E5" }}>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
-              {patients.map((p) => (
-                <Link key={p.id} href={`/fisio/paciente/${p.id}/ficha`} className="text-sm hover:underline">
-                  {p.fullName}
-                </Link>
-              ))}
-            </div>
-          </div>
-        </section>
+          <p className="text-xs text-neutral-500 italic text-center mt-4">
+            💡 Arrastra tareas entre días para mover o duplicar
+          </p>
+
+          <DragOverlay>
+            {dragging && (
+              <div className={`text-xs rounded px-2 py-1.5 border shadow-md ${TYPE_COLORS[dragging.task.type] ?? "bg-neutral-100 border-neutral-200"}`}>
+                <div className="font-medium truncate">{dragging.task.title}</div>
+                <div className="text-[10px] opacity-70 mt-0.5">{TYPE_LABELS[dragging.task.type]}</div>
+              </div>
+            )}
+          </DragOverlay>
+        </DndContext>
       )}
 
-      {editing && (
-        <WeekEditor
-          programId={program.id}
-          week={editing === "new" ? null : editing}
-          defaultDate={editing === "new" ? thisMondayIso : null}
-          onClose={() => setEditing(null)}
+      {/* Modales */}
+      {typeModal && (
+        <TaskTypeModal onSelect={addTaskOfType} onClose={() => setTypeModal(null)} />
+      )}
+
+      {editTask && (
+        <TaskEditorModal
+          task={editTask}
+          onClose={() => {
+            setEditTask(null);
+            loadWeek(currentMonday);
+          }}
+        />
+      )}
+
+      {moveModal && (
+        <MoveOrDuplicateModal
+          targetDay={DAY_HEADERS[moveModal.targetDayOfWeek - 1]}
+          taskTitle={moveModal.task.title}
+          onClose={() => setMoveModal(null)}
+          onMove={() => executeMoveOrDuplicate("move")}
+          onDuplicate={() => executeMoveOrDuplicate("duplicate")}
         />
       )}
     </main>
   );
 }
 
-function WeekEditor({
-  programId,
-  week,
-  defaultDate,
-  onClose,
-}: {
-  programId: string;
-  week: Week | null;
-  defaultDate: string | null;
-  onClose: () => void;
-}) {
-  const initialDate = week
-    ? new Date(week.weekStartDate).toISOString().split("T")[0]
-    : defaultDate
-    ? new Date(defaultDate).toISOString().split("T")[0]
-    : new Date().toISOString().split("T")[0];
+// =============================================================================
+// Subcomponentes
+// =============================================================================
 
-  const [weekDate, setWeekDate] = useState(initialDate);
-  const [title, setTitle] = useState(week?.title || "");
-  const [notes, setNotes] = useState(week?.notes || "");
-  const [content, setContent] = useState(() => {
-    if (week?.contentJson && week.contentJson !== "{}") {
-      try {
-        const parsed = JSON.parse(week.contentJson);
-        return parsed.markdown || "";
-      } catch {
-        return week.contentJson;
-      }
-    }
-    return "";
+function DroppableDayCell({
+  dayOfWeek,
+  title,
+  children,
+}: {
+  dayOfWeek: number;
+  title: string;
+  children: React.ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `day-${dayOfWeek}`,
+    data: { dayOfWeek },
   });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`rounded-lg p-2 min-h-[180px] flex flex-col gap-1.5 ${
+        isOver ? "bg-amber-50 border-amber-300" : "bg-neutral-50 border-neutral-200"
+      } border`}
+    >
+      <div className="text-xs font-medium text-neutral-600 mb-1">{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function DraggableTask({
+  task,
+  dayOfWeek,
+  onEdit,
+  onDelete,
+}: {
+  task: Task;
+  dayOfWeek: number;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `task-${task.id}`,
+    data: { task, dayOfWeek },
+  });
+  if (isDragging) {
+    return <div ref={setNodeRef} className="h-[42px] rounded border-2 border-dashed border-neutral-300" />;
+  }
+  return (
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      className={`text-xs rounded px-2 py-1.5 border cursor-grab active:cursor-grabbing ${TYPE_COLORS[task.type] ?? "bg-neutral-100 border-neutral-200"}`}
+    >
+      <div className="flex justify-between items-start gap-1.5 mb-0.5">
+        <div className="font-medium truncate flex-1">{task.title}</div>
+        <div className="flex gap-0.5">
+          <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="opacity-60 hover:opacity-100">✎</button>
+          <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="opacity-60 hover:opacity-100">✕</button>
+        </div>
+      </div>
+      <div className="text-[10px] opacity-70">{TYPE_LABELS[task.type]}</div>
+    </div>
+  );
+}
+
+function TaskTypeModal({ onSelect, onClose }: { onSelect: (t: string) => void; onClose: () => void }) {
+  const types = [
+    { type: "WORKOUT", label: "Workout", icon: "💪", desc: "Sesión de entrenamiento" },
+    { type: "VIDEO", label: "Vídeo", icon: "🎥", desc: "YouTube o enlace externo" },
+    { type: "FORM", label: "Formulario", icon: "📝", desc: "Cuestionario de Biblioteca" },
+    { type: "EVOLUTION", label: "Evolución", icon: "📊", desc: "Pedir métricas al paciente" },
+  ];
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl max-w-md w-full p-5" onClick={(e) => e.stopPropagation()}>
+        <h3 className="font-semibold mb-1">Tipo de tarea</h3>
+        <p className="text-xs text-neutral-500 mb-4">¿Qué quieres añadir a este día?</p>
+        <div className="grid grid-cols-2 gap-2">
+          {types.map((t) => (
+            <button
+              key={t.type}
+              onClick={() => onSelect(t.type)}
+              className="text-left p-3 rounded-lg hover:bg-neutral-50"
+              style={{ background: "#FFFFFF", border: "1px solid #E5E5E5" }}
+            >
+              <div className="text-xl mb-1">{t.icon}</div>
+              <div className="font-medium text-sm">{t.label}</div>
+              <div className="text-[10px] text-neutral-500 mt-0.5">{t.desc}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TaskEditorModal({ task, onClose }: { task: Task; onClose: () => void }) {
+  const [title, setTitle] = useState(task.title);
+  const [bodyText, setBodyText] = useState(task.bodyText || "");
+  const [youtubeUrl, setYoutubeUrl] = useState(task.youtubeUrl || "");
   const [saving, setSaving] = useState(false);
 
-  async function save(publish: boolean) {
+  async function save() {
     setSaving(true);
-    const contentJson = JSON.stringify({ markdown: content });
-    await fetch("/api/rolling-weeks", {
-      method: "POST",
+    await fetch("/api/rolling-tasks", {
+      method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        programId,
-        weekStartDate: new Date(weekDate).toISOString(),
-        title: title.trim() || null,
-        notes: notes.trim() || null,
-        contentJson,
-        publish,
+        id: task.id,
+        title,
+        bodyText: task.type === "WORKOUT" || task.type === "VIDEO" ? bodyText : undefined,
+        youtubeUrl: task.type === "VIDEO" ? youtubeUrl : undefined,
       }),
     });
-    window.location.reload();
-  }
-
-  async function remove() {
-    if (!week) return;
-    if (!confirm("¿Borrar esta semana? Los pacientes activos esa semana dejarán de ver el contenido.")) return;
-    setSaving(true);
-    await fetch(`/api/rolling-weeks?id=${week.id}`, { method: "DELETE" });
-    window.location.reload();
+    setSaving(false);
+    onClose();
   }
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[92vh] overflow-y-auto p-5" onClick={(e) => e.stopPropagation()}>
-        <div className="flex justify-between items-center mb-1">
-          <h3 className="font-semibold">{week ? "Editar semana" : "Programar semana"}</h3>
+      <div className="bg-white rounded-2xl max-w-lg w-full max-h-[92vh] overflow-y-auto p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-semibold">{TYPE_LABELS[task.type]}</h3>
           <button onClick={onClose} className="text-neutral-400 text-xl leading-none">✕</button>
         </div>
 
-        <div className="space-y-3 mt-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-neutral-500 block mb-1">Lunes de la semana *</label>
-              <input
-                type="date"
-                className="input text-sm w-full"
-                value={weekDate}
-                onChange={(e) => setWeekDate(e.target.value)}
-                disabled={!!week}
-              />
-              {!week && (
-                <p className="text-[10px] text-neutral-500 mt-1 italic">
-                  Si no es lunes, lo ajustaremos al lunes de esa semana.
-                </p>
-              )}
-            </div>
-            <div>
-              <label className="text-xs text-neutral-500 block mb-1">Título (opcional)</label>
-              <input
-                type="text"
-                className="input text-sm w-full"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Ej. Foco fuerza"
-              />
-            </div>
-          </div>
-
+        <div className="space-y-3">
           <div>
-            <label className="text-xs text-neutral-500 block mb-1">Contenido de la semana</label>
-            <textarea
-              className="input text-sm w-full font-mono"
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              rows={14}
-              placeholder={`Lunes - Fuerza
-- Sentadilla 5x5 @ 80%
-- Press banca 4x6
-- ...
-
-Martes - Skill
-- Doble bajo 5x20
-- ...`}
-            />
-            <p className="text-[10px] text-neutral-500 mt-1 italic">
-              Escribe el contenido que verá el paciente. Acepta saltos de línea y formato libre.
-            </p>
-          </div>
-
-          <div>
-            <label className="text-xs text-neutral-500 block mb-1">Notas internas (no visibles al paciente)</label>
-            <textarea
+            <label className="text-xs text-neutral-500 block mb-1">Título</label>
+            <input
+              type="text"
               className="input text-sm w-full"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={2}
-              placeholder="Recordatorios para ti..."
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              autoFocus
             />
           </div>
 
-          <div className="flex gap-2 pt-2">
-            {week && (
-              <button
-                onClick={remove}
-                disabled={saving}
-                className="text-sm px-3 py-2 rounded-lg text-red-600 hover:bg-red-50"
-              >
-                Borrar
-              </button>
-            )}
-            <button
-              onClick={() => save(false)}
-              disabled={saving}
-              className="flex-1 text-sm px-3 py-2 rounded-lg"
-              style={{ background: "#F5F5F5", color: "#0A0A0A" }}
-            >
-              Guardar borrador
-            </button>
-            <button
-              onClick={() => save(true)}
-              disabled={saving}
-              className="flex-1 text-sm font-medium px-3 py-2 rounded-lg"
-              style={{ background: "#0A0A0A", color: "#FAFAFA" }}
-            >
-              {week?.publishedAt ? "Guardar cambios" : "Publicar"}
-            </button>
-          </div>
+          {task.type === "WORKOUT" && (
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">Contenido del workout</label>
+              <textarea
+                className="input text-sm w-full font-mono"
+                value={bodyText}
+                onChange={(e) => setBodyText(e.target.value)}
+                rows={12}
+                placeholder={"Ejemplo:\n\nA. Sentadilla 5x5 @ 80%\nB. Press banca 4x6\nC. Metcon\n  21-15-9:\n  - Thrusters @ 42.5kg\n  - Pull-ups"}
+              />
+            </div>
+          )}
+
+          {task.type === "VIDEO" && (
+            <>
+              <div>
+                <label className="text-xs text-neutral-500 block mb-1">URL de YouTube</label>
+                <input
+                  type="url"
+                  className="input text-sm w-full"
+                  value={youtubeUrl}
+                  onChange={(e) => setYoutubeUrl(e.target.value)}
+                  placeholder="https://www.youtube.com/watch?v=..."
+                />
+              </div>
+              <div>
+                <label className="text-xs text-neutral-500 block mb-1">Notas (opcional)</label>
+                <textarea
+                  className="input text-sm w-full"
+                  value={bodyText}
+                  onChange={(e) => setBodyText(e.target.value)}
+                  rows={3}
+                  placeholder="Contexto o instrucciones para el vídeo..."
+                />
+              </div>
+            </>
+          )}
+
+          {task.type === "FORM" && (
+            <p className="text-xs text-neutral-500 italic">
+              La selección del formulario se hace desde la Biblioteca. Esta funcionalidad aún no está conectada para Rolling.
+            </p>
+          )}
+
+          {task.type === "EVOLUTION" && (
+            <p className="text-xs text-neutral-500 italic">
+              Al llegar a esta tarea, el paciente registrará su evolución del día (humor, sueño, dolor, etc).
+            </p>
+          )}
+
+          <button
+            onClick={save}
+            disabled={saving}
+            className="w-full text-sm font-medium mt-2"
+            style={{
+              background: "#0A0A0A",
+              color: "#FAFAFA",
+              padding: 11,
+              borderRadius: 10,
+              border: "none",
+              cursor: saving ? "wait" : "pointer",
+              opacity: saving ? 0.5 : 1,
+            }}
+          >
+            {saving ? "Guardando..." : "Guardar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MoveOrDuplicateModal({
+  targetDay,
+  taskTitle,
+  onClose,
+  onMove,
+  onDuplicate,
+}: {
+  targetDay: string;
+  taskTitle: string;
+  onClose: () => void;
+  onMove: () => void;
+  onDuplicate: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl max-w-sm w-full p-5" onClick={(e) => e.stopPropagation()}>
+        <h3 className="font-semibold mb-1">"{taskTitle}" → {targetDay}</h3>
+        <p className="text-xs text-neutral-500 mb-4">¿Qué quieres hacer?</p>
+        <div className="space-y-2">
+          <button
+            onClick={onMove}
+            className="w-full text-sm font-medium px-3 py-3 rounded-lg"
+            style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+          >
+            Mover
+          </button>
+          <button
+            onClick={onDuplicate}
+            className="w-full text-sm font-medium px-3 py-3 rounded-lg"
+            style={{ background: "#FFFFFF", border: "1px solid #E5E5E5" }}
+          >
+            Duplicar
+          </button>
+          <button onClick={onClose} className="w-full text-xs text-neutral-500 py-2 hover:underline">
+            Cancelar
+          </button>
         </div>
       </div>
     </div>

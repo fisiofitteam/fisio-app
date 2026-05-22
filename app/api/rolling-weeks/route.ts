@@ -3,23 +3,41 @@ import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 import { weekStartDate } from "@/lib/program-pauses";
 
-// GET: semanas de un programa rolling ----------------------------------------
+// GET: una semana concreta (programId + lunes) o lista del programa --------
 
 export async function GET(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const programId = req.nextUrl.searchParams.get("programId");
+  const weekDate = req.nextUrl.searchParams.get("weekDate"); // ISO opcional
   if (!programId) return NextResponse.json({ error: "programId required" }, { status: 400 });
 
+  // Si pasas weekDate → devolvemos esa semana con sus días y tareas
+  if (weekDate) {
+    const monday = weekStartDate(new Date(weekDate));
+    const week = await prisma.rollingWeek.findUnique({
+      where: { programId_weekStartDate: { programId, weekStartDate: monday } },
+      include: {
+        days: {
+          include: { tasks: { orderBy: { order: "asc" } } },
+          orderBy: { dayOfWeek: "asc" },
+        },
+      },
+    });
+    return NextResponse.json({ week, mondayIso: monday.toISOString() });
+  }
+
+  // Sin weekDate → lista (para vista índice del programa)
   const weeks = await prisma.rollingWeek.findMany({
     where: { programId },
     orderBy: { weekStartDate: "desc" },
+    include: { _count: { select: { days: true } } },
   });
-  return NextResponse.json(weeks);
+  return NextResponse.json({ weeks });
 }
 
-// POST: crear (o re-publicar) una semana -------------------------------------
+// POST: crear semana (sin contenido aún) o publicar/despublicar ------------
 
 export async function POST(req: NextRequest) {
   const user = await getActiveProfessional();
@@ -28,15 +46,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { programId, weekStartDate: wsd, title, notes, contentJson, publish } = await req.json();
+  const { programId, weekStartDate: wsd, title, notes, publish } = await req.json();
   if (!programId || !wsd) {
     return NextResponse.json({ error: "Faltan datos" }, { status: 400 });
   }
 
-  // Forzar al lunes de esa semana
   const monday = weekStartDate(new Date(wsd));
 
-  // Si ya existe la semana → upsert
   const existing = await prisma.rollingWeek.findUnique({
     where: { programId_weekStartDate: { programId, weekStartDate: monday } },
   });
@@ -45,10 +61,11 @@ export async function POST(req: NextRequest) {
     const updated = await prisma.rollingWeek.update({
       where: { id: existing.id },
       data: {
-        title: title?.trim() || null,
-        notes: notes?.trim() || null,
-        contentJson: contentJson || "{}",
-        publishedAt: publish ? (existing.publishedAt || new Date()) : null,
+        ...(title !== undefined && { title: title?.trim() || null }),
+        ...(notes !== undefined && { notes: notes?.trim() || null }),
+        ...(publish !== undefined && {
+          publishedAt: publish ? (existing.publishedAt || new Date()) : null,
+        }),
       },
     });
     return NextResponse.json({ ok: true, weekId: updated.id });
@@ -60,7 +77,6 @@ export async function POST(req: NextRequest) {
       weekStartDate: monday,
       title: title?.trim() || null,
       notes: notes?.trim() || null,
-      contentJson: contentJson || "{}",
       publishedAt: publish ? new Date() : null,
     },
   });

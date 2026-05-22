@@ -34,21 +34,12 @@ export async function POST(req: NextRequest) {
     where: { status: "scheduled", startDate: { lte: today } },
   });
   for (const p of toActivate) {
-    const days = Math.round((p.endDate.getTime() - p.startDate.getTime()) / 86400000);
+    // Solo cambiar status. La extensión y el shift de sesiones ya se
+    // aplicaron al crear la pausa (POST /api/program-pauses).
     await prisma.programPause.update({
       where: { id: p.id },
-      data: { status: "active", daysExtended: days },
+      data: { status: "active" },
     });
-    // Extender suscripción (sumando los días al startDate efectivo del paciente)
-    const patient = await prisma.patient.findUnique({ where: { id: p.patientId } });
-    if (patient?.subscriptionStartDate) {
-      await prisma.patient.update({
-        where: { id: p.patientId },
-        data: {
-          subscriptionStartDate: new Date(patient.subscriptionStartDate.getTime() + days * 86400000),
-        },
-      });
-    }
   }
 
   // 2) Cerrar pausas activas cuyo endDate ya pasó

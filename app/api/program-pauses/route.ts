@@ -15,28 +15,57 @@ function todayMidnight(): Date {
   return d;
 }
 
+function addDays(d: Date, days: number): Date {
+  return new Date(d.getTime() + days * 86400000);
+}
+
+/**
+ * Alarga el periodo de suscripción del paciente en función de los días de pausa.
+ *
+ * Convertimos días → meses (1 mes = 30 días, truncando hacia abajo):
+ *   - 14 días → 0 meses (la suscripción no cambia, se "pierden" esos días)
+ *   - 30 días → 1 mes
+ *   - 60 días → 2 meses
+ *
+ * IMPORTANTE: NO tocamos `subscriptionStartDate` para preservar el dato real
+ * (alta del paciente). Las métricas tipo LTV/cohorts/antigüedad seguirán siendo
+ * correctas. La pequeña pérdida de precisión (hasta 29 días) es aceptable según
+ * decisión de producto.
+ */
 async function extendSubscriptionByDays(patientId: string, days: number) {
   if (days === 0) return;
   const p = await prisma.patient.findUnique({ where: { id: patientId } });
   if (!p) return;
-  // Extendemos sumando días al periodo total (en meses no es exacto, pero
-  // mantenemos consistencia con cómo lo calculan otras partes de la app).
-  // Como días → meses no es exacto, en realidad lo que ajustamos es
-  // `subscriptionStartDate` retrasándolo (lo que efectivamente alarga el final).
-  if (p.subscriptionStartDate) {
-    const newStart = new Date(p.subscriptionStartDate.getTime() - days * 24 * 60 * 60 * 1000);
-    // Truco contra-intuitivo: para extender el final manteniendo periodMonths,
-    // adelantamos la fecha de inicio (días negativos)? No. Mejor lo hacemos al revés.
-    // Lo correcto es atrasar la fecha de fin. Pero como en la BD guardamos
-    // periodMonths sin fecha de fin explícita, la solución limpia es atrasar el
-    // inicio efectivo. Lo dejamos al revés: extendemos sumando días al startDate,
-    // de modo que el final también se desplace.
-    void newStart;
-    await prisma.patient.update({
-      where: { id: patientId },
-      data: {
-        subscriptionStartDate: new Date(p.subscriptionStartDate.getTime() + days * 24 * 60 * 60 * 1000),
-      },
+  // truncamiento (siempre redondea hacia 0): 14 → 0, -14 → 0
+  const monthsDelta = Math.trunc(days / 30);
+  if (monthsDelta === 0) return;
+  const newPeriod = Math.max(1, p.subscriptionPeriodMonths + monthsDelta);
+  await prisma.patient.update({
+    where: { id: patientId },
+    data: { subscriptionPeriodMonths: newPeriod },
+  });
+}
+
+/**
+ * Desplaza N días las sesiones del programa del paciente que caen ON OR AFTER `fromDate`.
+ * - days > 0: empuja hacia el futuro (al crear pausa)
+ * - days < 0: tira hacia el pasado (al cancelar pausa)
+ *
+ * Solo toca sesiones de assignments ACTIVOS y no completadas.
+ */
+async function shiftFutureSessions(patientId: string, fromDate: Date, days: number) {
+  if (days === 0) return;
+  const sessions = await prisma.programSession.findMany({
+    where: {
+      assignment: { patientId, isActive: true },
+      scheduledDate: { gte: fromDate },
+      completedAt: null,
+    },
+  });
+  for (const s of sessions) {
+    await prisma.programSession.update({
+      where: { id: s.id },
+      data: { scheduledDate: addDays(s.scheduledDate, days) },
     });
   }
 }
@@ -69,7 +98,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Faltan datos obligatorios" }, { status: 400 });
   }
 
-  // Validar paciente y que no sea rolling
   const patient = await prisma.patient.findUnique({ where: { id: patientId } });
   if (!patient) return NextResponse.json({ error: "Paciente no encontrado" }, { status: 404 });
   if (patient.programMode === "rolling") {
@@ -88,12 +116,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Validar que no hay otra pausa activa o programada
+  // Una sola pausa scheduled/active por paciente
   const existing = await prisma.programPause.findFirst({
-    where: {
-      patientId,
-      status: { in: ["scheduled", "active"] },
-    },
+    where: { patientId, status: { in: ["scheduled", "active"] } },
   });
   if (existing) {
     return NextResponse.json(
@@ -102,11 +127,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Determinar estado inicial (si empieza hoy o antes, ya está activa)
   const today = todayMidnight();
   const status = start <= today ? "active" : "scheduled";
+  const days = daysBetween(start, end);
 
-  // Crear la pausa
+  // Crear la pausa (siempre con daysExtended ya rellenado: aplicamos extensión y shift al crearla)
   const pause = await prisma.programPause.create({
     data: {
       patientId,
@@ -114,28 +139,19 @@ export async function POST(req: NextRequest) {
       endDate: end,
       reason: reason?.trim() || null,
       status,
+      daysExtended: days,
       createdById: user.id,
     },
   });
 
-  // Si la pausa ya está activa, aplicamos la extensión inmediatamente
-  if (status === "active") {
-    const days = daysBetween(start, end);
-    await extendSubscriptionByDays(patientId, days);
-    await prisma.programPause.update({
-      where: { id: pause.id },
-      data: { daysExtended: days },
-    });
-  }
+  // Aplicar extensión y desplazamiento de sesiones futuras (desde startDate)
+  await extendSubscriptionByDays(patientId, days);
+  await shiftFutureSessions(patientId, start, days);
 
   return NextResponse.json({ ok: true, pauseId: pause.id });
 }
 
 // PATCH: editar / cancelar / finalizar antes -----------------------------------
-// Acciones:
-//   - action: "update" (cambia fechas, solo si scheduled)
-//   - action: "cancel" (cancela, revierte extensión si ya aplicada)
-//   - action: "end-now" (termina antes la pausa activa)
 
 export async function PATCH(req: NextRequest) {
   const user = await getActiveProfessional();
@@ -156,17 +172,28 @@ export async function PATCH(req: NextRequest) {
         { status: 400 }
       );
     }
-    const start = startDate ? new Date(startDate) : pause.startDate;
-    const end = endDate ? new Date(endDate) : pause.endDate;
-    if (end <= start) {
+    const newStart = startDate ? new Date(startDate) : pause.startDate;
+    const newEnd = endDate ? new Date(endDate) : pause.endDate;
+    if (newEnd <= newStart) {
       return NextResponse.json({ error: "Fechas inválidas" }, { status: 400 });
     }
+
+    // 1. Revertir el shift y la extensión anteriores
+    await shiftFutureSessions(pause.patientId, pause.startDate, -pause.daysExtended);
+    await extendSubscriptionByDays(pause.patientId, -pause.daysExtended);
+
+    // 2. Aplicar la nueva
+    const newDays = daysBetween(newStart, newEnd);
+    await shiftFutureSessions(pause.patientId, newStart, newDays);
+    await extendSubscriptionByDays(pause.patientId, newDays);
+
     await prisma.programPause.update({
       where: { id: pauseId },
       data: {
-        startDate: start,
-        endDate: end,
+        startDate: newStart,
+        endDate: newEnd,
         reason: reason !== undefined ? reason?.trim() || null : pause.reason,
+        daysExtended: newDays,
       },
     });
     return NextResponse.json({ ok: true });
@@ -176,8 +203,9 @@ export async function PATCH(req: NextRequest) {
     if (pause.status === "ended" || pause.status === "cancelled") {
       return NextResponse.json({ error: "Esta pausa ya está cerrada" }, { status: 400 });
     }
-    // Si ya estaba activa, revertir la extensión
-    if (pause.status === "active" && pause.daysExtended > 0) {
+    // Revertir desplazamiento y extensión
+    if (pause.daysExtended > 0) {
+      await shiftFutureSessions(pause.patientId, pause.startDate, -pause.daysExtended);
       await extendSubscriptionByDays(pause.patientId, -pause.daysExtended);
     }
     await prisma.programPause.update({
@@ -192,11 +220,12 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "Solo se puede finalizar antes una pausa activa" }, { status: 400 });
     }
     const today = todayMidnight();
-    // Días reales en pausa = desde startDate hasta hoy
     const realDays = Math.max(1, daysBetween(pause.startDate, today));
     const diff = pause.daysExtended - realDays;
-    // Si habíamos extendido más días de los vividos, restamos el exceso
+    // Si vivió menos días de los previstos, devolvemos las sesiones desplazadas
     if (diff > 0) {
+      // Reculamos solo `diff` días, manteniendo los `realDays` ya consumidos
+      await shiftFutureSessions(pause.patientId, today, -diff);
       await extendSubscriptionByDays(pause.patientId, -diff);
     }
     await prisma.programPause.update({
