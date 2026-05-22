@@ -39,10 +39,10 @@ export function AgendaGracias({
         color: "#FAFAFA",
       }}
     >
-      {/* Overlay oscuro para legibilidad */}
+      {/* Overlay sutil para que la imagen del box se vea con buena legibilidad */}
       <div
         className="absolute inset-0"
-        style={{ background: "rgba(10, 10, 10, 0.85)", backdropFilter: "blur(2px)" }}
+        style={{ background: "rgba(10, 10, 10, 0.55)" }}
       />
 
       <div className="relative max-w-2xl mx-auto px-5 py-10 pb-20">
@@ -194,8 +194,8 @@ export function AgendaGracias({
                 3
               </span>
               <div style={{ color: "#A3A3A3" }}>
-                <strong style={{ color: "#FAFAFA" }}>Te llamamos a la hora reservada.</strong> Conecta unos
-                minutos antes desde el link del email para que no se te escape nada.
+                <strong style={{ color: "#FAFAFA" }}>Hablamos a la hora que has reservado.</strong> Solo tienes
+                que entrar en el link que te enviaremos por WhatsApp.
               </div>
             </li>
           </ol>

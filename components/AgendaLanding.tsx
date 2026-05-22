@@ -240,21 +240,15 @@ export function AgendaLanding() {
         color: "#FAFAFA",
       }}
     >
-      {/* Overlay oscuro para legibilidad */}
+      {/* Overlay sutil para que la imagen del box se vea con buena legibilidad */}
       <div
         className="absolute inset-0"
-        style={{ background: "rgba(10, 10, 10, 0.88)", backdropFilter: "blur(2px)" }}
+        style={{ background: "rgba(10, 10, 10, 0.55)" }}
       />
 
       <div className="relative max-w-2xl mx-auto px-5 py-10 pb-20">
         {/* Header */}
         <header className="mb-8 text-center">
-          <div
-            className="inline-flex items-center justify-center w-12 h-12 rounded-xl mb-4"
-            style={{ background: "rgba(31, 31, 31, 0.7)", border: "1px solid #404040", backdropFilter: "blur(8px)" }}
-          >
-            <span style={{ fontSize: 22 }}>🩺</span>
-          </div>
           <h1 className="text-2xl sm:text-3xl font-semibold leading-tight mb-2" style={{ letterSpacing: "-0.02em" }}>
             Vuelve a entrenar sin dolor
           </h1>
