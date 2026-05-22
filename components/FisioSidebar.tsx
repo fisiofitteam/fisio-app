@@ -17,6 +17,7 @@ import {
   Gift,
   Sparkles,
   UserCog,
+  Settings,
   LogOut,
   LucideIcon,
 } from "lucide-react";
@@ -42,13 +43,14 @@ const LLAMADAS: Item = { id: "llamadas", label: "Llamadas", Icon: Phone, href: "
 const RECURSOS: Item = { id: "recursos", label: "Recursos", Icon: Package, href: "/fisio/recursos", match: (p) => p.startsWith("/fisio/recursos") };
 const FINANZAS: Item = { id: "finanzas", label: "Finanzas", Icon: Wallet, href: "/fisio/finanzas", match: (p) => p.startsWith("/fisio/finanzas") };
 const EQUIPO: Item = { id: "equipo", label: "Equipo", Icon: UserCog, href: "/fisio/equipo", match: (p) => p.startsWith("/fisio/equipo") };
+const AJUSTES: Item = { id: "ajustes", label: "Ajustes", Icon: Settings, href: "/fisio/ajustes", match: (p) => p.startsWith("/fisio/ajustes") };
 
 function itemsForRole(role: string): Item[] {
   if (role === "ceo") {
-    return [PANEL, PACIENTES, LLAMADAS_VENTA, FOLLOWUP, CONTENIDO, BIBLIOTECA, TAREAS, RECURSOS, FINANZAS, EQUIPO];
+    return [PANEL, PACIENTES, LLAMADAS_VENTA, FOLLOWUP, CONTENIDO, BIBLIOTECA, TAREAS, RECURSOS, FINANZAS, EQUIPO, AJUSTES];
   }
   if (role === "head_success") {
-    return [PANEL, PACIENTES, BIBLIOTECA, TAREAS, LLAMADAS, RECURSOS, EQUIPO];
+    return [PANEL, PACIENTES, BIBLIOTECA, TAREAS, LLAMADAS, RECURSOS, EQUIPO, AJUSTES];
   }
   if (role === "setter") {
     return [LEADS, PARCHES, TAREAS, CONTENIDO, EQUIPO];

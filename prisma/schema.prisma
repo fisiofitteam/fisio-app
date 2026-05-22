@@ -1031,3 +1031,41 @@ model PatientNotification {
   @@index([patientId])
   @@index([readAt])
 }
+
+// ============================================================================
+// INTEGRACIÓN GOOGLE CALENDAR
+// ============================================================================
+// Almacena la conexión OAuth con Google Calendar de la organización.
+// Diseño: una conexión por organización (la de videoconsultas@fisiofitteam.com),
+// no por usuario individual. La hace un manager (CEO/Head_success) y se
+// reutiliza para todas las operaciones de la app.
+//
+// Los tokens se almacenan encriptados con AES-256-GCM usando ENCRYPTION_KEY.
+// ============================================================================
+
+model GoogleCalendarConnection {
+  id              String   @id @default(cuid())
+
+  // Email de la cuenta Google que se conectó (típicamente videoconsultas@fisiofitteam.com)
+  googleEmail     String   @unique
+  googleName      String?
+
+  // Quién hizo la conexión inicial (CEO o Head_success)
+  connectedById   String?
+
+  // Tokens encriptados (formato: "iv:authTag:ciphertext" en hex)
+  accessTokenEnc  String
+  refreshTokenEnc String?
+
+  // Cuándo expira el access token (típicamente 1 hora desde la emisión)
+  tokenExpiresAt  DateTime
+
+  // Permisos otorgados (CSV de scopes)
+  scopes          String   @default("")
+
+  // Última vez que la app usó esta conexión (para detectar conexiones muertas)
+  lastUsedAt      DateTime?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
