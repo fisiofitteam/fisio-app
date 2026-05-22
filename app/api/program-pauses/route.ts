@@ -39,30 +39,45 @@ function pauseShiftDays(rawDays: number): number {
 }
 
 /**
- * Alarga el periodo de suscripción del paciente en función de los días de pausa.
+ * Alarga el periodo activo de suscripción del paciente en días exactos.
  *
- * Convertimos días → meses (1 mes = 30 días, truncando hacia abajo):
- *   - 14 días → 0 meses (la suscripción no cambia, se "pierden" esos días)
- *   - 30 días → 1 mes
- *   - 60 días → 2 meses
+ * Toca dos lugares:
+ *  1. `SubscriptionRenewal.endDate` del periodo activo → suma N días.
+ *     Es la fuente de verdad visible en la ficha clínica.
+ *  2. `Patient.subscriptionPeriodMonths` → mantiene compat con código viejo
+ *     que mira ese campo (round trip dias→meses, sin pérdida en endDate).
  *
- * IMPORTANTE: NO tocamos `subscriptionStartDate` para preservar el dato real
- * (alta del paciente). Las métricas tipo LTV/cohorts/antigüedad seguirán siendo
- * correctas. La pequeña pérdida de precisión (hasta 29 días) es aceptable según
- * decisión de producto.
+ * NO tocamos `subscriptionStartDate` para preservar el dato real de alta.
  */
 async function extendSubscriptionByDays(patientId: string, days: number) {
   if (days === 0) return;
-  const p = await prisma.patient.findUnique({ where: { id: patientId } });
-  if (!p) return;
-  // truncamiento (siempre redondea hacia 0): 14 → 0, -14 → 0
-  const monthsDelta = Math.trunc(days / 30);
-  if (monthsDelta === 0) return;
-  const newPeriod = Math.max(1, p.subscriptionPeriodMonths + monthsDelta);
-  await prisma.patient.update({
-    where: { id: patientId },
-    data: { subscriptionPeriodMonths: newPeriod },
+
+  // 1. Periodo activo: sumar/restar días exactos al endDate
+  const activePeriod = await prisma.subscriptionRenewal.findFirst({
+    where: { patientId, status: "active" },
+    orderBy: { startDate: "desc" },
   });
+  if (activePeriod?.endDate) {
+    const newEnd = new Date(activePeriod.endDate.getTime() + days * 86400000);
+    await prisma.subscriptionRenewal.update({
+      where: { id: activePeriod.id },
+      data: { endDate: newEnd },
+    });
+  }
+
+  // 2. Patient.subscriptionPeriodMonths: opcional, solo para compat con cosas
+  // que lean ese campo. Convertimos días → meses (truncando) y sumamos.
+  const p = await prisma.patient.findUnique({ where: { id: patientId } });
+  if (p) {
+    const monthsDelta = Math.trunc(days / 30);
+    if (monthsDelta !== 0) {
+      const newPeriod = Math.max(1, p.subscriptionPeriodMonths + monthsDelta);
+      await prisma.patient.update({
+        where: { id: patientId },
+        data: { subscriptionPeriodMonths: newPeriod },
+      });
+    }
+  }
 }
 
 /**
@@ -135,13 +150,23 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Una sola pausa scheduled/active por paciente
-  const existing = await prisma.programPause.findFirst({
-    where: { patientId, status: { in: ["scheduled", "active"] } },
+  // Permitimos múltiples pausas por paciente, pero validamos que la nueva
+  // no SOLAPE en fechas con otra existente (scheduled o active).
+  // Una pausa pasada (status=ended) no bloquea nuevas pausas futuras.
+  const overlapping = await prisma.programPause.findFirst({
+    where: {
+      patientId,
+      status: { in: ["scheduled", "active"] },
+      // Solapamiento clásico: A.start < B.end AND A.end > B.start
+      startDate: { lt: end },
+      endDate: { gt: start },
+    },
   });
-  if (existing) {
+  if (overlapping) {
+    const ovStart = overlapping.startDate.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
+    const ovEnd = overlapping.endDate.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
     return NextResponse.json(
-      { error: "Ya hay una pausa programada o activa. Cancélala o ajústala primero." },
+      { error: `Las fechas se solapan con otra pausa existente (${ovStart} – ${ovEnd}). Ajusta las fechas o cancela la otra primero.` },
       { status: 409 }
     );
   }

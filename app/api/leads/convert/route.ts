@@ -45,6 +45,10 @@ export async function POST(req: NextRequest) {
 
   // 1) Crear paciente (siempre como "fixed"; si es ADVANCE y se quiere mover a rolling,
   //    un manager lo hace después desde la ficha del paciente)
+  const months = Number(subscriptionPeriodMonths) || 4;
+  const startDate = new Date();
+  startDate.setHours(0, 0, 0, 0);
+
   const patient = await prisma.patient.create({
     data: {
       fullName: lead.fullName,
@@ -52,12 +56,28 @@ export async function POST(req: NextRequest) {
       sport: "CrossFit",
       diagnosis: lead.aiSummary ?? null,
       shippingPhone: phone?.trim() || null,
-      subscriptionStartDate: new Date(),
-      subscriptionPeriodMonths: Number(subscriptionPeriodMonths) || 4,
-      subscriptionTotalMonths: Number(subscriptionPeriodMonths) || 4,
+      subscriptionStartDate: startDate,
+      subscriptionPeriodMonths: months,
+      subscriptionTotalMonths: months,
       assignedProfessionalId: assignedProfessionalId || null,
       programType: programType || null,
       programMode: "fixed",
+    },
+  });
+
+  // 1b) Crear automáticamente Periodo 1 en SubscriptionRenewal
+  const periodEnd = new Date(startDate);
+  periodEnd.setMonth(periodEnd.getMonth() + months);
+  await prisma.subscriptionRenewal.create({
+    data: {
+      patientId: patient.id,
+      programType: programType || null,
+      periodMonths: months,
+      startDate,
+      endDate: periodEnd,
+      status: "active",
+      amountPaid: amountPaid && Number(amountPaid) > 0 ? Number(amountPaid) : null,
+      notes: "Alta inicial (conversión de lead)",
     },
   });
 

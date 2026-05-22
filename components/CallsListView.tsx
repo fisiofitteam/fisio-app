@@ -509,12 +509,24 @@ function ConvertModal({
   const [amountPaid, setAmountPaid] = useState("");
   const [subscriptionPeriodMonths, setSubscriptionPeriodMonths] = useState("4");
   const [programType, setProgramType] = useState("RECUPERA");
+  // Email: si el lead vino con contactType=email, lo precargamos
+  const [email, setEmail] = useState(lead.contactType === "email" ? lead.contactValue : "");
+  const [phone, setPhone] = useState(lead.contactType === "phone" ? lead.contactValue : "");
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   async function save() {
-    if (!amountPaid) return;
+    setError("");
+    if (!amountPaid) {
+      setError("Falta el importe");
+      return;
+    }
+    if (!email.trim()) {
+      setError("El email es obligatorio para que el paciente pueda hacer login");
+      return;
+    }
     setSaving(true);
-    await fetch("/api/leads/convert", {
+    const res = await fetch("/api/leads/convert", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -523,14 +535,22 @@ function ConvertModal({
         amountPaid,
         subscriptionPeriodMonths,
         programType,
+        email: email.trim(),
+        phone: phone.trim() || null,
       }),
     });
-    onSaved();
+    if (res.ok) {
+      onSaved();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "No se pudo convertir el lead");
+      setSaving(false);
+    }
   }
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl max-w-md w-full p-4" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl max-w-md w-full p-4 max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-1">
           <h3 className="font-medium">🏆 Convertir en paciente</h3>
           <button onClick={onClose} className="text-neutral-400 text-xl">✕</button>
@@ -539,8 +559,33 @@ function ConvertModal({
 
         <div className="space-y-3">
           <div>
+            <label className="text-xs text-neutral-500 block mb-1">Email del paciente *</label>
+            <input
+              type="email"
+              className="input text-sm w-full"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="paciente@ejemplo.com"
+            />
+            <p className="text-[10px] text-neutral-500 mt-0.5 italic">
+              Necesario para que el paciente entre a la app. Único en todo el sistema.
+            </p>
+          </div>
+
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Teléfono (opcional)</label>
+            <input
+              type="tel"
+              className="input text-sm w-full"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="+34 600000000"
+            />
+          </div>
+
+          <div>
             <label className="text-xs text-neutral-500 block mb-1">Fisio asignado</label>
-            <select className="input text-sm" value={assignedProfessionalId} onChange={(e) => setAssignedProfessionalId(e.target.value)}>
+            <select className="input text-sm w-full" value={assignedProfessionalId} onChange={(e) => setAssignedProfessionalId(e.target.value)}>
               <option value="">— Sin asignar (lo asigna luego un manager) —</option>
               {fisios.map((f) => (
                 <option key={f.id} value={f.id}>
@@ -570,14 +615,14 @@ function ConvertModal({
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-xs text-neutral-500 block mb-1">Duración (meses)</label>
-              <select className="input text-sm" value={subscriptionPeriodMonths} onChange={(e) => setSubscriptionPeriodMonths(e.target.value)}>
+              <select className="input text-sm w-full" value={subscriptionPeriodMonths} onChange={(e) => setSubscriptionPeriodMonths(e.target.value)}>
                 <option value="1">1 mes</option><option value="2">2 meses</option><option value="3">3 meses</option>
                 <option value="4">4 meses</option><option value="6">6 meses</option><option value="12">12 meses</option>
               </select>
             </div>
             <div>
-              <label className="text-xs text-neutral-500 block mb-1">Importe (€)</label>
-              <input type="number" step="0.01" min="0" className="input text-sm" value={amountPaid} onChange={(e) => setAmountPaid(e.target.value)} placeholder="0,00" />
+              <label className="text-xs text-neutral-500 block mb-1">Importe (€) *</label>
+              <input type="number" step="0.01" min="0" className="input text-sm w-full" value={amountPaid} onChange={(e) => setAmountPaid(e.target.value)} placeholder="0,00" />
             </div>
           </div>
 
@@ -585,7 +630,13 @@ function ConvertModal({
             💡 Se registra automáticamente como ingreso "Nueva alta" en Finanzas.
           </p>
 
-          <button onClick={save} disabled={!amountPaid || saving} className="btn btn-accent w-full">
+          {error && (
+            <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              {error}
+            </div>
+          )}
+
+          <button onClick={save} disabled={!amountPaid || !email.trim() || saving} className="btn btn-accent w-full">
             {saving ? "Procesando..." : "Confirmar conversión"}
           </button>
         </div>
