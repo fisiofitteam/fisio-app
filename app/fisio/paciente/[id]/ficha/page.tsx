@@ -26,6 +26,8 @@ export default async function PatientFichaTab({ params }: { params: { id: string
         whatsappGroupUrl: patient.whatsappGroupUrl ?? "",
         programType: patient.programType ?? "",
         difficulty: patient.difficulty ?? "",
+        programMode: patient.programMode ?? "fixed",
+        rollingProgramId: patient.rollingProgramId ?? null,
       }}
     />
   );

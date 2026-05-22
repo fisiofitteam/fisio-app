@@ -46,12 +46,14 @@ export function PatientsList({
   tab,
   counts,
   professionals,
+  rollingPrograms,
 }: {
   patients: Patient[];
   currentUser: CurrentUser;
   tab: string;
   counts: { all: number; unassigned: number; mine: number; byPro: Record<string, number> };
   professionals: ProInfo[];
+  rollingPrograms: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const [reassigning, setReassigning] = useState<Patient | null>(null);
@@ -161,6 +163,7 @@ export function PatientsList({
       {creating && currentUser.isManager && (
         <CreatePatientModal
           professionals={professionals}
+          rollingPrograms={rollingPrograms}
           onClose={() => setCreating(false)}
           onCreated={(patientId) => {
             setCreating(false);
@@ -429,10 +432,12 @@ function FisioSummary({ patients, isManager }: { patients: Patient[]; isManager:
 
 function CreatePatientModal({
   professionals,
+  rollingPrograms,
   onClose,
   onCreated,
 }: {
   professionals: ProInfo[];
+  rollingPrograms: { id: string; name: string }[];
   onClose: () => void;
   onCreated: (patientId: string) => void;
 }) {
@@ -442,10 +447,21 @@ function CreatePatientModal({
   const [diagnosis, setDiagnosis] = useState("");
   const [assignedProfessionalId, setAssignedProfessionalId] = useState("");
   const [programType, setProgramType] = useState("RECUPERA");
+  const [programMode, setProgramMode] = useState<"fixed" | "rolling">("fixed");
+  const [rollingProgramId, setRollingProgramId] = useState("");
   const [subscriptionPeriodMonths, setSubscriptionPeriodMonths] = useState("4");
   const [amountPaid, setAmountPaid] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  // Si cambia el programType a algo distinto de ADVANCE, forzar modo fijo
+  function selectProgramType(p: string) {
+    setProgramType(p);
+    if (p !== "ADVANCE") {
+      setProgramMode("fixed");
+      setRollingProgramId("");
+    }
+  }
 
   async function save() {
     setError("");
@@ -455,6 +471,10 @@ function CreatePatientModal({
     }
     if (!email.trim()) {
       setError("El email es obligatorio para que el paciente pueda entrar a la app");
+      return;
+    }
+    if (programMode === "rolling" && !rollingProgramId) {
+      setError("Selecciona un programa rolling al que enchufar al paciente");
       return;
     }
     setSaving(true);
@@ -468,6 +488,8 @@ function CreatePatientModal({
         diagnosis: diagnosis.trim() || null,
         assignedProfessionalId: assignedProfessionalId || null,
         programType,
+        programMode,
+        rollingProgramId: programMode === "rolling" ? rollingProgramId : null,
         subscriptionPeriodMonths,
         amountPaid: amountPaid || null,
       }),
@@ -567,7 +589,7 @@ function CreatePatientModal({
                 <button
                   key={p}
                   type="button"
-                  onClick={() => setProgramType(p)}
+                  onClick={() => selectProgramType(p)}
                   className={`flex-1 text-xs px-2 py-2 rounded border font-medium ${
                     programType === p ? "bg-neutral-900 text-white border-neutral-900" : "bg-white border-neutral-200"
                   }`}
@@ -577,6 +599,64 @@ function CreatePatientModal({
               ))}
             </div>
           </div>
+
+          {programType === "ADVANCE" && rollingPrograms.length > 0 && (
+            <div className="rounded-lg p-3" style={{ background: "#FAFAFA", border: "1px solid #E5E5E5" }}>
+              <label className="text-xs text-neutral-500 block mb-2 font-medium">Modo del programa</label>
+              <div className="flex gap-1 mb-3">
+                <button
+                  type="button"
+                  onClick={() => setProgramMode("fixed")}
+                  className={`flex-1 text-xs px-2 py-2 rounded border font-medium ${
+                    programMode === "fixed" ? "bg-neutral-900 text-white border-neutral-900" : "bg-white border-neutral-200"
+                  }`}
+                >
+                  Individual (fijo)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setProgramMode("rolling")}
+                  className={`flex-1 text-xs px-2 py-2 rounded border font-medium ${
+                    programMode === "rolling" ? "bg-neutral-900 text-white border-neutral-900" : "bg-white border-neutral-200"
+                  }`}
+                >
+                  Rolling (tiempo corrido)
+                </button>
+              </div>
+
+              {programMode === "rolling" && (
+                <>
+                  <label className="text-xs text-neutral-500 block mb-1">Programa rolling *</label>
+                  <select
+                    className="input text-sm w-full"
+                    value={rollingProgramId}
+                    onChange={(e) => setRollingProgramId(e.target.value)}
+                  >
+                    <option value="">— Selecciona uno —</option>
+                    {rollingPrograms.map((rp) => (
+                      <option key={rp.id} value={rp.id}>{rp.name}</option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-neutral-500 mt-1 italic">
+                    El paciente verá la semana actual del calendario, sin métricas, sin pausas.
+                  </p>
+                </>
+              )}
+
+              {programMode === "fixed" && (
+                <p className="text-[10px] text-neutral-500 italic">
+                  Programa individual con su propio contador de semanas, métricas y posibilidad de pausas.
+                </p>
+              )}
+            </div>
+          )}
+
+          {programType === "ADVANCE" && rollingPrograms.length === 0 && (
+            <div className="rounded-lg p-3 text-xs" style={{ background: "#FEF3C7", border: "1px solid #FCD34D", color: "#7C2D12" }}>
+              Aún no has creado programas rolling.{" "}
+              <a href="/fisio/rolling" className="font-medium underline">Crear el primero</a> para poder enchufar pacientes ADVANCE a rolling.
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-2">
             <div>

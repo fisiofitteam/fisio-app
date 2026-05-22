@@ -27,6 +27,15 @@ export default async function PatientsListPage({
       })
     : [];
 
+  // Programas rolling activos (para el modal de "Nuevo paciente")
+  const rollingPrograms = user.isManager
+    ? await prisma.rollingProgram.findMany({
+        where: { isActive: true },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true },
+      })
+    : [];
+
   // Filtro según tab
   let where: any = {};
   if (tab === "mine") {
@@ -104,6 +113,7 @@ export default async function PatientsListPage({
       tab={tab}
       counts={counts}
       professionals={professionals.map((p) => ({ id: p.id, fullName: p.fullName, role: p.role }))}
+      rollingPrograms={rollingPrograms}
     />
   );
 }

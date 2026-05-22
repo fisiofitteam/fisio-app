@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PROGRAM_TYPES, DIFFICULTIES, PROGRAM_LABELS, DIFFICULTY_LABELS } from "./PatientPills";
+import { ProgramPausesBlock } from "./ProgramPausesBlock";
+import { RollingAssignmentBlock } from "./RollingAssignmentBlock";
 
 type Patient = {
   id: string;
@@ -16,6 +18,8 @@ type Patient = {
   whatsappGroupUrl: string;
   programType: string;
   difficulty: string;
+  programMode: string;
+  rollingProgramId: string | null;
 };
 
 function daysUntilRenewal(start: string, months: number): number | null {
@@ -210,6 +214,15 @@ export function ClinicalFile({ patient, isManager }: { patient: Patient; isManag
             )}
           </div>
         )}
+
+        <RollingAssignmentBlock
+          patientId={patient.id}
+          programType={patient.programType}
+          programMode={patient.programMode}
+          currentRollingProgramId={patient.rollingProgramId}
+          isManager={isManager}
+        />
+        <ProgramPausesBlock patientId={patient.id} programMode={patient.programMode} />
       </section>
 
       <div className="flex justify-end items-center gap-3">

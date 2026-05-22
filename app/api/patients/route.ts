@@ -24,6 +24,8 @@ export async function POST(req: NextRequest) {
     programType,
     subscriptionPeriodMonths,
     amountPaid,
+    programMode,        // "fixed" | "rolling"
+    rollingProgramId,   // requerido si programMode = "rolling"
   } = body;
 
   // Validaciones mínimas
@@ -32,6 +34,31 @@ export async function POST(req: NextRequest) {
   }
   if (!email || !email.trim()) {
     return NextResponse.json({ error: "El email es obligatorio" }, { status: 400 });
+  }
+
+  // Validar coherencia de programMode
+  const mode = programMode === "rolling" ? "rolling" : "fixed";
+  if (mode === "rolling") {
+    if (programType !== "ADVANCE") {
+      return NextResponse.json(
+        { error: "Solo los programas ADVANCE pueden ser rolling" },
+        { status: 400 }
+      );
+    }
+    if (!rollingProgramId) {
+      return NextResponse.json(
+        { error: "Selecciona a qué programa rolling se enchufa el paciente" },
+        { status: 400 }
+      );
+    }
+    // Verificar que el programa rolling existe y está activo
+    const rp = await prisma.rollingProgram.findUnique({ where: { id: rollingProgramId } });
+    if (!rp || !rp.isActive) {
+      return NextResponse.json(
+        { error: "El programa rolling seleccionado no existe o está archivado" },
+        { status: 400 }
+      );
+    }
   }
 
   const normalizedEmail = email.trim().toLowerCase();
@@ -58,6 +85,8 @@ export async function POST(req: NextRequest) {
       subscriptionTotalMonths: Number(subscriptionPeriodMonths) || 4,
       assignedProfessionalId: assignedProfessionalId || null,
       programType: programType || null,
+      programMode: mode,
+      rollingProgramId: mode === "rolling" ? rollingProgramId : null,
     },
   });
 
@@ -96,6 +125,8 @@ export async function PATCH(req: NextRequest) {
     shippingCity,
     shippingPostalCode,
     shippingPhone,
+    programMode,
+    rollingProgramId,
   } = body;
 
   // Si se intenta cambiar email, validar que no esté ocupado por otro paciente
@@ -111,6 +142,31 @@ export async function PATCH(req: NextRequest) {
           { status: 409 }
         );
       }
+    }
+  }
+
+  // Si se está cambiando a rolling, validar
+  if (programMode === "rolling") {
+    // El programType debe ser ADVANCE (o el actual + el nuevo)
+    const currentProgramType = programType !== undefined ? programType : (await prisma.patient.findUnique({ where: { id }, select: { programType: true } }))?.programType;
+    if (currentProgramType !== "ADVANCE") {
+      return NextResponse.json(
+        { error: "Solo los programas ADVANCE pueden ser rolling. Cambia primero el tipo a ADVANCE." },
+        { status: 400 }
+      );
+    }
+    if (!rollingProgramId) {
+      return NextResponse.json(
+        { error: "Selecciona a qué programa rolling se enchufa el paciente" },
+        { status: 400 }
+      );
+    }
+    const rp = await prisma.rollingProgram.findUnique({ where: { id: rollingProgramId } });
+    if (!rp || !rp.isActive) {
+      return NextResponse.json(
+        { error: "El programa rolling seleccionado no existe o está archivado" },
+        { status: 400 }
+      );
     }
   }
 
@@ -143,6 +199,10 @@ export async function PATCH(req: NextRequest) {
       ...(shippingCity !== undefined && { shippingCity: shippingCity || null }),
       ...(shippingPostalCode !== undefined && { shippingPostalCode: shippingPostalCode || null }),
       ...(shippingPhone !== undefined && { shippingPhone: shippingPhone || null }),
+      ...(programMode !== undefined && { programMode: programMode === "rolling" ? "rolling" : "fixed" }),
+      ...(rollingProgramId !== undefined && { rollingProgramId: rollingProgramId || null }),
+      // Si se cambia a fixed, limpiamos el rollingProgramId
+      ...(programMode === "fixed" && { rollingProgramId: null }),
     },
   });
   return NextResponse.json(updated);

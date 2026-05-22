@@ -43,7 +43,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 1) Crear paciente
+  // 1) Crear paciente (siempre como "fixed"; si es ADVANCE y se quiere mover a rolling,
+  //    un manager lo hace después desde la ficha del paciente)
   const patient = await prisma.patient.create({
     data: {
       fullName: lead.fullName,
@@ -56,6 +57,7 @@ export async function POST(req: NextRequest) {
       subscriptionTotalMonths: Number(subscriptionPeriodMonths) || 4,
       assignedProfessionalId: assignedProfessionalId || null,
       programType: programType || null,
+      programMode: "fixed",
     },
   });
 

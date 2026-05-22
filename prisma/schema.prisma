@@ -33,6 +33,14 @@ model Patient {
   programType String?                                   // "RECUPERA" | "CONSOLIDA" | "ADVANCE"
   difficulty  String?                                   // "FACIL" | "MEDIO" | "DIFICIL"
 
+  // Modo de programa:
+  //   "fixed"   = programa individual de N semanas (RECUPERA, CONSOLIDA, etc) - el original
+  //   "rolling" = programa "a tiempo corrido" compartido (ADVANCE) - ve la semana actual del calendario
+  programMode      String   @default("fixed")
+  // Si programMode = "rolling", a qué programa rolling está enchufado
+  rollingProgramId String?
+  rollingProgram   RollingProgram? @relation(fields: [rollingProgramId], references: [id])
+
   // Perfil clínico aplicado (opcional)
   appliedLevelId  String?
   appliedLevel    ClinicalLevel? @relation(fields: [appliedLevelId], references: [id])
@@ -51,6 +59,7 @@ model Patient {
   transactions    Transaction[]
   leadsConverted  Lead[]
   sessions        Session[]
+  programPauses   ProgramPause[]
 }
 
 // ============================================================================
@@ -813,4 +822,68 @@ model LoginCode {
   createdAt DateTime @default(now())
 
   @@index([email, expiresAt])
+}
+
+// ============================================================================
+// PAUSAS DE PROGRAMA (solo para programas fixed)
+// ============================================================================
+// Cuando un paciente se va de vacaciones / pausa el programa, registramos
+// las fechas. La fecha fin de su suscripción se extiende automáticamente
+// el mismo número de días que dura la pausa. Su "semana actual del programa"
+// salta: la semana N se sirve después de la pausa.
+//
+// Regla: solo una pausa "scheduled" o "active" a la vez por paciente.
+// ============================================================================
+
+model ProgramPause {
+  id          String   @id @default(cuid())
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  startDate   DateTime
+  endDate     DateTime                       // fin originalmente previsto
+  actualEndDate DateTime?                    // si la termina antes manualmente, fin real
+  reason      String?                        // ej "Vacaciones", "Lesión externa"
+  status      String   @default("scheduled") // "scheduled" | "active" | "ended" | "cancelled"
+  daysExtended Int     @default(0)           // días gratis añadidos a la suscripción
+  createdById String?                        // quién la creó (profesional)
+  createdAt   DateTime @default(now())
+  reminderSent Boolean @default(false)       // email "vuelves" enviado al terminar
+
+  @@index([patientId, status])
+  @@index([endDate])
+}
+
+// ============================================================================
+// PROGRAMA ROLLING (tiempo corrido - solo para ADVANCE)
+// ============================================================================
+// Un RollingProgram es un "canal" de contenido semanal compartido (ej.
+// "Rolling Strength", "Rolling Performance"). Cada semana del calendario
+// tiene su contenido (RollingWeek). Pacientes ADVANCE rolling se suscriben
+// a UN RollingProgram y ven la semana actual del calendario.
+// ============================================================================
+
+model RollingProgram {
+  id          String   @id @default(cuid())
+  name        String                          // "Rolling Strength"
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  weeks       RollingWeek[]
+  patients    Patient[]
+}
+
+model RollingWeek {
+  id               String   @id @default(cuid())
+  programId        String
+  program          RollingProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+  weekStartDate    DateTime                   // lunes 00:00 de esa semana
+  title            String?                    // "Semana del 19 mayo · Foco fuerza"
+  notes            String?                    // notas internas del fisio (no visibles al paciente)
+  contentJson      String   @default("{}")    // estructura libre con las sesiones de la semana (formato similar a ProgramAssignment)
+  publishedAt      DateTime?                  // null = borrador; con fecha = visible para pacientes
+  createdAt        DateTime @default(now())
+
+  @@unique([programId, weekStartDate])         // una semana única por programa
+  @@index([weekStartDate])
 }

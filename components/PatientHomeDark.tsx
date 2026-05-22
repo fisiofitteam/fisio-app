@@ -47,11 +47,13 @@ export function PatientHomeDark({
   todaySessions,
   nextSession,
   adherence,
+  upcomingPause,
 }: {
   patient: Patient;
   todaySessions: TodaySession[];
   nextSession: NextSession | null;
   adherence: Adherence | null;
+  upcomingPause?: { startDate: string; endDate: string } | null;
 }) {
   const dow = new Date().getDay() === 0 ? 7 : new Date().getDay();
   const todayDate = new Date();
@@ -60,6 +62,23 @@ export function PatientHomeDark({
   return (
     <main className="min-h-screen text-white" style={{ color: "#FAFAFA" }}>
       <div className="relative max-w-md mx-auto px-5 py-7 pb-28">
+        {upcomingPause && (
+          <div
+            className="mb-5 rounded-xl px-4 py-3 text-sm"
+            style={{
+              background: "rgba(251, 191, 36, 0.10)",
+              border: "1px solid rgba(251, 191, 36, 0.30)",
+              color: "#FBBF24",
+            }}
+          >
+            <div className="font-medium mb-0.5">📅 Pausa programada</div>
+            <div className="text-xs" style={{ color: "#A3A3A3" }}>
+              Del {new Date(upcomingPause.startDate).toLocaleDateString("es-ES", { day: "numeric", month: "short" })} al{" "}
+              {new Date(upcomingPause.endDate).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}.
+              Tu programa se reanuda automáticamente.
+            </div>
+          </div>
+        )}
         {/* Header */}
         <header className="mb-7">
           <div className="flex justify-between items-center mb-5">
