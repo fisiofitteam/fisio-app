@@ -28,6 +28,8 @@ export default async function PatientFichaTab({ params }: { params: { id: string
         difficulty: patient.difficulty ?? "",
         programMode: patient.programMode ?? "fixed",
         rollingProgramId: patient.rollingProgramId ?? null,
+        rollingAccessoriesId: patient.rollingAccessoriesId ?? null,
+        rollingTrainingId: patient.rollingTrainingId ?? null,
       }}
     />
   );

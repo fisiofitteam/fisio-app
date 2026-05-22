@@ -9,6 +9,10 @@ type RollingTask = {
   title: string;
   bodyText: string | null;
   youtubeUrl: string | null;
+  /** Etiqueta del bloque al que pertenece (Accesorios / Entrenamiento). Solo en ADVANCE multi-rolling. */
+  blockLabel?: string;
+  /** Color del bloque (hex). Si está, se usa para el badge del bloque. */
+  blockColor?: string;
 };
 
 type RollingDay = {
@@ -209,6 +213,17 @@ function RollingTaskCard({ task }: { task: RollingTask }) {
       className="rounded-xl p-3"
       style={{ background: "#0F0F0F", border: "1px solid #262626" }}
     >
+      {task.blockLabel && (
+        <div
+          className="inline-flex items-center text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded mb-1.5"
+          style={{
+            background: `${task.blockColor || "#3B82F6"}33`,
+            color: task.blockColor || "#3B82F6",
+          }}
+        >
+          {task.blockLabel.toUpperCase()}
+        </div>
+      )}
       <div className="flex items-start gap-2 mb-1">
         <div className="text-base">{TYPE_ICONS[task.type] || "•"}</div>
         <div className="flex-1 min-w-0">

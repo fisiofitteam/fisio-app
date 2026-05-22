@@ -13,7 +13,7 @@ export default async function RollingPage() {
   const programs = await prisma.rollingProgram.findMany({
     orderBy: [{ isActive: "desc" }, { name: "asc" }],
     include: {
-      _count: { select: { patients: true, weeks: true } },
+      _count: { select: { patientsLegacy: true, patientsAccessories: true, patientsTraining: true, weeks: true } },
     },
   });
 
@@ -25,7 +25,7 @@ export default async function RollingPage() {
         name: p.name,
         description: p.description,
         isActive: p.isActive,
-        patientsCount: p._count.patients,
+        patientsCount: p._count.patientsLegacy + p._count.patientsAccessories + p._count.patientsTraining,
         weeksCount: p._count.weeks,
       }))}
     />

@@ -37,9 +37,19 @@ model Patient {
   //   "fixed"   = programa individual de N semanas (RECUPERA, CONSOLIDA, etc) - el original
   //   "rolling" = programa "a tiempo corrido" compartido (ADVANCE) - ve la semana actual del calendario
   programMode      String   @default("fixed")
-  // Si programMode = "rolling", a qué programa rolling está enchufado
+
+  // Slot LEGACY (mantenido por compat con datos antiguos). En v49+ se usa
+  // como "Rolling de entrenamiento" si rollingTrainingId es null.
   rollingProgramId String?
-  rollingProgram   RollingProgram? @relation(fields: [rollingProgramId], references: [id])
+  rollingProgram   RollingProgram? @relation("PatientLegacyRolling", fields: [rollingProgramId], references: [id])
+
+  // ADVANCE multi-Rolling: dos slots fijos con nombre semántico estable.
+  // Accesorios: contenido de calentamiento/movilidad compartido con PREVENTION.
+  // Entrenamiento: contenido específico de ADVANCE.
+  rollingAccessoriesId String?
+  rollingAccessories   RollingProgram? @relation("PatientAccessoriesRolling", fields: [rollingAccessoriesId], references: [id])
+  rollingTrainingId    String?
+  rollingTraining      RollingProgram? @relation("PatientTrainingRolling", fields: [rollingTrainingId], references: [id])
 
   // Perfil clínico aplicado (opcional)
   appliedLevelId  String?
@@ -893,7 +903,12 @@ model RollingProgram {
   createdAt   DateTime @default(now())
 
   weeks       RollingWeek[]
-  patients    Patient[]
+  // Pacientes con asignación legacy (1 solo rolling). Mantenido por compat.
+  patientsLegacy     Patient[] @relation("PatientLegacyRolling")
+  // Pacientes que tienen este programa como Accesorios
+  patientsAccessories Patient[] @relation("PatientAccessoriesRolling")
+  // Pacientes que tienen este programa como Entrenamiento
+  patientsTraining    Patient[] @relation("PatientTrainingRolling")
 }
 
 model RollingWeek {

@@ -21,6 +21,8 @@ type Patient = {
   difficulty: string;
   programMode: string;
   rollingProgramId: string | null;
+  rollingAccessoriesId: string | null;
+  rollingTrainingId: string | null;
 };
 
 function daysUntilRenewal(start: string, months: number): number | null {
@@ -192,6 +194,8 @@ export function ClinicalFile({ patient, isManager }: { patient: Patient; isManag
           programType={patient.programType}
           programMode={patient.programMode}
           currentRollingProgramId={patient.rollingProgramId}
+          currentAccessoriesId={patient.rollingAccessoriesId}
+          currentTrainingId={patient.rollingTrainingId}
           isManager={isManager}
         />
         <ProgramPausesBlock patientId={patient.id} programMode={patient.programMode} />

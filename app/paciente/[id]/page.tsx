@@ -29,7 +29,12 @@ export default async function PatientHome({ params }: { params: { id: string } }
   }
 
   // --- 2. Si es ADVANCE rolling → vista de programa rolling ---
-  if (patient.programMode === "rolling" && patient.rollingProgramId) {
+  // Determinar IDs de los Rollings asignados (accesorios + entrenamiento + fallback legacy)
+  const accId = patient.rollingAccessoriesId;
+  const trnId = patient.rollingTrainingId || patient.rollingProgramId; // fallback al legacy
+  const hasAnyRolling = Boolean(accId || trnId);
+
+  if (patient.programMode === "rolling" && hasAnyRolling) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const thisMonday = weekStartDate(today);
@@ -56,51 +61,68 @@ export default async function PatientHome({ params }: { params: { id: string } }
       );
     }
 
-    // Buscar la semana del programa que corresponde a esta semana del calendario
-    const week = await prisma.rollingWeek.findUnique({
-      where: {
-        programId_weekStartDate: {
-          programId: patient.rollingProgramId,
-          weekStartDate: thisMonday,
+    // Cargar la semana de cada rolling asignado (accesorios y/o entrenamiento)
+    const fetchWeek = async (programId: string | null) => {
+      if (!programId) return null;
+      return prisma.rollingWeek.findUnique({
+        where: { programId_weekStartDate: { programId, weekStartDate: thisMonday } },
+        include: {
+          days: {
+            include: { tasks: { orderBy: { order: "asc" } } },
+            orderBy: { dayOfWeek: "asc" },
+          },
         },
-      },
-      include: {
-        days: {
-          include: { tasks: { orderBy: { order: "asc" } } },
-          orderBy: { dayOfWeek: "asc" },
-        },
-      },
-    });
+      });
+    };
 
-    // Resolver vídeos referenciados (videoId → URL) tanto en VIDEO como en WORKOUT
+    const [accWeek, trnWeek] = await Promise.all([fetchWeek(accId), fetchWeek(trnId)]);
+
+    // Resolver vídeos referenciados de ambos rollings
     let videosById: Record<string, { youtubeUrl: string; title: string }> = {};
-    if (week) {
-      const videoIds = new Set<string>();
-      for (const d of week.days) {
-        for (const t of d.tasks) {
-          if ((t.type === "VIDEO" || t.type === "WORKOUT") && t.videoId) {
-            videoIds.add(t.videoId);
-          }
-        }
-      }
-      if (videoIds.size > 0) {
-        const vids = await prisma.videoLibrary.findMany({
-          where: { id: { in: Array.from(videoIds) } },
-        });
-        for (const v of vids) {
-          videosById[v.id] = { youtubeUrl: v.youtubeUrl, title: v.title };
-        }
+    const allTasksFlat = [
+      ...(accWeek?.days.flatMap((d) => d.tasks) || []),
+      ...(trnWeek?.days.flatMap((d) => d.tasks) || []),
+    ];
+    const videoIds = new Set<string>();
+    for (const t of allTasksFlat) {
+      if ((t.type === "VIDEO" || t.type === "WORKOUT") && t.videoId) videoIds.add(t.videoId);
+    }
+    if (videoIds.size > 0) {
+      const vids = await prisma.videoLibrary.findMany({
+        where: { id: { in: Array.from(videoIds) } },
+      });
+      for (const v of vids) {
+        videosById[v.id] = { youtubeUrl: v.youtubeUrl, title: v.title };
       }
     }
 
-    return (
-      <PatientHomeRolling
-        firstName={firstName}
-        patientId={patient.id}
-        mode={week && week.publishedAt ? "ready" : "pending"}
-        weekStartIso={thisMonday.toISOString()}
-        title={week?.title || null}
-        days={week?.days.map((d) => ({
+    // Construir lista de bloques: cada bloque es un Rolling (accesorios o entrenamiento)
+    // con sus 5 días y sus tareas. El componente PatientHomeRolling sabe pintar varios.
+    type Block = {
+      blockLabel: string; // "Accesorios" / "Entrenamiento"
+      blockColor: string; // color de la pastilla
+      title: string | null; // título de la semana
+      published: boolean;
+      days: Array<{
+        dayOfWeek: number;
+        tasks: Array<{
+          id: string;
+          type: string;
+          title: string;
+          bodyText: string | null;
+          youtubeUrl: string | null;
+        }>;
+      }>;
+    };
+
+    const blocks: Block[] = [];
+    if (accId && accWeek) {
+      blocks.push({
+        blockLabel: "Accesorios",
+        blockColor: "#3B82F6", // azul
+        title: accWeek.title || null,
+        published: Boolean(accWeek.publishedAt),
+        days: accWeek.days.map((d) => ({
           dayOfWeek: d.dayOfWeek,
           tasks: d.tasks.map((t) => ({
             id: t.id,
@@ -109,7 +131,59 @@ export default async function PatientHome({ params }: { params: { id: string } }
             bodyText: t.bodyText,
             youtubeUrl: t.videoId ? videosById[t.videoId]?.youtubeUrl ?? null : null,
           })),
-        })) || []}
+        })),
+      });
+    }
+    if (trnId && trnWeek) {
+      blocks.push({
+        blockLabel: "Entrenamiento",
+        blockColor: "#F59E0B", // ámbar
+        title: trnWeek.title || null,
+        published: Boolean(trnWeek.publishedAt),
+        days: trnWeek.days.map((d) => ({
+          dayOfWeek: d.dayOfWeek,
+          tasks: d.tasks.map((t) => ({
+            id: t.id,
+            type: t.type,
+            title: t.title,
+            bodyText: t.bodyText,
+            youtubeUrl: t.videoId ? videosById[t.videoId]?.youtubeUrl ?? null : null,
+          })),
+        })),
+      });
+    }
+
+    // Si todos los bloques están en borrador → "pending". Si al menos uno está publicado → "ready"
+    const anyPublished = blocks.some((b) => b.published);
+    // Mantenemos compat con el formato anterior: aplanar todos los bloques en 5 días L-V
+    // pero marcando cada tarea con su blockLabel.
+    const daysByDow: Record<number, Array<{ id: string; type: string; title: string; bodyText: string | null; youtubeUrl: string | null; blockLabel: string; blockColor: string }>> = {};
+    for (let dow = 1; dow <= 5; dow++) daysByDow[dow] = [];
+    for (const b of blocks) {
+      if (!b.published) continue; // solo mostrar bloques publicados
+      for (const d of b.days) {
+        for (const t of d.tasks) {
+          daysByDow[d.dayOfWeek].push({
+            ...t,
+            blockLabel: b.blockLabel,
+            blockColor: b.blockColor,
+          });
+        }
+      }
+    }
+    const flatDays = [1, 2, 3, 4, 5].map((dow) => ({ dayOfWeek: dow, tasks: daysByDow[dow] }));
+
+    // Título: usar el del entrenamiento si hay, si no el de accesorios
+    const headerTitle = (trnWeek?.title || accWeek?.title) || null;
+
+    return (
+      <PatientHomeRolling
+        firstName={firstName}
+        patientId={patient.id}
+        mode={anyPublished ? "ready" : "pending"}
+        weekStartIso={thisMonday.toISOString()}
+        title={headerTitle}
+        days={flatDays}
         daysToExpire={daysToExpire}
       />
     );

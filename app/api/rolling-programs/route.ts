@@ -11,10 +11,15 @@ export async function GET() {
   const programs = await prisma.rollingProgram.findMany({
     orderBy: [{ isActive: "desc" }, { name: "asc" }],
     include: {
-      _count: { select: { patients: true, weeks: true } },
+      _count: { select: { patientsLegacy: true, patientsAccessories: true, patientsTraining: true, weeks: true } },
     },
   });
-  return NextResponse.json(programs);
+  // Devolvemos también un patientsCount agregado para compat con UI antiguas
+  const enriched = programs.map((p) => ({
+    ...p,
+    patientsCount: p._count.patientsLegacy + p._count.patientsAccessories + p._count.patientsTraining,
+  }));
+  return NextResponse.json(enriched);
 }
 
 // POST: crear programa rolling -----------------------------------------------

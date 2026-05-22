@@ -9,19 +9,28 @@ export function RollingAssignmentBlock({
   programType,
   programMode,
   currentRollingProgramId,
+  currentAccessoriesId,
+  currentTrainingId,
   isManager,
 }: {
   patientId: string;
   programType: string;
   programMode: string;
+  /** Slot legacy (1 solo rolling) — solo usado si los nuevos están vacíos */
   currentRollingProgramId: string | null;
+  /** Slot Accesorios */
+  currentAccessoriesId: string | null;
+  /** Slot Entrenamiento */
+  currentTrainingId: string | null;
   isManager: boolean;
 }) {
   const [programs, setPrograms] = useState<RollingProgram[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [selectedMode, setSelectedMode] = useState<"fixed" | "rolling">(programMode as any);
-  const [selectedProgramId, setSelectedProgramId] = useState(currentRollingProgramId || "");
+  // Valor inicial: si hay slots nuevos, usarlos. Si no, "training" hereda el legacy.
+  const [accessoriesId, setAccessoriesId] = useState(currentAccessoriesId || "");
+  const [trainingId, setTrainingId] = useState(currentTrainingId || currentRollingProgramId || "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -38,11 +47,12 @@ export function RollingAssignmentBlock({
   // Solo mostrar el bloque si es ADVANCE (los demás programas no admiten rolling)
   if (programType !== "ADVANCE") return null;
 
-  const currentProgram = programs.find((p) => p.id === currentRollingProgramId);
+  const accProgram = programs.find((p) => p.id === (currentAccessoriesId || ""));
+  const trnProgram = programs.find((p) => p.id === (currentTrainingId || currentRollingProgramId || ""));
 
   async function save() {
-    if (selectedMode === "rolling" && !selectedProgramId) {
-      setError("Selecciona un programa rolling");
+    if (selectedMode === "rolling" && !accessoriesId && !trainingId) {
+      setError("Selecciona al menos un programa rolling (Accesorios o Entrenamiento)");
       return;
     }
     setSaving(true);
@@ -53,7 +63,10 @@ export function RollingAssignmentBlock({
       body: JSON.stringify({
         id: patientId,
         programMode: selectedMode,
-        rollingProgramId: selectedMode === "rolling" ? selectedProgramId : null,
+        rollingAccessoriesId: selectedMode === "rolling" ? (accessoriesId || null) : null,
+        rollingTrainingId: selectedMode === "rolling" ? (trainingId || null) : null,
+        // Limpiar el legacy: ya no lo usamos
+        rollingProgramId: null,
       }),
     });
     if (res.ok) {
@@ -68,7 +81,7 @@ export function RollingAssignmentBlock({
   return (
     <div className="mt-3 pt-3" style={{ borderTop: "1px dashed #E5E5E5" }}>
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-medium">Modo del programa ADVANCE</h3>
+        <h3 className="text-sm font-medium">Programas Rolling de ADVANCE</h3>
         {isManager && !editing && (
           <button
             onClick={() => setEditing(true)}
@@ -83,17 +96,27 @@ export function RollingAssignmentBlock({
       {!editing && (
         <div className="rounded-lg p-3 text-sm" style={{ background: "#FAFAFA", border: "1px solid #E5E5E5" }}>
           {programMode === "rolling" ? (
-            <>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded" style={{ background: "#0A0A0A", color: "#FAFAFA" }}>
-                  ROLLING
-                </span>
-                <span className="font-medium">{currentProgram?.name || "(programa archivado)"}</span>
+            <div className="space-y-2.5">
+              <div>
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded" style={{ background: "#DBEAFE", color: "#1E40AF" }}>
+                    ACCESORIOS
+                  </span>
+                  <span className="font-medium">{accProgram?.name || (currentAccessoriesId ? "(archivado)" : "—")}</span>
+                </div>
               </div>
-              <p className="text-[11px] text-neutral-500">
-                Ve la semana actual del calendario. Sin métricas, sin pausas.
+              <div>
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded" style={{ background: "#FEF3C7", color: "#7C2D12" }}>
+                    ENTRENAMIENTO
+                  </span>
+                  <span className="font-medium">{trnProgram?.name || ((currentTrainingId || currentRollingProgramId) ? "(archivado)" : "—")}</span>
+                </div>
+              </div>
+              <p className="text-[11px] text-neutral-500 mt-1.5">
+                Ve cada día las sesiones de ambos programas. Sin métricas, sin pausas.
               </p>
-            </>
+            </div>
           ) : (
             <>
               <div className="flex items-center gap-2 mb-1">
@@ -142,16 +165,45 @@ export function RollingAssignmentBlock({
                   No hay programas rolling activos. <a href="/fisio/biblioteca/rolling" className="underline font-medium">Crear uno primero</a>.
                 </div>
               ) : (
-                <select
-                  className="input text-sm w-full"
-                  value={selectedProgramId}
-                  onChange={(e) => setSelectedProgramId(e.target.value)}
-                >
-                  <option value="">— Selecciona un programa —</option>
-                  {programs.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
+                <div className="space-y-2.5">
+                  <div>
+                    <label className="text-xs text-neutral-500 block mb-1">
+                      <span className="font-medium text-neutral-800">Accesorios</span>
+                      <span className="text-[10px] ml-1.5">(calentamiento/movilidad, compartido con PREVENTION)</span>
+                    </label>
+                    <select
+                      className="input text-sm w-full"
+                      value={accessoriesId}
+                      onChange={(e) => setAccessoriesId(e.target.value)}
+                    >
+                      <option value="">— Sin programa de accesorios —</option>
+                      {programs.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-neutral-500 block mb-1">
+                      <span className="font-medium text-neutral-800">Entrenamiento</span>
+                      <span className="text-[10px] ml-1.5">(sesión principal de ADVANCE)</span>
+                    </label>
+                    <select
+                      className="input text-sm w-full"
+                      value={trainingId}
+                      onChange={(e) => setTrainingId(e.target.value)}
+                    >
+                      <option value="">— Sin programa de entrenamiento —</option>
+                      {programs.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <p className="text-[10px] italic text-neutral-500">
+                    Tienes que asignar al menos uno de los dos.
+                  </p>
+                </div>
               )}
             </>
           )}
@@ -163,7 +215,8 @@ export function RollingAssignmentBlock({
               onClick={() => {
                 setEditing(false);
                 setSelectedMode(programMode as any);
-                setSelectedProgramId(currentRollingProgramId || "");
+                setAccessoriesId(currentAccessoriesId || "");
+                setTrainingId(currentTrainingId || currentRollingProgramId || "");
                 setError("");
               }}
               className="flex-1 text-xs px-3 py-2 rounded-md"

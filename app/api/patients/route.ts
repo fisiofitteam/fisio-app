@@ -144,6 +144,8 @@ export async function PATCH(req: NextRequest) {
     shippingPhone,
     programMode,
     rollingProgramId,
+    rollingAccessoriesId,
+    rollingTrainingId,
   } = body;
 
   // Si se intenta cambiar email, validar que no esté ocupado por otro paciente
@@ -164,7 +166,6 @@ export async function PATCH(req: NextRequest) {
 
   // Si se está cambiando a rolling, validar
   if (programMode === "rolling") {
-    // El programType debe ser ADVANCE (o el actual + el nuevo)
     const currentProgramType = programType !== undefined ? programType : (await prisma.patient.findUnique({ where: { id }, select: { programType: true } }))?.programType;
     if (currentProgramType !== "ADVANCE") {
       return NextResponse.json(
@@ -172,18 +173,26 @@ export async function PATCH(req: NextRequest) {
         { status: 400 }
       );
     }
-    if (!rollingProgramId) {
+    // En modo rolling, ADVANCE necesita al menos UNO de los dos slots asignado.
+    // Aceptamos cualquier combinación: solo accesorios, solo entrenamiento, o ambos.
+    const accId = rollingAccessoriesId !== undefined ? rollingAccessoriesId : null;
+    const trnId = rollingTrainingId !== undefined ? rollingTrainingId : null;
+    const legacyId = rollingProgramId !== undefined ? rollingProgramId : null;
+    if (!accId && !trnId && !legacyId) {
       return NextResponse.json(
-        { error: "Selecciona a qué programa rolling se enchufa el paciente" },
+        { error: "Asigna al menos un programa rolling (Accesorios o Entrenamiento)" },
         { status: 400 }
       );
     }
-    const rp = await prisma.rollingProgram.findUnique({ where: { id: rollingProgramId } });
-    if (!rp || !rp.isActive) {
-      return NextResponse.json(
-        { error: "El programa rolling seleccionado no existe o está archivado" },
-        { status: 400 }
-      );
+    // Validar que los rollings seleccionados existen y están activos
+    for (const rid of [accId, trnId, legacyId].filter(Boolean) as string[]) {
+      const rp = await prisma.rollingProgram.findUnique({ where: { id: rid } });
+      if (!rp || !rp.isActive) {
+        return NextResponse.json(
+          { error: "Uno de los programas rolling seleccionados no existe o está archivado" },
+          { status: 400 }
+        );
+      }
     }
   }
 
@@ -218,8 +227,14 @@ export async function PATCH(req: NextRequest) {
       ...(shippingPhone !== undefined && { shippingPhone: shippingPhone || null }),
       ...(programMode !== undefined && { programMode: programMode === "rolling" ? "rolling" : "fixed" }),
       ...(rollingProgramId !== undefined && { rollingProgramId: rollingProgramId || null }),
-      // Si se cambia a fixed, limpiamos el rollingProgramId
-      ...(programMode === "fixed" && { rollingProgramId: null }),
+      ...(rollingAccessoriesId !== undefined && { rollingAccessoriesId: rollingAccessoriesId || null }),
+      ...(rollingTrainingId !== undefined && { rollingTrainingId: rollingTrainingId || null }),
+      // Si se cambia a fixed, limpiamos los tres rollings
+      ...(programMode === "fixed" && {
+        rollingProgramId: null,
+        rollingAccessoriesId: null,
+        rollingTrainingId: null,
+      }),
     },
   });
   return NextResponse.json(updated);
