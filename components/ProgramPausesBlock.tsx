@@ -43,7 +43,8 @@ export function ProgramPausesBlock({ patientId, programMode }: { patientId: stri
     const res = await fetch(`/api/program-pauses?patientId=${patientId}`);
     if (res.ok) {
       const data = await res.json();
-      setPauses(data);
+      // Las pausas canceladas no se muestran (siguen en BD por trazabilidad)
+      setPauses(data.filter((p: Pause) => p.status !== "cancelled"));
     }
     setLoading(false);
   }

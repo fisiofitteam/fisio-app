@@ -88,6 +88,7 @@ export function CalendarMonth({
   const [assignmentModal, setAssignmentModal] = useState<{ date: string } | null>(null);
   const [addChoice, setAddChoice] = useState<{ date: string } | null>(null);
   const [editingSession, setEditingSession] = useState<Session | null>(null);
+  const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null);
   const [dragging, setDragging] = useState<Session | null>(null);
   const [dropAction, setDropAction] = useState<{ session: Session; targetKey: string } | null>(null);
 
@@ -170,7 +171,7 @@ export function CalendarMonth({
         ) : (
           <div className="space-y-2">
             {activeAssignments.map((a) => (
-              <div key={a.id} className="flex justify-between items-center text-sm">
+              <div key={a.id} className="flex justify-between items-center text-sm gap-2">
                 <div className="flex-1 min-w-0">
                   <div className="font-medium">{a.programName}</div>
                   <div className="text-xs text-neutral-500">
@@ -180,6 +181,13 @@ export function CalendarMonth({
                 <div className="text-xs text-neutral-500">
                   desde {new Date(a.startDate).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
                 </div>
+                <button
+                  onClick={() => setEditingAssignment(a)}
+                  className="text-xs text-neutral-500 hover:text-neutral-900 px-1.5"
+                  title="Editar"
+                >
+                  ✎
+                </button>
               </div>
             ))}
           </div>
@@ -302,6 +310,18 @@ export function CalendarMonth({
         />
       )}
 
+      {editingAssignment && (
+        <EditAssignmentModal
+          assignment={editingAssignment}
+          patientId={patientId}
+          onClose={() => setEditingAssignment(null)}
+          onSaved={() => {
+            setEditingAssignment(null);
+            router.refresh();
+          }}
+        />
+      )}
+
       {dropAction && (
         <DropActionModal
           session={dropAction.session}
@@ -402,6 +422,28 @@ function DraggableSession({ session }: { session: Session }) {
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, opacity: isDragging ? 0.4 : 1 }
     : undefined;
 
+  // Sacar el título visible de la sesión: primer task (o nombre programa si es standalone)
+  let displayTitle: string | null = null;
+  try {
+    const tasks = JSON.parse(session.tasksSnapshot);
+    if (Array.isArray(tasks) && tasks.length > 0) {
+      // Si solo hay una tarea: ese es el título
+      // Si hay varias: el de la primera (orden=0)
+      const first = tasks[0];
+      displayTitle = first.title || null;
+      // Si hay más de una tarea, añadimos contador
+      if (tasks.length > 1) {
+        displayTitle = `${displayTitle} +${tasks.length - 1}`;
+      }
+    }
+  } catch {}
+  // Si es standalone (sesión suelta sin programa) usamos su programName
+  if (!displayTitle && session.isStandalone) {
+    displayTitle = session.programName;
+  }
+  // Si no hay nada que mostrar, no rendereamos (día de descanso, sesión vacía)
+  if (!displayTitle) return null;
+
   return (
     <div
       ref={setNodeRef}
@@ -413,7 +455,7 @@ function DraggableSession({ session }: { session: Session }) {
       }`}
     >
       {session.completedAt && "✓ "}
-      {session.programName}
+      {displayTitle}
     </div>
   );
 }
@@ -902,4 +944,107 @@ function parseKey(k: string): Date {
 function isToday(d: Date): boolean {
   const t = new Date();
   return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() && d.getDate() === t.getDate();
+}
+
+function EditAssignmentModal({
+  assignment,
+  patientId,
+  onClose,
+  onSaved,
+}: {
+  assignment: Assignment;
+  patientId: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [startDate, setStartDate] = useState(assignment.startDate.split("T")[0]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function saveDate() {
+    setError("");
+    setSaving(true);
+    const res = await fetch("/api/assignments", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: assignment.id,
+        startDate: new Date(startDate).toISOString(),
+      }),
+    });
+    if (res.ok) {
+      onSaved();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "No se pudo guardar");
+      setSaving(false);
+    }
+  }
+
+  async function deactivate() {
+    if (!confirm(`¿Desactivar el programa "${assignment.programName}"?\n\nLas sesiones quedarán como histórico de lectura. Esta acción NO borra ningún dato.`)) {
+      return;
+    }
+    setSaving(true);
+    const res = await fetch("/api/assignments", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: assignment.id, isActive: false }),
+    });
+    if (res.ok) onSaved();
+    else { setError("No se pudo desactivar"); setSaving(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl max-w-md w-full p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-1">
+          <h3 className="font-semibold">Editar programa</h3>
+          <button onClick={onClose} className="text-neutral-400 text-xl leading-none">✕</button>
+        </div>
+        <p className="text-xs text-neutral-500 mb-4">
+          <strong>{assignment.programName}</strong> — {assignment.programType} N{assignment.programLevel}
+        </p>
+
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Fecha de inicio</label>
+            <input
+              type="date"
+              className="input text-sm w-full"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+            <p className="text-[10px] text-neutral-500 mt-1 italic">
+              Si cambias la fecha, las sesiones futuras no completadas se moverán proporcionalmente. Las ya completadas se quedan en su sitio.
+            </p>
+          </div>
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          <button
+            onClick={saveDate}
+            disabled={saving}
+            className="w-full text-sm font-medium"
+            style={{ background: "#0A0A0A", color: "#FAFAFA", padding: 11, borderRadius: 10, border: "none", opacity: saving ? 0.5 : 1 }}
+          >
+            {saving ? "Guardando..." : "Guardar fecha"}
+          </button>
+
+          <div className="pt-3 border-t border-neutral-200">
+            <button
+              onClick={deactivate}
+              disabled={saving}
+              className="w-full text-sm font-medium text-red-600 hover:bg-red-50 py-2 rounded-lg"
+            >
+              Desactivar programa
+            </button>
+            <p className="text-[10px] text-neutral-500 mt-1 italic text-center">
+              El histórico de sesiones se conserva.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }

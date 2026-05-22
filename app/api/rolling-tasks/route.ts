@@ -65,7 +65,7 @@ export async function PATCH(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const { id, title, bodyText, youtubeUrl, formId } = await req.json();
+  const { id, title, bodyText, videoId, formId } = await req.json();
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
   const task = await prisma.rollingTask.update({
@@ -73,7 +73,7 @@ export async function PATCH(req: NextRequest) {
     data: {
       ...(title !== undefined && { title }),
       ...(bodyText !== undefined && { bodyText: bodyText || null }),
-      ...(youtubeUrl !== undefined && { youtubeUrl: youtubeUrl || null }),
+      ...(videoId !== undefined && { videoId: videoId || null }),
       ...(formId !== undefined && { formId: formId || null }),
     },
   });
@@ -135,7 +135,7 @@ export async function PUT(req: NextRequest) {
         title: task.title,
         order: count,
         bodyText: task.bodyText,
-        youtubeUrl: task.youtubeUrl,
+        videoId: task.videoId,
         formId: task.formId,
       },
     });

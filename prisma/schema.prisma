@@ -566,18 +566,41 @@ model VideoLibrary {
 // HISTORIAL DE RENOVACIONES
 // ============================================================================
 
-model SubscriptionRenewal {
-  id           String   @id @default(cuid())
-  patientId    String
-  patient      Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+// ============================================================================
+// PERIODOS DE SUSCRIPCIÓN (historial)
+// ============================================================================
+// Cada paciente tiene una secuencia de Periodos. El periodo activo es el
+// que no tiene endDate cumplido o tiene status="active". Al renovar, se
+// crea un nuevo periodo (no se modifica el anterior).
+//
+// IMPORTANTE: mantenemos el nombre `SubscriptionRenewal` por compatibilidad
+// con el código existente, aunque conceptualmente ahora representa también
+// el periodo de alta inicial.
+// ============================================================================
 
-  outcome      String                                  // "renewed" | "lost" | "pending"
-  decidedAt    DateTime @default(now())
-  amountPaid   Float?                                  // importe pagado en la renovación (€)
-  notes        String?
+model SubscriptionRenewal {
+  id            String   @id @default(cuid())
+  patientId     String
+  patient       Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  // Tipo de periodo y duración
+  programType   String?                                  // "RECUPERA" | "CONSOLIDA" | "ADVANCE"
+  periodMonths  Int      @default(4)                     // duración en meses
+  startDate     DateTime?                                // inicio del periodo
+  endDate       DateTime?                                // fin previsto (puede moverse si hay pausas)
+
+  // Estado
+  status        String   @default("active")              // "active" | "finished" | "lost"
+  // (`outcome` legado: "renewed" | "lost" | "pending" — se mapea a status para compat)
+  outcome       String?                                  // legacy, no usar en código nuevo
+
+  decidedAt     DateTime @default(now())                 // fecha en la que se registró este periodo
+  amountPaid    Float?                                   // importe pagado por este periodo (€)
+  notes         String?
 
   @@index([patientId])
   @@index([decidedAt])
+  @@index([status])
 }
 
 // ============================================================================
@@ -908,8 +931,8 @@ model RollingTask {
   order       Int      @default(0)
 
   // Payload inline según `type`. Mantenemos simple: una tabla, sin sub-tablas.
-  bodyText    String?                         // WORKOUT: texto libre (markdown ligero); VIDEO/FORM: descripción opcional
-  youtubeUrl  String?                         // VIDEO: URL del vídeo
+  bodyText    String?                         // WORKOUT: texto libre (markdown ligero); VIDEO/FORM: notas
+  videoId     String?                         // VIDEO: referencia a VideoLibrary (FK lógico, no relación)
   formId      String?                         // FORM: referencia al Form de Biblioteca
 
   @@index([dayId])

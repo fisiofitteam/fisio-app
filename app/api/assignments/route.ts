@@ -33,3 +33,57 @@ export async function DELETE(req: NextRequest) {
   await prisma.programAssignment.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }
+
+/**
+ * PATCH: editar una asignación.
+ *
+ * Soporta:
+ *  - isActive: desactivar el programa (sesiones quedan como histórico)
+ *  - startDate: cambiar fecha de inicio (mueve sesiones futuras no completadas)
+ */
+export async function PATCH(req: NextRequest) {
+  const body = await req.json();
+  const { id, isActive, startDate } = body;
+
+  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+
+  const current = await prisma.programAssignment.findUnique({ where: { id } });
+  if (!current) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const data: any = {};
+
+  // Cambio de fecha → mover sesiones futuras no completadas
+  if (startDate !== undefined) {
+    const newStart = getMondayOfWeek(new Date(startDate));
+    const oldStart = current.startDate;
+    const diffDays = Math.round((newStart.getTime() - oldStart.getTime()) / 86400000);
+
+    if (diffDays !== 0) {
+      // Sólo sesiones futuras no completadas
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const sessions = await prisma.programSession.findMany({
+        where: {
+          assignmentId: id,
+          completedAt: null,
+          scheduledDate: { gte: today },
+        },
+      });
+      for (const s of sessions) {
+        const newDate = new Date(s.scheduledDate.getTime() + diffDays * 86400000);
+        await prisma.programSession.update({
+          where: { id: s.id },
+          data: { scheduledDate: newDate },
+        });
+      }
+    }
+    data.startDate = newStart;
+  }
+
+  if (isActive !== undefined) {
+    data.isActive = isActive;
+  }
+
+  const updated = await prisma.programAssignment.update({ where: { id }, data });
+  return NextResponse.json(updated);
+}

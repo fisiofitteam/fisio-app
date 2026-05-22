@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { PROGRAM_TYPES, DIFFICULTIES, PROGRAM_LABELS, DIFFICULTY_LABELS } from "./PatientPills";
 import { ProgramPausesBlock } from "./ProgramPausesBlock";
 import { RollingAssignmentBlock } from "./RollingAssignmentBlock";
+import { SubscriptionPeriodsBlock } from "./SubscriptionPeriodsBlock";
 
 type Patient = {
   id: string;
@@ -214,6 +215,8 @@ export function ClinicalFile({ patient, isManager }: { patient: Patient; isManag
             )}
           </div>
         )}
+
+        <SubscriptionPeriodsBlock patientId={patient.id} isManager={isManager} />
 
         <RollingAssignmentBlock
           patientId={patient.id}

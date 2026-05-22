@@ -72,6 +72,25 @@ export default async function PatientHome({ params }: { params: { id: string } }
       },
     });
 
+    // Resolver vídeos referenciados (videoId → URL)
+    let videosById: Record<string, { youtubeUrl: string; title: string }> = {};
+    if (week) {
+      const videoIds = new Set<string>();
+      for (const d of week.days) {
+        for (const t of d.tasks) {
+          if (t.type === "VIDEO" && t.videoId) videoIds.add(t.videoId);
+        }
+      }
+      if (videoIds.size > 0) {
+        const vids = await prisma.videoLibrary.findMany({
+          where: { id: { in: Array.from(videoIds) } },
+        });
+        for (const v of vids) {
+          videosById[v.id] = { youtubeUrl: v.youtubeUrl, title: v.title };
+        }
+      }
+    }
+
     return (
       <PatientHomeRolling
         firstName={firstName}
@@ -86,7 +105,7 @@ export default async function PatientHome({ params }: { params: { id: string } }
             type: t.type,
             title: t.title,
             bodyText: t.bodyText,
-            youtubeUrl: t.youtubeUrl,
+            youtubeUrl: t.videoId ? videosById[t.videoId]?.youtubeUrl ?? null : null,
           })),
         })) || []}
         daysToExpire={daysToExpire}

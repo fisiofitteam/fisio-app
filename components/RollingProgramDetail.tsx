@@ -26,8 +26,15 @@ type Task = {
   title: string;
   order: number;
   bodyText: string | null;
-  youtubeUrl: string | null;
+  videoId: string | null;
   formId: string | null;
+};
+
+type LibraryVideo = {
+  id: string;
+  title: string;
+  youtubeUrl: string;
+  category: string;
 };
 
 type Day = {
@@ -480,8 +487,25 @@ function TaskTypeModal({ onSelect, onClose }: { onSelect: (t: string) => void; o
 function TaskEditorModal({ task, onClose }: { task: Task; onClose: () => void }) {
   const [title, setTitle] = useState(task.title);
   const [bodyText, setBodyText] = useState(task.bodyText || "");
-  const [youtubeUrl, setYoutubeUrl] = useState(task.youtubeUrl || "");
+  const [videoId, setVideoId] = useState(task.videoId || "");
   const [saving, setSaving] = useState(false);
+
+  // Lista de vídeos de la Biblioteca (cargado al abrir si es tipo VIDEO)
+  const [videos, setVideos] = useState<LibraryVideo[]>([]);
+  const [loadingVideos, setLoadingVideos] = useState(false);
+  const [creatingVideo, setCreatingVideo] = useState(false);
+
+  useEffect(() => {
+    if (task.type !== "VIDEO") return;
+    setLoadingVideos(true);
+    fetch("/api/library/videos")
+      .then((r) => r.json())
+      .then((data) => {
+        setVideos(data);
+        setLoadingVideos(false);
+      })
+      .catch(() => setLoadingVideos(false));
+  }, [task.type]);
 
   async function save() {
     setSaving(true);
@@ -492,12 +516,24 @@ function TaskEditorModal({ task, onClose }: { task: Task; onClose: () => void })
         id: task.id,
         title,
         bodyText: task.type === "WORKOUT" || task.type === "VIDEO" ? bodyText : undefined,
-        youtubeUrl: task.type === "VIDEO" ? youtubeUrl : undefined,
+        videoId: task.type === "VIDEO" ? (videoId || null) : undefined,
       }),
     });
     setSaving(false);
     onClose();
   }
+
+  async function handleVideoCreated(newVideo: LibraryVideo) {
+    setVideos((prev) => [...prev, newVideo]);
+    setVideoId(newVideo.id);
+    setCreatingVideo(false);
+    // Si el título de la tarea es el default, lo sustituimos por el del vídeo
+    if (title === "Nuevo vídeo" || !title.trim()) {
+      setTitle(newVideo.title);
+    }
+  }
+
+  const selectedVideo = videos.find((v) => v.id === videoId);
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
@@ -535,14 +571,47 @@ function TaskEditorModal({ task, onClose }: { task: Task; onClose: () => void })
           {task.type === "VIDEO" && (
             <>
               <div>
-                <label className="text-xs text-neutral-500 block mb-1">URL de YouTube</label>
-                <input
-                  type="url"
-                  className="input text-sm w-full"
-                  value={youtubeUrl}
-                  onChange={(e) => setYoutubeUrl(e.target.value)}
-                  placeholder="https://www.youtube.com/watch?v=..."
-                />
+                <div className="flex items-end justify-between mb-1 gap-2">
+                  <label className="text-xs text-neutral-500">Vídeo de la Biblioteca *</label>
+                  <button
+                    type="button"
+                    onClick={() => setCreatingVideo(true)}
+                    className="text-[11px] font-medium hover:underline"
+                    style={{ color: "#0A0A0A" }}
+                  >
+                    + Subir nuevo a Biblioteca
+                  </button>
+                </div>
+                {loadingVideos ? (
+                  <p className="text-xs text-neutral-500 italic">Cargando vídeos...</p>
+                ) : videos.length === 0 ? (
+                  <div className="text-xs p-3 rounded-lg" style={{ background: "#FEF3C7", color: "#7C2D12" }}>
+                    No hay vídeos en Biblioteca todavía. Pulsa "+ Subir nuevo" para añadir uno.
+                  </div>
+                ) : (
+                  <select
+                    className="input text-sm w-full"
+                    value={videoId}
+                    onChange={(e) => setVideoId(e.target.value)}
+                  >
+                    <option value="">— Selecciona un vídeo —</option>
+                    {videos.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        [{v.category}] {v.title}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {selectedVideo && (
+                  <a
+                    href={selectedVideo.youtubeUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block mt-1 text-[11px] text-neutral-500 hover:underline"
+                  >
+                    Ver vídeo en YouTube →
+                  </a>
+                )}
               </div>
               <div>
                 <label className="text-xs text-neutral-500 block mb-1">Notas (opcional)</label>
@@ -584,6 +653,135 @@ function TaskEditorModal({ task, onClose }: { task: Task; onClose: () => void })
             }}
           >
             {saving ? "Guardando..." : "Guardar"}
+          </button>
+        </div>
+      </div>
+
+      {creatingVideo && (
+        <QuickCreateVideoModal
+          onClose={() => setCreatingVideo(false)}
+          onCreated={handleVideoCreated}
+        />
+      )}
+    </div>
+  );
+}
+
+function QuickCreateVideoModal({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: (v: LibraryVideo) => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("Educacional");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function save() {
+    setError("");
+    if (!title.trim() || !youtubeUrl.trim()) {
+      setError("Título y URL son obligatorios");
+      return;
+    }
+    setSaving(true);
+    const res = await fetch("/api/library/videos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: title.trim(),
+        youtubeUrl: youtubeUrl.trim(),
+        description: description.trim() || null,
+        category,
+      }),
+    });
+    if (res.ok) {
+      const v = await res.json();
+      onCreated({ id: v.id, title: v.title, youtubeUrl: v.youtubeUrl, category: v.category });
+    } else {
+      setError("No se pudo guardar");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl max-w-md w-full p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-1">
+          <h3 className="font-semibold">+ Vídeo a Biblioteca</h3>
+          <button onClick={onClose} className="text-neutral-400 text-xl leading-none">✕</button>
+        </div>
+        <p className="text-xs text-neutral-500 mb-4">
+          Se guardará en Biblioteca → Vídeos y quedará seleccionado para esta tarea.
+        </p>
+
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Título *</label>
+            <input
+              type="text"
+              autoFocus
+              className="input text-sm w-full"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Ej. Movilidad torácica - rotaciones"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">URL de YouTube *</label>
+            <input
+              type="url"
+              className="input text-sm w-full"
+              value={youtubeUrl}
+              onChange={(e) => setYoutubeUrl(e.target.value)}
+              placeholder="https://www.youtube.com/watch?v=..."
+            />
+          </div>
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Categoría</label>
+            <select
+              className="input text-sm w-full"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+            >
+              <option>Educacional</option>
+              <option>Anatomía</option>
+              <option>Técnica</option>
+              <option>Movilidad</option>
+              <option>Fuerza</option>
+              <option>Cardio</option>
+              <option>Otros</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Descripción (opcional)</label>
+            <textarea
+              className="input text-sm w-full"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={2}
+            />
+          </div>
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          <button
+            onClick={save}
+            disabled={saving || !title.trim() || !youtubeUrl.trim()}
+            className="w-full text-sm font-medium"
+            style={{
+              background: "#0A0A0A",
+              color: "#FAFAFA",
+              padding: 11,
+              borderRadius: 10,
+              border: "none",
+              opacity: saving ? 0.5 : 1,
+            }}
+          >
+            {saving ? "Guardando..." : "Guardar en Biblioteca"}
           </button>
         </div>
       </div>

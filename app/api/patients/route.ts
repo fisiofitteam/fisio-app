@@ -90,6 +90,23 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  // 1b) Crear automáticamente Periodo 1 en SubscriptionRenewal
+  const periodStart = patient.subscriptionStartDate ?? new Date();
+  const periodEnd = new Date(periodStart);
+  periodEnd.setMonth(periodEnd.getMonth() + patient.subscriptionPeriodMonths);
+  await prisma.subscriptionRenewal.create({
+    data: {
+      patientId: patient.id,
+      programType: programType || null,
+      periodMonths: patient.subscriptionPeriodMonths,
+      startDate: periodStart,
+      endDate: periodEnd,
+      status: "active",
+      amountPaid: amountPaid && Number(amountPaid) > 0 ? Number(amountPaid) : null,
+      notes: "Alta inicial",
+    },
+  });
+
   // 2) Si se indicó importe, generar transacción
   if (amountPaid && Number(amountPaid) > 0) {
     await prisma.transaction.create({
