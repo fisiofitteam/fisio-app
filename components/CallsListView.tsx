@@ -93,6 +93,7 @@ export function CallsListView({
   const router = useRouter();
   const [editing, setEditing] = useState<Lead | null>(null);
   const [converting, setConverting] = useState<Lead | null>(null);
+  const [creating, setCreating] = useState(false);
 
   function switchStatus(key: string) {
     const url = new URL(window.location.href);
@@ -117,11 +118,20 @@ export function CallsListView({
 
   return (
     <main>
-      <header className="mb-4">
-        <h1 className="text-xl font-semibold">Llamadas</h1>
-        <p className="text-xs text-neutral-500 mt-0.5">
-          {currentUser.role === "closer" ? "Tus llamadas asignadas" : "Llamadas del equipo"}
-        </p>
+      <header className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold">Llamadas</h1>
+          <p className="text-xs text-neutral-500 mt-0.5">
+            {currentUser.role === "closer" ? "Tus llamadas asignadas" : "Llamadas del equipo"}
+          </p>
+        </div>
+        <button
+          onClick={() => setCreating(true)}
+          className="text-xs font-medium px-3 py-2 rounded-lg shrink-0"
+          style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+        >
+          + Añadir llamada
+        </button>
       </header>
 
       {/* Tabs de closer (solo para CEO) */}
@@ -219,6 +229,18 @@ export function CallsListView({
           onClose={() => setConverting(null)}
           onSaved={() => {
             setConverting(null);
+            router.refresh();
+          }}
+        />
+      )}
+
+      {creating && (
+        <AddCallModal
+          currentUser={currentUser}
+          closers={closers}
+          onClose={() => setCreating(false)}
+          onSaved={() => {
+            setCreating(false);
             router.refresh();
           }}
         />
@@ -565,6 +587,169 @@ function ConvertModal({
 
           <button onClick={save} disabled={!amountPaid || saving} className="btn btn-accent w-full">
             {saving ? "Procesando..." : "Confirmar conversión"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AddCallModal({
+  currentUser,
+  closers,
+  onClose,
+  onSaved,
+}: {
+  currentUser: { id: string; fullName: string; role: string };
+  closers: Pro[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [fullName, setFullName] = useState("");
+  const [contactType, setContactType] = useState<"phone" | "instagram" | "email">("phone");
+  const [contactValue, setContactValue] = useState("");
+  const [aiSummary, setAiSummary] = useState("");
+  const [callScheduledAt, setCallScheduledAt] = useState(() => {
+    // Por defecto: dentro de 1h
+    const d = new Date();
+    d.setMinutes(0, 0, 0);
+    d.setHours(d.getHours() + 1);
+    return d.toISOString().slice(0, 16);
+  });
+  const [closerId, setCloserId] = useState(currentUser.role === "closer" ? currentUser.id : currentUser.id);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function save() {
+    setError("");
+    if (!fullName.trim() || !contactValue.trim() || !callScheduledAt) {
+      setError("Nombre, contacto y fecha son obligatorios");
+      return;
+    }
+    setSaving(true);
+    const res = await fetch("/api/leads", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fullName: fullName.trim(),
+        contactType,
+        contactValue: contactValue.trim(),
+        aiSummary: aiSummary.trim() || null,
+        callScheduledAt: new Date(callScheduledAt).toISOString(),
+        closerId: closerId || null,
+      }),
+    });
+    if (res.ok) {
+      onSaved();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "No se pudo crear");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl max-w-md w-full p-5 max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-1">
+          <h3 className="font-semibold">+ Nueva llamada</h3>
+          <button onClick={onClose} className="text-neutral-400 text-xl leading-none">✕</button>
+        </div>
+        <p className="text-xs text-neutral-500 mb-4">
+          Programa una nueva llamada de cierre. El lead se creará automáticamente.
+        </p>
+
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Nombre completo *</label>
+            <input
+              type="text"
+              autoFocus
+              className="input text-sm w-full"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="Ej. Juan Pérez"
+            />
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">Contacto</label>
+              <select
+                className="input text-sm w-full"
+                value={contactType}
+                onChange={(e) => setContactType(e.target.value as any)}
+              >
+                <option value="phone">📞 Tel</option>
+                <option value="instagram">📷 IG</option>
+                <option value="email">✉️ Email</option>
+              </select>
+            </div>
+            <div className="col-span-2">
+              <label className="text-xs text-neutral-500 block mb-1">Valor *</label>
+              <input
+                type="text"
+                className="input text-sm w-full"
+                value={contactValue}
+                onChange={(e) => setContactValue(e.target.value)}
+                placeholder={contactType === "phone" ? "+34 600000000" : contactType === "instagram" ? "@usuario" : "email@ejemplo.com"}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Fecha y hora de la llamada *</label>
+            <input
+              type="datetime-local"
+              className="input text-sm w-full"
+              value={callScheduledAt}
+              onChange={(e) => setCallScheduledAt(e.target.value)}
+            />
+          </div>
+
+          {/* Selector de closer solo para CEO (la closer queda fija a sí misma) */}
+          {currentUser.role === "ceo" && closers.length > 1 && (
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">Asignada a (closer)</label>
+              <select
+                className="input text-sm w-full"
+                value={closerId}
+                onChange={(e) => setCloserId(e.target.value)}
+              >
+                {closers.map((c) => (
+                  <option key={c.id} value={c.id}>{c.fullName}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Resumen IA / Notas (opcional)</label>
+            <textarea
+              className="input text-sm w-full"
+              value={aiSummary}
+              onChange={(e) => setAiSummary(e.target.value)}
+              rows={3}
+              placeholder="Qué le duele, qué espera, info relevante..."
+            />
+          </div>
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          <button
+            onClick={save}
+            disabled={saving}
+            className="w-full text-sm font-medium"
+            style={{
+              background: "#0A0A0A",
+              color: "#FAFAFA",
+              padding: 11,
+              borderRadius: 10,
+              border: "none",
+              opacity: saving ? 0.5 : 1,
+            }}
+          >
+            {saving ? "Guardando..." : "Crear llamada"}
           </button>
         </div>
       </div>

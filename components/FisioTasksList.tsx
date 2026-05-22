@@ -22,7 +22,7 @@ type Task = {
 const DAY_NAMES = ["", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
 // Profesionales disponibles del equipo (TODO: cuando integremos roles, vendrá de BD via props)
-const TEAM_MEMBERS = ["Ales Faus", "Miguel Castro", "Alberto Melis", "Sofía Cáliz", "Blanca Garrido"];
+const TEAM_MEMBERS = ["Ales Faus", "Miguel Castro", "Alberto Melis", "Sofía Cáliz", "Blanca Garrido", "Niki Boykova", "Alba Maldonado"];
 
 const PRIORITY_ORDER = ["high", "medium", "low"];
 const PRIORITY_LABELS: Record<string, string> = {

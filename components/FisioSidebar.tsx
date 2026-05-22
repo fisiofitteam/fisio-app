@@ -51,11 +51,11 @@ function itemsForRole(role: string): Item[] {
     return [PANEL, PACIENTES, BIBLIOTECA, TAREAS, LLAMADAS, RECURSOS];
   }
   if (role === "setter") {
-    return [LEADS, PARCHES, CONTENIDO];
+    return [LEADS, PARCHES, TAREAS, CONTENIDO];
   }
   if (role === "closer") {
-    // Panel propio + Llamadas + Follow-up
-    return [PANEL, LLAMADAS_VENTA, FOLLOWUP];
+    // Panel propio + Llamadas + Follow-up + Tareas
+    return [PANEL, LLAMADAS_VENTA, FOLLOWUP, TAREAS];
   }
   // fisio normal
   return [PANEL, PACIENTES, BIBLIOTECA, TAREAS, LLAMADAS, RECURSOS];

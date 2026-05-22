@@ -5,8 +5,8 @@ import { getActiveProfessional } from "@/lib/session";
 export async function POST(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  // Crear lead: setter, head_success o ceo
-  if (user.role !== "setter" && !user.isManager) {
+  // Crear lead: setter, closer, head_success o ceo
+  if (user.role !== "setter" && user.role !== "closer" && !user.isManager) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -18,7 +18,8 @@ export async function POST(req: NextRequest) {
       contactValue: data.contactValue,
       aiSummary: data.aiSummary || null,
       callScheduledAt: new Date(data.callScheduledAt),
-      closerId: data.closerId || null,
+      // Si lo crea un closer y no se especifica otro closer, se lo auto-asigna
+      closerId: data.closerId || (user.role === "closer" ? user.id : null),
       setterId: user.role === "setter" ? user.id : data.setterId || null,
       status: "scheduled",
     },
