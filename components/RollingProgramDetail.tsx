@@ -496,7 +496,8 @@ function TaskEditorModal({ task, onClose }: { task: Task; onClose: () => void })
   const [creatingVideo, setCreatingVideo] = useState(false);
 
   useEffect(() => {
-    if (task.type !== "VIDEO") return;
+    // Cargamos la lista de vídeos para VIDEO y WORKOUT (en WORKOUT es opcional como apoyo)
+    if (task.type !== "VIDEO" && task.type !== "WORKOUT") return;
     setLoadingVideos(true);
     fetch("/api/library/videos")
       .then((r) => r.json())
@@ -516,7 +517,7 @@ function TaskEditorModal({ task, onClose }: { task: Task; onClose: () => void })
         id: task.id,
         title,
         bodyText: task.type === "WORKOUT" || task.type === "VIDEO" ? bodyText : undefined,
-        videoId: task.type === "VIDEO" ? (videoId || null) : undefined,
+        videoId: (task.type === "VIDEO" || task.type === "WORKOUT") ? (videoId || null) : undefined,
       }),
     });
     setSaving(false);
@@ -556,16 +557,51 @@ function TaskEditorModal({ task, onClose }: { task: Task; onClose: () => void })
           </div>
 
           {task.type === "WORKOUT" && (
-            <div>
-              <label className="text-xs text-neutral-500 block mb-1">Contenido del workout</label>
-              <textarea
-                className="input text-sm w-full font-mono"
-                value={bodyText}
-                onChange={(e) => setBodyText(e.target.value)}
-                rows={12}
-                placeholder={"Ejemplo:\n\nA. Sentadilla 5x5 @ 80%\nB. Press banca 4x6\nC. Metcon\n  21-15-9:\n  - Thrusters @ 42.5kg\n  - Pull-ups"}
-              />
-            </div>
+            <>
+              <div>
+                <label className="text-xs text-neutral-500 block mb-1">Contenido del workout</label>
+                <textarea
+                  className="input text-sm w-full font-mono"
+                  value={bodyText}
+                  onChange={(e) => setBodyText(e.target.value)}
+                  rows={12}
+                  placeholder={"Ejemplo:\n\nA. Sentadilla 5x5 @ 80%\nB. Press banca 4x6\nC. Metcon\n  21-15-9:\n  - Thrusters @ 42.5kg\n  - Pull-ups"}
+                />
+              </div>
+              <div>
+                <div className="flex items-end justify-between mb-1 gap-2">
+                  <label className="text-xs text-neutral-500">Vídeo de apoyo (opcional)</label>
+                  <button
+                    type="button"
+                    onClick={() => setCreatingVideo(true)}
+                    className="text-[11px] font-medium hover:underline"
+                    style={{ color: "#0A0A0A" }}
+                  >
+                    + Subir nuevo a Biblioteca
+                  </button>
+                </div>
+                {loadingVideos ? (
+                  <p className="text-xs text-neutral-500 italic">Cargando vídeos...</p>
+                ) : videos.length === 0 ? (
+                  <select className="input text-sm w-full" value="" disabled>
+                    <option>— No hay vídeos en Biblioteca todavía —</option>
+                  </select>
+                ) : (
+                  <select
+                    className="input text-sm w-full"
+                    value={videoId}
+                    onChange={(e) => setVideoId(e.target.value)}
+                  >
+                    <option value="">— Sin vídeo —</option>
+                    {videos.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        [{v.category}] {v.title}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            </>
           )}
 
           {task.type === "VIDEO" && (

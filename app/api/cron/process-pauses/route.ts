@@ -87,10 +87,44 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // 3) Activar renovaciones "scheduled" cuyo startDate ya llegó
+  // (renovaciones anticipadas que ya entran en vigor)
+  const renewalsToActivate = await prisma.subscriptionRenewal.findMany({
+    where: {
+      status: "scheduled",
+      startDate: { lte: today },
+    },
+    orderBy: { startDate: "asc" }, // procesar las más antiguas primero
+  });
+  for (const r of renewalsToActivate) {
+    // Cerrar el periodo activo anterior del mismo paciente
+    await prisma.subscriptionRenewal.updateMany({
+      where: { patientId: r.patientId, status: "active", id: { not: r.id } },
+      data: { status: "finished" },
+    });
+    // Activar este
+    await prisma.subscriptionRenewal.update({
+      where: { id: r.id },
+      data: { status: "active" },
+    });
+    // Sincronizar paciente
+    if (r.programType && r.startDate) {
+      await prisma.patient.update({
+        where: { id: r.patientId },
+        data: {
+          programType: r.programType,
+          subscriptionStartDate: r.startDate,
+          subscriptionPeriodMonths: r.periodMonths,
+        },
+      });
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     activated: toActivate.length,
     ended: toEnd.length,
+    renewalsActivated: renewalsToActivate.length,
     emailsSent: emailsSent.length,
   });
 }

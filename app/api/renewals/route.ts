@@ -22,9 +22,15 @@ export async function GET(req: NextRequest) {
 
 /**
  * POST /api/renewals
- * Crear un nuevo periodo (renovación). Si hay un periodo activo, se cierra
- * automáticamente (status → "finished") con endDate = hoy y el nuevo periodo
- * empieza hoy.
+ * Crear un nuevo periodo (renovación).
+ *
+ * Comportamiento:
+ *  - Si hay un periodo activo con endDate en el futuro: el nuevo periodo se
+ *    crea en estado "scheduled" empezando en endDate del actual. El periodo
+ *    activo NO se cierra (sigue corriendo hasta su endDate natural).
+ *  - Si hay un periodo activo ya vencido (endDate <= hoy) o no hay periodo
+ *    activo: el nuevo periodo empieza hoy en estado "active". El periodo
+ *    anterior (si lo hay) se cierra (status=finished).
  *
  * Body: { patientId, programType, periodMonths, amountPaid, notes }
  */
@@ -39,18 +45,34 @@ export async function POST(req: NextRequest) {
 
   const months = Number(periodMonths) || 4;
 
-  // Cerrar el periodo activo anterior (si lo hay)
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  await prisma.subscriptionRenewal.updateMany({
+  // Buscar periodo activo
+  const activePeriod = await prisma.subscriptionRenewal.findFirst({
     where: { patientId, status: "active" },
-    data: { status: "finished", endDate: today },
+    orderBy: { startDate: "desc" },
   });
 
-  // Crear el nuevo periodo activo
-  const startDate = today;
-  const endDate = new Date(today);
+  let startDate: Date;
+  let status: "active" | "scheduled";
+
+  if (activePeriod && activePeriod.endDate && activePeriod.endDate > today) {
+    // RENOVACIÓN ANTICIPADA: el nuevo empieza cuando acaba el actual
+    startDate = activePeriod.endDate;
+    status = "scheduled";
+  } else {
+    // No hay activo o ya está vencido: cerramos cualquier "active" colgado
+    // y arrancamos hoy
+    await prisma.subscriptionRenewal.updateMany({
+      where: { patientId, status: "active" },
+      data: { status: "finished", endDate: today },
+    });
+    startDate = today;
+    status = "active";
+  }
+
+  const endDate = new Date(startDate);
   endDate.setMonth(endDate.getMonth() + months);
 
   const renewal = await prisma.subscriptionRenewal.create({
@@ -60,21 +82,36 @@ export async function POST(req: NextRequest) {
       periodMonths: months,
       startDate,
       endDate,
-      status: "active",
+      status,
       amountPaid: amountPaid ? Number(amountPaid) : null,
       notes: notes?.trim() || null,
     },
   });
 
-  // Actualizar también el paciente para reflejar el nuevo periodo activo
+  // Actualizar paciente:
+  //  - Si el nuevo es ACTIVE: se vuelve el periodo activo del paciente
+  //  - Si el nuevo es SCHEDULED: NO tocamos los datos del periodo actual,
+  //    pero sí sumamos al total acumulado
+  if (status === "active") {
+    await prisma.patient.update({
+      where: { id: patientId },
+      data: {
+        programType,
+        subscriptionStartDate: startDate,
+        subscriptionPeriodMonths: months,
+      },
+    });
+  }
+
+  // Recalcular subscriptionTotalMonths = suma de todos los periodos
+  const all = await prisma.subscriptionRenewal.findMany({
+    where: { patientId },
+    select: { periodMonths: true },
+  });
+  const total = all.reduce((sum, r) => sum + (r.periodMonths || 0), 0);
   await prisma.patient.update({
     where: { id: patientId },
-    data: {
-      programType,
-      subscriptionStartDate: startDate,
-      subscriptionPeriodMonths: months,
-      subscriptionTotalMonths: months,
-    },
+    data: { subscriptionTotalMonths: total },
   });
 
   // Si hay importe, registrar como ingreso "income_renewal"
@@ -84,7 +121,7 @@ export async function POST(req: NextRequest) {
       data: {
         type: "income_renewal",
         amount: Number(amountPaid),
-        description: `Renovación - ${patient?.fullName ?? ""}`,
+        description: `Renovación - ${patient?.fullName ?? ""} (${programType}, ${months}m)`,
         occurredAt: new Date(),
         patientId,
         professionalId: user.id,
@@ -92,7 +129,7 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  return NextResponse.json({ ok: true, renewalId: renewal.id });
+  return NextResponse.json({ ok: true, renewalId: renewal.id, status });
 }
 
 /**

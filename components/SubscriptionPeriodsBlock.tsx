@@ -97,22 +97,32 @@ export function SubscriptionPeriodsBlock({ patientId, isManager }: { patientId: 
           {renewals.map((r, i) => {
             const periodPauses = pausesInsidePeriod(r);
             const typeColor = r.programType ? TYPE_COLORS[r.programType] : null;
+            const isScheduled = r.status === "scheduled";
             return (
               <div
                 key={r.id}
                 className="rounded-lg px-3 py-2.5 text-sm"
                 style={{
-                  background: r.status === "active" ? "#FAFAFA" : "#FFFFFF",
-                  border: r.status === "active" ? "1px solid #0A0A0A" : "1px solid #E5E5E5",
+                  background: r.status === "active" ? "#FAFAFA" : isScheduled ? "#FFFBEB" : "#FFFFFF",
+                  border: r.status === "active"
+                    ? "1px solid #0A0A0A"
+                    : isScheduled
+                    ? "1px dashed #F59E0B"
+                    : "1px solid #E5E5E5",
                 }}
               >
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
                   <span className="text-xs font-bold tracking-wider" style={{ color: "#525252" }}>
                     PERIODO {i + 1}
                   </span>
                   {r.status === "active" && (
                     <span className="text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded" style={{ background: "#0A0A0A", color: "#FAFAFA" }}>
                       ACTUAL
+                    </span>
+                  )}
+                  {isScheduled && (
+                    <span className="text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded" style={{ background: "#F59E0B", color: "#FFFFFF" }}>
+                      PROGRAMADO · empieza {formatDate(r.startDate)}
                     </span>
                   )}
                   {r.programType && typeColor && (
@@ -125,14 +135,13 @@ export function SubscriptionPeriodsBlock({ patientId, isManager }: { patientId: 
                   )}
                 </div>
 
-                <div className="text-xs flex items-baseline gap-3 flex-wrap">
-                  <span className="font-medium">{r.periodMonths} {r.periodMonths === 1 ? "mes" : "meses"}</span>
-                  <span style={{ color: "#737373" }}>
+                <div className="text-xs flex items-baseline gap-3 flex-wrap" style={{ color: "#737373" }}>
+                  <span>
                     {formatDate(r.startDate)} → {formatDate(r.endDate)}
                   </span>
                   {r.amountPaid != null && (
-                    <span style={{ color: "#737373" }}>
-                      · {r.amountPaid.toLocaleString("es-ES", { style: "currency", currency: "EUR" })}
+                    <span>
+                      {r.amountPaid.toLocaleString("es-ES", { style: "currency", currency: "EUR" })}
                     </span>
                   )}
                 </div>
@@ -219,7 +228,8 @@ function AddRenewalModal({
           <button onClick={onClose} className="text-neutral-400 text-xl leading-none">✕</button>
         </div>
         <p className="text-xs text-neutral-500 mb-4">
-          El periodo actual se cierra hoy y empieza uno nuevo. La fecha de renovación se recalcula automáticamente.
+          Si el periodo actual sigue vigente, el nuevo se programa para empezar cuando termine.
+          Si ya está vencido o no hay periodo, el nuevo empieza hoy.
         </p>
 
         <div className="space-y-3">

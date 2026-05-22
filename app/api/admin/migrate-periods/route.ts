@@ -21,41 +21,61 @@ export async function POST(req: NextRequest) {
 
   // Pacientes sin renewals
   const candidates = await prisma.patient.findMany({
-    include: { renewals: { select: { id: true } } },
+    include: { renewals: { select: { id: true, periodMonths: true } } },
   });
 
   let created = 0;
+  let recalculated = 0;
   const errors: string[] = [];
 
   for (const p of candidates) {
-    if (p.renewals.length > 0) continue;
+    // 1) Si no tiene ninguna renewal, crear Periodo 1 con sus datos actuales
+    if (p.renewals.length === 0) {
+      try {
+        const start = p.subscriptionStartDate || p.startedAt || new Date();
+        const months = p.subscriptionPeriodMonths || 4;
+        const end = new Date(start);
+        end.setMonth(end.getMonth() + months);
 
+        await prisma.subscriptionRenewal.create({
+          data: {
+            patientId: p.id,
+            programType: p.programType || null,
+            periodMonths: months,
+            startDate: start,
+            endDate: end,
+            status: "active",
+            notes: "Periodo 1 generado automáticamente (migración)",
+          },
+        });
+        created++;
+      } catch (e: any) {
+        errors.push(`${p.fullName} (crear): ${e.message}`);
+        continue;
+      }
+    }
+
+    // 2) Recalcular subscriptionTotalMonths como suma de todos los periodos
     try {
-      const start = p.subscriptionStartDate || p.startedAt || new Date();
-      const months = p.subscriptionPeriodMonths || 4;
-      const end = new Date(start);
-      end.setMonth(end.getMonth() + months);
-
-      await prisma.subscriptionRenewal.create({
-        data: {
-          patientId: p.id,
-          programType: p.programType || null,
-          periodMonths: months,
-          startDate: start,
-          endDate: end,
-          status: "active",
-          notes: "Periodo 1 generado automáticamente (migración)",
-        },
+      const all = await prisma.subscriptionRenewal.findMany({
+        where: { patientId: p.id },
+        select: { periodMonths: true },
       });
-      created++;
+      const total = all.reduce((sum, r) => sum + (r.periodMonths || 0), 0);
+      await prisma.patient.update({
+        where: { id: p.id },
+        data: { subscriptionTotalMonths: total },
+      });
+      recalculated++;
     } catch (e: any) {
-      errors.push(`${p.fullName}: ${e.message}`);
+      errors.push(`${p.fullName} (recalcular): ${e.message}`);
     }
   }
 
   return NextResponse.json({
     ok: true,
     created,
+    recalculated,
     skipped: candidates.length - created - errors.length,
     errors,
   });

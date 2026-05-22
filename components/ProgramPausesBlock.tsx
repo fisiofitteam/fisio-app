@@ -220,11 +220,22 @@ function CreatePauseModal({
             <input type="text" className="input text-sm w-full" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Ej. Vacaciones, lesión externa..." />
           </div>
 
-          {days > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs">
-              <strong>{days} {days === 1 ? "día" : "días"}</strong> de pausa. Su suscripción se extiende automáticamente {days} {days === 1 ? "día" : "días"} gratis.
-            </div>
-          )}
+          {days > 0 && (() => {
+            const shiftDays = Math.ceil(days / 7) * 7;
+            const weeks = shiftDays / 7;
+            const extraDays = shiftDays - days;
+            return (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs">
+                <strong>{days} {days === 1 ? "día" : "días"}</strong> de pausa →{" "}
+                el programa se desplaza <strong>{weeks} {weeks === 1 ? "semana" : "semanas"}</strong> ({shiftDays} días).
+                {extraDays > 0 && (
+                  <span style={{ color: "#737373" }}>
+                    {" "}Las sesiones se retoman el mismo día de la semana ({extraDays} {extraDays === 1 ? "día extra" : "días extra"} de regalo).
+                  </span>
+                )}
+              </div>
+            );
+          })()}
 
           {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
 

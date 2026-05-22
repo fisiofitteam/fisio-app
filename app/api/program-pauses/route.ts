@@ -20,6 +20,25 @@ function addDays(d: Date, days: number): Date {
 }
 
 /**
+ * Calcula los días a desplazar las sesiones según la duración de la pausa.
+ *
+ * Regla: las sesiones siempre se desplazan en MÚLTIPLOS DE 7 días,
+ * para que el programa se reanude siempre en los mismos días de la semana
+ * (martes/viernes siguen siendo martes/viernes después de la pausa).
+ *
+ * Redondeamos hacia arriba al múltiplo de 7 que cubra la duración de la pausa.
+ *   - Pausa de 14 días (2 semanas exactas L-D) → 14 días de desplazamiento ✓
+ *   - Pausa de 10 días (no completa)            → 14 días de desplazamiento (1 semana extra de regalo)
+ *   - Pausa de 9 días                            → 14 días
+ *   - Pausa de 7 días                            → 7 días
+ *   - Pausa de 1 día                             → 7 días
+ */
+function pauseShiftDays(rawDays: number): number {
+  if (rawDays <= 0) return 0;
+  return Math.ceil(rawDays / 7) * 7;
+}
+
+/**
  * Alarga el periodo de suscripción del paciente en función de los días de pausa.
  *
  * Convertimos días → meses (1 mes = 30 días, truncando hacia abajo):
@@ -129,7 +148,8 @@ export async function POST(req: NextRequest) {
 
   const today = todayMidnight();
   const status = start <= today ? "active" : "scheduled";
-  const days = daysBetween(start, end);
+  const rawDays = daysBetween(start, end);
+  const shiftDays = pauseShiftDays(rawDays); // múltiplo de 7
 
   // Crear la pausa (siempre con daysExtended ya rellenado: aplicamos extensión y shift al crearla)
   const pause = await prisma.programPause.create({
@@ -139,16 +159,16 @@ export async function POST(req: NextRequest) {
       endDate: end,
       reason: reason?.trim() || null,
       status,
-      daysExtended: days,
+      daysExtended: shiftDays,
       createdById: user.id,
     },
   });
 
   // Aplicar extensión y desplazamiento de sesiones futuras (desde startDate)
-  await extendSubscriptionByDays(patientId, days);
-  await shiftFutureSessions(patientId, start, days);
+  await extendSubscriptionByDays(patientId, shiftDays);
+  await shiftFutureSessions(patientId, start, shiftDays);
 
-  return NextResponse.json({ ok: true, pauseId: pause.id });
+  return NextResponse.json({ ok: true, pauseId: pause.id, shiftDays });
 }
 
 // PATCH: editar / cancelar / finalizar antes -----------------------------------
@@ -182,10 +202,11 @@ export async function PATCH(req: NextRequest) {
     await shiftFutureSessions(pause.patientId, pause.startDate, -pause.daysExtended);
     await extendSubscriptionByDays(pause.patientId, -pause.daysExtended);
 
-    // 2. Aplicar la nueva
-    const newDays = daysBetween(newStart, newEnd);
-    await shiftFutureSessions(pause.patientId, newStart, newDays);
-    await extendSubscriptionByDays(pause.patientId, newDays);
+    // 2. Aplicar la nueva (con shift redondeado a múltiplo de 7)
+    const rawNewDays = daysBetween(newStart, newEnd);
+    const newShiftDays = pauseShiftDays(rawNewDays);
+    await shiftFutureSessions(pause.patientId, newStart, newShiftDays);
+    await extendSubscriptionByDays(pause.patientId, newShiftDays);
 
     await prisma.programPause.update({
       where: { id: pauseId },
@@ -193,7 +214,7 @@ export async function PATCH(req: NextRequest) {
         startDate: newStart,
         endDate: newEnd,
         reason: reason !== undefined ? reason?.trim() || null : pause.reason,
-        daysExtended: newDays,
+        daysExtended: newShiftDays,
       },
     });
     return NextResponse.json({ ok: true });
@@ -221,10 +242,11 @@ export async function PATCH(req: NextRequest) {
     }
     const today = todayMidnight();
     const realDays = Math.max(1, daysBetween(pause.startDate, today));
-    const diff = pause.daysExtended - realDays;
-    // Si vivió menos días de los previstos, devolvemos las sesiones desplazadas
+    // Redondeamos las semanas vividas al múltiplo de 7 más cercano por arriba
+    const realShiftDays = pauseShiftDays(realDays);
+    const diff = pause.daysExtended - realShiftDays;
+    // Si la extensión inicial era mayor que el ajustado real → devolver sesiones
     if (diff > 0) {
-      // Reculamos solo `diff` días, manteniendo los `realDays` ya consumidos
       await shiftFutureSessions(pause.patientId, today, -diff);
       await extendSubscriptionByDays(pause.patientId, -diff);
     }
@@ -233,7 +255,7 @@ export async function PATCH(req: NextRequest) {
       data: {
         status: "ended",
         actualEndDate: today,
-        daysExtended: realDays,
+        daysExtended: realShiftDays,
       },
     });
     return NextResponse.json({ ok: true });

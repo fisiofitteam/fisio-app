@@ -82,6 +82,18 @@ export async function PATCH(req: NextRequest) {
 
   if (isActive !== undefined) {
     data.isActive = isActive;
+    // Si se desactiva: borrar sesiones futuras no completadas (conservar pasadas + completadas)
+    if (isActive === false) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      await prisma.programSession.deleteMany({
+        where: {
+          assignmentId: id,
+          scheduledDate: { gte: today },
+          completedAt: null,
+        },
+      });
+    }
   }
 
   const updated = await prisma.programAssignment.update({ where: { id }, data });

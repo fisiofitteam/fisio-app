@@ -51,7 +51,7 @@ type ProgramOption = {
 };
 
 const MONTH_NAMES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
-const DAY_HEADERS = ["L","M","X","J","V","S","D"];
+const DAY_HEADERS = ["L","M","X","J","V"];
 
 const TYPE_COLORS: Record<string, string> = {
   Movilidad: "bg-blue-100 text-blue-800",
@@ -206,7 +206,7 @@ export function CalendarMonth({
         </div>
 
         <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
-          <div className="grid grid-cols-7 gap-1">
+          <div className="grid grid-cols-5 gap-1">
             {DAY_HEADERS.map((d) => (
               <div key={d} className="text-center text-xs text-neutral-400 py-1 font-medium">{d}</div>
             ))}
@@ -911,22 +911,41 @@ function DropActionModal({
 }
 
 function buildMonthGrid(year: number, month: number) {
+  // Generamos un grid de solo días laborables (L-V).
+  // Empezamos por el primer lunes ≤ día 1 del mes.
   const first = new Date(year, month, 1);
   const last = new Date(year, month + 1, 0);
-  const firstDow = first.getDay() === 0 ? 7 : first.getDay();
+  const firstDow = first.getDay() === 0 ? 7 : first.getDay(); // 1=L .. 7=D
   const grid: { date: Date; inMonth: boolean }[] = [];
-  for (let i = firstDow - 1; i > 0; i--) {
-    const d = new Date(first);
-    d.setDate(first.getDate() - i);
-    grid.push({ date: d, inMonth: false });
+
+  // Padding inicial: si el día 1 no es lunes, añadimos los laborables del mes anterior
+  if (firstDow >= 2 && firstDow <= 5) {
+    for (let i = firstDow - 1; i > 0; i--) {
+      const d = new Date(first);
+      d.setDate(first.getDate() - i);
+      grid.push({ date: d, inMonth: false });
+    }
   }
-  for (let i = 1; i <= last.getDate(); i++) {
-    grid.push({ date: new Date(year, month, i), inMonth: true });
+  // Si día 1 es sábado o domingo, no añadimos padding (la semana empieza con el lunes siguiente)
+  // y mostramos los días en mes desde ese lunes
+  const startOffset = firstDow >= 6 ? 8 - firstDow : 0; // 6=sa→2 días skip; 7=do→1 día skip
+
+  // Días del mes (solo L-V)
+  for (let i = 1 + startOffset; i <= last.getDate(); i++) {
+    const d = new Date(year, month, i);
+    const dow = d.getDay();
+    if (dow === 0 || dow === 6) continue; // Saltar domingos y sábados
+    grid.push({ date: d, inMonth: true });
   }
-  while (grid.length % 7 !== 0) {
+
+  // Padding final: completar hasta múltiplo de 5
+  while (grid.length % 5 !== 0) {
     const lastDate = grid[grid.length - 1].date;
-    const d = new Date(lastDate);
+    let d = new Date(lastDate);
     d.setDate(lastDate.getDate() + 1);
+    while (d.getDay() === 0 || d.getDay() === 6) {
+      d.setDate(d.getDate() + 1);
+    }
     grid.push({ date: d, inMonth: false });
   }
   return grid;
@@ -982,7 +1001,7 @@ function EditAssignmentModal({
   }
 
   async function deactivate() {
-    if (!confirm(`¿Desactivar el programa "${assignment.programName}"?\n\nLas sesiones quedarán como histórico de lectura. Esta acción NO borra ningún dato.`)) {
+    if (!confirm(`¿Desactivar el programa "${assignment.programName}"?\n\nSe conservan las sesiones pasadas y completadas como histórico.\nLas sesiones futuras no completadas se eliminarán.`)) {
       return;
     }
     setSaving(true);
@@ -1040,7 +1059,7 @@ function EditAssignmentModal({
               Desactivar programa
             </button>
             <p className="text-[10px] text-neutral-500 mt-1 italic text-center">
-              El histórico de sesiones se conserva.
+              Sesiones pasadas y completadas se conservan. Futuras se borran.
             </p>
           </div>
         </div>
