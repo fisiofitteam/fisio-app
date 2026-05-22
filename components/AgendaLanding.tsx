@@ -78,6 +78,9 @@ export function AgendaLanding() {
   // Errores por campo (clave del campo → mensaje de error)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
+  // ¿El usuario ha pulsado "ver más fechas"?
+  const [showLaterDays, setShowLaterDays] = useState(false);
+
   // Huso horario del usuario (calculado en cliente)
   const [userTz, setUserTz] = useState<string | null>(null);
   useEffect(() => {
@@ -228,6 +231,34 @@ export function AgendaLanding() {
     slotsByDay.get(k)!.push(s);
   }
 
+  // Separar días en 2 bloques: "esta semana" (hasta el próximo domingo en
+  // Madrid incluido) vs "más adelante". El divisor es el domingo 23:59 de
+  // la semana actual.
+  // Cálculo: hoy en Madrid → dayOfWeek (1=L..7=D) → días hasta domingo = 7 - dow
+  function sundayEndOfThisWeek(): Date {
+    const now = new Date();
+    const fmt = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Madrid", weekday: "short" });
+    const wk = fmt.format(now);
+    const map: Record<string, number> = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 };
+    const dow = map[wk] || 1;
+    const daysUntilSunday = 7 - dow;
+    const sunday = new Date(now);
+    sunday.setDate(sunday.getDate() + daysUntilSunday);
+    sunday.setHours(23, 59, 59, 999);
+    return sunday;
+  }
+  const thisWeekEnd = sundayEndOfThisWeek();
+  const thisWeekDays: Array<[string, Slot[]]> = [];
+  const laterDays: Array<[string, Slot[]]> = [];
+  for (const [dayKey, daySlots] of slotsByDay.entries()) {
+    const dayStart = new Date(daySlots[0].startISO);
+    if (dayStart <= thisWeekEnd) {
+      thisWeekDays.push([dayKey, daySlots]);
+    } else {
+      laterDays.push([dayKey, daySlots]);
+    }
+  }
+
   return (
     <main
       className="min-h-screen relative"
@@ -243,7 +274,7 @@ export function AgendaLanding() {
       {/* Overlay sutil para que la imagen del box se vea con buena legibilidad */}
       <div
         className="absolute inset-0"
-        style={{ background: "rgba(10, 10, 10, 0.55)" }}
+        style={{ background: "rgba(10, 10, 10, 0.72)" }}
       />
 
       <div className="relative max-w-2xl mx-auto px-5 py-10 pb-20">
@@ -258,9 +289,6 @@ export function AgendaLanding() {
             cuanto antes.
           </p>
         </header>
-
-        {/* ━━━ Bloque de autoridad: equipo + credenciales ━━━ */}
-        <TeamAuthorityBlock />
 
         {/* Tarjeta principal */}
         <section
@@ -499,43 +527,68 @@ export function AgendaLanding() {
 
               {!loadingSlots && slots.length > 0 && (
                 <div className="space-y-3">
-                  {Array.from(slotsByDay.entries()).map(([dayKey, daySlots]) => (
-                    <div
-                      key={dayKey}
-                      className="rounded-lg p-3"
-                      style={{ background: "rgba(26, 26, 26, 0.85)", border: "1px solid #262626", backdropFilter: "blur(8px)" }}
-                    >
-                      <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#D4D4D4" }}>
-                        {formatDateLabel(daySlots[0].startISO)}
-                      </h3>
-                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
-                        {daySlots.map((s) => {
-                          const isSelected = selectedSlot?.startISO === s.startISO;
-                          const madridTime = formatHHMM(s.startISO);
-                          const localTime = !isUserInMadrid ? formatHHMMLocal(s.startISO) : null;
-                          return (
-                            <button
-                              key={s.startISO}
-                              onClick={() => setSelectedSlot(s)}
-                              className="px-2 py-2 rounded-md text-sm font-medium tabular-nums leading-tight"
-                              style={{
-                                background: isSelected ? "#FAFAFA" : "#262626",
-                                color: isSelected ? "#0A0A0A" : "#FAFAFA",
-                                border: "1px solid " + (isSelected ? "#FAFAFA" : "#404040"),
-                              }}
-                            >
-                              <div>{madridTime}</div>
-                              {localTime && (
-                                <div className="text-[10px] mt-0.5" style={{ opacity: 0.6 }}>
-                                  {localTime} local
-                                </div>
-                              )}
-                            </button>
-                          );
-                        })}
+                  {/* Esta semana — siempre desplegado */}
+                  {thisWeekDays.length > 0 && (
+                    <>
+                      <div className="text-[10px] uppercase tracking-wider font-semibold pl-1" style={{ color: "#737373" }}>
+                        Esta semana
                       </div>
+                      {thisWeekDays.map(([dayKey, daySlots]) => (
+                        <DayBlock
+                          key={dayKey}
+                          daySlots={daySlots}
+                          selectedSlot={selectedSlot}
+                          setSelectedSlot={setSelectedSlot}
+                          isUserInMadrid={isUserInMadrid}
+                        />
+                      ))}
+                    </>
+                  )}
+
+                  {thisWeekDays.length === 0 && (
+                    <div
+                      className="rounded-lg p-3 text-sm text-center"
+                      style={{ background: "rgba(31, 31, 31, 0.6)", border: "1px dashed #404040", color: "#A3A3A3" }}
+                    >
+                      No quedan huecos disponibles esta semana. Mira las próximas fechas ↓
                     </div>
-                  ))}
+                  )}
+
+                  {/* Siguientes semanas — colapsado por defecto */}
+                  {laterDays.length > 0 && (
+                    <div className="pt-1">
+                      <button
+                        onClick={() => setShowLaterDays((v) => !v)}
+                        className="w-full text-left px-3 py-2.5 rounded-lg text-sm flex items-center justify-between"
+                        style={{
+                          background: "rgba(26, 26, 26, 0.85)",
+                          border: "1px solid #262626",
+                          color: "#D4D4D4",
+                          backdropFilter: "blur(8px)",
+                        }}
+                      >
+                        <span>
+                          <strong style={{ color: "#FAFAFA" }}>Ver más fechas</strong>{" "}
+                          <span style={{ color: "#737373" }}>· próximas semanas</span>
+                        </span>
+                        <span style={{ color: "#A3A3A3", fontSize: 14 }}>{showLaterDays ? "▲" : "▼"}</span>
+                      </button>
+
+                      {showLaterDays && (
+                        <div className="space-y-3 mt-3">
+                          {laterDays.map(([dayKey, daySlots]) => (
+                            <DayBlock
+                              key={dayKey}
+                              daySlots={daySlots}
+                              selectedSlot={selectedSlot}
+                              setSelectedSlot={setSelectedSlot}
+                              isUserInMadrid={isUserInMadrid}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -581,32 +634,68 @@ export function AgendaLanding() {
           )}
         </section>
 
-        {/* Beneficios */}
-        <section className="mt-10 grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {[
-            { icon: "🎯", title: "Diagnóstico claro", desc: "Sabrás exactamente qué te ocurre y por qué" },
-            { icon: "📋", title: "Plan personalizado", desc: "Ejercicios y readaptación para tu caso" },
-            { icon: "💪", title: "Vuelta al box", desc: "El objetivo es que vuelvas a entrenar pleno" },
-          ].map((b, i) => (
-            <div
-              key={i}
-              className="rounded-xl p-4"
-              style={{ background: "rgba(20, 20, 20, 0.85)", border: "1px solid #262626", backdropFilter: "blur(8px)" }}
-            >
-              <div className="text-xl mb-1.5">{b.icon}</div>
-              <h3 className="text-sm font-semibold mb-0.5">{b.title}</h3>
-              <p className="text-xs" style={{ color: "#A3A3A3" }}>
-                {b.desc}
-              </p>
-            </div>
-          ))}
-        </section>
+        {/* ━━━ Bloque de autoridad: equipo + credenciales (debajo del form) ━━━ */}
+        <div className="mt-8">
+          <TeamAuthorityBlock />
+        </div>
 
         <footer className="mt-10 text-center text-xs" style={{ color: "#525252" }}>
           FisioFit Team · Readaptación deportiva online · {new Date().getFullYear()}
         </footer>
       </div>
     </main>
+  );
+}
+
+// ============================================================================
+// Bloque de un día con sus slots disponibles
+// ============================================================================
+function DayBlock({
+  daySlots,
+  selectedSlot,
+  setSelectedSlot,
+  isUserInMadrid,
+}: {
+  daySlots: Slot[];
+  selectedSlot: Slot | null;
+  setSelectedSlot: (s: Slot) => void;
+  isUserInMadrid: boolean;
+}) {
+  return (
+    <div
+      className="rounded-lg p-3"
+      style={{ background: "rgba(26, 26, 26, 0.85)", border: "1px solid #262626", backdropFilter: "blur(8px)" }}
+    >
+      <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#D4D4D4" }}>
+        {formatDateLabel(daySlots[0].startISO)}
+      </h3>
+      <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
+        {daySlots.map((s) => {
+          const isSelected = selectedSlot?.startISO === s.startISO;
+          const madridTime = formatHHMM(s.startISO);
+          const localTime = !isUserInMadrid ? formatHHMMLocal(s.startISO) : null;
+          return (
+            <button
+              key={s.startISO}
+              onClick={() => setSelectedSlot(s)}
+              className="px-2 py-2 rounded-md text-sm font-medium tabular-nums leading-tight"
+              style={{
+                background: isSelected ? "#FAFAFA" : "#262626",
+                color: isSelected ? "#0A0A0A" : "#FAFAFA",
+                border: "1px solid " + (isSelected ? "#FAFAFA" : "#404040"),
+              }}
+            >
+              <div>{madridTime}</div>
+              {localTime && (
+                <div className="text-[10px] mt-0.5" style={{ opacity: 0.6 }}>
+                  {localTime} local
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

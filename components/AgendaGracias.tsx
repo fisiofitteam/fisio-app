@@ -42,7 +42,7 @@ export function AgendaGracias({
       {/* Overlay sutil para que la imagen del box se vea con buena legibilidad */}
       <div
         className="absolute inset-0"
-        style={{ background: "rgba(10, 10, 10, 0.55)" }}
+        style={{ background: "rgba(10, 10, 10, 0.72)" }}
       />
 
       <div className="relative max-w-2xl mx-auto px-5 py-10 pb-20">
