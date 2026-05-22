@@ -22,6 +22,14 @@ type Lead = {
   closer: Pro | null;
   convertedPatient: { id: string; fullName: string } | null;
   decidedAt: string | null;
+  // Campos de landing pública (v54)
+  email: string | null;
+  phone: string | null;
+  motivo: string | null;
+  tratamientosPrevios: string | null;
+  impactoCrossfit: string | null;
+  meetingUrl: string | null;
+  source: string | null;
 };
 
 const STATUS_TABS = [
@@ -298,11 +306,21 @@ function CallRow({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-medium">{lead.fullName}</span>
+            {lead.source === "landing" && (
+              <span className="text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded" style={{ background: "#DBEAFE", color: "#1E40AF" }}>
+                LANDING
+              </span>
+            )}
             <span className="text-xs text-neutral-500">
               {CONTACT_ICON[lead.contactType] ?? "·"} {lead.contactValue}
             </span>
           </div>
-          {lead.aiSummary && (
+          {lead.motivo && (
+            <p className="text-xs text-neutral-700 mt-1 line-clamp-2">
+              <strong>Motivo:</strong> {lead.motivo}
+            </p>
+          )}
+          {!lead.motivo && lead.aiSummary && (
             <p className="text-xs text-neutral-600 italic mt-1 line-clamp-2">"{lead.aiSummary}"</p>
           )}
           {lead.status === "lost" && lead.lostReason && (
@@ -419,6 +437,45 @@ function CallEditModal({
             <label className="text-xs text-neutral-500 block mb-1">Resumen de la conversación</label>
             <textarea className="input text-sm" rows={3} value={aiSummary} onChange={(e) => setAiSummary(e.target.value)} />
           </div>
+
+          {/* Cuestionario rellenado en la landing (solo lectura) */}
+          {(lead.motivo || lead.tratamientosPrevios || lead.impactoCrossfit || lead.meetingUrl) && (
+            <div className="rounded-lg p-3" style={{ background: "#F0FDF4", border: "1px solid #BBF7D0" }}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded" style={{ background: "#15803D", color: "#FFFFFF" }}>
+                  LANDING
+                </span>
+                <span className="text-xs font-medium" style={{ color: "#065F46" }}>
+                  Cuestionario rellenado por el lead
+                </span>
+              </div>
+              {lead.meetingUrl && (
+                <div className="text-xs mb-2">
+                  <a href={lead.meetingUrl} target="_blank" rel="noopener noreferrer" className="underline" style={{ color: "#065F46" }}>
+                    🔗 Abrir Google Meet
+                  </a>
+                </div>
+              )}
+              {lead.motivo && (
+                <div className="text-xs mb-2">
+                  <strong>Motivo:</strong>
+                  <p className="whitespace-pre-wrap mt-0.5" style={{ color: "#1F2937" }}>{lead.motivo}</p>
+                </div>
+              )}
+              {lead.tratamientosPrevios && (
+                <div className="text-xs mb-2">
+                  <strong>Tratamientos previos:</strong>
+                  <p className="whitespace-pre-wrap mt-0.5" style={{ color: "#1F2937" }}>{lead.tratamientosPrevios}</p>
+                </div>
+              )}
+              {lead.impactoCrossfit && (
+                <div className="text-xs">
+                  <strong>Impacto en CrossFit:</strong>
+                  <p className="whitespace-pre-wrap mt-0.5" style={{ color: "#1F2937" }}>{lead.impactoCrossfit}</p>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-2">
             <div>

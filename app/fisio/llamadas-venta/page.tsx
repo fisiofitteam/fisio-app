@@ -77,6 +77,13 @@ export default async function LlamadasVentaPage({
         closer: l.closer,
         convertedPatient: l.convertedPatient,
         decidedAt: l.decidedAt?.toISOString() ?? null,
+        email: l.email,
+        phone: l.phone,
+        motivo: l.motivo,
+        tratamientosPrevios: l.tratamientosPrevios,
+        impactoCrossfit: l.impactoCrossfit,
+        meetingUrl: l.meetingUrl,
+        source: l.source,
       }))}
       fisios={fisios.map((f) => ({ id: f.id, fullName: f.fullName, role: f.role }))}
       counts={{

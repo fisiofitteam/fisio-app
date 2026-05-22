@@ -10,6 +10,8 @@ const PUBLIC_PATHS = [
   "/api/auth/reset",
   "/api/auth/patient-code",
   "/api/auth/patient-verify",
+  "/agenda",        // landing pública de reserva
+  "/api/agenda",    // endpoints públicos slots + book
 ];
 
 const STATIC_PREFIXES = ["/_next", "/api/_internal", "/favicon", "/icon-", "/box.jpg", "/manifest.json"];

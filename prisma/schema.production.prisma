@@ -176,6 +176,20 @@ model Lead {
   // Si se pierde, razón
   lostReason      String?                                    // "precio" | "no_encaja" | "ghosting" | "otro"
 
+  // ─── Auto-agenda desde landing pública (v54) ───
+  // Si el lead vino de la landing pública, se rellenan estos campos.
+  // Si lo creó la setter manualmente, quedan null.
+  email           String?                                    // correo del formulario público
+  phone           String?                                    // teléfono del formulario público
+  country         String?                                    // país (opcional, no obligatorio)
+  motivo          String?                                    // "¿Qué te trae aquí?"
+  tratamientosPrevios String?                                // qué ha probado antes
+  impactoCrossfit String?                                    // cómo afecta a su entrenamiento
+  meetingUrl      String?                                    // URL de Google Meet
+  googleEventId   String?                                    // id del evento en Calendar (para sincronizar)
+  source          String?                                    // "landing" | "manual" | (futuros: "ads_meta", "ads_google", ...)
+  bookedAt        DateTime?                                  // momento exacto en que se hizo la reserva pública
+
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   decidedAt       DateTime?                                   // cuándo se marcó won/lost/postponed
