@@ -102,6 +102,7 @@ model Professional {
   leadsAsCloser     Lead[]       @relation("LeadsAsCloser")
   sessions          Session[]
   leaves            ProfessionalLeave[]
+  closingShifts     ClosingShift[]       @relation("ClosingShifts")
 }
 
 // ============================================================================
@@ -1068,4 +1069,45 @@ model GoogleCalendarConnection {
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+}
+
+// ============================================================================
+// CALENDARIO DE LLAMADAS (FRANJAS DE COBERTURA)
+// ============================================================================
+// Cada semana, CEO/Closer/Setter definen qué franjas horarias cubre cada
+// closer. Esto permite que cuando un lead agende en Calendar (en sesión 3),
+// la app sepa automáticamente a qué closer asignarle.
+//
+// Modelo: por semana concreta (no patrón abstracto). Botón "Copiar semana
+// anterior" facilita la repetición.
+//
+// Una franja = un closer cubriendo un tramo horario un día concreto:
+//   weekStartDate=lunes 26may, dayOfWeek=1 (L), 09:00–14:00, closer=Alba
+// ============================================================================
+
+model ClosingShift {
+  id              String   @id @default(cuid())
+
+  // Lunes 00:00 de la semana a la que pertenece la franja
+  weekStartDate   DateTime
+
+  // Día de la semana: 1=L, 2=M, 3=X, 4=J, 5=V, 6=S, 7=D
+  dayOfWeek       Int
+
+  // Hora en formato "HH:MM" (24h). Ej: "09:00", "14:30"
+  startTime       String
+  endTime         String
+
+  // Closer que cubre esta franja (FK a Professional)
+  closerId        String
+  closer          Professional @relation("ClosingShifts", fields: [closerId], references: [id], onDelete: Cascade)
+
+  // Notas internas (opcional)
+  notes           String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([weekStartDate, dayOfWeek])
+  @@index([closerId])
 }

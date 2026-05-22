@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { InviteView } from "@/app/fisio/equipo/InviteView";
 
 type TeamMember = {
@@ -56,11 +56,13 @@ function daysBetweenInclusive(a: string, b: string): number {
 export function EquipoTabs({
   activeTab,
   isManager,
+  currentUserRole,
   team,
   leaves,
 }: {
   activeTab: string;
   isManager: boolean;
+  currentUserRole: string;
   team: TeamMember[];
   leaves: Leave[];
 }) {
@@ -73,26 +75,28 @@ export function EquipoTabs({
     router.push(url.pathname + url.search);
   }
 
+  // ¿Tiene acceso al Calendario de llamadas?
+  const canSeeClosingShifts = ["ceo", "closer", "setter"].includes(currentUserRole);
+
   return (
     <>
-      <div className="flex gap-1 mb-4 border-b border-neutral-200">
-        {/* Miembros solo CEO */}
-        {team.find((m) => m.role === "ceo") && (
+      <div className="flex gap-1 mb-4 border-b border-neutral-200 overflow-x-auto">
+        {/* Miembros solo CEO/Head_success */}
+        {isManager && (
           <button
             onClick={() => switchTab("miembros")}
-            disabled={!isManager}
-            className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
+            className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
               activeTab === "miembros"
                 ? "border-neutral-900 text-neutral-900"
                 : "border-transparent text-neutral-500 hover:text-neutral-900"
-            } ${!isManager ? "opacity-40 cursor-not-allowed" : ""}`}
+            }`}
           >
             👥 Miembros
           </button>
         )}
         <button
           onClick={() => switchTab("calendario")}
-          className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
+          className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
             activeTab === "calendario"
               ? "border-neutral-900 text-neutral-900"
               : "border-transparent text-neutral-500 hover:text-neutral-900"
@@ -100,10 +104,26 @@ export function EquipoTabs({
         >
           📅 Calendario equipo
         </button>
+        {canSeeClosingShifts && (
+          <button
+            onClick={() => switchTab("llamadas")}
+            className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === "llamadas"
+                ? "border-neutral-900 text-neutral-900"
+                : "border-transparent text-neutral-500 hover:text-neutral-900"
+            }`}
+          >
+            🗓️ Calendario de llamadas
+          </button>
+        )}
       </div>
 
       {activeTab === "miembros" && isManager && (
         <InviteView team={team} />
+      )}
+
+      {activeTab === "llamadas" && canSeeClosingShifts && (
+        <ClosingShiftsView team={team.filter((m) => m.active && ["ceo", "closer", "setter"].includes(m.role))} />
       )}
 
       {activeTab === "calendario" && (
@@ -439,6 +459,442 @@ function CreateLeaveModal({
             }}
           >
             {saving ? "Guardando..." : "Programar vacaciones"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// CALENDARIO DE LLAMADAS — gestión de franjas semanales por closer
+// ============================================================================
+
+const DAY_LABELS = ["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
+
+type ClosingShift = {
+  id: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  closerId: string;
+  closerName: string;
+  closerRole: string;
+  notes: string | null;
+};
+
+function weekStartOfClient(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const dow = d.getDay() === 0 ? 7 : d.getDay();
+  d.setDate(d.getDate() - (dow - 1));
+  return d;
+}
+
+function formatWeekRange(weekStart: Date): string {
+  const end = new Date(weekStart);
+  end.setDate(end.getDate() + 4); // viernes
+  const startStr = weekStart.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+  const endStr = end.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
+  return `${startStr} – ${endStr}`;
+}
+
+function ClosingShiftsView({ team }: { team: TeamMember[] }) {
+  const [weekStart, setWeekStart] = useState<Date>(weekStartOfClient(new Date()));
+  const [shifts, setShifts] = useState<ClosingShift[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState<{ dayOfWeek: number } | null>(null);
+  const [error, setError] = useState("");
+
+  async function loadShifts() {
+    setLoading(true);
+    const res = await fetch(`/api/closing-shifts?weekStart=${weekStart.toISOString()}`);
+    if (res.ok) {
+      const data = await res.json();
+      setShifts(data.shifts);
+    }
+    setLoading(false);
+  }
+
+  // Cargar al montar y al cambiar weekStart
+  useEffect(() => {
+    loadShifts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekStart.getTime()]);
+
+  function navigateWeek(direction: -1 | 1) {
+    const newWeek = new Date(weekStart);
+    newWeek.setDate(newWeek.getDate() + 7 * direction);
+    setWeekStart(newWeek);
+    setError("");
+  }
+
+  function goToCurrentWeek() {
+    setWeekStart(weekStartOfClient(new Date()));
+    setError("");
+  }
+
+  async function copyFromPrevious() {
+    setError("");
+    const res = await fetch("/api/closing-shifts/copy-from-previous", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ weekStart: weekStart.toISOString() }),
+    });
+    if (res.ok) {
+      loadShifts();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "No se pudo copiar");
+    }
+  }
+
+  async function deleteShift(id: string) {
+    if (!confirm("¿Eliminar esta franja?")) return;
+    const res = await fetch(`/api/closing-shifts?id=${id}`, { method: "DELETE" });
+    if (res.ok) loadShifts();
+  }
+
+  // Agrupar shifts por día
+  const shiftsByDay: Record<number, ClosingShift[]> = {};
+  for (let i = 1; i <= 7; i++) shiftsByDay[i] = [];
+  for (const s of shifts) shiftsByDay[s.dayOfWeek].push(s);
+
+  const isCurrentWeek = weekStart.getTime() === weekStartOfClient(new Date()).getTime();
+  const todayDow = new Date().getDay() === 0 ? 7 : new Date().getDay();
+
+  return (
+    <div>
+      {/* Navegación */}
+      <div className="flex items-center justify-between mb-4 gap-2">
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => navigateWeek(-1)}
+            className="text-sm px-2 py-1.5 rounded-md"
+            style={{ background: "#FFFFFF", border: "1px solid #E5E5E5" }}
+          >
+            ← Anterior
+          </button>
+          <button
+            onClick={goToCurrentWeek}
+            className="text-xs px-2 py-1.5 rounded-md"
+            style={{
+              background: isCurrentWeek ? "#0A0A0A" : "#FFFFFF",
+              color: isCurrentWeek ? "#FAFAFA" : "#0A0A0A",
+              border: "1px solid " + (isCurrentWeek ? "#0A0A0A" : "#E5E5E5"),
+            }}
+          >
+            Hoy
+          </button>
+          <button
+            onClick={() => navigateWeek(1)}
+            className="text-sm px-2 py-1.5 rounded-md"
+            style={{ background: "#FFFFFF", border: "1px solid #E5E5E5" }}
+          >
+            Siguiente →
+          </button>
+        </div>
+        <div className="text-sm font-medium" style={{ color: "#0A0A0A" }}>
+          {formatWeekRange(weekStart)}
+        </div>
+      </div>
+
+      {/* Botón copiar de la semana anterior si la actual está vacía */}
+      {!loading && shifts.length === 0 && (
+        <div className="rounded-lg p-3 mb-3" style={{ background: "#FAFAFA", border: "1px dashed #D4D4D4" }}>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm" style={{ color: "#525252" }}>
+              Esta semana no tiene franjas configuradas.
+            </p>
+            <button
+              onClick={copyFromPrevious}
+              className="text-xs font-medium px-3 py-1.5 rounded-md whitespace-nowrap"
+              style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+            >
+              📋 Copiar semana anterior
+            </button>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-lg px-3 py-2 mb-3 text-sm" style={{ background: "#FEF2F2", color: "#991B1B", border: "1px solid #F87171" }}>
+          {error}
+        </div>
+      )}
+
+      {/* Días L-V (los principales) */}
+      <div className="space-y-3">
+        {[1, 2, 3, 4, 5].map((dow) => (
+          <DayBlock
+            key={dow}
+            dow={dow}
+            label={DAY_LABELS[dow]}
+            shifts={shiftsByDay[dow]}
+            isToday={isCurrentWeek && dow === todayDow}
+            onAdd={() => setAdding({ dayOfWeek: dow })}
+            onDelete={deleteShift}
+            team={team}
+            weekStart={weekStart}
+            onChanged={loadShifts}
+          />
+        ))}
+      </div>
+
+      {/* Sábado y Domingo opcionales: solo si tienen franjas (caso edge) */}
+      {(shiftsByDay[6].length > 0 || shiftsByDay[7].length > 0) && (
+        <div className="space-y-3 mt-3 pt-3" style={{ borderTop: "1px dashed #D4D4D4" }}>
+          {[6, 7].filter((d) => shiftsByDay[d].length > 0).map((dow) => (
+            <DayBlock
+              key={dow}
+              dow={dow}
+              label={DAY_LABELS[dow]}
+              shifts={shiftsByDay[dow]}
+              isToday={isCurrentWeek && dow === todayDow}
+              onAdd={() => setAdding({ dayOfWeek: dow })}
+              onDelete={deleteShift}
+              team={team}
+              weekStart={weekStart}
+              onChanged={loadShifts}
+            />
+          ))}
+        </div>
+      )}
+
+      {adding && (
+        <AddShiftModal
+          weekStart={weekStart}
+          dayOfWeek={adding.dayOfWeek}
+          team={team}
+          onClose={() => setAdding(null)}
+          onSaved={() => {
+            setAdding(null);
+            loadShifts();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function DayBlock({
+  dow,
+  label,
+  shifts,
+  isToday,
+  onAdd,
+  onDelete,
+  team,
+  weekStart,
+  onChanged,
+}: {
+  dow: number;
+  label: string;
+  shifts: ClosingShift[];
+  isToday: boolean;
+  onAdd: () => void;
+  onDelete: (id: string) => void;
+  team: TeamMember[];
+  weekStart: Date;
+  onChanged: () => void;
+}) {
+  return (
+    <div
+      className="rounded-lg p-3"
+      style={{
+        background: isToday ? "#FFFBEB" : "#FFFFFF",
+        border: isToday ? "1px solid #FCD34D" : "1px solid #E5E5E5",
+      }}
+    >
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <h4 className="font-medium text-sm">{label}</h4>
+          {isToday && (
+            <span className="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded" style={{ background: "#FCD34D", color: "#78350F" }}>
+              HOY
+            </span>
+          )}
+        </div>
+        <button
+          onClick={onAdd}
+          className="text-xs hover:underline"
+          style={{ color: "#525252" }}
+        >
+          + Añadir franja
+        </button>
+      </div>
+
+      {shifts.length === 0 ? (
+        <p className="text-xs italic" style={{ color: "#A3A3A3" }}>
+          Sin cobertura
+        </p>
+      ) : (
+        <div className="space-y-1.5">
+          {shifts.map((s) => (
+            <div
+              key={s.id}
+              className="flex items-center justify-between gap-2 rounded-md px-2.5 py-2 text-sm"
+              style={{ background: "#FAFAFA", border: "1px solid #E5E5E5" }}
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-medium tabular-nums">
+                    {s.startTime} – {s.endTime}
+                  </span>
+                  <span style={{ color: "#737373" }}>→</span>
+                  <span className="font-medium">{s.closerName}</span>
+                  <span
+                    className="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded"
+                    style={{ background: "#F5F5F5", color: "#525252" }}
+                  >
+                    {s.closerRole.toUpperCase()}
+                  </span>
+                </div>
+                {s.notes && (
+                  <div className="text-[11px] mt-0.5 italic" style={{ color: "#737373" }}>
+                    {s.notes}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => onDelete(s.id)}
+                className="text-xs text-red-600 hover:underline shrink-0"
+              >
+                Eliminar
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AddShiftModal({
+  weekStart,
+  dayOfWeek,
+  team,
+  onClose,
+  onSaved,
+}: {
+  weekStart: Date;
+  dayOfWeek: number;
+  team: TeamMember[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [startTime, setStartTime] = useState("09:00");
+  const [endTime, setEndTime] = useState("14:00");
+  const [closerId, setCloserId] = useState(team[0]?.id || "");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function save() {
+    setError("");
+    if (!closerId) {
+      setError("Selecciona un closer");
+      return;
+    }
+    setSaving(true);
+    const res = await fetch("/api/closing-shifts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        weekStart: weekStart.toISOString(),
+        dayOfWeek,
+        startTime,
+        endTime,
+        closerId,
+        notes: notes.trim() || null,
+      }),
+    });
+    if (res.ok) {
+      onSaved();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "No se pudo guardar");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl max-w-md w-full p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-1">
+          <h3 className="font-semibold">+ Añadir franja</h3>
+          <button onClick={onClose} className="text-neutral-400 text-xl leading-none">✕</button>
+        </div>
+        <p className="text-xs text-neutral-500 mb-4">
+          {DAY_LABELS[dayOfWeek]} · semana del{" "}
+          {weekStart.toLocaleDateString("es-ES", { day: "numeric", month: "long" })}
+        </p>
+
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">Desde</label>
+              <input
+                type="time"
+                className="input text-sm w-full"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">Hasta</label>
+              <input
+                type="time"
+                className="input text-sm w-full"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Closer asignado</label>
+            <select
+              className="input text-sm w-full"
+              value={closerId}
+              onChange={(e) => setCloserId(e.target.value)}
+            >
+              {team.length === 0 && <option value="">— No hay closers disponibles —</option>}
+              {team.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.fullName} ({m.role})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Notas (opcional)</label>
+            <input
+              type="text"
+              className="input text-sm w-full"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Ej. solo videollamadas"
+            />
+          </div>
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          <button
+            onClick={save}
+            disabled={saving || team.length === 0}
+            className="w-full text-sm font-medium"
+            style={{
+              background: "#0A0A0A",
+              color: "#FAFAFA",
+              padding: 11,
+              borderRadius: 10,
+              border: "none",
+              opacity: saving || team.length === 0 ? 0.5 : 1,
+            }}
+          >
+            {saving ? "Guardando..." : "Crear franja"}
           </button>
         </div>
       </div>

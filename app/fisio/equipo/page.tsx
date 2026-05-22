@@ -11,11 +11,12 @@ export default async function EquipoPage({
   const user = await getActiveProfessional();
   if (!user) redirect("/login");
 
-  // Tab activa. Por defecto: "calendario" para todos, "miembros" para CEO.
+  // Tab activa. Por defecto: "calendario" para todos, "miembros" para CEO/Head_success.
   const isManager = user.role === "ceo" || user.role === "head_success";
-  const tab = searchParams.tab === "miembros" || searchParams.tab === "calendario"
+  const validTabs = ["miembros", "calendario", "llamadas"];
+  const tab = searchParams.tab && validTabs.includes(searchParams.tab)
     ? searchParams.tab
-    : (user.role === "ceo" ? "miembros" : "calendario");
+    : (isManager ? "miembros" : "calendario");
 
   // Lista de miembros (solo necesaria si es manager o si está en cualquier tab)
   const pros = await prisma.professional.findMany({
@@ -67,6 +68,7 @@ export default async function EquipoPage({
       <EquipoTabs
         activeTab={tab}
         isManager={isManager}
+        currentUserRole={user.role}
         team={team}
         leaves={leaves.map((l) => ({
           id: l.id,
