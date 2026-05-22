@@ -87,15 +87,13 @@ export function ProgramPausesBlock({ patientId, programMode }: { patientId: stri
     <div className="mt-3 pt-3" style={{ borderTop: "1px dashed #E5E5E5" }}>
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-sm font-medium">Pausas del programa</h3>
-        {activeOrScheduled.length === 0 && (
-          <button
-            onClick={() => setCreating(true)}
-            className="text-xs font-medium px-2.5 py-1.5 rounded-md"
-            style={{ background: "#0A0A0A", color: "#FAFAFA" }}
-          >
-            + Programar pausa
-          </button>
-        )}
+        <button
+          onClick={() => setCreating(true)}
+          className="text-xs font-medium px-2.5 py-1.5 rounded-md"
+          style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+        >
+          + Programar pausa
+        </button>
       </div>
 
       {loading ? (
