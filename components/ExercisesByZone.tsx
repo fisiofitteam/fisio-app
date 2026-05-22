@@ -15,8 +15,11 @@ type Exercise = {
 
 const ZONES = [
   { key: "hombro", label: "Hombro", icon: "💪" },
+  { key: "cervical", label: "Cervical", icon: "🦒" },
   { key: "lumbar", label: "Lumbar", icon: "🦴" },
+  { key: "cadera", label: "Cadera", icon: "🍑" },
   { key: "rodilla", label: "Rodilla", icon: "🦵" },
+  { key: "tobillo", label: "Tobillo", icon: "🦶" },
   { key: "otros", label: "Otros", icon: "✨" },
 ];
 

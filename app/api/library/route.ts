@@ -17,10 +17,11 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { name, category, tags, youtubeUrl, description } = await req.json();
+  const { name, bodyZone, category, tags, youtubeUrl, description } = await req.json();
   const ex = await prisma.exerciseLibrary.create({
     data: {
       name,
+      bodyZone: bodyZone || "otros",
       category,
       tags: tags || "",
       youtubeUrl: youtubeUrl || null,
@@ -31,11 +32,12 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const { id, name, category, tags, youtubeUrl, description } = await req.json();
+  const { id, name, bodyZone, category, tags, youtubeUrl, description } = await req.json();
   const ex = await prisma.exerciseLibrary.update({
     where: { id },
     data: {
       name,
+      ...(bodyZone !== undefined && { bodyZone: bodyZone || "otros" }),
       category,
       tags: tags || "",
       youtubeUrl: youtubeUrl || null,

@@ -221,6 +221,12 @@ export default async function PatientHome({ params }: { params: { id: string } }
   // Si hay una pausa programada (futura), avisamos en el dashboard
   const upcomingPause = pauseSnapshot.upcomingPause;
 
+  // Notificaciones persistentes (vacaciones de fisio, etc)
+  const notifications = await prisma.patientNotification.findMany({
+    where: { patientId: patient.id, readAt: null },
+    orderBy: { createdAt: "asc" },
+  });
+
   return (
     <PatientHomeDark
       patient={{
@@ -257,6 +263,12 @@ export default async function PatientHome({ params }: { params: { id: string } }
         startDate: upcomingPause.startDate.toISOString(),
         endDate: upcomingPause.endDate.toISOString(),
       } : null}
+      notifications={notifications.map((n) => ({
+        id: n.id,
+        type: n.type,
+        title: n.title,
+        body: n.body,
+      }))}
     />
   );
 }

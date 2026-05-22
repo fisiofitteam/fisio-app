@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import {
   Zap,
   Calendar,
@@ -48,20 +49,64 @@ export function PatientHomeDark({
   nextSession,
   adherence,
   upcomingPause,
+  notifications,
 }: {
   patient: Patient;
   todaySessions: TodaySession[];
   nextSession: NextSession | null;
   adherence: Adherence | null;
   upcomingPause?: { startDate: string; endDate: string } | null;
+  notifications?: { id: string; type: string; title: string; body: string }[];
 }) {
   const dow = new Date().getDay() === 0 ? 7 : new Date().getDay();
   const todayDate = new Date();
   const initial = patient.firstName[0]?.toUpperCase() ?? "?";
 
+  // Estado local para ocultar notificaciones tras marcarlas leídas
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const visibleNotifications = (notifications || []).filter((n) => !dismissed.has(n.id));
+
+  async function dismissNotification(id: string) {
+    setDismissed((prev) => new Set([...prev, id]));
+    fetch("/api/patient-notifications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    }).catch(() => {});
+  }
+
   return (
     <main className="min-h-screen text-white" style={{ color: "#FAFAFA" }}>
       <div className="relative max-w-md mx-auto px-5 py-7 pb-28">
+        {/* Notificaciones persistentes (vacaciones del fisio, etc) */}
+        {visibleNotifications.map((n) => (
+          <div
+            key={n.id}
+            className="mb-3 rounded-xl px-4 py-3 text-sm"
+            style={{
+              background: "rgba(34, 197, 94, 0.10)",
+              border: "1px solid rgba(34, 197, 94, 0.30)",
+              color: "#86EFAC",
+            }}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1">
+                <div className="font-medium mb-1">🎁 {n.title}</div>
+                <div className="text-xs leading-relaxed" style={{ color: "#A3A3A3" }}>
+                  {n.body}
+                </div>
+              </div>
+              <button
+                onClick={() => dismissNotification(n.id)}
+                className="text-xs px-2 py-1 rounded shrink-0"
+                style={{ background: "rgba(34, 197, 94, 0.2)", color: "#86EFAC" }}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        ))}
+
         {upcomingPause && (
           <div
             className="mb-5 rounded-xl px-4 py-3 text-sm"

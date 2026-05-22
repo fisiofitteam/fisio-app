@@ -17,6 +17,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
+import { applyLeaveBonus } from "@/app/api/professional-leaves/route";
 
 export async function POST(req: NextRequest) {
   // Protección con secreto si está configurado
@@ -120,11 +121,25 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // 4) Procesar vacaciones del equipo: aplicar bonus a las que llegan hoy
+  const leavesToApply = await prisma.professionalLeave.findMany({
+    where: {
+      status: "scheduled",
+      startDate: { lte: today },
+    },
+  });
+  let leavesApplied = 0;
+  for (const l of leavesToApply) {
+    await applyLeaveBonus(l.id);
+    leavesApplied++;
+  }
+
   return NextResponse.json({
     ok: true,
     activated: toActivate.length,
     ended: toEnd.length,
     renewalsActivated: renewalsToActivate.length,
+    leavesApplied,
     emailsSent: emailsSent.length,
   });
 }

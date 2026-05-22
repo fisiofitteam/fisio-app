@@ -7,17 +7,29 @@ import { youtubeEmbedUrl, youtubeThumbnail } from "@/lib/youtube";
 type Exercise = {
   id: string;
   name: string;
+  bodyZone: string;
   category: string;
   tags: string;
   youtubeUrl: string;
   description: string;
 };
 
+const BODY_ZONES = [
+  { key: "hombro", label: "Hombro" },
+  { key: "cervical", label: "Cervical" },
+  { key: "lumbar", label: "Lumbar" },
+  { key: "cadera", label: "Cadera" },
+  { key: "rodilla", label: "Rodilla" },
+  { key: "tobillo", label: "Tobillo" },
+  { key: "otros", label: "Otros" },
+];
+
 const CATEGORIES = ["Movilidad", "Activación", "Fuerza", "Técnica", "Estiramiento", "Educacional", "Cardio", "Otro"];
 
 export function ExerciseEditor({ exercise }: { exercise: Exercise | null }) {
   const router = useRouter();
   const [name, setName] = useState(exercise?.name ?? "");
+  const [bodyZone, setBodyZone] = useState(exercise?.bodyZone ?? "otros");
   const [category, setCategory] = useState(exercise?.category ?? "Movilidad");
   const [tags, setTags] = useState(exercise?.tags ?? "");
   const [youtubeUrl, setYoutubeUrl] = useState(exercise?.youtubeUrl ?? "");
@@ -34,6 +46,7 @@ export function ExerciseEditor({ exercise }: { exercise: Exercise | null }) {
     const body = JSON.stringify({
       ...(exercise && { id: exercise.id }),
       name,
+      bodyZone,
       category,
       tags,
       youtubeUrl,
@@ -70,6 +83,14 @@ export function ExerciseEditor({ exercise }: { exercise: Exercise | null }) {
 
       <div className="grid grid-cols-2 gap-2">
         <div>
+          <label className="text-xs text-neutral-500 block mb-1">Zona corporal</label>
+          <select className="input" value={bodyZone} onChange={(e) => setBodyZone(e.target.value)}>
+            {BODY_ZONES.map((z) => (
+              <option key={z.key} value={z.key}>{z.label}</option>
+            ))}
+          </select>
+        </div>
+        <div>
           <label className="text-xs text-neutral-500 block mb-1">Categoría</label>
           <select className="input" value={category} onChange={(e) => setCategory(e.target.value)}>
             {CATEGORIES.map((c) => (
@@ -77,15 +98,16 @@ export function ExerciseEditor({ exercise }: { exercise: Exercise | null }) {
             ))}
           </select>
         </div>
-        <div>
-          <label className="text-xs text-neutral-500 block mb-1">Etiquetas (separadas por coma)</label>
-          <input
-            className="input"
-            placeholder="hombro,escapular,activación"
-            value={tags}
-            onChange={(e) => setTags(e.target.value)}
-          />
-        </div>
+      </div>
+
+      <div>
+        <label className="text-xs text-neutral-500 block mb-1">Etiquetas (separadas por coma)</label>
+        <input
+          className="input"
+          placeholder="hombro,escapular,activación"
+          value={tags}
+          onChange={(e) => setTags(e.target.value)}
+        />
       </div>
 
       <div>

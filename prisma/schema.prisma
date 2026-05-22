@@ -70,6 +70,7 @@ model Patient {
   leadsConverted  Lead[]
   sessions        Session[]
   programPauses   ProgramPause[]
+  notifications   PatientNotification[]
 }
 
 // ============================================================================
@@ -100,6 +101,7 @@ model Professional {
   leadsAsSetter     Lead[]       @relation("LeadsAsSetter")
   leadsAsCloser     Lead[]       @relation("LeadsAsCloser")
   sessions          Session[]
+  leaves            ProfessionalLeave[]
 }
 
 // ============================================================================
@@ -951,4 +953,81 @@ model RollingTask {
   formId      String?                         // FORM: referencia al Form de Biblioteca
 
   @@index([dayId])
+}
+
+// ============================================================================
+// VACACIONES / AUSENCIAS DEL EQUIPO
+// ============================================================================
+// Cuando un fisio o head success se va de vacaciones, sus pacientes RECUPERA
+// y CONSOLIDA reciben +N días extra en el endDate de su periodo activo, como
+// compensación por la ausencia de soporte humano.
+//
+// Reglas:
+//  - Solo se aplica el bonus si las vacaciones duran 8+ días
+//  - Días exactos (no se redondea)
+//  - Solo aplica a pacientes RECUPERA y CONSOLIDA (no ADVANCE ni PREVENTION)
+//  - Las sesiones del programa NO se mueven
+//  - Si el paciente cambia de fisio en mitad de las vacaciones, solo recibe
+//    bonus si está asignado al fisio durante las vacaciones
+// ============================================================================
+
+model ProfessionalLeave {
+  id              String   @id @default(cuid())
+  professionalId  String
+  professional    Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  startDate       DateTime                        // primer día fuera
+  endDate         DateTime                        // último día fuera (inclusivo)
+
+  // Días que se sumaron a los pacientes afectados. Puede ser 0 si no aplica
+  // (vacaciones < 8 días, sin pacientes asignados, etc).
+  daysApplied     Int      @default(0)
+  // Cuántos pacientes recibieron el bonus
+  affectedPatientsCount Int @default(0)
+
+  // Estado: "scheduled" (programada, aún no aplicada) | "applied" (bonus ya
+  // sumado) | "cancelled" (cancelada, bonus revertido si lo había)
+  status          String   @default("scheduled")
+
+  // Cuándo se aplicó el bonus (cuando llegó startDate y se procesó)
+  appliedAt       DateTime?
+  // Cuándo se canceló (si aplica)
+  cancelledAt     DateTime?
+
+  notes           String?                         // motivo / notas internas
+
+  // Quién creó la vacación (CEO/Head success típicamente)
+  createdById     String?
+
+  createdAt       DateTime @default(now())
+
+  @@index([professionalId])
+  @@index([startDate])
+  @@index([status])
+}
+
+// ============================================================================
+// NOTIFICACIONES PARA EL PACIENTE
+// ============================================================================
+// Avisos persistentes que aparecen en el dashboard del paciente cuando entra.
+// Se marcan como leídos al pulsar "OK" y dejan de salir.
+//
+// Tipos usados hoy:
+//  - "leave_bonus": vacaciones del fisio → días extra de regalo
+// ============================================================================
+
+model PatientNotification {
+  id          String   @id @default(cuid())
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  type        String                          // "leave_bonus" | (futuros)
+  title       String
+  body        String
+
+  readAt      DateTime?                       // null = aún no leída
+  createdAt   DateTime @default(now())
+
+  @@index([patientId])
+  @@index([readAt])
 }

@@ -26,6 +26,7 @@ export default async function ExerciseEditPage({ params }: { params: { id: strin
             ? {
                 id: exercise.id,
                 name: exercise.name,
+                bodyZone: exercise.bodyZone ?? "otros",
                 category: exercise.category,
                 tags: exercise.tags,
                 youtubeUrl: exercise.youtubeUrl ?? "",

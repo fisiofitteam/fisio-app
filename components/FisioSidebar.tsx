@@ -48,17 +48,16 @@ function itemsForRole(role: string): Item[] {
     return [PANEL, PACIENTES, LLAMADAS_VENTA, FOLLOWUP, CONTENIDO, BIBLIOTECA, TAREAS, RECURSOS, FINANZAS, EQUIPO];
   }
   if (role === "head_success") {
-    return [PANEL, PACIENTES, BIBLIOTECA, TAREAS, LLAMADAS, RECURSOS];
+    return [PANEL, PACIENTES, BIBLIOTECA, TAREAS, LLAMADAS, RECURSOS, EQUIPO];
   }
   if (role === "setter") {
-    return [LEADS, PARCHES, TAREAS, CONTENIDO];
+    return [LEADS, PARCHES, TAREAS, CONTENIDO, EQUIPO];
   }
   if (role === "closer") {
-    // Panel propio + Llamadas + Follow-up + Tareas
-    return [PANEL, LLAMADAS_VENTA, FOLLOWUP, TAREAS];
+    return [PANEL, LLAMADAS_VENTA, FOLLOWUP, TAREAS, EQUIPO];
   }
   // fisio normal
-  return [PANEL, PACIENTES, BIBLIOTECA, TAREAS, LLAMADAS, RECURSOS];
+  return [PANEL, PACIENTES, BIBLIOTECA, TAREAS, LLAMADAS, RECURSOS, EQUIPO];
 }
 
 const ROLE_LABEL: Record<string, string> = {
