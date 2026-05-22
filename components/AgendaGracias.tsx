@@ -3,14 +3,19 @@
 // Vídeo pre-llamada (si cambias el vídeo, edita esta constante)
 const PRE_CALL_VIDEO_ID = "DnEAQXs09BI";
 
+// Contacto de la marca (canales públicos)
+const WHATSAPP_NUMBER = "+34621495367";
+const WHATSAPP_LINK = `https://wa.me/${WHATSAPP_NUMBER.replace(/[^0-9]/g, "")}`;
+const INSTAGRAM_HANDLE = "fisiofitcross";
+const INSTAGRAM_URL = `https://www.instagram.com/${INSTAGRAM_HANDLE}`;
+
 function formatDateLong(iso: string): string {
   const d = new Date(iso);
-  const dayName = d.toLocaleDateString("es-ES", { weekday: "long" });
-  const day = d.getDate();
-  const month = d.toLocaleDateString("es-ES", { month: "long" });
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${dayName} ${day} de ${month} a las ${hh}:${mm}`;
+  const dayName = d.toLocaleDateString("es-ES", { weekday: "long", timeZone: "Europe/Madrid" });
+  const day = d.toLocaleDateString("es-ES", { day: "numeric", timeZone: "Europe/Madrid" });
+  const month = d.toLocaleDateString("es-ES", { month: "long", timeZone: "Europe/Madrid" });
+  const time = d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Madrid" });
+  return `${dayName} ${day} de ${month} a las ${time}`;
 }
 
 export function AgendaGracias({
@@ -24,13 +29,23 @@ export function AgendaGracias({
 
   return (
     <main
-      className="min-h-screen"
+      className="min-h-screen relative"
       style={{
-        background: "linear-gradient(180deg, #0A0A0A 0%, #0F0F0F 100%)",
+        backgroundColor: "#0A0A0A",
+        backgroundImage: "url('/box.jpg')",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundAttachment: "fixed",
         color: "#FAFAFA",
       }}
     >
-      <div className="max-w-2xl mx-auto px-5 py-10 pb-20">
+      {/* Overlay oscuro para legibilidad */}
+      <div
+        className="absolute inset-0"
+        style={{ background: "rgba(10, 10, 10, 0.85)", backdropFilter: "blur(2px)" }}
+      />
+
+      <div className="relative max-w-2xl mx-auto px-5 py-10 pb-20">
         {/* ━━━ Confirmación inicial ━━━ */}
         <section className="text-center mb-8">
           <div
@@ -42,7 +57,7 @@ export function AgendaGracias({
           <h1 className="text-2xl sm:text-3xl font-semibold leading-tight mb-3" style={{ letterSpacing: "-0.02em" }}>
             {firstName ? `Listo, ${firstName}.` : "Reserva confirmada"}
           </h1>
-          <p className="text-sm sm:text-base" style={{ color: "#A3A3A3" }}>
+          <p className="text-sm sm:text-base" style={{ color: "#D4D4D4" }}>
             {dateLabel ? (
               <>
                 Tu videoconsulta está reservada para el{" "}
@@ -54,10 +69,10 @@ export function AgendaGracias({
           </p>
         </section>
 
-        {/* ━━━ Cómo será la llamada ━━━ */}
+        {/* ━━━ Cómo será tu videoconsulta ━━━ */}
         <section
           className="rounded-2xl p-5 sm:p-6 mb-4"
-          style={{ background: "#141414", border: "1px solid #262626" }}
+          style={{ background: "rgba(20, 20, 20, 0.85)", border: "1px solid #262626", backdropFilter: "blur(8px)" }}
         >
           <div className="flex items-center gap-2 mb-3">
             <span style={{ fontSize: 20 }}>📋</span>
@@ -74,77 +89,10 @@ export function AgendaGracias({
           </p>
         </section>
 
-        {/* ━━━ Cómo prepararte ━━━ */}
+        {/* ━━━ Vídeo pre-llamada (MOVIDO ARRIBA) ━━━ */}
         <section
           className="rounded-2xl p-5 sm:p-6 mb-4"
-          style={{ background: "#141414", border: "1px solid #262626" }}
-        >
-          <div className="flex items-center gap-2 mb-3">
-            <span style={{ fontSize: 20 }}>📍</span>
-            <h2 className="text-base sm:text-lg font-semibold">Cómo prepararte</h2>
-          </div>
-          <p className="text-sm leading-relaxed" style={{ color: "#A3A3A3" }}>
-            Busca un <strong style={{ color: "#FAFAFA" }}>sitio tranquilo</strong>, sin distracciones. Evita
-            conectarte por la calle o conduciendo:{" "}
-            <strong style={{ color: "#FAFAFA" }}>necesitamos toda tu atención</strong> para sacar el máximo
-            partido de la llamada.
-          </p>
-        </section>
-
-        {/* ━━━ Qué pasará entre ahora y la llamada ━━━ */}
-        <section
-          className="rounded-2xl p-5 sm:p-6 mb-4"
-          style={{ background: "#141414", border: "1px solid #262626" }}
-        >
-          <div className="flex items-center gap-2 mb-4">
-            <span style={{ fontSize: 20 }}>⏱</span>
-            <h2 className="text-base sm:text-lg font-semibold">Qué pasará antes de la llamada</h2>
-          </div>
-
-          <ol className="space-y-4 text-sm">
-            <li className="flex items-start gap-3">
-              <span
-                className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold"
-                style={{ background: "#262626", color: "#FAFAFA" }}
-              >
-                1
-              </span>
-              <div style={{ color: "#A3A3A3" }}>
-                <strong style={{ color: "#FAFAFA" }}>En breve recibirás un mensaje por WhatsApp</strong> para
-                presentarte al especialista que te atenderá y resolver cualquier duda inicial.
-              </div>
-            </li>
-            <li className="flex items-start gap-3">
-              <span
-                className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold"
-                style={{ background: "#262626", color: "#FAFAFA" }}
-              >
-                2
-              </span>
-              <div style={{ color: "#A3A3A3" }}>
-                <strong style={{ color: "#FAFAFA" }}>24 horas antes de la llamada</strong> te enviaremos un
-                recordatorio con el link de Google Meet para conectarte.
-              </div>
-            </li>
-            <li className="flex items-start gap-3">
-              <span
-                className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold"
-                style={{ background: "#262626", color: "#FAFAFA" }}
-              >
-                3
-              </span>
-              <div style={{ color: "#A3A3A3" }}>
-                <strong style={{ color: "#FAFAFA" }}>Mira el vídeo de abajo cuando puedas</strong>. Te ayudará a
-                llegar a la llamada con contexto y aprovecharla al máximo.
-              </div>
-            </li>
-          </ol>
-        </section>
-
-        {/* ━━━ Vídeo pre-llamada ━━━ */}
-        <section
-          className="rounded-2xl p-5 sm:p-6 mb-4"
-          style={{ background: "#141414", border: "1px solid #262626" }}
+          style={{ background: "rgba(20, 20, 20, 0.85)", border: "1px solid #262626", backdropFilter: "blur(8px)" }}
         >
           <div className="flex items-center gap-2 mb-3">
             <span
@@ -186,12 +134,80 @@ export function AgendaGracias({
           </ul>
         </section>
 
+        {/* ━━━ Cómo prepararte ━━━ */}
+        <section
+          className="rounded-2xl p-5 sm:p-6 mb-4"
+          style={{ background: "rgba(20, 20, 20, 0.85)", border: "1px solid #262626", backdropFilter: "blur(8px)" }}
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <span style={{ fontSize: 20 }}>📍</span>
+            <h2 className="text-base sm:text-lg font-semibold">Cómo prepararte</h2>
+          </div>
+          <p className="text-sm leading-relaxed" style={{ color: "#A3A3A3" }}>
+            Busca un <strong style={{ color: "#FAFAFA" }}>sitio tranquilo</strong>, sin distracciones. Evita
+            conectarte por la calle o conduciendo:{" "}
+            <strong style={{ color: "#FAFAFA" }}>necesitamos toda tu atención</strong> para sacar el máximo
+            partido de la llamada.
+          </p>
+        </section>
+
+        {/* ━━━ Qué pasará antes de la llamada ━━━ */}
+        <section
+          className="rounded-2xl p-5 sm:p-6 mb-4"
+          style={{ background: "rgba(20, 20, 20, 0.85)", border: "1px solid #262626", backdropFilter: "blur(8px)" }}
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <span style={{ fontSize: 20 }}>⏱</span>
+            <h2 className="text-base sm:text-lg font-semibold">Qué pasará antes de la llamada</h2>
+          </div>
+
+          <ol className="space-y-4 text-sm">
+            <li className="flex items-start gap-3">
+              <span
+                className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold"
+                style={{ background: "#262626", color: "#FAFAFA" }}
+              >
+                1
+              </span>
+              <div style={{ color: "#A3A3A3" }}>
+                <strong style={{ color: "#FAFAFA" }}>En breve recibirás un mensaje por WhatsApp</strong> para
+                presentarte al especialista que te atenderá y resolver cualquier duda inicial.
+              </div>
+            </li>
+            <li className="flex items-start gap-3">
+              <span
+                className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold"
+                style={{ background: "#262626", color: "#FAFAFA" }}
+              >
+                2
+              </span>
+              <div style={{ color: "#A3A3A3" }}>
+                <strong style={{ color: "#FAFAFA" }}>24 horas antes de la llamada</strong> te enviaremos un
+                recordatorio con el link de Google Meet para conectarte.
+              </div>
+            </li>
+            <li className="flex items-start gap-3">
+              <span
+                className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold"
+                style={{ background: "#262626", color: "#FAFAFA" }}
+              >
+                3
+              </span>
+              <div style={{ color: "#A3A3A3" }}>
+                <strong style={{ color: "#FAFAFA" }}>Te llamamos a la hora reservada.</strong> Conecta unos
+                minutos antes desde el link del email para que no se te escape nada.
+              </div>
+            </li>
+          </ol>
+        </section>
+
         {/* ━━━ Política de cancelación ━━━ */}
         <section
           className="rounded-2xl p-5 sm:p-6 mb-4"
           style={{
-            background: "rgba(252, 165, 165, 0.05)",
-            border: "1px solid rgba(252, 165, 165, 0.2)",
+            background: "rgba(127, 29, 29, 0.15)",
+            border: "1px solid rgba(252, 165, 165, 0.25)",
+            backdropFilter: "blur(8px)",
           }}
         >
           <div className="flex items-center gap-2 mb-3">
@@ -209,8 +225,8 @@ export function AgendaGracias({
           <div
             className="rounded-lg p-3 mt-3"
             style={{
-              background: "rgba(252, 165, 165, 0.12)",
-              border: "1px solid rgba(252, 165, 165, 0.35)",
+              background: "rgba(127, 29, 29, 0.25)",
+              border: "1px solid rgba(252, 165, 165, 0.4)",
             }}
           >
             <p className="text-sm leading-relaxed" style={{ color: "#FCA5A5" }}>
@@ -223,25 +239,43 @@ export function AgendaGracias({
 
         {/* ━━━ Contacto / reprogramar ━━━ */}
         <section
-          className="rounded-2xl p-4 text-sm text-center"
-          style={{ background: "transparent", border: "1px dashed #404040", color: "#A3A3A3" }}
+          className="rounded-2xl p-5 text-sm"
+          style={{
+            background: "rgba(20, 20, 20, 0.7)",
+            border: "1px solid #262626",
+            backdropFilter: "blur(8px)",
+          }}
         >
-          ¿Te ha surgido un imprevisto o tienes dudas?{" "}
-          <strong style={{ color: "#FAFAFA" }}>
-            Escríbenos por Instagram{" "}
+          <p className="text-center mb-4" style={{ color: "#A3A3A3" }}>
+            ¿Te ha surgido un imprevisto o tienes dudas antes de la llamada?
+          </p>
+          <div className="flex flex-col sm:flex-row gap-2 justify-center">
             <a
-              href="https://www.instagram.com/fisiofitteam"
+              href={WHATSAPP_LINK}
               target="_blank"
               rel="noopener noreferrer"
-              className="underline"
+              className="text-center text-sm font-semibold rounded-lg px-4 py-2.5 flex items-center justify-center gap-2"
+              style={{ background: "#25D366", color: "#0A0A0A" }}
             >
-              @fisiofitteam
+              <span style={{ fontSize: 16 }}>💬</span> Escríbenos por WhatsApp
             </a>
-          </strong>{" "}
-          o responde al WhatsApp que te enviaremos en breve.
+            <a
+              href={INSTAGRAM_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-center text-sm rounded-lg px-4 py-2.5 flex items-center justify-center gap-2"
+              style={{
+                background: "rgba(31, 31, 31, 0.7)",
+                border: "1px solid #404040",
+                color: "#D4D4D4",
+              }}
+            >
+              <span style={{ fontSize: 16 }}>📷</span> @{INSTAGRAM_HANDLE}
+            </a>
+          </div>
         </section>
 
-        <footer className="mt-10 text-center text-xs" style={{ color: "#525252" }}>
+        <footer className="mt-10 text-center text-xs" style={{ color: "#737373" }}>
           FisioFit Team · Readaptación deportiva online · {new Date().getFullYear()}
         </footer>
       </div>
