@@ -31,14 +31,17 @@ export async function GET(req: NextRequest) {
  *  - Si hay un periodo activo ya vencido (endDate <= hoy) o no hay periodo
  *    activo: el nuevo periodo empieza hoy en estado "active". El periodo
  *    anterior (si lo hay) se cierra (status=finished).
+ *  - Si el cliente pasa `strategy: "replace"`: el periodo activo se ELIMINA
+ *    (no se cierra) y el nuevo empieza hoy. Útil cuando el activo fue creado
+ *    por error y se quiere "deshacer" para empezar de nuevo.
  *
- * Body: { patientId, programType, periodMonths, amountPaid, notes }
+ * Body: { patientId, programType, periodMonths, amountPaid, notes, strategy? }
  */
 export async function POST(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const { patientId, programType, periodMonths, amountPaid, notes } = await req.json();
+  const { patientId, programType, periodMonths, amountPaid, notes, strategy } = await req.json();
 
   if (!patientId) return NextResponse.json({ error: "patientId required" }, { status: 400 });
   if (!programType) return NextResponse.json({ error: "programType required" }, { status: 400 });
@@ -57,7 +60,12 @@ export async function POST(req: NextRequest) {
   let startDate: Date;
   let status: "active" | "scheduled";
 
-  if (activePeriod && activePeriod.endDate && activePeriod.endDate > today) {
+  if (strategy === "replace" && activePeriod) {
+    // SUSTITUIR: borramos el actual (típicamente porque se creó mal) y empezamos hoy
+    await prisma.subscriptionRenewal.delete({ where: { id: activePeriod.id } });
+    startDate = today;
+    status = "active";
+  } else if (activePeriod && activePeriod.endDate && activePeriod.endDate > today) {
     // RENOVACIÓN ANTICIPADA: el nuevo empieza cuando acaba el actual
     startDate = activePeriod.endDate;
     status = "scheduled";
@@ -133,8 +141,69 @@ export async function POST(req: NextRequest) {
 }
 
 /**
+ * PATCH /api/renewals
+ * Editar un periodo existente.
+ * Body: { id, programType?, periodMonths?, startDate?, endDate?, amountPaid?, notes?, status? }
+ */
+export async function PATCH(req: NextRequest) {
+  const user = await getActiveProfessional();
+  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!(user.role === "ceo" || user.role === "head_success")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const { id, programType, periodMonths, startDate, endDate, amountPaid, notes, status } = await req.json();
+  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+
+  const current = await prisma.subscriptionRenewal.findUnique({ where: { id } });
+  if (!current) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  // Si solo cambian meses sin tocar endDate, recalcular endDate
+  let computedEndDate: Date | undefined;
+  if (endDate !== undefined) {
+    computedEndDate = new Date(endDate);
+  } else if (periodMonths !== undefined && current.startDate) {
+    const newMonths = Number(periodMonths);
+    computedEndDate = new Date(current.startDate);
+    computedEndDate.setMonth(computedEndDate.getMonth() + newMonths);
+  }
+
+  const updated = await prisma.subscriptionRenewal.update({
+    where: { id },
+    data: {
+      ...(programType !== undefined && { programType: programType || null }),
+      ...(periodMonths !== undefined && { periodMonths: Number(periodMonths) }),
+      ...(startDate !== undefined && { startDate: new Date(startDate) }),
+      ...(computedEndDate && { endDate: computedEndDate }),
+      ...(amountPaid !== undefined && { amountPaid: amountPaid ? Number(amountPaid) : null }),
+      ...(notes !== undefined && { notes: notes?.trim() || null }),
+      ...(status !== undefined && { status }),
+    },
+  });
+
+  // Recalcular subscriptionTotalMonths y sincronizar paciente
+  const all = await prisma.subscriptionRenewal.findMany({
+    where: { patientId: current.patientId },
+  });
+  const total = all.reduce((sum, r) => sum + (r.periodMonths || 0), 0);
+  const active = all.find((r) => r.status === "active");
+  const dataToUpdate: any = { subscriptionTotalMonths: total };
+  if (active && active.programType) {
+    dataToUpdate.programType = active.programType;
+    if (active.startDate) dataToUpdate.subscriptionStartDate = active.startDate;
+    dataToUpdate.subscriptionPeriodMonths = active.periodMonths;
+  }
+  await prisma.patient.update({
+    where: { id: current.patientId },
+    data: dataToUpdate,
+  });
+
+  return NextResponse.json(updated);
+}
+
+/**
  * DELETE /api/renewals?id=xxx
- * Borra un periodo (solo se permite si no es el activo y no tiene transacciones asociadas).
+ * Borra un periodo. Recalcula los totales del paciente.
  */
 export async function DELETE(req: NextRequest) {
   const user = await getActiveProfessional();
@@ -146,6 +215,27 @@ export async function DELETE(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
+  const current = await prisma.subscriptionRenewal.findUnique({ where: { id } });
+  if (!current) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
   await prisma.subscriptionRenewal.delete({ where: { id } });
+
+  // Recalcular subscriptionTotalMonths del paciente
+  const all = await prisma.subscriptionRenewal.findMany({
+    where: { patientId: current.patientId },
+  });
+  const total = all.reduce((sum, r) => sum + (r.periodMonths || 0), 0);
+  const active = all.find((r) => r.status === "active");
+  const dataToUpdate: any = { subscriptionTotalMonths: total };
+  if (active && active.programType) {
+    dataToUpdate.programType = active.programType;
+    if (active.startDate) dataToUpdate.subscriptionStartDate = active.startDate;
+    dataToUpdate.subscriptionPeriodMonths = active.periodMonths;
+  }
+  await prisma.patient.update({
+    where: { id: current.patientId },
+    data: dataToUpdate,
+  });
+
   return NextResponse.json({ ok: true });
 }

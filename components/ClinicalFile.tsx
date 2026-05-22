@@ -184,37 +184,6 @@ export function ClinicalFile({ patient, isManager }: { patient: Patient; isManag
 
       <section className="card space-y-3">
         <h2 className="font-medium">Suscripción</h2>
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="text-xs text-neutral-500 block mb-1">Fecha de inicio</label>
-            <input type="date" className="input" value={subscriptionStartDate} onChange={(e) => setSubscriptionStartDate(e.target.value)} />
-          </div>
-          <div>
-            <label className="text-xs text-neutral-500 block mb-1">Periodo (meses)</label>
-            <input
-              type="number"
-              className="input"
-              min={1}
-              max={24}
-              value={subscriptionPeriodMonths}
-              onChange={(e) => setSubscriptionPeriodMonths(Number(e.target.value))}
-            />
-          </div>
-        </div>
-        {renewalDate && (
-          <div className="bg-neutral-50 rounded-lg p-3 text-sm">
-            <div>Próxima renovación: <strong>{renewalDate}</strong></div>
-            {renewalDays !== null && (
-              <div className={`text-xs mt-1 ${
-                renewalDays < 0 ? "text-red-600" : renewalDays <= 15 ? "text-amber-700" : renewalDays <= 30 ? "text-neutral-700" : "text-neutral-500"
-              }`}>
-                {renewalDays < 0
-                  ? `Vencida hace ${-renewalDays} días`
-                  : renewalDays === 0 ? "Hoy" : `En ${renewalDays} días`}
-              </div>
-            )}
-          </div>
-        )}
 
         <SubscriptionPeriodsBlock patientId={patient.id} isManager={isManager} />
 
