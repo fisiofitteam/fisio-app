@@ -154,14 +154,36 @@ export async function createEventWithMeet(params: {
   const calendarId = await getCalendarId();
   const tz = params.timeZone || "Europe/Madrid";
 
+  // ─── Coanfitriones del equipo FisioFit ───
+  // Estos miembros del equipo deben asistir a TODAS las videoconsultas como
+  // organizadores. La agenda pública de Google Appointment ya los configura
+  // automáticamente cuando alguien agenda desde su URL, pero la API NO lo
+  // hace por nosotros — hay que añadirlos manualmente aquí.
+  //
+  // Si añades nuevos miembros del equipo de ventas, edita este array.
+  const TEAM_COHOSTS: { email: string; name: string }[] = [
+    { email: "fisiofitteam@fisiofitteam.com", name: "Ales Faus (FisioFit)" },
+    { email: "miguelcastro@fisiofitteam.com", name: "Miguel Castro (FisioFit)" },
+  ];
+
+  // El attendee principal (el lead). Asegurar que no duplicamos si el lead
+  // por casualidad usara alguno de los emails del equipo.
+  const leadEmailLower = params.attendeeEmail.trim().toLowerCase();
+  const cohostsFiltered = TEAM_COHOSTS.filter(
+    (c) => c.email.toLowerCase() !== leadEmailLower
+  );
+
+  const attendees = [
+    { email: params.attendeeEmail, displayName: params.attendeeName },
+    ...cohostsFiltered.map((c) => ({ email: c.email, displayName: c.name })),
+  ];
+
   const body = {
     summary: params.title,
     description: params.description || "",
     start: { dateTime: params.startISO, timeZone: tz },
     end: { dateTime: params.endISO, timeZone: tz },
-    attendees: [
-      { email: params.attendeeEmail, displayName: params.attendeeName },
-    ],
+    attendees,
     conferenceData: {
       createRequest: {
         requestId: `fisiofit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,

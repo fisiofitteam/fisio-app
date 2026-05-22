@@ -75,6 +75,8 @@ export function AgendaLanding() {
   // Booking
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  // Errores por campo (clave del campo → mensaje de error)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Huso horario del usuario (calculado en cliente)
   const [userTz, setUserTz] = useState<string | null>(null);
@@ -83,16 +85,46 @@ export function AgendaLanding() {
   }, []);
   const isUserInMadrid = userTz === "Europe/Madrid";
 
-  function step1Valid(): boolean {
-    return (
-      fullName.trim().length >= 2 &&
-      /^\S+@\S+\.\S+$/.test(email.trim()) &&
-      phone.trim().length >= 6 &&
-      motivo.trim().length >= 10 &&
-      tratamientosPrevios.trim().length >= 5 &&
-      impactoCrossfit.trim().length >= 5
-    );
+  /**
+   * Valida los campos del paso 1 y devuelve un objeto con los errores
+   * encontrados (clave → mensaje). Vacío si todo es válido.
+   */
+  function validateStep1(): Record<string, string> {
+    const errs: Record<string, string> = {};
+    if (fullName.trim().length < 2) {
+      errs.fullName = "Indícanos tu nombre y apellidos";
+    }
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
+      errs.email = "Introduce un email válido (ej. tu@email.com)";
+    }
+    if (phone.trim().length < 6) {
+      errs.phone = "Introduce un teléfono válido";
+    }
+    if (motivo.trim().length < 3) {
+      errs.motivo = "Cuéntanos brevemente tu lesión o molestia";
+    }
+    if (tratamientosPrevios.trim().length < 3) {
+      errs.tratamientosPrevios = "Indícanos qué has probado hasta ahora";
+    }
+    if (impactoCrossfit.trim().length < 3) {
+      errs.impactoCrossfit = "Indícanos cómo te afecta en tus entrenamientos";
+    }
+    return errs;
   }
+
+  // Limpia automáticamente el error de un campo cuando el usuario empieza a escribir bien
+  useEffect(() => {
+    if (Object.keys(fieldErrors).length === 0) return;
+    const fresh = validateStep1();
+    // Solo bajar errores que ya estaban marcados (no añadir nuevos hasta que pulsen el botón)
+    const cleaned: Record<string, string> = {};
+    for (const k of Object.keys(fieldErrors)) {
+      if (fresh[k]) cleaned[k] = fresh[k];
+    }
+    if (Object.keys(cleaned).length !== Object.keys(fieldErrors).length) {
+      setFieldErrors(cleaned);
+    }
+  }, [fullName, email, phone, motivo, tratamientosPrevios, impactoCrossfit]);
 
   async function loadSlots() {
     setLoadingSlots(true);
@@ -119,10 +151,30 @@ export function AgendaLanding() {
   }, [step]);
 
   function goStep2() {
-    if (!step1Valid()) {
-      setError("Por favor revisa los campos. Todos son obligatorios.");
+    const errs = validateStep1();
+    if (Object.keys(errs).length > 0) {
+      setFieldErrors(errs);
+      // Resumen amigable arriba
+      const count = Object.keys(errs).length;
+      setError(
+        count === 1
+          ? "Hay 1 campo por completar. Lo hemos marcado en rojo."
+          : `Hay ${count} campos por completar. Los hemos marcado en rojo.`
+      );
+      // Scroll al primer campo con error
+      setTimeout(() => {
+        const firstKey = Object.keys(errs)[0];
+        const el = document.querySelector(`[data-field="${firstKey}"]`) as HTMLElement | null;
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          // Foco para que el usuario pueda escribir directamente
+          const input = el.querySelector("input, textarea") as HTMLElement | null;
+          input?.focus();
+        }
+      }, 50);
       return;
     }
+    setFieldErrors({});
     setError("");
     setStep(2);
   }
@@ -235,110 +287,152 @@ export function AgendaLanding() {
 
           {step === 1 && (
             <div className="space-y-4">
-              <div>
+              <div data-field="fullName">
                 <label className="text-xs block mb-1.5" style={{ color: "#A3A3A3" }}>
                   Nombre y apellidos *
                 </label>
                 <input
                   type="text"
                   className="w-full px-3 py-2.5 rounded-lg text-sm"
-                  style={{ background: "#1F1F1F", border: "1px solid #404040", color: "#FAFAFA" }}
+                  style={{
+                    background: "#1F1F1F",
+                    border: `1px solid ${fieldErrors.fullName ? "#DC2626" : "#404040"}`,
+                    color: "#FAFAFA",
+                  }}
                   placeholder="Ej. Carlos Martínez"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                 />
+                {fieldErrors.fullName && (
+                  <p className="text-xs mt-1" style={{ color: "#FCA5A5" }}>{fieldErrors.fullName}</p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
+                <div data-field="email">
                   <label className="text-xs block mb-1.5" style={{ color: "#A3A3A3" }}>
                     Email *
                   </label>
                   <input
                     type="email"
                     className="w-full px-3 py-2.5 rounded-lg text-sm"
-                    style={{ background: "#1F1F1F", border: "1px solid #404040", color: "#FAFAFA" }}
+                    style={{
+                      background: "#1F1F1F",
+                      border: `1px solid ${fieldErrors.email ? "#DC2626" : "#404040"}`,
+                      color: "#FAFAFA",
+                    }}
                     placeholder="tu@email.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                   />
+                  {fieldErrors.email && (
+                    <p className="text-xs mt-1" style={{ color: "#FCA5A5" }}>{fieldErrors.email}</p>
+                  )}
                 </div>
-                <div>
+                <div data-field="phone">
                   <label className="text-xs block mb-1.5" style={{ color: "#A3A3A3" }}>
                     Teléfono *
                   </label>
                   <input
                     type="tel"
                     className="w-full px-3 py-2.5 rounded-lg text-sm"
-                    style={{ background: "#1F1F1F", border: "1px solid #404040", color: "#FAFAFA" }}
+                    style={{
+                      background: "#1F1F1F",
+                      border: `1px solid ${fieldErrors.phone ? "#DC2626" : "#404040"}`,
+                      color: "#FAFAFA",
+                    }}
                     placeholder="+34 600 000 000"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                   />
+                  {fieldErrors.phone && (
+                    <p className="text-xs mt-1" style={{ color: "#FCA5A5" }}>{fieldErrors.phone}</p>
+                  )}
                 </div>
               </div>
 
-              <div>
+              <div data-field="motivo">
                 <label className="text-xs block mb-1.5" style={{ color: "#A3A3A3" }}>
                   ¿Qué te trae aquí? Cuéntanos tu lesión/molestia *
                 </label>
                 <textarea
                   rows={3}
                   className="w-full px-3 py-2.5 rounded-lg text-sm"
-                  style={{ background: "#1F1F1F", border: "1px solid #404040", color: "#FAFAFA" }}
+                  style={{
+                    background: "#1F1F1F",
+                    border: `1px solid ${fieldErrors.motivo ? "#DC2626" : "#404040"}`,
+                    color: "#FAFAFA",
+                  }}
                   placeholder="Ej. Llevo 3 meses con dolor de hombro al hacer snatches…"
                   value={motivo}
                   onChange={(e) => setMotivo(e.target.value)}
                 />
+                {fieldErrors.motivo && (
+                  <p className="text-xs mt-1" style={{ color: "#FCA5A5" }}>{fieldErrors.motivo}</p>
+                )}
               </div>
 
-              <div>
+              <div data-field="tratamientosPrevios">
                 <label className="text-xs block mb-1.5" style={{ color: "#A3A3A3" }}>
                   ¿Qué tratamientos has probado antes? *
                 </label>
                 <textarea
                   rows={2}
                   className="w-full px-3 py-2.5 rounded-lg text-sm"
-                  style={{ background: "#1F1F1F", border: "1px solid #404040", color: "#FAFAFA" }}
+                  style={{
+                    background: "#1F1F1F",
+                    border: `1px solid ${fieldErrors.tratamientosPrevios ? "#DC2626" : "#404040"}`,
+                    color: "#FAFAFA",
+                  }}
                   placeholder="Ej. Fisio durante 2 meses, descanso, antiinflamatorios…"
                   value={tratamientosPrevios}
                   onChange={(e) => setTratamientosPrevios(e.target.value)}
                 />
+                {fieldErrors.tratamientosPrevios && (
+                  <p className="text-xs mt-1" style={{ color: "#FCA5A5" }}>{fieldErrors.tratamientosPrevios}</p>
+                )}
               </div>
 
-              <div>
+              <div data-field="impactoCrossfit">
                 <label className="text-xs block mb-1.5" style={{ color: "#A3A3A3" }}>
                   ¿Cómo te afecta en tu CrossFit? *
                 </label>
                 <textarea
                   rows={2}
                   className="w-full px-3 py-2.5 rounded-lg text-sm"
-                  style={{ background: "#1F1F1F", border: "1px solid #404040", color: "#FAFAFA" }}
+                  style={{
+                    background: "#1F1F1F",
+                    border: `1px solid ${fieldErrors.impactoCrossfit ? "#DC2626" : "#404040"}`,
+                    color: "#FAFAFA",
+                  }}
                   placeholder="Ej. No puedo hacer movimientos por encima de la cabeza, pierdo entrenos…"
                   value={impactoCrossfit}
                   onChange={(e) => setImpactoCrossfit(e.target.value)}
                 />
+                {fieldErrors.impactoCrossfit && (
+                  <p className="text-xs mt-1" style={{ color: "#FCA5A5" }}>{fieldErrors.impactoCrossfit}</p>
+                )}
               </div>
 
               {error && (
                 <div
-                  className="rounded-lg px-3 py-2 text-sm"
+                  className="rounded-lg px-3 py-2 text-sm flex items-start gap-2"
                   style={{ background: "rgba(248, 113, 113, 0.1)", border: "1px solid #7F1D1D", color: "#FCA5A5" }}
                 >
-                  {error}
+                  <span className="flex-shrink-0">⚠️</span>
+                  <span>{error}</span>
                 </div>
               )}
 
               <button
                 onClick={goStep2}
-                disabled={!step1Valid()}
                 className="w-full text-sm font-semibold rounded-lg"
                 style={{
-                  background: step1Valid() ? "#FAFAFA" : "#404040",
-                  color: step1Valid() ? "#0A0A0A" : "#737373",
+                  background: "#FAFAFA",
+                  color: "#0A0A0A",
                   padding: 14,
                   border: "none",
-                  cursor: step1Valid() ? "pointer" : "not-allowed",
+                  cursor: "pointer",
                 }}
               >
                 Siguiente · Elegir hueco →

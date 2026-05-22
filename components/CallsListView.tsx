@@ -343,10 +343,44 @@ function CallRow({
               }
               return null;
             })()}
-            <span className="text-xs text-neutral-500">
-              {CONTACT_ICON[lead.contactType] ?? "·"} {lead.contactValue}
-            </span>
           </div>
+
+          {/* Datos de contacto: email + teléfono en líneas separadas */}
+          {(lead.email || lead.phone) ? (
+            <div className="mt-1 space-y-0.5">
+              {lead.phone && (
+                <div className="text-xs text-neutral-600 flex items-center gap-1.5">
+                  <span>📞</span>
+                  <a
+                    href={`https://wa.me/${lead.phone.replace(/[^0-9+]/g, "")}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="hover:underline tabular-nums"
+                  >
+                    {lead.phone}
+                  </a>
+                </div>
+              )}
+              {lead.email && (
+                <div className="text-xs text-neutral-600 flex items-center gap-1.5">
+                  <span>✉️</span>
+                  <a
+                    href={`mailto:${lead.email}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="hover:underline truncate"
+                  >
+                    {lead.email}
+                  </a>
+                </div>
+              )}
+            </div>
+          ) : (
+            // Fallback: si no hay email ni teléfono (lead manual antiguo), usar contactType+contactValue
+            <div className="text-xs text-neutral-500 mt-1">
+              {CONTACT_ICON[lead.contactType] ?? "·"} {lead.contactValue}
+            </div>
+          )}
           {lead.motivo && (
             <p className="text-xs text-neutral-700 mt-1 line-clamp-2">
               <strong>Motivo:</strong> {lead.motivo}
