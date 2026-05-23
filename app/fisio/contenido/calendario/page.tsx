@@ -36,7 +36,7 @@ export default async function CalendarPage({
       orderBy: [{ year: "desc" }, { weekNumber: "desc" }],
       include: {
         pieces: {
-          select: { id: true, dayOfWeek: true, format: true, status: true, scheduledAt: true, hook: true },
+          select: { id: true, dayOfWeek: true, format: true, title: true, status: true, scheduledAt: true, hook: true },
           orderBy: { dayOfWeek: "asc" },
         },
       },
@@ -72,6 +72,7 @@ export default async function CalendarPage({
             id: p.id,
             dayOfWeek: p.dayOfWeek,
             format: p.format,
+            title: p.title,
             status: p.status,
             scheduledAt: p.scheduledAt?.toISOString() ?? null,
             hook: p.hook,

@@ -15,6 +15,7 @@ type Piece = {
   id: string;
   dayOfWeek: number;
   format: string;
+  title: string | null;
   status: string;
   scheduledAt: string | null;
   hook: string | null;
@@ -344,7 +345,7 @@ function MonthGrid({
                     <div className="space-y-1">
                       {dayPieces.map((dp) => {
                         const tpl = FORMAT_TEMPLATES[dp.piece.format as FormatKey];
-                        const label = dp.piece.hook?.trim() || tpl?.goal || tpl?.label || "Pieza";
+                        const label = dp.piece.title?.trim() || dp.piece.hook?.trim() || tpl?.label || "Pieza";
                         const statusIcon = dp.piece.status === "published" ? " ✓" : dp.piece.status === "scheduled" ? " 📅" : "";
                         return (
                           <Link

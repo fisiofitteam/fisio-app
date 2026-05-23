@@ -17,6 +17,7 @@ type Piece = {
   id: string;
   dayOfWeek: number;
   format: string;
+  title: string | null;
   status: string;
   scheduledAt: string | null;
   hook: string | null;
@@ -368,7 +369,7 @@ function PieceCard({ piece, weekId }: { piece: Piece; weekId: string }) {
           <div className="text-[10px] uppercase text-neutral-500 font-medium tracking-wide">
             {dayLabel}
           </div>
-          <div className="font-semibold text-sm mt-0.5">{tpl?.label ?? piece.format}</div>
+          <div className="font-semibold text-sm mt-0.5">{piece.title || tpl?.label || piece.format}</div>
         </div>
         {statusMeta && (
           <span className={`text-[10px] uppercase font-medium px-2 py-0.5 rounded-full border ${STATUS_COLORS[statusMeta.color]} whitespace-nowrap`}>
