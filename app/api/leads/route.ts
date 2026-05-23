@@ -97,11 +97,42 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const user = await getActiveProfessional();
-  if (!user || (user.role !== "setter" && !user.isManager)) {
+  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // Setter, closer y CEO/head_success pueden borrar
+  if (user.role !== "setter" && user.role !== "closer" && !user.isManager) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "missing id" }, { status: 400 });
-  await prisma.lead.delete({ where: { id } });
+
+  const lead = await prisma.lead.findUnique({
+    where: { id },
+    include: { sales: { select: { id: true, status: true } } },
+  });
+  if (!lead) return NextResponse.json({ error: "Lead no encontrado" }, { status: 404 });
+
+  // Protección 1: si ya hay un paciente asociado, no se puede borrar
+  if (lead.patientId) {
+    return NextResponse.json(
+      { error: "Este lead ya se convirtió en paciente. No se puede borrar." },
+      { status: 409 }
+    );
+  }
+  // Protección 2: si hay algún Sale paid, no se puede borrar
+  if (lead.sales.some((s) => s.status === "paid")) {
+    return NextResponse.json(
+      { error: "Este lead tiene un pago confirmado en Stripe. No se puede borrar." },
+      { status: 409 }
+    );
+  }
+
+  // Borrado en cascada: notificaciones + sales + lead, todo en una transacción
+  await prisma.$transaction([
+    prisma.teamNotification.deleteMany({ where: { leadId: id } }),
+    prisma.sale.deleteMany({ where: { leadId: id } }),
+    prisma.lead.delete({ where: { id } }),
+  ]);
+
   return NextResponse.json({ ok: true });
 }

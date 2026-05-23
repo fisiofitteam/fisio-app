@@ -711,15 +711,32 @@ function CallEditModal({
             )}
           </div>
 
-          <div className="flex justify-end gap-2 pt-2">
-            {status !== "lost" && !lead.convertedPatient && (
-              <button onClick={() => onConvert(lead)} className="btn btn-accent text-sm">
-                💳 Generar link de pago
-              </button>
-            )}
-            <button onClick={save} disabled={saving} className="btn btn-primary text-sm">
-              {saving ? "Guardando..." : "Guardar"}
+          <div className="flex justify-between items-center gap-2 pt-2">
+            <button
+              onClick={async () => {
+                if (!window.confirm(`¿Seguro que quieres borrar el lead "${lead.fullName}"? Esta acción no se puede deshacer.`)) return;
+                const res = await fetch(`/api/leads?id=${lead.id}`, { method: "DELETE" });
+                if (res.ok) {
+                  onSaved();
+                } else {
+                  const data = await res.json().catch(() => ({}));
+                  alert(data.error || "No se pudo borrar el lead");
+                }
+              }}
+              className="text-xs text-red-600 hover:underline"
+            >
+              🗑️ Borrar lead
             </button>
+            <div className="flex gap-2">
+              {status !== "lost" && !lead.convertedPatient && (
+                <button onClick={() => onConvert(lead)} className="btn btn-accent text-sm">
+                  💳 Generar link de pago
+                </button>
+              )}
+              <button onClick={save} disabled={saving} className="btn btn-primary text-sm">
+                {saving ? "Guardando..." : "Guardar"}
+              </button>
+            </div>
           </div>
         </div>
       </div>
