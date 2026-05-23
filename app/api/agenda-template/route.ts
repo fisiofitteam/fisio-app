@@ -56,6 +56,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Formato HH:MM" }, { status: 400 });
   }
 
+  // Validar que end > start
+  const [sH, sM] = startTime.split(":").map((n: string) => parseInt(n, 10));
+  const [eH, eM] = endTime.split(":").map((n: string) => parseInt(n, 10));
+  if (eH * 60 + eM <= sH * 60 + sM) {
+    return NextResponse.json({ error: "La hora de fin debe ser posterior a la de inicio" }, { status: 400 });
+  }
+
   // Si llega slotDurationMinutes, aplicarlo. Si no, heredar el de la franja
   // más reciente de la plantilla (es global).
   let duration = slotDurationMinutes;

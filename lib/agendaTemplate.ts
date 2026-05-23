@@ -211,11 +211,22 @@ export function madridDateAt(year: number, month: number, day: number, hour: num
 }
 
 /**
- * Lunes 00:00 Madrid de la semana que contiene la fecha dada.
+ * Lunes 00:00 UTC de la semana que contiene la fecha dada (calculado en
+ * hora Madrid).
+ *
+ * IMPORTANTE: devolvemos siempre 00:00 UTC para que la representación en BD
+ * sea consistente y único entre semanas. Aunque la "semana" se determina por
+ * el día de la semana en Madrid, el timestamp que guardamos es UTC limpio
+ * (sin offset DST).
  */
 export function weekStartOf(date: Date): Date {
   const ymd = madridYMD(date);
   const dow = madridDayOfWeek(madridDateAt(ymd.year, ymd.month, ymd.day, 12, 0));
-  const today = madridDateAt(ymd.year, ymd.month, ymd.day, 0, 0);
-  return new Date(today.getTime() - (dow - 1) * 86400 * 1000);
+  // Calcular qué día del mes es el lunes de la semana actual (en Madrid)
+  const todayMadrid = madridDateAt(ymd.year, ymd.month, ymd.day, 0, 0);
+  const mondayMadrid = new Date(todayMadrid.getTime() - (dow - 1) * 86400 * 1000);
+
+  // Normalizar a "lunes 00:00 UTC" usando los componentes Y-M-D Madrid del lunes
+  const mondayYMD = madridYMD(mondayMadrid);
+  return new Date(Date.UTC(mondayYMD.year, mondayYMD.month - 1, mondayYMD.day, 0, 0, 0, 0));
 }

@@ -27,6 +27,19 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
   if (closerId !== undefined) data.closerId = closerId;
 
+  // Si se cambia startTime o endTime, validar que la nueva combinación es válida
+  if (startTime !== undefined || endTime !== undefined) {
+    const current = await prisma.defaultClosingShift.findUnique({ where: { id: params.id } });
+    if (!current) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const newStart = startTime ?? current.startTime;
+    const newEnd = endTime ?? current.endTime;
+    const [sH, sM] = newStart.split(":").map((n: string) => parseInt(n, 10));
+    const [eH, eM] = newEnd.split(":").map((n: string) => parseInt(n, 10));
+    if (eH * 60 + eM <= sH * 60 + sM) {
+      return NextResponse.json({ error: "La hora de fin debe ser posterior a la de inicio" }, { status: 400 });
+    }
+  }
+
   await prisma.defaultClosingShift.update({ where: { id: params.id }, data });
   return NextResponse.json({ ok: true });
 }
