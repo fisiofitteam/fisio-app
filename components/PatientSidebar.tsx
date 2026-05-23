@@ -29,6 +29,12 @@ const SECTIONS = [
     desc: "Datos, diagnóstico, perfil",
   },
   {
+    id: "suscripcion",
+    label: "Suscripción",
+    icon: "💳",
+    desc: "Pago, programa, pausas",
+  },
+  {
     id: "formularios",
     label: "Formularios",
     icon: "📝",

@@ -3,9 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PROGRAM_TYPES, DIFFICULTIES, PROGRAM_LABELS, DIFFICULTY_LABELS } from "./PatientPills";
-import { ProgramPausesBlock } from "./ProgramPausesBlock";
 import { RollingAssignmentBlock } from "./RollingAssignmentBlock";
-import { SubscriptionPeriodsBlock } from "./SubscriptionPeriodsBlock";
 
 type Patient = {
   id: string;
@@ -184,11 +182,9 @@ export function ClinicalFile({ patient, isManager }: { patient: Patient; isManag
         </div>
       </section>
 
+      {/* Asignación del programa rolling (queda en ficha clínica porque es decisión clínica, no comercial) */}
       <section className="card space-y-3">
-        <h2 className="font-medium">Suscripción</h2>
-
-        <SubscriptionPeriodsBlock patientId={patient.id} isManager={isManager} />
-
+        <h2 className="font-medium">Programa rolling</h2>
         <RollingAssignmentBlock
           patientId={patient.id}
           programType={patient.programType}
@@ -198,7 +194,6 @@ export function ClinicalFile({ patient, isManager }: { patient: Patient; isManag
           currentTrainingId={patient.rollingTrainingId}
           isManager={isManager}
         />
-        <ProgramPausesBlock patientId={patient.id} programMode={patient.programMode} />
       </section>
 
       <div className="flex justify-end items-center gap-3">

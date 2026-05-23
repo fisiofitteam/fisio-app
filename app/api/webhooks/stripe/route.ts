@@ -163,6 +163,20 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       },
     });
 
+    // Crear Transaction de ingreso por nueva alta
+    // Importe en euros (Transaction.amount es Float en €, Sale.amountCents en céntimos)
+    await tx.transaction.create({
+      data: {
+        type: "income_new",
+        category: `${sale.programType} ${sale.durationMonths}M`,
+        amount: sale.amountCents / 100,
+        description: `Pago vía Stripe · ${sale.programType} ${sale.durationMonths} meses · ${paymentMethod || "card"}`,
+        occurredAt: now,
+        patientId: patient.id,
+        professionalId: sale.closerId,
+      },
+    });
+
     // Update Lead: marcar como won si no lo está ya
     if (sale.lead.status !== "won") {
       await tx.lead.update({
