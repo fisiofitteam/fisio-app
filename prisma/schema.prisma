@@ -103,6 +103,7 @@ model Professional {
   sessions          Session[]
   leaves            ProfessionalLeave[]
   closingShifts     ClosingShift[]       @relation("ClosingShifts")
+  defaultShifts     DefaultClosingShift[]
 }
 
 // ============================================================================
@@ -1181,4 +1182,74 @@ model TeamNotification {
   @@index([targetRole, readAt])
   @@index([targetProfessionalId, readAt])
   @@index([leadId])
+}
+
+// ============================================================================
+// PLANTILLA POR DEFECTO DEL CALENDARIO DE LLAMADAS
+// ============================================================================
+// Plantilla que se aplica a TODAS las semanas a menos que la semana concreta
+// tenga overrides (ver WeekOverride más abajo).
+//
+// La landing pública /agenda usa esta plantilla (o los overrides) como
+// fuente de verdad para los slots disponibles.
+//
+// Las franjas son en HORA DE MADRID. Ejemplo: L 18-20 = Alba.
+// ============================================================================
+
+model DefaultClosingShift {
+  id          String   @id @default(cuid())
+  dayOfWeek   Int                                          // 1=L, 2=M, ..., 7=D
+  startTime   String                                       // "HH:MM"
+  endTime     String                                       // "HH:MM"
+  closerId    String
+  closer      Professional @relation(fields: [closerId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([dayOfWeek])
+  @@index([closerId])
+}
+
+// ============================================================================
+// OVERRIDE DE SEMANA CONCRETA
+// ============================================================================
+// Indica si una semana usa la plantilla por defecto (default) o tiene franjas
+// personalizadas en ClosingShift.
+//
+// Cuando se edita una franja en una semana concreta, se crea automáticamente
+// un WeekOverride con useDefault=false y se copian las franjas actuales de
+// la plantilla a ClosingShift.
+// ============================================================================
+
+model WeekOverride {
+  id              String   @id @default(cuid())
+  weekStartDate   DateTime @unique                         // lunes 00:00 de esa semana
+  useDefault      Boolean  @default(true)                  // true=plantilla, false=overrides
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([weekStartDate])
+}
+
+// ============================================================================
+// BLOQUEOS PUNTUALES
+// ============================================================================
+// Días o franjas concretos bloqueados (vacaciones, indisposición, festivos...).
+// Pueden ser:
+//  - Día entero: blockedStartTime/blockedEndTime null
+//  - Franja concreta: blockedStartTime/blockedEndTime con HH:MM
+//
+// La landing los detecta y los descarta de los slots disponibles.
+// ============================================================================
+
+model AgendaBlock {
+  id                String    @id @default(cuid())
+  blockedDate       DateTime                                  // fecha bloqueada (YYYY-MM-DD a las 00:00 Madrid)
+  blockedStartTime  String?                                   // "HH:MM" o null (= todo el día)
+  blockedEndTime    String?                                   // "HH:MM" o null
+  reason            String?                                   // "Vacaciones", "Festivo", ...
+  createdBy         String?                                   // Professional.id que lo creó
+  createdAt         DateTime  @default(now())
+
+  @@index([blockedDate])
 }

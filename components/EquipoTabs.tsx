@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { InviteView } from "@/app/fisio/equipo/InviteView";
+import { AgendaScheduleView } from "./AgendaScheduleView";
 
 type TeamMember = {
   id: string;
@@ -123,7 +124,7 @@ export function EquipoTabs({
       )}
 
       {activeTab === "llamadas" && canSeeClosingShifts && (
-        <ClosingShiftsView team={team.filter((m) => m.active && ["ceo", "closer", "setter"].includes(m.role))} />
+        <AgendaScheduleView team={team.filter((m) => m.active && ["ceo", "closer", "setter"].includes(m.role))} />
       )}
 
       {activeTab === "calendario" && (
