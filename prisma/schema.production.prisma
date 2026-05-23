@@ -695,6 +695,30 @@ model MessageTemplate {
 // CONTENIDO PARA INSTAGRAM (planificación + ejecución + métricas)
 // ============================================================================
 
+// ============================================================================
+// PLANTILLA SEMANAL DE CONTENIDO
+// ============================================================================
+// Define el formato y bloques iniciales que se vuelcan al crear una semana
+// nueva con la opción "usar plantilla". Hay exactamente 7 filas, una por día
+// de la semana (1=Lunes, ..., 7=Domingo). Editable desde /fisio/contenido/plantilla.
+// ============================================================================
+
+model ContentTemplateDay {
+  id                String   @id @default(cuid())
+  dayOfWeek         Int      @unique             // 1=Lun ... 7=Dom
+  format            String                       // ver content-templates.ts: "belief_carousel" | "case_reel" | ...
+  goal              String   @default("")
+  ctaType           String   @default("")
+  defaultDmKeyword  String   @default("")
+
+  // JSON arrays
+  blocks            String   @default("[]")     // [{id, label, order}] sin "content"
+  storyChecklist    String   @default("[]")     // ["Story con...", "Caja de preguntas..."]
+
+  updatedAt         DateTime @updatedAt
+  updatedById       String?
+}
+
 model ContentWeek {
   id              String   @id @default(cuid())
   weekNumber      Int                                 // semana del año (1-53)
