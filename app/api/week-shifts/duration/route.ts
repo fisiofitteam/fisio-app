@@ -25,9 +25,13 @@ export async function PATCH(req: NextRequest) {
   }
 
   const ws = weekStartOf(new Date(week + "T12:00:00Z"));
+  const dayStart = new Date(ws);
+  dayStart.setUTCHours(0, 0, 0, 0);
+  const dayEnd = new Date(dayStart);
+  dayEnd.setUTCHours(23, 59, 59, 999);
 
   await prisma.closingShift.updateMany({
-    where: { weekStartDate: ws },
+    where: { weekStartDate: { gte: dayStart, lte: dayEnd } },
     data: { slotDurationMinutes },
   });
 

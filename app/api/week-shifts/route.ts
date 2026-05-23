@@ -21,7 +21,15 @@ export async function GET(req: NextRequest) {
   if (!weekParam) return NextResponse.json({ error: "?week=YYYY-MM-DD requerido" }, { status: 400 });
   const weekStart = weekStartOf(new Date(weekParam + "T12:00:00Z"));
 
-  const override = await prisma.weekOverride.findUnique({ where: { weekStartDate: weekStart } });
+  // Rango de día para búsqueda timezone-safe
+  const dayStart = new Date(weekStart);
+  dayStart.setUTCHours(0, 0, 0, 0);
+  const dayEnd = new Date(dayStart);
+  dayEnd.setUTCHours(23, 59, 59, 999);
+
+  const override = await prisma.weekOverride.findFirst({
+    where: { weekStartDate: { gte: dayStart, lte: dayEnd } },
+  });
   const usingDefault = !override || override.useDefault;
 
   let shifts;
@@ -42,7 +50,7 @@ export async function GET(req: NextRequest) {
     }));
   } else {
     const ws = await prisma.closingShift.findMany({
-      where: { weekStartDate: weekStart },
+      where: { weekStartDate: { gte: dayStart, lte: dayEnd } },
       orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
       include: { closer: { select: { id: true, fullName: true, role: true } } },
     });
@@ -77,9 +85,24 @@ export async function POST(req: NextRequest) {
   if (!week) return NextResponse.json({ error: "week requerido" }, { status: 400 });
   const weekStart = weekStartOf(new Date(week + "T12:00:00Z"));
 
-  // Clonar plantilla en ClosingShift para esta semana
-  const existing = await prisma.closingShift.findMany({ where: { weekStartDate: weekStart } });
-  if (existing.length === 0) {
+  // Rango de día para búsqueda timezone-safe
+  const dayStart = new Date(weekStart);
+  dayStart.setUTCHours(0, 0, 0, 0);
+  const dayEnd = new Date(dayStart);
+  dayEnd.setUTCHours(23, 59, 59, 999);
+
+  // Comprobar si la semana ya está marcada como personalizada
+  const existingOverride = await prisma.weekOverride.findFirst({
+    where: { weekStartDate: { gte: dayStart, lte: dayEnd } },
+  });
+  const wasAlreadyPersonalized = existingOverride && !existingOverride.useDefault;
+
+  // Si NO estaba personalizada (era plantilla), borrar cualquier shift huérfano
+  // que pudiera existir, y clonar la plantilla actual.
+  if (!wasAlreadyPersonalized) {
+    await prisma.closingShift.deleteMany({
+      where: { weekStartDate: { gte: dayStart, lte: dayEnd } },
+    });
     const defaults = await prisma.defaultClosingShift.findMany();
     if (defaults.length > 0) {
       await prisma.closingShift.createMany({
@@ -96,11 +119,16 @@ export async function POST(req: NextRequest) {
   }
 
   // Marcar la semana como personalizada
-  await prisma.weekOverride.upsert({
-    where: { weekStartDate: weekStart },
-    create: { weekStartDate: weekStart, useDefault: false },
-    update: { useDefault: false },
-  });
+  if (existingOverride) {
+    await prisma.weekOverride.update({
+      where: { id: existingOverride.id },
+      data: { useDefault: false, weekStartDate: weekStart },
+    });
+  } else {
+    await prisma.weekOverride.create({
+      data: { weekStartDate: weekStart, useDefault: false },
+    });
+  }
 
   return NextResponse.json({ ok: true });
 }
@@ -116,11 +144,19 @@ export async function DELETE(req: NextRequest) {
   if (!weekParam) return NextResponse.json({ error: "?week=YYYY-MM-DD requerido" }, { status: 400 });
   const weekStart = weekStartOf(new Date(weekParam + "T12:00:00Z"));
 
-  await prisma.closingShift.deleteMany({ where: { weekStartDate: weekStart } });
-  await prisma.weekOverride.upsert({
-    where: { weekStartDate: weekStart },
-    create: { weekStartDate: weekStart, useDefault: true },
-    update: { useDefault: true },
+  // Rango de día para búsqueda timezone-safe
+  const dayStart = new Date(weekStart);
+  dayStart.setUTCHours(0, 0, 0, 0);
+  const dayEnd = new Date(dayStart);
+  dayEnd.setUTCHours(23, 59, 59, 999);
+
+  // Borrar todos los ClosingShifts de esa semana
+  await prisma.closingShift.deleteMany({
+    where: { weekStartDate: { gte: dayStart, lte: dayEnd } },
+  });
+  // Borrar también el WeekOverride (estado limpio: sin override = usa plantilla)
+  await prisma.weekOverride.deleteMany({
+    where: { weekStartDate: { gte: dayStart, lte: dayEnd } },
   });
 
   return NextResponse.json({ ok: true });
