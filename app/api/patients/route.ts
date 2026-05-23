@@ -196,6 +196,13 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
+  // Coherencia: si cambian programType a algo distinto a ADVANCE, forzar fixed y limpiar rollings.
+  // Esto previene estados inconsistentes (ej. RECUPERA con programMode="rolling").
+  let forceFixedCleanup = false;
+  if (programType !== undefined && programType !== null && programType !== "ADVANCE") {
+    forceFixedCleanup = true;
+  }
+
   const updated = await prisma.patient.update({
     where: { id },
     data: {
@@ -231,6 +238,14 @@ export async function PATCH(req: NextRequest) {
       ...(rollingTrainingId !== undefined && { rollingTrainingId: rollingTrainingId || null }),
       // Si se cambia a fixed, limpiamos los tres rollings
       ...(programMode === "fixed" && {
+        rollingProgramId: null,
+        rollingAccessoriesId: null,
+        rollingTrainingId: null,
+      }),
+      // Si se cambia programType a uno no-ADVANCE, forzar fixed y limpiar rollings
+      // (gana sobre el bloque anterior si está activo)
+      ...(forceFixedCleanup && {
+        programMode: "fixed",
         rollingProgramId: null,
         rollingAccessoriesId: null,
         rollingTrainingId: null,
