@@ -7,6 +7,7 @@ type Tab = { key: string; label: string; href: string };
 const TABS: Tab[] = [
   { key: "this-week", label: "📍 Esta semana", href: "/fisio/contenido" },
   { key: "calendar", label: "📅 Calendario", href: "/fisio/contenido/calendario" },
+  { key: "template", label: "🧩 Plantilla", href: "/fisio/contenido/plantilla" },
   { key: "metrics", label: "📈 Métricas", href: "/fisio/contenido/metricas" },
   { key: "bank", label: "🗂 Banco recursos", href: "/fisio/contenido/banco" },
 ];
