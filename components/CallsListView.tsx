@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PaymentLinkModal } from "@/components/PaymentLinkModal";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -104,7 +105,7 @@ export function CallsListView({
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState<Lead | null>(null);
-  const [converting, setConverting] = useState<Lead | null>(null);
+  const [paymentLinkFor, setPaymentLinkFor] = useState<Lead | null>(null);
   const [creating, setCreating] = useState(false);
 
   function switchStatus(key: string) {
@@ -229,20 +230,15 @@ export function CallsListView({
           }}
           onConvert={(lead) => {
             setEditing(null);
-            setConverting(lead);
+            setPaymentLinkFor(lead);
           }}
         />
       )}
 
-      {converting && (
-        <ConvertModal
-          lead={converting}
-          fisios={fisios}
-          onClose={() => setConverting(null)}
-          onSaved={() => {
-            setConverting(null);
-            router.refresh();
-          }}
+      {paymentLinkFor && (
+        <PaymentLinkModal
+          lead={paymentLinkFor}
+          onClose={() => setPaymentLinkFor(null)}
         />
       )}
 
@@ -718,7 +714,7 @@ function CallEditModal({
           <div className="flex justify-end gap-2 pt-2">
             {status === "won" && !lead.convertedPatient && (
               <button onClick={() => onConvert(lead)} className="btn btn-accent text-sm">
-                🏆 Convertir en paciente
+                💳 Generar link de pago
               </button>
             )}
             <button onClick={save} disabled={saving} className="btn btn-primary text-sm">
@@ -789,7 +785,7 @@ function ConvertModal({
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl max-w-md w-full p-4 max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-1">
-          <h3 className="font-medium">🏆 Convertir en paciente</h3>
+          <h3 className="font-medium">💳 Generar link de pago</h3>
           <button onClick={onClose} className="text-neutral-400 text-xl">✕</button>
         </div>
         <p className="text-xs text-neutral-500 mb-4">{lead.fullName} se dará de alta como paciente.</p>
