@@ -43,8 +43,22 @@ export default async function PatientSuscripcionTab({ params }: { params: { id: 
     include: { professional: { select: { id: true, fullName: true } } },
   });
 
+  // Métricas (solo se muestran al CEO en SubscriptionView, las calculamos siempre por simplicidad)
+  const renewals = await prisma.subscriptionRenewal.findMany({
+    where: { patientId: patient.id },
+    select: { periodMonths: true, amountPaid: true },
+  });
+  const incomeTransactions = transactions.filter((t) => t.type.startsWith("income"));
+  const metrics = {
+    totalMonths: renewals.reduce((acc, r) => acc + (r.periodMonths || 0), 0),
+    lifetimeValue: incomeTransactions.reduce((acc, t) => acc + t.amount, 0),
+    renewalsCount: Math.max(0, renewals.length - 1),
+  };
+
   return (
     <SubscriptionView
+      isCeo={user.role === "ceo"}
+      metrics={metrics}
       isManager={user.isManager}
       patient={{
         id: patient.id,

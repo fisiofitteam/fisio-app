@@ -73,52 +73,40 @@ const TX_TYPE_LABEL: Record<string, string> = {
   expense: "Gasto",
 };
 
+type Metrics = {
+  totalMonths: number;
+  lifetimeValue: number;
+  renewalsCount: number;
+};
+
 export function SubscriptionView({
   patient,
   sale,
   transactions,
   isManager,
+  isCeo,
+  metrics,
 }: {
   patient: Patient;
   sale: Sale | null;
   transactions: Transaction[];
   isManager: boolean;
+  isCeo: boolean;
+  metrics: Metrics;
 }) {
   return (
     <div className="space-y-4">
-      {/* Bloque 1: Datos del pago (Sale Stripe) */}
-      <section className="card space-y-3">
-        <h2 className="font-medium">💳 Datos del pago</h2>
-
-        {!sale ? (
-          <p className="text-sm text-neutral-500 italic">
-            Este paciente no tiene un pago vinculado a Stripe. Probablemente fue dado de alta manualmente antes del sistema de pagos online.
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <Field label="Programa contratado" value={`${sale.programType} · ${sale.durationMonths} meses`} />
-            <Field label="Importe pagado" value={formatEuros(sale.amountCents, sale.currency)} strong />
-            <Field label="Método de pago" value={PAYMENT_METHOD_LABEL[sale.paymentMethod || ""] || sale.paymentMethod || "—"} />
-            <Field label="Fecha del pago" value={formatDateTime(sale.paidAt)} />
-            <Field label="Estado" value={
-              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                sale.status === "paid" ? "bg-emerald-100 text-emerald-800" :
-                sale.status === "refunded" ? "bg-red-100 text-red-800" :
-                sale.status === "failed" ? "bg-red-100 text-red-800" :
-                "bg-neutral-100 text-neutral-700"
-              }`}>{sale.status}</span>
-            } />
-            <Field label="Closer" value={sale.closer ? `${sale.closer.fullName}${sale.closer.role === "ceo" ? " (CEO)" : ""}` : "—"} />
-            {isManager && sale.stripePaymentIntentId && (
-              <div className="md:col-span-2">
-                <Field label="ID Stripe" value={
-                  <span className="font-mono text-xs text-neutral-600 break-all">{sale.stripePaymentIntentId}</span>
-                } />
-              </div>
-            )}
+      {/* Cuadro de KPIs (solo CEO) */}
+      {isCeo && (
+        <section className="card">
+          <h2 className="font-medium mb-3">📊 KPIs del paciente</h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <KpiTile label="Meses contratados" value={`${metrics.totalMonths} ${metrics.totalMonths === 1 ? "mes" : "meses"}`} />
+            <KpiTile label="Life Time Value" value={formatAmount(metrics.lifetimeValue)} />
+            <KpiTile label="Nº de renovaciones" value={String(metrics.renewalsCount)} />
           </div>
-        )}
-      </section>
+        </section>
+      )}
 
       {/* Bloque 2: Programa actual (resumen del periodo vigente) */}
       <section className="card space-y-3">
@@ -183,6 +171,15 @@ export function SubscriptionView({
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+function KpiTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="bg-neutral-50 rounded-lg p-3">
+      <div className="text-[11px] text-neutral-500 uppercase tracking-wide">{label}</div>
+      <div className="text-lg font-semibold text-neutral-900 mt-1">{value}</div>
     </div>
   );
 }
