@@ -45,15 +45,21 @@ export async function getDefaultSlotDuration(): Promise<number> {
  * Si tiene override (useDefault=false), devuelve los ClosingShift de la semana.
  */
 export async function getShiftsForWeek(weekStartDate: Date): Promise<ResolvedShift[]> {
-  // Buscar override de la semana
-  const override = await prisma.weekOverride.findUnique({
-    where: { weekStartDate },
+  // Buscar override de la semana usando rango de día completo para evitar
+  // problemas de timezone entre Date guardados con distintos offsets.
+  const dayStart = new Date(weekStartDate);
+  dayStart.setUTCHours(0, 0, 0, 0);
+  const dayEnd = new Date(dayStart);
+  dayEnd.setUTCHours(23, 59, 59, 999);
+
+  const override = await prisma.weekOverride.findFirst({
+    where: { weekStartDate: { gte: dayStart, lte: dayEnd } },
   });
 
   if (override && !override.useDefault) {
-    // Semana personalizada → ClosingShift
+    // Semana personalizada → ClosingShift de esta semana
     const shifts = await prisma.closingShift.findMany({
-      where: { weekStartDate },
+      where: { weekStartDate: { gte: dayStart, lte: dayEnd } },
       orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
     });
     return shifts.map((s) => ({
