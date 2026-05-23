@@ -65,7 +65,15 @@ function formatWeekRange(weekStart: Date): string {
 }
 
 function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  // IMPORTANTE: NO usar d.toISOString().slice(0, 10) porque eso devuelve la
+  // fecha en UTC, lo que descoloca el día cuando d está en hora local con
+  // offset positivo (ej. Madrid CEST +2): un lunes 00:00 local = domingo 22:00 UTC,
+  // y toISOString.slice(0,10) devolvería domingo en vez de lunes.
+  // Usamos los componentes locales del Date para construir el YYYY-MM-DD.
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 // ============================================================================
