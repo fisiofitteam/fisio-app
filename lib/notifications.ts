@@ -144,3 +144,25 @@ export async function markLeadNotificationsRead(params: {
     data: { readAt: new Date() },
   });
 }
+
+/**
+ * Crea notificación dirigida a todos los head_success (Miguel y futuros).
+ * Mismo patrón que notifySetters.
+ */
+export async function notifyHeadSuccess(params: {
+  type: string;
+  title: string;
+  body: string;
+  actionUrl?: string;
+}): Promise<void> {
+  await prisma.teamNotification.create({
+    data: {
+      targetRole: "head_success",
+      targetProfessionalId: null,
+      type: params.type,
+      title: params.title,
+      body: params.body,
+      actionUrl: params.actionUrl,
+    },
+  });
+}
