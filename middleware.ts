@@ -12,6 +12,10 @@ const PUBLIC_PATHS = [
   "/api/auth/patient-verify",
   "/agenda",        // landing pública de reserva
   "/api/agenda",    // endpoints públicos slots + book
+  "/contratar",     // landing pública de contratación post-pago
+  "/pagar",         // página de gracias tras pago (/pagar/gracias)
+  "/api/sale",      // endpoints públicos del flujo de venta (status, checkout, create-account)
+  "/api/webhooks",  // webhooks externos (Stripe) — los llama Stripe sin cookie
 ];
 
 const STATIC_PREFIXES = ["/_next", "/api/_internal", "/favicon", "/icon-", "/box.jpg", "/manifest.json"];
