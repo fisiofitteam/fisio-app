@@ -120,9 +120,14 @@ export function SubscriptionView({
         )}
       </section>
 
-      {/* Bloque 2: Programa contratado (fechas + duración) */}
+      {/* Bloque 2: Programa actual (resumen del periodo vigente) */}
       <section className="card space-y-3">
-        <h2 className="font-medium">📅 Programa</h2>
+        <div>
+          <h2 className="font-medium">📅 Programa actual</h2>
+          <p className="text-[11px] text-neutral-500 mt-0.5">
+            Resumen del periodo vigente. Para histórico completo, ver "Periodos de suscripción" abajo.
+          </p>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
           <Field label="Programa" value={patient.programType || "—"} />
           <Field label="Duración contratada" value={patient.programDurationMonths ? `${patient.programDurationMonths} meses` : "—"} />

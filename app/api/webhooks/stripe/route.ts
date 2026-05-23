@@ -177,6 +177,22 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       },
     });
 
+    // Crear SubscriptionRenewal inicial (es el "Periodo 1" que verá Miguel en la pestaña Suscripción)
+    // En futuras renovaciones se crea uno nuevo desde el panel, no automáticamente
+    await tx.subscriptionRenewal.create({
+      data: {
+        patientId: patient.id,
+        programType: sale.programType,
+        periodMonths: sale.durationMonths,
+        startDate: patient.programStartDate ?? now,
+        endDate: patient.programEndDate ?? new Date(now.getTime() + sale.durationMonths * 30 * 86400000),
+        status: "active",
+        amountPaid: sale.amountCents / 100,
+        decidedAt: now,
+        notes: "Alta inicial (pago Stripe)",
+      },
+    });
+
     // Update Lead: marcar como won si no lo está ya
     if (sale.lead.status !== "won") {
       await tx.lead.update({
