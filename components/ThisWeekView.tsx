@@ -419,38 +419,23 @@ function NewWeekModal({
   const [centralTheme, setCentralTheme] = useState("");
   const [bodyZone, setBodyZone] = useState("mixta");
   const [weekType, setWeekType] = useState("educativa");
-  const [limitingBeliefs, setLimitingBeliefs] = useState(""); // separadas por enter
-  const [leadMagnetName, setLeadMagnetName] = useState("");
-  const [leadMagnetKeyword, setLeadMagnetKeyword] = useState("");
-  const [commercialTrigger, setCommercialTrigger] = useState("");
-  const [previousWeekConnection, setPreviousWeekConnection] = useState("");
-  const [nextWeekSetup, setNextWeekSetup] = useState("");
-  const [mixValue, setMixValue] = useState(50);
-  const [mixBeliefs, setMixBeliefs] = useState(30);
-  const [mixConversion, setMixConversion] = useState(20);
   const [kpiName, setKpiName] = useState("DMs con palabra clave");
   const [kpiTarget, setKpiTarget] = useState("");
+  const [useTemplate, setUseTemplate] = useState(true);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const mixSum = mixValue + mixBeliefs + mixConversion;
-  const mixValid = mixSum === 100;
-
   async function save() {
     setSaving(true);
     setError("");
-    const beliefsArr = limitingBeliefs.split("\n").map((s) => s.trim()).filter(Boolean);
     const res = await fetch("/api/content/weeks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         year, weekNumber, centralTheme, bodyZone, weekType,
-        limitingBeliefs: beliefsArr,
-        leadMagnetName, leadMagnetKeyword, commercialTrigger,
-        previousWeekConnection, nextWeekSetup,
-        mixValue, mixBeliefs, mixConversion,
         kpiName, kpiTarget: kpiTarget ? Number(kpiTarget) : null,
+        useTemplate,
       }),
     });
     if (res.ok) {
@@ -465,17 +450,17 @@ function NewWeekModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl max-w-2xl w-full p-5 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl max-w-lg w-full p-5 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-1">
           <h3 className="font-medium text-lg">Nueva semana de contenido</h3>
           <button onClick={onClose} className="text-neutral-400 text-xl">✕</button>
         </div>
         <p className="text-xs text-neutral-500 mb-4">
-          Define el briefing. El sistema generará automáticamente las 7 piezas con su estructura por defecto.
+          Define lo mínimo. El resto lo puedes editar luego desde la ficha de la semana.
         </p>
 
         <div className="space-y-4">
-          {/* Semana y fechas */}
+          {/* Año + semana */}
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-xs text-neutral-500 block mb-1">Año</label>
@@ -487,102 +472,68 @@ function NewWeekModal({
             </div>
           </div>
 
-          {/* Briefing principal */}
-          <div className="border-t border-neutral-100 pt-3">
-            <h4 className="text-xs uppercase text-neutral-500 font-medium mb-2">Briefing estratégico</h4>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs text-neutral-500 block mb-1">Tema central</label>
-                <input className="input text-sm" value={centralTheme} onChange={(e) => setCentralTheme(e.target.value)} placeholder="Ej: Impingement subacromial en CrossFitters" autoFocus />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs text-neutral-500 block mb-1">Zona corporal</label>
-                  <select className="input text-sm" value={bodyZone} onChange={(e) => setBodyZone(e.target.value)}>
-                    {BODY_ZONES.map((z) => <option key={z.value} value={z.value}>{z.label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-neutral-500 block mb-1">Tipo de semana</label>
-                  <select className="input text-sm" value={weekType} onChange={(e) => setWeekType(e.target.value)}>
-                    {WEEK_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-neutral-500 block mb-1">Creencias limitantes a derribar</label>
-                <textarea className="input text-sm" rows={3} value={limitingBeliefs} onChange={(e) => setLimitingBeliefs(e.target.value)} placeholder="Una por línea&#10;Ej: El descanso cura el dolor de hombro&#10;Hay que dejar de entrenar si duele" />
-              </div>
-            </div>
+          {/* Tema central */}
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Tema central</label>
+            <input className="input text-sm" value={centralTheme} onChange={(e) => setCentralTheme(e.target.value)} placeholder="Ej: Impingement subacromial en CrossFitters" autoFocus />
           </div>
 
-          {/* Lead magnet + comercial */}
-          <div className="border-t border-neutral-100 pt-3">
-            <h4 className="text-xs uppercase text-neutral-500 font-medium mb-2">Lead magnet y comercial</h4>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-xs text-neutral-500 block mb-1">Lead magnet</label>
-                <input className="input text-sm" value={leadMagnetName} onChange={(e) => setLeadMagnetName(e.target.value)} placeholder="Ej: Guía hombro CrossFit" />
-              </div>
-              <div>
-                <label className="text-xs text-neutral-500 block mb-1">Palabra clave DM</label>
-                <input className="input text-sm" value={leadMagnetKeyword} onChange={(e) => setLeadMagnetKeyword(e.target.value)} placeholder="Ej: HOMBRO" />
-              </div>
+          {/* Zona + tipo */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">Zona corporal</label>
+              <select className="input text-sm" value={bodyZone} onChange={(e) => setBodyZone(e.target.value)}>
+                {BODY_ZONES.map((z) => <option key={z.value} value={z.value}>{z.label}</option>)}
+              </select>
             </div>
-            <div className="mt-2">
-              <label className="text-xs text-neutral-500 block mb-1">Disparador comercial (opcional)</label>
-              <input className="input text-sm" value={commercialTrigger} onChange={(e) => setCommercialTrigger(e.target.value)} placeholder="Ej: Promoción 15% en programa Recupera" />
-            </div>
-          </div>
-
-          {/* Conexión */}
-          <div className="border-t border-neutral-100 pt-3">
-            <h4 className="text-xs uppercase text-neutral-500 font-medium mb-2">Continuidad</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              <div>
-                <label className="text-xs text-neutral-500 block mb-1">Conexión con semana anterior</label>
-                <textarea className="input text-sm" rows={2} value={previousWeekConnection} onChange={(e) => setPreviousWeekConnection(e.target.value)} />
-              </div>
-              <div>
-                <label className="text-xs text-neutral-500 block mb-1">Setup para próxima semana</label>
-                <textarea className="input text-sm" rows={2} value={nextWeekSetup} onChange={(e) => setNextWeekSetup(e.target.value)} />
-              </div>
-            </div>
-          </div>
-
-          {/* Mix objetivo */}
-          <div className="border-t border-neutral-100 pt-3">
-            <h4 className="text-xs uppercase text-neutral-500 font-medium mb-2">
-              Mix objetivo {!mixValid && <span className="text-red-600 normal-case font-normal">· debe sumar 100% (ahora {mixSum}%)</span>}
-            </h4>
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <label className="text-xs text-neutral-500 block mb-1">% Valor</label>
-                <input type="number" min="0" max="100" className="input text-sm" value={mixValue} onChange={(e) => setMixValue(Number(e.target.value))} />
-              </div>
-              <div>
-                <label className="text-xs text-neutral-500 block mb-1">% Creencias</label>
-                <input type="number" min="0" max="100" className="input text-sm" value={mixBeliefs} onChange={(e) => setMixBeliefs(Number(e.target.value))} />
-              </div>
-              <div>
-                <label className="text-xs text-neutral-500 block mb-1">% Conversión</label>
-                <input type="number" min="0" max="100" className="input text-sm" value={mixConversion} onChange={(e) => setMixConversion(Number(e.target.value))} />
-              </div>
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">Tipo de semana</label>
+              <select className="input text-sm" value={weekType} onChange={(e) => setWeekType(e.target.value)}>
+                {WEEK_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
             </div>
           </div>
 
           {/* KPI */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">KPI · Nombre</label>
+              <input className="input text-sm" value={kpiName} onChange={(e) => setKpiName(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">KPI · Objetivo</label>
+              <input type="number" step="any" className="input text-sm" value={kpiTarget} onChange={(e) => setKpiTarget(e.target.value)} placeholder="Ej: 25" />
+            </div>
+          </div>
+
+          {/* Selector plantilla vs vacía */}
           <div className="border-t border-neutral-100 pt-3">
-            <h4 className="text-xs uppercase text-neutral-500 font-medium mb-2">KPI principal</h4>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-xs text-neutral-500 block mb-1">Nombre</label>
-                <input className="input text-sm" value={kpiName} onChange={(e) => setKpiName(e.target.value)} />
-              </div>
-              <div>
-                <label className="text-xs text-neutral-500 block mb-1">Valor objetivo</label>
-                <input type="number" step="any" className="input text-sm" value={kpiTarget} onChange={(e) => setKpiTarget(e.target.value)} placeholder="Ej: 25" />
-              </div>
+            <label className="text-xs text-neutral-500 block mb-2">¿Cómo quieres generar las 7 piezas?</label>
+            <div className="grid grid-cols-1 gap-2">
+              <button
+                type="button"
+                onClick={() => setUseTemplate(true)}
+                className={`text-left px-4 py-3 rounded-lg border transition ${
+                  useTemplate ? "bg-neutral-900 text-white border-neutral-900" : "bg-white border-neutral-200 hover:border-neutral-400"
+                }`}
+              >
+                <div className="font-medium text-sm">🧩 Usar plantilla actual</div>
+                <div className={`text-xs mt-0.5 ${useTemplate ? "text-neutral-300" : "text-neutral-500"}`}>
+                  Cada día tendrá su formato y bloques predefinidos según la pestaña "Plantilla".
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setUseTemplate(false)}
+                className={`text-left px-4 py-3 rounded-lg border transition ${
+                  !useTemplate ? "bg-neutral-900 text-white border-neutral-900" : "bg-white border-neutral-200 hover:border-neutral-400"
+                }`}
+              >
+                <div className="font-medium text-sm">📝 Crear 7 piezas vacías</div>
+                <div className={`text-xs mt-0.5 ${!useTemplate ? "text-neutral-300" : "text-neutral-500"}`}>
+                  Tú decides formato y bloques de cada día desde cero.
+                </div>
+              </button>
             </div>
           </div>
 
@@ -590,8 +541,8 @@ function NewWeekModal({
 
           <div className="flex justify-end gap-2 pt-2 border-t border-neutral-100">
             <button onClick={onClose} className="text-sm text-neutral-500">Cancelar</button>
-            <button onClick={save} disabled={!mixValid || !centralTheme || saving} className="btn btn-primary text-sm">
-              {saving ? "Creando..." : "Crear semana + generar 7 piezas"}
+            <button onClick={save} disabled={!centralTheme || saving} className="btn btn-primary text-sm">
+              {saving ? "Creando..." : "Crear semana"}
             </button>
           </div>
         </div>
