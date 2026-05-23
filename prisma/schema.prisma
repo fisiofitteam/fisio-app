@@ -90,6 +90,10 @@ model Patient {
   // Estructura: { "anamnesis": false, "contract": false, "firstSession": false }
   onboardingTasks        Json?
 
+  // Hash de la contraseña (opcional - los pacientes antiguos siguen con login por código).
+  // Los pacientes creados desde el flujo de pago v57+ tienen contraseña.
+  passwordHash           String?
+
   adaptations     PatientAdaptation[]
   wodLogs         WodLog[]
   programAssignments ProgramAssignment[]

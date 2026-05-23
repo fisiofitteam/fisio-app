@@ -21,7 +21,7 @@ export type ActivePatient = {
 };
 
 export const SESSION_COOKIE = "fisio-session";
-export const SESSION_DAYS = 60;
+export const SESSION_DAYS = 90;
 
 // ============================================================================
 // PASSWORDS — hash con scrypt (sin dependencias externas, robusto)
@@ -156,8 +156,33 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     return null;
   }
 
-  // Actualizar lastUsedAt (no bloqueante)
-  prisma.session.update({ where: { id: session.id }, data: { lastUsedAt: new Date() } }).catch(() => {});
+  // Actualizar lastUsedAt + refrescar expiración rolling (no bloqueante).
+  // Si la sesión expira en menos de 30 días, la extendemos otros 90 días.
+  // Esto consigue el efecto "app siempre abierta" sin renovar en cada request
+  // (lo cual sería costoso).
+  const now = new Date();
+  const thirtyDaysFromNow = new Date(now.getTime() + 30 * 86400 * 1000);
+  if (session.expiresAt < thirtyDaysFromNow) {
+    prisma.session.update({
+      where: { id: session.id },
+      data: { lastUsedAt: now, expiresAt: expiryDate() },
+    }).catch(() => {});
+    // También refrescar cookie del navegador
+    try {
+      cookies().set(SESSION_COOKIE, token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: SESSION_DAYS * 24 * 60 * 60,
+      });
+    } catch {
+      // Algunas rutas (Server Components puros) no permiten set cookies aquí.
+      // Es OK, en la próxima Server Action o Route Handler se refrescará.
+    }
+  } else {
+    prisma.session.update({ where: { id: session.id }, data: { lastUsedAt: now } }).catch(() => {});
+  }
 
   if (session.professional && session.professional.active) {
     return { kind: "professional", pro: toActivePro(session.professional) };
