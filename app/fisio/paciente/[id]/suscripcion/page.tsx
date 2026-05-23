@@ -48,6 +48,17 @@ export default async function PatientSuscripcionTab({ params }: { params: { id: 
     where: { patientId: patient.id },
     select: { periodMonths: true, amountPaid: true },
   });
+
+  // Pausas activas o programadas: sumamos sus daysExtended a programEndDate
+  // para mostrar la fecha de fin REAL (la BD no la actualiza al crear pausas)
+  const activePauses = await prisma.programPause.findMany({
+    where: {
+      patientId: patient.id,
+      status: { in: ["scheduled", "active", "ended"] }, // todo lo que ya extiende o extenderá
+    },
+    select: { daysExtended: true },
+  });
+  const totalDaysExtended = activePauses.reduce((acc, p) => acc + (p.daysExtended || 0), 0);
   const incomeTransactions = transactions.filter((t) => t.type.startsWith("income"));
   const metrics = {
     totalMonths: renewals.reduce((acc, r) => acc + (r.periodMonths || 0), 0),
@@ -59,6 +70,7 @@ export default async function PatientSuscripcionTab({ params }: { params: { id: 
     <SubscriptionView
       isCeo={user.role === "ceo"}
       metrics={metrics}
+      totalDaysExtended={totalDaysExtended}
       isManager={user.isManager}
       patient={{
         id: patient.id,

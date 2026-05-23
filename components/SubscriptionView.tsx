@@ -86,6 +86,7 @@ export function SubscriptionView({
   isManager,
   isCeo,
   metrics,
+  totalDaysExtended,
 }: {
   patient: Patient;
   sale: Sale | null;
@@ -93,7 +94,17 @@ export function SubscriptionView({
   isManager: boolean;
   isCeo: boolean;
   metrics: Metrics;
+  totalDaysExtended: number;
 }) {
+  // Calcular la fecha de fin REAL del programa sumando los días de pausa
+  // a programEndDate. La BD no la actualiza al crear pausas, lo hacemos aquí.
+  const realProgramEndDate = (() => {
+    if (!patient.programEndDate) return null;
+    if (!totalDaysExtended) return patient.programEndDate;
+    const d = new Date(patient.programEndDate);
+    d.setDate(d.getDate() + totalDaysExtended);
+    return d.toISOString();
+  })();
   return (
     <div className="space-y-4">
       {/* Cuadro de KPIs (solo CEO) */}
@@ -120,7 +131,14 @@ export function SubscriptionView({
           <Field label="Programa" value={patient.programType || "—"} />
           <Field label="Duración contratada" value={patient.programDurationMonths ? `${patient.programDurationMonths} meses` : "—"} />
           <Field label="Inicio del programa" value={formatDate(patient.programStartDate)} />
-          <Field label="Fin previsto" value={formatDate(patient.programEndDate)} />
+          <Field label="Fin previsto" value={
+            <span>
+              {formatDate(realProgramEndDate)}
+              {totalDaysExtended > 0 && (
+                <span className="text-[11px] text-neutral-500 ml-1">(+{totalDaysExtended}d por pausas)</span>
+              )}
+            </span>
+          } />
         </div>
         <p className="text-[11px] text-neutral-500 italic">
           La fecha de fin se actualiza automáticamente si añades pausas que extiendan el programa.
