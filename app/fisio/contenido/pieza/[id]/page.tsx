@@ -36,6 +36,7 @@ export default async function PiecePage({ params }: { params: { id: string } }) 
         weekId: piece.weekId,
         dayOfWeek: piece.dayOfWeek,
         format: piece.format,
+        title: piece.title,
         goal: piece.goal,
         ctaType: piece.ctaType,
         dmKeyword: piece.dmKeyword,

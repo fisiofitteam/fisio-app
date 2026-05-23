@@ -24,6 +24,7 @@ type Piece = {
   weekId: string;
   dayOfWeek: number;
   format: string;
+  title: string | null;
   goal: string;
   ctaType: string;
   dmKeyword: string | null;
@@ -177,7 +178,21 @@ export function PieceEditor({
         <div className="flex justify-between items-start gap-3 flex-wrap">
           <div>
             <div className="flex items-baseline gap-3 flex-wrap">
-              <h1 className="text-xl font-semibold">{tpl?.label ?? piece.format}</h1>
+              <input
+                type="text"
+                className="text-xl font-semibold bg-transparent border-0 outline-none focus:bg-neutral-50 rounded px-1 -mx-1 min-w-0 flex-shrink"
+                style={{ width: `${Math.max((piece.title || tpl?.label || piece.format || "Sin título").length, 10)}ch` }}
+                value={piece.title ?? ""}
+                placeholder={tpl?.label ?? piece.format}
+                onChange={(e) => update("title", e.target.value)}
+                onBlur={(e) => {
+                  // Si se queda vacío, lo guardamos como null (volverá al fallback)
+                  if (e.target.value.trim() === "" && piece.title !== null) {
+                    update("title", null);
+                  }
+                }}
+              />
+              <span className="text-xs text-neutral-400 italic">({tpl?.label ?? piece.format})</span>
               <span className="text-sm text-neutral-500">{dayLabel}</span>
               {statusMeta && (
                 <span className={`text-[10px] uppercase font-medium px-2 py-0.5 rounded-full border ${STATUS_BADGE[statusMeta.color]}`}>

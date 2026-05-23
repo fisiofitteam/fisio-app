@@ -770,6 +770,7 @@ model ContentPiece {
 
   dayOfWeek       Int                                 // 1=Lun ... 7=Dom
   format          String                              // ver content-templates.ts: "belief_carousel" | "case_reel" | "value_carousel" | "value_reel" | "exercises_carousel" | "infographic" | "closing_reel"
+  title           String?                             // título libre editable; si null se muestra el label del formato
   goal            String                              // autopoblado por formato
   ctaType         String                              // autopoblado por formato
   dmKeyword       String?                             // palabra clave de DM si aplica
