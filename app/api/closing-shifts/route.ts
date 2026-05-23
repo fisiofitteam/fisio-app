@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { weekStart, dayOfWeek, startTime, endTime, closerId, notes } = body;
+  const { weekStart, dayOfWeek, startTime, endTime, closerId, notes, slotDurationMinutes } = body;
 
   if (!weekStart || !dayOfWeek || !startTime || !endTime || !closerId) {
     return NextResponse.json({ error: "Faltan datos" }, { status: 400 });
@@ -118,6 +118,11 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Validar duración si llega; si no, default 60
+  const duration = slotDurationMinutes && [30, 45, 60].includes(slotDurationMinutes)
+    ? slotDurationMinutes
+    : 60;
+
   const shift = await prisma.closingShift.create({
     data: {
       weekStartDate: ws,
@@ -126,6 +131,7 @@ export async function POST(req: NextRequest) {
       endTime,
       closerId,
       notes: notes?.trim() || null,
+      slotDurationMinutes: duration,
     },
   });
 

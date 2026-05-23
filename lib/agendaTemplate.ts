@@ -18,6 +18,7 @@ export type ResolvedShift = {
   startTime: string;
   endTime: string;
   closerId: string;
+  slotDurationMinutes: number;
 };
 
 export type AgendaBlockInfo = {
@@ -25,6 +26,18 @@ export type AgendaBlockInfo = {
   blockedStartTime: string | null;
   blockedEndTime: string | null;
 };
+
+/**
+ * Devuelve la duración global de los slots según la plantilla por defecto.
+ * Se calcula tomando la franja "más representativa" (la primera ordenada).
+ * En la UI tratamos la duración como global pero almacenamos por franja.
+ */
+export async function getDefaultSlotDuration(): Promise<number> {
+  const first = await prisma.defaultClosingShift.findFirst({
+    orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
+  });
+  return first?.slotDurationMinutes ?? 60;
+}
 
 /**
  * Devuelve las franjas de una semana concreta (lunes 00:00 Madrid → domingo 23:59).
@@ -48,6 +61,7 @@ export async function getShiftsForWeek(weekStartDate: Date): Promise<ResolvedShi
       startTime: s.startTime,
       endTime: s.endTime,
       closerId: s.closerId,
+      slotDurationMinutes: s.slotDurationMinutes,
     }));
   }
 
@@ -60,6 +74,7 @@ export async function getShiftsForWeek(weekStartDate: Date): Promise<ResolvedShi
     startTime: s.startTime,
     endTime: s.endTime,
     closerId: s.closerId,
+    slotDurationMinutes: s.slotDurationMinutes,
   }));
 }
 

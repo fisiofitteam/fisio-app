@@ -1128,6 +1128,10 @@ model ClosingShift {
   // Notas internas (opcional)
   notes           String?
 
+  // Duración del slot en minutos para esta semana (override de la duración
+  // global de la plantilla). Default 60.
+  slotDurationMinutes Int     @default(60)
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -1197,14 +1201,19 @@ model TeamNotification {
 // ============================================================================
 
 model DefaultClosingShift {
-  id          String   @id @default(cuid())
-  dayOfWeek   Int                                          // 1=L, 2=M, ..., 7=D
-  startTime   String                                       // "HH:MM"
-  endTime     String                                       // "HH:MM"
-  closerId    String
-  closer      Professional @relation(fields: [closerId], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                  String   @id @default(cuid())
+  dayOfWeek           Int                                          // 1=L, 2=M, ..., 7=D
+  startTime           String                                       // "HH:MM"
+  endTime             String                                       // "HH:MM"
+  closerId            String
+  closer              Professional @relation(fields: [closerId], references: [id])
+  // Duración del slot en minutos. Valor por defecto 60.
+  // Aunque es un campo por franja, en UI lo gestionamos como global (todas las
+  // franjas de la plantilla comparten el mismo valor). Almacenarlo aquí evita
+  // crear una tabla aparte de configuración.
+  slotDurationMinutes Int      @default(60)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   @@index([dayOfWeek])
   @@index([closerId])

@@ -30,7 +30,11 @@ export async function GET() {
       endTime: s.endTime,
       closerId: s.closerId,
       closer: s.closer,
+      slotDurationMinutes: s.slotDurationMinutes,
     })),
+    // La duración es "global" — devolvemos la de la primera franja como
+    // representativa, o 60 si la plantilla está vacía.
+    slotDurationMinutes: shifts[0]?.slotDurationMinutes ?? 60,
   });
 }
 
@@ -41,7 +45,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { dayOfWeek, startTime, endTime, closerId } = await req.json();
+  const { dayOfWeek, startTime, endTime, closerId, slotDurationMinutes } = await req.json();
   if (!dayOfWeek || !startTime || !endTime || !closerId) {
     return NextResponse.json({ error: "Faltan campos" }, { status: 400 });
   }
@@ -52,8 +56,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Formato HH:MM" }, { status: 400 });
   }
 
+  // Si llega slotDurationMinutes, aplicarlo. Si no, heredar el de la franja
+  // más reciente de la plantilla (es global).
+  let duration = slotDurationMinutes;
+  if (!duration) {
+    const ref = await prisma.defaultClosingShift.findFirst({
+      orderBy: [{ updatedAt: "desc" }],
+    });
+    duration = ref?.slotDurationMinutes ?? 60;
+  }
+  if (![30, 45, 60].includes(duration)) {
+    return NextResponse.json({ error: "Duración debe ser 30, 45 o 60" }, { status: 400 });
+  }
+
   const created = await prisma.defaultClosingShift.create({
-    data: { dayOfWeek, startTime, endTime, closerId },
+    data: { dayOfWeek, startTime, endTime, closerId, slotDurationMinutes: duration },
   });
 
   return NextResponse.json({ ok: true, id: created.id });

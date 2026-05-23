@@ -1,16 +1,15 @@
 /**
  * Cálculo de slots disponibles para reserva pública desde la landing.
  *
- * Lee la configuración de horarios desde la BD (plantilla + overrides + bloqueos)
- * y los cruza con eventos existentes en Google Calendar.
+ * Lee la configuración de horarios desde la BD (plantilla + overrides) y
+ * los cruza con eventos existentes en Google Calendar.
  *
+ * La duración del slot se toma de cada franja (slotDurationMinutes).
  * Todas las franjas están en HORA DE MADRID.
  */
 import { listEvents } from "@/lib/googleCalendar";
 import {
   getShiftsForDateRange,
-  getBlocksInRange,
-  isSlotBlocked,
   madridYMD,
   madridDayOfWeek,
   madridDateAt,
@@ -18,7 +17,6 @@ import {
   timeToMinutes,
 } from "@/lib/agendaTemplate";
 
-export const SLOT_DURATION_MINUTES = 60;
 export const MIN_HOURS_AHEAD = 24;
 export const MAX_DAYS_AHEAD = 20;
 
@@ -27,6 +25,7 @@ export type SlotInfo = {
   endISO: string;
   dayOfWeek: number;
   hhmm: string;
+  durationMinutes: number;
 };
 
 export async function getAvailableSlots(): Promise<SlotInfo[]> {
@@ -37,10 +36,7 @@ export async function getAvailableSlots(): Promise<SlotInfo[]> {
   // 1) Cargar franjas (plantilla u overrides) para todo el rango
   const shiftsByWeek = await getShiftsForDateRange(now, maxStart);
 
-  // 2) Cargar bloqueos del rango
-  const blocks = await getBlocksInRange(now, maxStart);
-
-  // 3) Generar candidatos
+  // 2) Generar candidatos
   const candidates: SlotInfo[] = [];
 
   for (let dayOffset = 0; dayOffset <= MAX_DAYS_AHEAD; dayOffset++) {
@@ -56,23 +52,21 @@ export async function getAvailableSlots(): Promise<SlotInfo[]> {
     for (const franja of dailyFranjas) {
       const franjaStart = timeToMinutes(franja.startTime);
       const franjaEnd = timeToMinutes(franja.endTime);
-      for (let m = franjaStart; m + SLOT_DURATION_MINUTES <= franjaEnd; m += SLOT_DURATION_MINUTES) {
+      const duration = franja.slotDurationMinutes;
+      for (let m = franjaStart; m + duration <= franjaEnd; m += duration) {
         const hh = Math.floor(m / 60);
         const mm = m % 60;
         const hhmm = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
-
-        // Filtrar bloqueos
-        if (isSlotBlocked(ymd, m, m + SLOT_DURATION_MINUTES, blocks)) continue;
-
         const startDate = madridDateAt(ymd.year, ymd.month, ymd.day, hh, mm);
         if (startDate < minStart) continue;
         if (startDate > maxStart) continue;
-        const endDate = new Date(startDate.getTime() + SLOT_DURATION_MINUTES * 60 * 1000);
+        const endDate = new Date(startDate.getTime() + duration * 60 * 1000);
         candidates.push({
           startISO: startDate.toISOString(),
           endISO: endDate.toISOString(),
           dayOfWeek: dow,
           hhmm,
+          durationMinutes: duration,
         });
       }
     }
@@ -80,7 +74,7 @@ export async function getAvailableSlots(): Promise<SlotInfo[]> {
 
   if (candidates.length === 0) return [];
 
-  // 4) Cruzar con eventos Calendar
+  // 3) Cruzar con eventos Calendar
   const fromISO = candidates[0].startISO;
   const toISO = candidates[candidates.length - 1].endISO;
   const events = await listEvents(fromISO, toISO);

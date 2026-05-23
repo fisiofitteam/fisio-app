@@ -1,7 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Trash2, Plus, X, Pencil, Calendar, CalendarOff, Settings2 } from "lucide-react";
+import { Trash2, Plus, X, Settings2, Calendar } from "lucide-react";
+
+// ============================================================================
+// COLORES POR CLOSER (HARDCODED)
+// ============================================================================
+// Si añades nuevos closers principales, edita este mapeo.
+// El matching es por nombre (case-insensitive, primera palabra).
+function colorForCloser(name: string): { bg: string; border: string; text: string; dot: string } {
+  const firstName = (name || "").trim().split(" ")[0].toLowerCase();
+  if (firstName === "alba") {
+    return { bg: "#F3E8FF", border: "#C084FC", text: "#6B21A8", dot: "#A855F7" };
+  }
+  if (firstName === "ales") {
+    return { bg: "#DBEAFE", border: "#60A5FA", text: "#1E3A8A", dot: "#3B82F6" };
+  }
+  // Otros: gris neutro
+  return { bg: "#F5F5F5", border: "#D4D4D4", text: "#404040", dot: "#737373" };
+}
 
 // ============================================================================
 // TIPOS
@@ -20,23 +37,17 @@ type ShiftRecord = {
   endTime: string;
   closerId: string;
   closer: { id: string; fullName: string; role: string };
-  fromDefault?: boolean;
+  slotDurationMinutes: number;
 };
 
-type BlockRecord = {
-  id: string;
-  blockedDate: string;        // YYYY-MM-DD
-  blockedStartTime: string | null;
-  blockedEndTime: string | null;
-  reason: string | null;
-};
+const DAYS = [1, 2, 3, 4, 5];                                       // Solo L-V
+const DAY_LABELS = ["", "Lun", "Mar", "Mié", "Jue", "Vie"];
+const DAY_LABELS_LONG = ["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
+const DURATION_OPTIONS = [30, 45, 60];
 
 // ============================================================================
 // HELPERS
 // ============================================================================
-const DAY_LABELS = ["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
-const DAYS = [1, 2, 3, 4, 5, 6, 7];
-
 function weekStartOfClient(date: Date): Date {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
@@ -47,7 +58,7 @@ function weekStartOfClient(date: Date): Date {
 
 function formatWeekRange(weekStart: Date): string {
   const end = new Date(weekStart);
-  end.setDate(end.getDate() + 6);
+  end.setDate(end.getDate() + 4);                                   // viernes
   const startStr = weekStart.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
   const endStr = end.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
   return `${startStr} – ${endStr}`;
@@ -58,16 +69,15 @@ function isoDate(d: Date): string {
 }
 
 // ============================================================================
-// COMPONENTE PRINCIPAL
+// COMPONENTE PRINCIPAL: 2 sub-tabs (Plantilla / Por semana)
 // ============================================================================
-type SubTab = "template" | "week" | "blocks";
+type SubTab = "template" | "week";
 
 export function AgendaScheduleView({ team }: { team: TeamMember[] }) {
   const [subTab, setSubTab] = useState<SubTab>("template");
 
   return (
     <div className="space-y-4">
-      {/* Tabs secundarias */}
       <div className="flex gap-1 p-1 rounded-xl bg-neutral-100 inline-flex">
         <SubTabButton active={subTab === "template"} onClick={() => setSubTab("template")} icon={<Settings2 size={14} />}>
           Plantilla por defecto
@@ -75,14 +85,10 @@ export function AgendaScheduleView({ team }: { team: TeamMember[] }) {
         <SubTabButton active={subTab === "week"} onClick={() => setSubTab("week")} icon={<Calendar size={14} />}>
           Por semana
         </SubTabButton>
-        <SubTabButton active={subTab === "blocks"} onClick={() => setSubTab("blocks")} icon={<CalendarOff size={14} />}>
-          Bloqueos
-        </SubTabButton>
       </div>
 
       {subTab === "template" && <TemplateView team={team} />}
       {subTab === "week" && <WeekView team={team} />}
-      {subTab === "blocks" && <BlocksView />}
     </div>
   );
 }
@@ -119,9 +125,8 @@ function SubTabButton({
 // ============================================================================
 function TemplateView({ team }: { team: TeamMember[] }) {
   const [shifts, setShifts] = useState<ShiftRecord[]>([]);
+  const [duration, setDuration] = useState(60);
   const [loading, setLoading] = useState(true);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [addingDay, setAddingDay] = useState<number | null>(null);
 
   async function load() {
     setLoading(true);
@@ -129,42 +134,41 @@ function TemplateView({ team }: { team: TeamMember[] }) {
     if (res.ok) {
       const data = await res.json();
       setShifts(data.shifts || []);
+      setDuration(data.slotDurationMinutes || 60);
     }
     setLoading(false);
   }
 
   useEffect(() => { load(); }, []);
 
-  const byDay: Record<number, ShiftRecord[]> = {};
-  for (let i = 1; i <= 7; i++) byDay[i] = [];
-  for (const s of shifts) byDay[s.dayOfWeek].push(s);
+  async function changeDuration(newDur: number) {
+    const res = await fetch("/api/agenda-template/duration", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slotDurationMinutes: newDur }),
+    });
+    if (res.ok) load();
+  }
 
   return (
     <div className="space-y-3">
       <div className="rounded-lg p-3 text-sm" style={{ background: "#EFF6FF", border: "1px solid #DBEAFE", color: "#1E40AF" }}>
-        <strong>Plantilla por defecto.</strong> Este horario se aplica a TODAS las semanas. Cualquier cambio aquí afecta a todas las semanas futuras.
+        <strong>Plantilla por defecto.</strong> Este horario se aplica a TODAS las semanas que no estén personalizadas.
       </div>
+
+      <DurationSelector value={duration} onChange={changeDuration} />
 
       {loading ? (
         <p className="text-sm text-neutral-500">Cargando…</p>
       ) : (
-        <div className="space-y-2">
-          {DAYS.map((dow) => (
-            <DayBlock
-              key={dow}
-              dayOfWeek={dow}
-              shifts={byDay[dow]}
-              team={team}
-              editingId={editingId}
-              setEditingId={setEditingId}
-              addingDay={addingDay}
-              setAddingDay={setAddingDay}
-              endpoint="/api/agenda-template"
-              onChange={load}
-              showFromDefaultBadge={false}
-            />
-          ))}
-        </div>
+        <WeekGrid
+          shifts={shifts}
+          team={team}
+          endpoint="/api/agenda-template"
+          extraCreateBody={{ slotDurationMinutes: duration }}
+          onChange={load}
+          readOnly={false}
+        />
       )}
     </div>
   );
@@ -177,9 +181,8 @@ function WeekView({ team }: { team: TeamMember[] }) {
   const [weekStart, setWeekStart] = useState<Date>(weekStartOfClient(new Date()));
   const [shifts, setShifts] = useState<ShiftRecord[]>([]);
   const [usingDefault, setUsingDefault] = useState(true);
+  const [duration, setDuration] = useState(60);
   const [loading, setLoading] = useState(true);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [addingDay, setAddingDay] = useState<number | null>(null);
 
   async function load() {
     setLoading(true);
@@ -188,6 +191,7 @@ function WeekView({ team }: { team: TeamMember[] }) {
       const data = await res.json();
       setShifts(data.shifts || []);
       setUsingDefault(data.usingDefault);
+      setDuration(data.slotDurationMinutes || 60);
     }
     setLoading(false);
   }
@@ -209,9 +213,14 @@ function WeekView({ team }: { team: TeamMember[] }) {
     if (res.ok) load();
   }
 
-  const byDay: Record<number, ShiftRecord[]> = {};
-  for (let i = 1; i <= 7; i++) byDay[i] = [];
-  for (const s of shifts) byDay[s.dayOfWeek].push(s);
+  async function changeDuration(newDur: number) {
+    const res = await fetch("/api/week-shifts/duration", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ week: isoDate(weekStart), slotDurationMinutes: newDur }),
+    });
+    if (res.ok) load();
+  }
 
   const isCurrentWeek = weekStart.getTime() === weekStartOfClient(new Date()).getTime();
 
@@ -251,7 +260,7 @@ function WeekView({ team }: { team: TeamMember[] }) {
         >
           <div className="text-sm">
             <strong>Esta semana usa la plantilla por defecto.</strong>
-            <p className="text-xs mt-0.5">Si necesitas cambios solo para esta semana, pulsa el botón.</p>
+            <p className="text-xs mt-0.5">Si necesitas cambios solo para esta semana, púlsalo abajo.</p>
           </div>
           <button
             onClick={personalizeWeek}
@@ -268,7 +277,7 @@ function WeekView({ team }: { team: TeamMember[] }) {
         >
           <div className="text-sm">
             <strong>Semana personalizada.</strong>
-            <p className="text-xs mt-0.5">Los cambios solo afectan a esta semana. Puedes restaurar la plantilla.</p>
+            <p className="text-xs mt-0.5">Los cambios solo afectan a esta semana.</p>
           </div>
           <button
             onClick={restoreTemplate}
@@ -280,91 +289,173 @@ function WeekView({ team }: { team: TeamMember[] }) {
         </div>
       )}
 
-      {/* Días */}
+      {/* Selector duración: solo editable si la semana está personalizada */}
+      <DurationSelector value={duration} onChange={changeDuration} disabled={usingDefault} />
+
+      {/* Grid */}
       {loading ? (
         <p className="text-sm text-neutral-500">Cargando…</p>
       ) : (
-        <div className="space-y-2">
-          {DAYS.map((dow) => (
-            <DayBlock
-              key={dow}
-              dayOfWeek={dow}
-              shifts={byDay[dow]}
-              team={team}
-              editingId={editingId}
-              setEditingId={setEditingId}
-              addingDay={addingDay}
-              setAddingDay={setAddingDay}
-              // Si estamos en plantilla: editar = plantilla. Si personalizado: editar shifts de la semana.
-              endpoint={usingDefault ? "/api/agenda-template" : "/api/closing-shifts"}
-              extraCreateBody={usingDefault ? {} : { weekStart: weekStart.toISOString() }}
-              onChange={load}
-              showFromDefaultBadge={usingDefault}
-              readOnly={usingDefault}
-            />
-          ))}
-        </div>
+        <WeekGrid
+          shifts={shifts}
+          team={team}
+          endpoint={usingDefault ? "/api/agenda-template" : "/api/closing-shifts"}
+          extraCreateBody={
+            usingDefault
+              ? { slotDurationMinutes: duration }
+              : { weekStart: weekStart.toISOString(), slotDurationMinutes: duration }
+          }
+          onChange={load}
+          readOnly={usingDefault}
+        />
       )}
     </div>
   );
 }
 
 // ============================================================================
-// COMPONENTE: BLOQUE DE UN DÍA CON SUS FRANJAS
+// SELECTOR DE DURACIÓN
 // ============================================================================
-function DayBlock({
+function DurationSelector({
+  value,
+  onChange,
+  disabled = false,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-xs uppercase tracking-wider font-semibold text-neutral-500">
+        Duración de llamadas:
+      </span>
+      <div className="flex gap-1 p-0.5 rounded-md bg-neutral-100">
+        {DURATION_OPTIONS.map((opt) => (
+          <button
+            key={opt}
+            onClick={() => !disabled && opt !== value && onChange(opt)}
+            disabled={disabled}
+            className="px-3 py-1 text-xs font-medium rounded-md tabular-nums"
+            style={{
+              background: opt === value ? "#FFFFFF" : "transparent",
+              color: opt === value ? "#0A0A0A" : disabled ? "#A3A3A3" : "#525252",
+              boxShadow: opt === value ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
+              cursor: disabled ? "not-allowed" : "pointer",
+              opacity: disabled ? 0.6 : 1,
+            }}
+          >
+            {opt} min
+          </button>
+        ))}
+      </div>
+      {disabled && (
+        <span className="text-[11px] text-neutral-500">
+          (personaliza la semana para editar)
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// GRID SEMANAL HORIZONTAL (Lun-Vie en columnas)
+// ============================================================================
+function WeekGrid({
+  shifts,
+  team,
+  endpoint,
+  extraCreateBody = {},
+  onChange,
+  readOnly,
+}: {
+  shifts: ShiftRecord[];
+  team: TeamMember[];
+  endpoint: string;
+  extraCreateBody?: Record<string, unknown>;
+  onChange: () => void;
+  readOnly: boolean;
+}) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [addingDay, setAddingDay] = useState<number | null>(null);
+
+  // Agrupar shifts por día
+  const byDay: Record<number, ShiftRecord[]> = {};
+  for (let i = 1; i <= 5; i++) byDay[i] = [];
+  for (const s of shifts) {
+    if (s.dayOfWeek >= 1 && s.dayOfWeek <= 5) byDay[s.dayOfWeek].push(s);
+  }
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+      {DAYS.map((dow) => (
+        <DayColumn
+          key={dow}
+          dayOfWeek={dow}
+          shifts={byDay[dow]}
+          team={team}
+          editingId={editingId}
+          setEditingId={setEditingId}
+          isAdding={addingDay === dow}
+          startAdd={() => setAddingDay(dow)}
+          cancelAdd={() => setAddingDay(null)}
+          endpoint={endpoint}
+          extraCreateBody={extraCreateBody}
+          onChange={() => { setEditingId(null); setAddingDay(null); onChange(); }}
+          readOnly={readOnly}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ============================================================================
+// COLUMNA DE UN DÍA
+// ============================================================================
+function DayColumn({
   dayOfWeek,
   shifts,
   team,
   editingId,
   setEditingId,
-  addingDay,
-  setAddingDay,
+  isAdding,
+  startAdd,
+  cancelAdd,
   endpoint,
-  extraCreateBody = {},
+  extraCreateBody,
   onChange,
-  showFromDefaultBadge,
-  readOnly = false,
+  readOnly,
 }: {
   dayOfWeek: number;
   shifts: ShiftRecord[];
   team: TeamMember[];
   editingId: string | null;
   setEditingId: (id: string | null) => void;
-  addingDay: number | null;
-  setAddingDay: (d: number | null) => void;
+  isAdding: boolean;
+  startAdd: () => void;
+  cancelAdd: () => void;
   endpoint: string;
-  extraCreateBody?: Record<string, unknown>;
+  extraCreateBody: Record<string, unknown>;
   onChange: () => void;
-  showFromDefaultBadge: boolean;
-  readOnly?: boolean;
+  readOnly: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-neutral-200 bg-white overflow-hidden">
-      <div className="flex items-center justify-between px-3 py-2 bg-neutral-50 border-b border-neutral-200">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold">{DAY_LABELS[dayOfWeek]}</span>
-          {shifts.length === 0 && !readOnly && (
-            <span className="text-[10px] text-neutral-400">sin franjas</span>
-          )}
+    <div className="rounded-xl border border-neutral-200 bg-white overflow-hidden flex flex-col">
+      <div className="px-2 py-1.5 bg-neutral-50 border-b border-neutral-200 text-center">
+        <div className="text-[10px] uppercase tracking-wider text-neutral-500">
+          {DAY_LABELS[dayOfWeek]}
         </div>
-        {!readOnly && (
-          <button
-            onClick={() => setAddingDay(dayOfWeek)}
-            className="text-xs font-medium px-2 py-1 rounded-md flex items-center gap-1"
-            style={{ background: "#FAFAFA", border: "1px solid #E5E5E5", color: "#171717" }}
-          >
-            <Plus size={12} /> Añadir
-          </button>
-        )}
+        <div className="text-xs font-semibold">{DAY_LABELS_LONG[dayOfWeek]}</div>
       </div>
 
-      <div className="divide-y divide-neutral-100">
-        {shifts.length === 0 && readOnly && (
-          <div className="px-3 py-2 text-xs text-neutral-400 italic">Sin franjas en este día</div>
+      <div className="p-1.5 space-y-1.5 flex-1">
+        {shifts.length === 0 && !isAdding && (
+          <div className="text-[10px] text-neutral-400 italic text-center py-2">
+            sin franjas
+          </div>
         )}
         {shifts.map((s) => (
-          <ShiftRow
+          <ShiftCard
             key={s.id}
             shift={s}
             team={team}
@@ -372,31 +463,39 @@ function DayBlock({
             onEdit={() => !readOnly && setEditingId(s.id)}
             onCancel={() => setEditingId(null)}
             endpoint={endpoint}
-            onChange={() => { setEditingId(null); onChange(); }}
-            showFromDefaultBadge={showFromDefaultBadge}
+            onChange={onChange}
             readOnly={readOnly}
           />
         ))}
-
-        {addingDay === dayOfWeek && !readOnly && (
-          <AddShiftForm
+        {isAdding && !readOnly && (
+          <AddShiftCard
             dayOfWeek={dayOfWeek}
             team={team}
             endpoint={endpoint}
             extraBody={extraCreateBody}
-            onCancel={() => setAddingDay(null)}
-            onCreated={() => { setAddingDay(null); onChange(); }}
+            onCancel={cancelAdd}
+            onCreated={onChange}
           />
         )}
       </div>
+
+      {!readOnly && !isAdding && (
+        <button
+          onClick={startAdd}
+          className="mx-1.5 mb-1.5 px-2 py-1 text-[11px] font-medium rounded-md flex items-center justify-center gap-1 hover:bg-neutral-50"
+          style={{ border: "1px dashed #D4D4D4", color: "#737373" }}
+        >
+          <Plus size={11} /> Añadir
+        </button>
+      )}
     </div>
   );
 }
 
 // ============================================================================
-// FILA DE UNA FRANJA (vista + edición inline)
+// CARD DE UNA FRANJA (vista + edición)
 // ============================================================================
-function ShiftRow({
+function ShiftCard({
   shift,
   team,
   isEditing,
@@ -404,7 +503,6 @@ function ShiftRow({
   onCancel,
   endpoint,
   onChange,
-  showFromDefaultBadge,
   readOnly,
 }: {
   shift: ShiftRecord;
@@ -414,13 +512,13 @@ function ShiftRow({
   onCancel: () => void;
   endpoint: string;
   onChange: () => void;
-  showFromDefaultBadge: boolean;
   readOnly: boolean;
 }) {
   const [startTime, setStartTime] = useState(shift.startTime);
   const [endTime, setEndTime] = useState(shift.endTime);
   const [closerId, setCloserId] = useState(shift.closerId);
   const [saving, setSaving] = useState(false);
+  const colors = colorForCloser(shift.closer.fullName);
 
   async function save() {
     setSaving(true);
@@ -441,74 +539,79 @@ function ShiftRow({
 
   if (!isEditing) {
     return (
-      <div className="px-3 py-2 flex items-center justify-between gap-2">
-        <div className="text-sm tabular-nums flex items-center gap-2 flex-wrap">
-          <span className="font-medium">{shift.startTime} → {shift.endTime}</span>
-          <span className="text-neutral-400">·</span>
-          <span className="text-neutral-700">👤 {shift.closer.fullName}</span>
-          {showFromDefaultBadge && (
-            <span className="text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded" style={{ background: "#DBEAFE", color: "#1E40AF" }}>
-              PLANTILLA
-            </span>
-          )}
+      <div
+        onClick={() => !readOnly && onEdit()}
+        className="rounded-md px-2 py-1.5 text-xs"
+        style={{
+          background: colors.bg,
+          border: `1px solid ${colors.border}`,
+          color: colors.text,
+          cursor: readOnly ? "default" : "pointer",
+        }}
+      >
+        <div className="font-semibold tabular-nums">
+          {shift.startTime} → {shift.endTime}
         </div>
-        {!readOnly && (
-          <div className="flex gap-1">
-            <button onClick={onEdit} className="p-1.5 rounded-md hover:bg-neutral-100" title="Editar">
-              <Pencil size={14} className="text-neutral-500" />
-            </button>
-            <button onClick={deleteShift} className="p-1.5 rounded-md hover:bg-red-50" title="Eliminar">
-              <Trash2 size={14} className="text-red-500" />
-            </button>
-          </div>
-        )}
+        <div className="flex items-center gap-1 mt-0.5">
+          <span
+            className="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
+            style={{ background: colors.dot }}
+          />
+          <span className="truncate">{shift.closer.fullName}</span>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="px-3 py-3 bg-blue-50 space-y-2">
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 items-end">
-        <div>
-          <label className="text-[10px] uppercase tracking-wider text-neutral-500 block mb-0.5">Inicio</label>
-          <input
-            type="time"
-            value={startTime}
-            onChange={(e) => setStartTime(e.target.value)}
-            className="w-full px-2 py-1.5 text-sm rounded-md border border-neutral-300 tabular-nums"
-          />
-        </div>
-        <div>
-          <label className="text-[10px] uppercase tracking-wider text-neutral-500 block mb-0.5">Fin</label>
-          <input
-            type="time"
-            value={endTime}
-            onChange={(e) => setEndTime(e.target.value)}
-            className="w-full px-2 py-1.5 text-sm rounded-md border border-neutral-300 tabular-nums"
-          />
-        </div>
-        <div>
-          <label className="text-[10px] uppercase tracking-wider text-neutral-500 block mb-0.5">Closer</label>
-          <select
-            value={closerId}
-            onChange={(e) => setCloserId(e.target.value)}
-            className="w-full px-2 py-1.5 text-sm rounded-md border border-neutral-300 bg-white"
-          >
-            {team.map((m) => (
-              <option key={m.id} value={m.id}>{m.fullName} ({m.role})</option>
-            ))}
-          </select>
-        </div>
+    <div
+      className="rounded-md p-2 space-y-1.5"
+      style={{ background: "#EFF6FF", border: "1px solid #BFDBFE" }}
+    >
+      <div className="flex gap-1">
+        <input
+          type="time"
+          value={startTime}
+          onChange={(e) => setStartTime(e.target.value)}
+          className="flex-1 min-w-0 px-1 py-1 text-xs rounded border border-neutral-300 tabular-nums"
+        />
+        <input
+          type="time"
+          value={endTime}
+          onChange={(e) => setEndTime(e.target.value)}
+          className="flex-1 min-w-0 px-1 py-1 text-xs rounded border border-neutral-300 tabular-nums"
+        />
       </div>
-      <div className="flex gap-2 justify-end">
-        <button onClick={onCancel} className="px-3 py-1.5 text-xs rounded-md border border-neutral-300 bg-white">Cancelar</button>
+      <select
+        value={closerId}
+        onChange={(e) => setCloserId(e.target.value)}
+        className="w-full px-1 py-1 text-xs rounded border border-neutral-300 bg-white"
+      >
+        {team.map((m) => (
+          <option key={m.id} value={m.id}>{m.fullName}</option>
+        ))}
+      </select>
+      <div className="flex gap-1">
         <button
           onClick={save}
           disabled={saving}
-          className="px-3 py-1.5 text-xs font-medium rounded-md"
+          className="flex-1 px-1.5 py-1 text-[10px] font-medium rounded-md"
           style={{ background: "#0A0A0A", color: "#FAFAFA" }}
         >
-          {saving ? "Guardando..." : "Guardar"}
+          {saving ? "..." : "Guardar"}
+        </button>
+        <button
+          onClick={onCancel}
+          className="px-1.5 py-1 text-[10px] rounded-md border border-neutral-300 bg-white"
+        >
+          Cancelar
+        </button>
+        <button
+          onClick={deleteShift}
+          className="px-1.5 py-1 rounded-md hover:bg-red-50"
+          title="Eliminar"
+        >
+          <Trash2 size={11} className="text-red-500" />
         </button>
       </div>
     </div>
@@ -516,9 +619,9 @@ function ShiftRow({
 }
 
 // ============================================================================
-// FORM CREAR FRANJA
+// CREAR NUEVA FRANJA
 // ============================================================================
-function AddShiftForm({
+function AddShiftCard({
   dayOfWeek,
   team,
   endpoint,
@@ -550,221 +653,54 @@ function AddShiftForm({
     if (res.ok) onCreated();
     else {
       const data = await res.json().catch(() => ({}));
-      setErr(data.error || "No se pudo crear");
+      setErr(data.error || "Error");
       setSaving(false);
     }
   }
 
   return (
-    <div className="px-3 py-3 bg-blue-50 space-y-2">
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 items-end">
-        <div>
-          <label className="text-[10px] uppercase tracking-wider text-neutral-500 block mb-0.5">Inicio</label>
-          <input
-            type="time"
-            value={startTime}
-            onChange={(e) => setStartTime(e.target.value)}
-            className="w-full px-2 py-1.5 text-sm rounded-md border border-neutral-300 tabular-nums"
-          />
-        </div>
-        <div>
-          <label className="text-[10px] uppercase tracking-wider text-neutral-500 block mb-0.5">Fin</label>
-          <input
-            type="time"
-            value={endTime}
-            onChange={(e) => setEndTime(e.target.value)}
-            className="w-full px-2 py-1.5 text-sm rounded-md border border-neutral-300 tabular-nums"
-          />
-        </div>
-        <div>
-          <label className="text-[10px] uppercase tracking-wider text-neutral-500 block mb-0.5">Closer</label>
-          <select
-            value={closerId}
-            onChange={(e) => setCloserId(e.target.value)}
-            className="w-full px-2 py-1.5 text-sm rounded-md border border-neutral-300 bg-white"
-          >
-            {team.map((m) => (
-              <option key={m.id} value={m.id}>{m.fullName} ({m.role})</option>
-            ))}
-          </select>
-        </div>
+    <div
+      className="rounded-md p-2 space-y-1.5"
+      style={{ background: "#F0FDF4", border: "1px solid #BBF7D0" }}
+    >
+      <div className="flex gap-1">
+        <input
+          type="time"
+          value={startTime}
+          onChange={(e) => setStartTime(e.target.value)}
+          className="flex-1 min-w-0 px-1 py-1 text-xs rounded border border-neutral-300 tabular-nums"
+        />
+        <input
+          type="time"
+          value={endTime}
+          onChange={(e) => setEndTime(e.target.value)}
+          className="flex-1 min-w-0 px-1 py-1 text-xs rounded border border-neutral-300 tabular-nums"
+        />
       </div>
-      {err && <p className="text-xs text-red-600">{err}</p>}
-      <div className="flex gap-2 justify-end">
-        <button onClick={onCancel} className="px-3 py-1.5 text-xs rounded-md border border-neutral-300 bg-white">Cancelar</button>
+      <select
+        value={closerId}
+        onChange={(e) => setCloserId(e.target.value)}
+        className="w-full px-1 py-1 text-xs rounded border border-neutral-300 bg-white"
+      >
+        {team.map((m) => (
+          <option key={m.id} value={m.id}>{m.fullName}</option>
+        ))}
+      </select>
+      {err && <p className="text-[10px] text-red-600">{err}</p>}
+      <div className="flex gap-1">
         <button
           onClick={create}
           disabled={saving || !closerId}
-          className="px-3 py-1.5 text-xs font-medium rounded-md"
+          className="flex-1 px-1.5 py-1 text-[10px] font-medium rounded-md"
           style={{ background: "#0A0A0A", color: "#FAFAFA" }}
         >
-          {saving ? "Creando..." : "Crear franja"}
+          {saving ? "..." : "Crear"}
         </button>
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
-// VISTA: BLOQUEOS
-// ============================================================================
-function BlocksView() {
-  const [blocks, setBlocks] = useState<BlockRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [adding, setAdding] = useState(false);
-
-  async function load() {
-    setLoading(true);
-    const res = await fetch("/api/agenda-blocks");
-    if (res.ok) {
-      const data = await res.json();
-      setBlocks(data.blocks || []);
-    }
-    setLoading(false);
-  }
-  useEffect(() => { load(); }, []);
-
-  async function deleteBlock(id: string) {
-    if (!confirm("¿Eliminar este bloqueo?")) return;
-    const res = await fetch(`/api/agenda-blocks/${id}`, { method: "DELETE" });
-    if (res.ok) load();
-  }
-
-  return (
-    <div className="space-y-3">
-      <div className="rounded-lg p-3 text-sm" style={{ background: "#FEF3C7", border: "1px solid #FDE68A", color: "#92400E" }}>
-        <strong>Bloqueos puntuales.</strong> Usa esto para indisposiciones, vacaciones o festivos. Puedes bloquear un día entero o solo franjas concretas.
-      </div>
-
-      <div className="flex justify-end">
         <button
-          onClick={() => setAdding(true)}
-          className="text-sm font-medium px-3 py-1.5 rounded-md flex items-center gap-1"
-          style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+          onClick={onCancel}
+          className="px-1.5 py-1 rounded-md hover:bg-neutral-100"
         >
-          <Plus size={14} /> Nuevo bloqueo
-        </button>
-      </div>
-
-      {adding && <AddBlockForm onCancel={() => setAdding(false)} onCreated={() => { setAdding(false); load(); }} />}
-
-      {loading ? (
-        <p className="text-sm text-neutral-500">Cargando…</p>
-      ) : blocks.length === 0 ? (
-        <div className="rounded-lg p-6 text-center text-sm text-neutral-500" style={{ background: "#FAFAFA", border: "1px dashed #E5E5E5" }}>
-          No hay bloqueos próximos.
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {blocks.map((b) => {
-            const d = new Date(b.blockedDate + "T12:00:00Z");
-            const dayLabel = d.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-            const fullDay = !b.blockedStartTime || !b.blockedEndTime;
-            return (
-              <div key={b.id} className="rounded-xl border border-neutral-200 bg-white px-3 py-2.5 flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-medium capitalize">{dayLabel}</div>
-                  <div className="text-xs text-neutral-500 mt-0.5">
-                    {fullDay ? "Día completo bloqueado" : `Franja ${b.blockedStartTime} – ${b.blockedEndTime}`}
-                    {b.reason && <span className="ml-2">· {b.reason}</span>}
-                  </div>
-                </div>
-                <button onClick={() => deleteBlock(b.id)} className="p-1.5 rounded-md hover:bg-red-50">
-                  <Trash2 size={14} className="text-red-500" />
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function AddBlockForm({ onCancel, onCreated }: { onCancel: () => void; onCreated: () => void }) {
-  const [blockedDate, setBlockedDate] = useState(isoDate(new Date()));
-  const [fullDay, setFullDay] = useState(true);
-  const [startTime, setStartTime] = useState("09:00");
-  const [endTime, setEndTime] = useState("13:00");
-  const [reason, setReason] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  async function create() {
-    setSaving(true);
-    const body: any = { blockedDate };
-    if (!fullDay) { body.blockedStartTime = startTime; body.blockedEndTime = endTime; }
-    if (reason.trim()) body.reason = reason.trim();
-    const res = await fetch("/api/agenda-blocks", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (res.ok) onCreated();
-    else setSaving(false);
-  }
-
-  return (
-    <div className="rounded-xl border border-neutral-200 bg-blue-50 p-3 space-y-3">
-      <div className="flex items-center justify-between">
-        <h4 className="text-sm font-semibold">Nuevo bloqueo</h4>
-        <button onClick={onCancel} className="p-1 hover:bg-white rounded">
-          <X size={14} className="text-neutral-500" />
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <div>
-          <label className="text-[10px] uppercase tracking-wider text-neutral-500 block mb-0.5">Fecha</label>
-          <input
-            type="date"
-            value={blockedDate}
-            onChange={(e) => setBlockedDate(e.target.value)}
-            className="w-full px-2 py-1.5 text-sm rounded-md border border-neutral-300 bg-white"
-          />
-        </div>
-        <div>
-          <label className="text-[10px] uppercase tracking-wider text-neutral-500 block mb-0.5">Motivo (opcional)</label>
-          <input
-            type="text"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Ej. Vacaciones, festivo..."
-            className="w-full px-2 py-1.5 text-sm rounded-md border border-neutral-300 bg-white"
-          />
-        </div>
-      </div>
-
-      <label className="flex items-center gap-2 text-sm cursor-pointer">
-        <input
-          type="checkbox"
-          checked={fullDay}
-          onChange={(e) => setFullDay(e.target.checked)}
-        />
-        Bloquear día completo
-      </label>
-
-      {!fullDay && (
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="text-[10px] uppercase tracking-wider text-neutral-500 block mb-0.5">Inicio</label>
-            <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="w-full px-2 py-1.5 text-sm rounded-md border border-neutral-300 tabular-nums" />
-          </div>
-          <div>
-            <label className="text-[10px] uppercase tracking-wider text-neutral-500 block mb-0.5">Fin</label>
-            <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="w-full px-2 py-1.5 text-sm rounded-md border border-neutral-300 tabular-nums" />
-          </div>
-        </div>
-      )}
-
-      <div className="flex gap-2 justify-end">
-        <button onClick={onCancel} className="px-3 py-1.5 text-xs rounded-md border border-neutral-300 bg-white">Cancelar</button>
-        <button
-          onClick={create}
-          disabled={saving}
-          className="px-3 py-1.5 text-xs font-medium rounded-md"
-          style={{ background: "#0A0A0A", color: "#FAFAFA" }}
-        >
-          {saving ? "Creando..." : "Crear bloqueo"}
+          <X size={11} className="text-neutral-500" />
         </button>
       </div>
     </div>

@@ -50,6 +50,7 @@ export async function POST() {
       startTime: s.startTime,
       endTime: s.endTime,
       closerId: s.closerId,
+      slotDurationMinutes: s.slotDurationMinutes || 60,
     })),
   });
 

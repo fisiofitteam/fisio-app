@@ -37,6 +37,7 @@ export async function GET(req: NextRequest) {
       endTime: s.endTime,
       closerId: s.closerId,
       closer: s.closer,
+      slotDurationMinutes: s.slotDurationMinutes,
       fromDefault: true,
     }));
   } else {
@@ -52,6 +53,7 @@ export async function GET(req: NextRequest) {
       endTime: s.endTime,
       closerId: s.closerId,
       closer: s.closer,
+      slotDurationMinutes: s.slotDurationMinutes,
       fromDefault: false,
     }));
   }
@@ -60,6 +62,7 @@ export async function GET(req: NextRequest) {
     weekStartDate: weekStart.toISOString().slice(0, 10),
     usingDefault,
     shifts,
+    slotDurationMinutes: shifts[0]?.slotDurationMinutes ?? 60,
   });
 }
 
@@ -86,6 +89,7 @@ export async function POST(req: NextRequest) {
           startTime: d.startTime,
           endTime: d.endTime,
           closerId: d.closerId,
+          slotDurationMinutes: d.slotDurationMinutes,
         })),
       });
     }
