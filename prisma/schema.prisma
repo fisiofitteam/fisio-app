@@ -57,7 +57,38 @@ model Patient {
 
   // Fisio asignado (null = sin asignar todavía)
   assignedProfessionalId String?
-  assignedProfessional   Professional? @relation(fields: [assignedProfessionalId], references: [id])
+  assignedProfessional   Professional? @relation("PatientAssignedTo", fields: [assignedProfessionalId], references: [id])
+
+  // ─── ONBOARDING v57 ─────────────────────────────────────────────────────
+  // Estado del flujo de onboarding tras pagar:
+  //   "pending_assignment" → ha pagado, Miguel aún no le ha asignado fisio
+  //   "active"             → fisio asignado, programa en marcha
+  //   "paused"             → pausa (vacaciones, lesión secundaria...)
+  //   "finished"           → programa terminado
+  onboardingStatus       String   @default("active")
+
+  // Quién y cuándo asignó al fisio (típicamente Miguel = head_success)
+  assignedByUserId       String?
+  assignedByUser         Professional? @relation("PatientAssignedBy", fields: [assignedByUserId], references: [id])
+  assignedAt             DateTime?
+  assignmentNotes        String?
+
+  // Duración contratada del programa (campos derivados de la compra)
+  programDurationMonths  Int?
+  programStartDate       DateTime?
+  programEndDate         DateTime?
+
+  // Datos para el contrato (firma electrónica)
+  contractDNI            String?
+  contractSignedAt       DateTime?
+  contractSignedFromIP   String?
+  contractSignedUserAgent String?
+  contractVersion        String?     // "v1", "v2"... para versionar el contrato
+  contractTextSnapshot   String?     // texto exacto firmado (legal evidence)
+
+  // Checklist de tareas iniciales (JSON)
+  // Estructura: { "anamnesis": false, "contract": false, "firstSession": false }
+  onboardingTasks        Json?
 
   adaptations     PatientAdaptation[]
   wodLogs         WodLog[]
@@ -71,6 +102,7 @@ model Patient {
   sessions        Session[]
   programPauses   ProgramPause[]
   notifications   PatientNotification[]
+  sales           Sale[]
 }
 
 // ============================================================================
@@ -94,7 +126,8 @@ model Professional {
   // Si está marcado como inactivo, no puede iniciar sesión (pero conservamos su historial)
   active               Boolean  @default(true)
 
-  patients          Patient[]
+  patients          Patient[]            @relation("PatientAssignedTo")
+  patientsAssignedBy Patient[]           @relation("PatientAssignedBy")
   assignedTasks     FisioTask[]  @relation("AssignedToFisio")
   authoredTasks     FisioTask[]  @relation("AssignedByFisio")
   transactions      Transaction[]
@@ -104,6 +137,7 @@ model Professional {
   leaves            ProfessionalLeave[]
   closingShifts     ClosingShift[]       @relation("ClosingShifts")
   defaultShifts     DefaultClosingShift[]
+  salesAsCloser     Sale[]               @relation("SaleByCloser")
 }
 
 // ============================================================================
@@ -202,6 +236,8 @@ model Lead {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   decidedAt       DateTime?                                   // cuándo se marcó won/lost/postponed
+
+  sales           Sale[]
 
   @@index([status])
   @@index([callScheduledAt])
@@ -1261,4 +1297,70 @@ model AgendaBlock {
   createdAt         DateTime  @default(now())
 
   @@index([blockedDate])
+}
+
+// ============================================================================
+// SALE - VENTAS / PAGOS DE PROGRAMAS
+// ============================================================================
+// Cada venta de un programa (RECUPERA / CONSOLIDA) genera un Sale.
+//
+// Flujo:
+//   1. Closer cierra lead en videollamada
+//   2. Closer pulsa "Generar link de pago" en la ficha del lead → crea Sale
+//      con status="pending" y paymentToken único
+//   3. Lead abre URL /pagar/[token] → landing branded
+//   4. Lead paga en Stripe Checkout
+//   5. Webhook Stripe → marca Sale status="paid"
+//   6. Tras crear cuenta y entrar a la app, se crea Patient y se vincula al Sale
+// ============================================================================
+
+model Sale {
+  id          String   @id @default(cuid())
+
+  // Origen: el lead que se cierra en videollamada
+  leadId      String
+  lead        Lead     @relation(fields: [leadId], references: [id])
+
+  // Closer que generó el link (auditoría)
+  closerId    String
+  closer      Professional @relation("SaleByCloser", fields: [closerId], references: [id])
+
+  // Paciente creado tras pagar (null hasta que paga)
+  patientId   String?
+  patient     Patient? @relation(fields: [patientId], references: [id])
+
+  // ─── Producto comprado ──────────────────────────────────────────────────
+  productCode    String                       // "RECUPERA_4M" | "RECUPERA_6M" | "CONSOLIDA_4M" | "CONSOLIDA_6M"
+  programType    String                       // "RECUPERA" | "CONSOLIDA"
+  durationMonths Int                          // 4 | 6
+
+  // ─── Stripe ─────────────────────────────────────────────────────────────
+  stripeSessionId         String?  @unique
+  stripePaymentIntentId   String?
+  stripePriceId           String                        // price_xxx de Stripe
+  amountCents             Int                           // en céntimos (60000 = 600€)
+  currency                String   @default("eur")
+  paymentMethod           String?                       // "card" | "klarna" | null hasta pagar
+
+  // ─── Estado de la venta ─────────────────────────────────────────────────
+  // "pending"  → link generado, todavía no pagado
+  // "paid"     → pago completado correctamente
+  // "failed"   → intento de pago fallido (puede reintentarse)
+  // "refunded" → reembolsado
+  // "expired"  → token expiró sin pago
+  status      String   @default("pending")
+  paidAt      DateTime?
+
+  // ─── Token único para la landing ────────────────────────────────────────
+  // El cliente recibe URL del tipo /pagar/[paymentToken]
+  paymentToken    String   @unique
+  tokenExpiresAt  DateTime
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([leadId])
+  @@index([patientId])
+  @@index([status])
+  @@index([paymentToken])
 }
