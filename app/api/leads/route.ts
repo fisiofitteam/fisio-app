@@ -16,6 +16,8 @@ export async function POST(req: NextRequest) {
       fullName: data.fullName,
       contactType: data.contactType ?? "phone",
       contactValue: data.contactValue,
+      email: data.email || null,
+      phone: data.phone || null,
       aiSummary: data.aiSummary || null,
       callScheduledAt: new Date(data.callScheduledAt),
       // Si lo crea un closer y no se especifica otro closer, se lo auto-asigna
@@ -48,6 +50,8 @@ export async function PATCH(req: NextRequest) {
   if (rest.fullName !== undefined) updateData.fullName = rest.fullName;
   if (rest.contactType !== undefined) updateData.contactType = rest.contactType;
   if (rest.contactValue !== undefined) updateData.contactValue = rest.contactValue;
+  if (rest.email !== undefined) updateData.email = rest.email || null;
+  if (rest.phone !== undefined) updateData.phone = rest.phone || null;
   if (rest.aiSummary !== undefined) updateData.aiSummary = rest.aiSummary || null;
   if (rest.callScheduledAt !== undefined) updateData.callScheduledAt = new Date(rest.callScheduledAt);
   if (rest.closerId !== undefined) updateData.closerId = rest.closerId || null;
@@ -113,7 +117,7 @@ export async function DELETE(req: NextRequest) {
   if (!lead) return NextResponse.json({ error: "Lead no encontrado" }, { status: 404 });
 
   // Protección 1: si ya hay un paciente asociado, no se puede borrar
-  if (lead.patientId) {
+  if (lead.convertedPatientId) {
     return NextResponse.json(
       { error: "Este lead ya se convirtió en paciente. No se puede borrar." },
       { status: 409 }

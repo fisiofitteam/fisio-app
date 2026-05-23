@@ -543,8 +543,8 @@ function CallEditModal({
 }) {
   // Datos editables del lead (closer ya puede editar todo)
   const [fullName, setFullName] = useState(lead.fullName);
-  const [contactType, setContactType] = useState(lead.contactType);
-  const [contactValue, setContactValue] = useState(lead.contactValue);
+  const [email, setEmail] = useState(lead.email ?? "");
+  const [phone, setPhone] = useState(lead.phone ?? "");
   const [aiSummary, setAiSummary] = useState(lead.aiSummary ?? "");
   const [callScheduledAt, setCallScheduledAt] = useState(
     new Date(lead.callScheduledAt).toISOString().slice(0, 16)
@@ -566,8 +566,8 @@ function CallEditModal({
       body: JSON.stringify({
         id: lead.id,
         fullName,
-        contactType,
-        contactValue,
+        email,
+        phone,
         aiSummary,
         callScheduledAt,
         closerId: closerId || null,
@@ -594,18 +594,26 @@ function CallEditModal({
             <input className="input text-sm" value={fullName} onChange={(e) => setFullName(e.target.value)} />
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-xs text-neutral-500 block mb-1">Contacto</label>
-              <select className="input text-sm" value={contactType} onChange={(e) => setContactType(e.target.value)}>
-                <option value="phone">📞 Teléfono</option>
-                <option value="instagram">📷 Instagram</option>
-                <option value="email">✉️ Email</option>
-              </select>
+              <label className="text-xs text-neutral-500 block mb-1">📞 Teléfono</label>
+              <input
+                type="tel"
+                className="input text-sm"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="+34 600 000 000"
+              />
             </div>
-            <div className="col-span-2">
-              <label className="text-xs text-neutral-500 block mb-1">Valor</label>
-              <input className="input text-sm" value={contactValue} onChange={(e) => setContactValue(e.target.value)} />
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">✉️ Email</label>
+              <input
+                type="email"
+                className="input text-sm"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="correo@ejemplo.com"
+              />
             </div>
           </div>
 
@@ -907,8 +915,8 @@ function AddCallModal({
   onSaved: () => void;
 }) {
   const [fullName, setFullName] = useState("");
-  const [contactType, setContactType] = useState<"phone" | "instagram" | "email">("phone");
-  const [contactValue, setContactValue] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [aiSummary, setAiSummary] = useState("");
   const [callScheduledAt, setCallScheduledAt] = useState(() => {
     // Por defecto: dentro de 1h
@@ -923,8 +931,8 @@ function AddCallModal({
 
   async function save() {
     setError("");
-    if (!fullName.trim() || !contactValue.trim() || !callScheduledAt) {
-      setError("Nombre, contacto y fecha son obligatorios");
+    if (!fullName.trim() || (!email.trim() && !phone.trim()) || !callScheduledAt) {
+      setError("Nombre, fecha, y al menos un email o teléfono son obligatorios");
       return;
     }
     setSaving(true);
@@ -933,8 +941,10 @@ function AddCallModal({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         fullName: fullName.trim(),
-        contactType,
-        contactValue: contactValue.trim(),
+        contactType: phone.trim() ? "phone" : "email",
+        contactValue: (phone.trim() || email.trim()),
+        email: email.trim() || null,
+        phone: phone.trim() || null,
         aiSummary: aiSummary.trim() || null,
         callScheduledAt: new Date(callScheduledAt).toISOString(),
         closerId: closerId || null,
@@ -973,27 +983,25 @@ function AddCallModal({
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-xs text-neutral-500 block mb-1">Contacto</label>
-              <select
-                className="input text-sm w-full"
-                value={contactType}
-                onChange={(e) => setContactType(e.target.value as any)}
-              >
-                <option value="phone">📞 Tel</option>
-                <option value="instagram">📷 IG</option>
-                <option value="email">✉️ Email</option>
-              </select>
-            </div>
-            <div className="col-span-2">
-              <label className="text-xs text-neutral-500 block mb-1">Valor *</label>
+              <label className="text-xs text-neutral-500 block mb-1">📞 Teléfono *</label>
               <input
-                type="text"
+                type="tel"
                 className="input text-sm w-full"
-                value={contactValue}
-                onChange={(e) => setContactValue(e.target.value)}
-                placeholder={contactType === "phone" ? "+34 600000000" : contactType === "instagram" ? "@usuario" : "email@ejemplo.com"}
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="+34 600 000 000"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">✉️ Email *</label>
+              <input
+                type="email"
+                className="input text-sm w-full"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="correo@ejemplo.com"
               />
             </div>
           </div>
