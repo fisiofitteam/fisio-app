@@ -55,9 +55,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // 1. Buscar lead
   const lead = await prisma.lead.findUnique({ where: { id: params.id } });
   if (!lead) return NextResponse.json({ error: "Lead no encontrado" }, { status: 404 });
-  if (lead.status !== "won") {
+  // Bloqueamos solo si el lead está marcado como "perdido". En cualquier otro
+  // estado (scheduled, won, etc) se puede generar el link — el webhook marcará
+  // el Lead como "won" automáticamente al confirmarse el pago.
+  if (lead.status === "lost") {
     return NextResponse.json(
-      { error: 'El lead debe estar marcado como "Vendida" (won) antes de generar el link' },
+      { error: 'Este lead está marcado como "Perdido". Cámbialo de estado antes de generar el link.' },
       { status: 400 }
     );
   }

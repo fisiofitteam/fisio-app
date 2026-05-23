@@ -712,7 +712,7 @@ function CallEditModal({
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
-            {status === "won" && !lead.convertedPatient && (
+            {status !== "lost" && !lead.convertedPatient && (
               <button onClick={() => onConvert(lead)} className="btn btn-accent text-sm">
                 💳 Generar link de pago
               </button>
