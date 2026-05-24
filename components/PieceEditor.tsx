@@ -167,7 +167,18 @@ export function PieceEditor({
     const next = currentGoals.includes(g)
       ? currentGoals.filter((x) => x !== g)
       : [...currentGoals, g];
+    // El backend espera un array y serializa él mismo a JSON.
+    // Tras el PATCH el server devuelve la pieza con goals como string JSON,
+    // por eso lo guardamos también como string en el estado local para que
+    // parseGoals(piece.goals) siga funcionando.
     update("goals", JSON.stringify(next) as any);
+    // Ojo: update() lleva el valor al pendingPayloadRef tal cual.
+    // Forzamos que se envíe como array al backend usando un fetch directo.
+    fetch("/api/content/pieces", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: piece.id, goals: next }),
+    });
   }
 
   // ===== MODO GRABACIÓN =====
