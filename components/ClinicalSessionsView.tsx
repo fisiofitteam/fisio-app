@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { ProgressRing } from "@/components/ProgressRing";
+import { PatientPill } from "@/components/PatientPills";
 
 type Case = {
   id: string;
@@ -8,6 +10,13 @@ type Case = {
   patientName: string;
   assignedToId: string | null;
   bodyZone: string | null;
+  programType: string | null;
+  appliedLevelName: string | null;
+  hasSubscription: boolean;
+  subConsumed: number;
+  subTotal: number;
+  adhCompleted: number;
+  adhTotal: number;
   status: string;
   situation: string | null;
   proposedSolutions: string | null;
@@ -43,7 +52,7 @@ export function ClinicalSessionsView({
   initialCases: Case[];
 }) {
   const [cases, setCases] = useState<Case[]>(initialCases);
-  const [filter, setFilter] = useState<"todos" | "pendiente" | "supervision" | "resuelto" | "mios">("todos");
+  const [filter, setFilter] = useState<"todos" | "pendiente" | "supervision" | "resuelto" | "mios">("pendiente");
   const [editing, setEditing] = useState<Case | null>(null);
   const [creating, setCreating] = useState(false);
 
@@ -76,7 +85,6 @@ export function ClinicalSessionsView({
   }
 
   const TABS = [
-    { value: "todos", label: "Todos" },
     { value: "pendiente", label: "Pendientes" },
     { value: "supervision", label: "En supervisión" },
     { value: "resuelto", label: "Resueltos" },
@@ -123,19 +131,31 @@ export function ClinicalSessionsView({
             const meta = STATUS_META[c.status] ?? STATUS_META.pendiente;
             return (
               <button key={c.id} onClick={() => setEditing(c)} className="card w-full text-left hover:border-neutral-400 transition-colors block">
-                <div className="flex justify-between items-start gap-2">
+                <div className="flex justify-between items-start gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-semibold text-sm">{c.patientName}</span>
+                      <PatientPill value={c.programType} kind="program" />
                       {c.bodyZone && <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600">{c.bodyZone}</span>}
                     </div>
                     <div className="text-xs text-neutral-500 mt-0.5">
                       {c.assignedToId && proMap[c.assignedToId] ? proMap[c.assignedToId] : "Sin fisio asignado"}
                     </div>
+                    {c.appliedLevelName && (
+                      <div className="text-xs text-emerald-700 mt-0.5">✓ Control de cargas · {c.appliedLevelName}</div>
+                    )}
                   </div>
-                  <span className={`text-[10px] uppercase font-medium px-2 py-0.5 rounded-full border whitespace-nowrap flex-shrink-0 ${meta.cls}`}>
-                    {meta.label}
-                  </span>
+                  <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                    <span className={`text-[10px] uppercase font-medium px-2 py-0.5 rounded-full border whitespace-nowrap ${meta.cls}`}>
+                      {meta.label}
+                    </span>
+                    {c.hasSubscription && (
+                      <ProgressRing value={c.subConsumed} max={c.subTotal} size={40} stroke={4} label="suscripción" mode="subscription" />
+                    )}
+                    {c.adhTotal > 0 && (
+                      <ProgressRing value={c.adhCompleted} max={c.adhTotal} size={40} stroke={4} label="cumplimiento" mode="adherence" />
+                    )}
+                  </div>
                 </div>
 
                 {/* Columnas tipo Notion: visibles sin entrar en la ficha */}
