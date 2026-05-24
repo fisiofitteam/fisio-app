@@ -188,6 +188,33 @@ export function CalendarView({
 // Vista mensual
 // ============================================================================
 
+// Encuentra la semana que cubre un día concreto (entre startDate y endDate inclusivos)
+// y devuelve { weekId, dayOfWeek } o null si ese día no está cubierto por ninguna semana.
+function findWeekForDate(weeks: Week[], dateKey: string): { weekId: string; dayOfWeek: number } | null {
+  const target = new Date(dateKey + "T00:00:00.000Z").getTime();
+  for (const w of weeks) {
+    const ws = new Date(w.startDate).getTime();
+    const we = new Date(w.endDate).getTime();
+    // endDate suele ser el sábado/domingo a las 00:00, ampliamos para que incluya todo el día.
+    const weEnd = we + 24 * 60 * 60 * 1000 - 1;
+    if (target >= ws && target <= weEnd) {
+      const diffDays = Math.round((target - ws) / (1000 * 60 * 60 * 24));
+      const dayOfWeek = diffDays + 1; // 1=Lunes
+      return { weekId: w.id, dayOfWeek };
+    }
+  }
+  return null;
+}
+
+async function movePiece(pieceId: string, weekId: string, dayOfWeek: number) {
+  const res = await fetch("/api/content/pieces", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: pieceId, weekId, dayOfWeek }),
+  });
+  return res.ok;
+}
+
 function MonthGrid({
   month,
   year,
@@ -301,10 +328,34 @@ function MonthGrid({
                   <div
                     key={colIdx}
                     onClick={() => setEventModal({ date: dateKey, event: null })}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                    }}
+                    onDrop={async (e) => {
+                      e.preventDefault();
+                      const pieceId = e.dataTransfer.getData("text/piece-id");
+                      const sourceWeekId = e.dataTransfer.getData("text/source-week-id");
+                      const sourceDayOfWeek = Number(e.dataTransfer.getData("text/source-dayofweek"));
+                      if (!pieceId) return;
+                      const target = findWeekForDate(weeks, dateKey);
+                      if (!target) {
+                        alert("Ese día no está dentro de ninguna semana planificada. Crea la semana antes de mover la pieza.");
+                        return;
+                      }
+                      // No hacer nada si se suelta en el mismo sitio
+                      if (target.weekId === sourceWeekId && target.dayOfWeek === sourceDayOfWeek) return;
+                      const ok = await movePiece(pieceId, target.weekId, target.dayOfWeek);
+                      if (ok) {
+                        router.refresh();
+                      } else {
+                        alert("Error al mover la pieza");
+                      }
+                    }}
                     className={`min-h-[120px] p-1.5 border-r border-neutral-100 last:border-r-0 cursor-pointer hover:bg-amber-50/30 transition-colors ${
                       isOtherMonth ? "bg-neutral-50/50" : "bg-white"
                     } ${isToday ? "bg-amber-50" : ""}`}
-                    title="Click para añadir evento"
+                    title="Click para añadir evento · Arrastra piezas aquí"
                   >
                     <div className="flex justify-between items-start mb-1">
                       <span className={`text-[11px] ${isOtherMonth ? "text-neutral-300" : isToday ? "text-amber-800 font-bold" : "text-neutral-500"}`}>
@@ -339,7 +390,14 @@ function MonthGrid({
                             key={dp.piece.id}
                             href={`/fisio/contenido/pieza/${dp.piece.id}`}
                             onClick={(e) => e.stopPropagation()}
-                            className="flex flex-col gap-0.5 text-[10px] px-1.5 py-1 rounded bg-neutral-100 hover:bg-neutral-200 leading-tight"
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData("text/piece-id", dp.piece.id);
+                              e.dataTransfer.setData("text/source-week-id", dp.weekId);
+                              e.dataTransfer.setData("text/source-dayofweek", String(dp.piece.dayOfWeek));
+                              e.dataTransfer.effectAllowed = "move";
+                            }}
+                            className="flex flex-col gap-0.5 text-[10px] px-1.5 py-1 rounded bg-neutral-100 hover:bg-neutral-200 leading-tight cursor-move"
                             title={`${fmtLabel}${dp.piece.hook ? " · " + dp.piece.hook : ""}${dp.weekTheme ? " · " + dp.weekTheme : ""}`}
                           >
                             <div className="flex items-start gap-1">
