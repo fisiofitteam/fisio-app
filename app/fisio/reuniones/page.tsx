@@ -9,6 +9,22 @@ export default async function ReunionesPage() {
   const user = await getActiveProfessional();
   if (!user) redirect("/login");
 
+  // Las sesiones clínicas son del área clínica + dirección. Setter/closer (ventas) no.
+  const canClinical = user.role === "ceo" || user.role === "head_success" || user.role === "fisio";
+  if (!canClinical) {
+    return (
+      <div>
+        <header className="mb-4">
+          <h1 className="text-xl font-semibold">Reuniones</h1>
+          <p className="text-xs text-neutral-500 mt-0.5">Próximamente</p>
+        </header>
+        <div className="card text-center py-12 text-sm text-neutral-500">
+          Aún no hay tipos de reunión disponibles para tu rol.
+        </div>
+      </div>
+    );
+  }
+
   const [cases, patients, professionals] = await Promise.all([
     prisma.clinicalSessionCase.findMany({
       orderBy: { updatedAt: "desc" },

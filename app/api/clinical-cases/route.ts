@@ -4,6 +4,11 @@ import { getActiveProfessional } from "@/lib/session";
 
 const STATUSES = ["pendiente", "supervision", "resuelto"];
 
+// Solo área clínica + dirección (no ventas).
+function canClinical(role: string): boolean {
+  return role === "ceo" || role === "head_success" || role === "fisio";
+}
+
 // Forma de salida con datos derivados del paciente (fisio y zona)
 function shape(c: any) {
   return {
@@ -24,7 +29,7 @@ const patientSelect = { select: { fullName: true, assignedProfessionalId: true, 
 // GET /api/clinical-cases — lista de casos (todo el equipo).
 export async function GET() {
   const user = await getActiveProfessional();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!user || !canClinical(user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const cases = await prisma.clinicalSessionCase.findMany({
     orderBy: { updatedAt: "desc" },
@@ -36,7 +41,7 @@ export async function GET() {
 // POST /api/clinical-cases — crea un caso para un paciente (uno por paciente).
 export async function POST(req: NextRequest) {
   const user = await getActiveProfessional();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!user || !canClinical(user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const b = await req.json().catch(() => ({}));
   const patientId = typeof b?.patientId === "string" ? b.patientId : "";
@@ -70,7 +75,7 @@ export async function POST(req: NextRequest) {
 // PATCH /api/clinical-cases — edita el contenido del caso (no el paciente).
 export async function PATCH(req: NextRequest) {
   const user = await getActiveProfessional();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!user || !canClinical(user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const b = await req.json().catch(() => ({}));
   if (!b?.id) return NextResponse.json({ error: "id requerido" }, { status: 400 });
@@ -92,7 +97,7 @@ export async function PATCH(req: NextRequest) {
 // DELETE /api/clinical-cases?id=xxx — borra un caso.
 export async function DELETE(req: NextRequest) {
   const user = await getActiveProfessional();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!user || !canClinical(user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id requerido" }, { status: 400 });
