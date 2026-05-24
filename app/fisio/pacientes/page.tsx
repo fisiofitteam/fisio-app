@@ -88,6 +88,7 @@ export default async function PatientsListPage({
       id: p.id,
       fullName: p.fullName,
       diagnosis: p.diagnosis ?? "",
+      bodyZone: p.bodyZone ?? null,
       appliedLevelName: p.appliedLevel ? `${p.appliedLevel.profile.name} · ${p.appliedLevel.name}` : null,
       whatsappGroupUrl: p.whatsappGroupUrl,
       subscriptionStartDate: p.subscriptionStartDate?.toISOString() ?? null,

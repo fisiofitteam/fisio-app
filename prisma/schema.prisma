@@ -13,6 +13,7 @@ model Patient {
   email           String?  @unique                  // para login con código de 6 dígitos
   sport           String   @default("CrossFit")
   diagnosis       String?
+  bodyZone        String?                             // zona corporal clínica (hombro, lumbar...)
   startedAt       DateTime @default(now())
 
   subscriptionStartDate    DateTime?
@@ -106,6 +107,7 @@ model Patient {
   scheduledCalls  ScheduledCall[]
   renewals        SubscriptionRenewal[]
   renewalCheckouts RenewalCheckout[]
+  clinicalSessionCase ClinicalSessionCase?
   transactions    Transaction[]
   leadsConverted  Lead[]
   sessions        Session[]
@@ -1470,10 +1472,9 @@ model WelcomeMessageConfig {
 // comenta cada semana. assignedToId es el id del Professional (sin relación FK).
 model ClinicalSessionCase {
   id                String   @id @default(cuid())
-  patientName       String                              // Nombre del paciente
-  assignedToId      String?                             // fisioterapeuta asignado
+  patientId         String   @unique                    // un caso por paciente
+  patient           Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
   status            String   @default("pendiente")      // "pendiente" | "supervision" | "resuelto"
-  bodyZone          String?                             // zona corporal (texto libre)
   situation         String?                             // descripción de la situación
   proposedSolutions String?                             // soluciones propuestas
   consensusSolution String?                             // solución consensuada
@@ -1482,5 +1483,4 @@ model ClinicalSessionCase {
   updatedAt         DateTime @updatedAt
 
   @@index([status])
-  @@index([assignedToId])
 }

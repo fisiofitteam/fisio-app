@@ -4,16 +4,18 @@ import { useMemo, useState } from "react";
 
 type Case = {
   id: string;
+  patientId: string;
   patientName: string;
   assignedToId: string | null;
-  status: string;
   bodyZone: string | null;
+  status: string;
   situation: string | null;
   proposedSolutions: string | null;
   consensusSolution: string | null;
 };
 
-type TeamMember = { id: string; fullName: string };
+type PatientOption = { id: string; fullName: string; assignedToId: string | null; bodyZone: string | null };
+type Professional = { id: string; fullName: string };
 
 const STATUS_META: Record<string, { label: string; cls: string }> = {
   pendiente: { label: "Pendiente", cls: "bg-red-100 text-red-700 border-red-200" },
@@ -29,11 +31,15 @@ const STATUS_OPTIONS = [
 
 export function ClinicalSessionsView({
   currentUserId,
-  team,
+  isCeo,
+  professionals,
+  patients,
   initialCases,
 }: {
   currentUserId: string;
-  team: TeamMember[];
+  isCeo: boolean;
+  professionals: Professional[];
+  patients: PatientOption[];
   initialCases: Case[];
 }) {
   const [cases, setCases] = useState<Case[]>(initialCases);
@@ -41,7 +47,7 @@ export function ClinicalSessionsView({
   const [editing, setEditing] = useState<Case | null>(null);
   const [creating, setCreating] = useState(false);
 
-  const teamMap = useMemo(() => Object.fromEntries(team.map((t) => [t.id, t.fullName])), [team]);
+  const proMap = useMemo(() => Object.fromEntries(professionals.map((p) => [p.id, p.fullName])), [professionals]);
 
   const filtered = cases.filter((c) => {
     if (filter === "todos") return true;
@@ -69,13 +75,17 @@ export function ClinicalSessionsView({
     });
   }
 
-  const TABS: { value: typeof filter; label: string }[] = [
+  const TABS = [
     { value: "todos", label: "Todos" },
     { value: "pendiente", label: "Pendientes" },
     { value: "supervision", label: "En supervisión" },
     { value: "resuelto", label: "Resueltos" },
-    { value: "mios", label: "Míos" },
-  ];
+    ...(isCeo ? [] : [{ value: "mios", label: "Míos" }]),
+  ] as { value: typeof filter; label: string }[];
+
+  // Pacientes que aún no tienen caso, para el selector de "Nuevo caso"
+  const existingPatientIds = new Set(cases.map((c) => c.patientId));
+  const availablePatients = patients.filter((p) => !existingPatientIds.has(p.id));
 
   return (
     <div>
@@ -89,7 +99,6 @@ export function ClinicalSessionsView({
         </button>
       </header>
 
-      {/* Filtros por estado */}
       <div className="flex gap-1 mb-4 border-b border-neutral-200 overflow-x-auto">
         {TABS.map((t) => (
           <button
@@ -106,32 +115,24 @@ export function ClinicalSessionsView({
 
       {filtered.length === 0 ? (
         <p className="text-sm text-neutral-500 text-center py-12">
-          {cases.length === 0 ? "Aún no hay casos. Crea el primero." : "No hay casos en este filtro."}
+          {cases.length === 0 ? "Aún no hay casos. Añade el primero." : "No hay casos en este filtro."}
         </p>
       ) : (
         <div className="space-y-2">
           {filtered.map((c) => {
             const meta = STATUS_META[c.status] ?? STATUS_META.pendiente;
             return (
-              <button
-                key={c.id}
-                onClick={() => setEditing(c)}
-                className="card w-full text-left hover:border-neutral-400 transition-colors block"
-              >
+              <button key={c.id} onClick={() => setEditing(c)} className="card w-full text-left hover:border-neutral-400 transition-colors block">
                 <div className="flex justify-between items-start gap-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-semibold text-sm">{c.patientName}</span>
-                      {c.bodyZone && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600">{c.bodyZone}</span>
-                      )}
+                      {c.bodyZone && <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600">{c.bodyZone}</span>}
                     </div>
                     <div className="text-xs text-neutral-500 mt-0.5">
-                      {c.assignedToId && teamMap[c.assignedToId] ? teamMap[c.assignedToId] : "Sin asignar"}
+                      {c.assignedToId && proMap[c.assignedToId] ? proMap[c.assignedToId] : "Sin fisio asignado"}
                     </div>
-                    {c.situation && (
-                      <p className="text-xs text-neutral-600 mt-1.5 line-clamp-2">{c.situation}</p>
-                    )}
+                    {c.situation && <p className="text-xs text-neutral-600 mt-1.5 line-clamp-2">{c.situation}</p>}
                   </div>
                   <span className={`text-[10px] uppercase font-medium px-2 py-0.5 rounded-full border whitespace-nowrap flex-shrink-0 ${meta.cls}`}>
                     {meta.label}
@@ -143,17 +144,30 @@ export function ClinicalSessionsView({
         </div>
       )}
 
-      {(creating || editing) && (
-        <CaseEditorModal
-          team={team}
-          initial={editing}
-          onClose={() => {
-            setCreating(false);
-            setEditing(null);
-          }}
+      {creating && (
+        <NewCaseModal
+          availablePatients={availablePatients}
+          proMap={proMap}
+          onClose={() => setCreating(false)}
           onSaved={(c) => {
             upsertLocal(c);
             setCreating(false);
+          }}
+          onConflict={(id) => {
+            const existing = cases.find((x) => x.id === id);
+            setCreating(false);
+            if (existing) setEditing(existing);
+          }}
+        />
+      )}
+
+      {editing && (
+        <EditCaseModal
+          c={editing}
+          proMap={proMap}
+          onClose={() => setEditing(null)}
+          onSaved={(c) => {
+            upsertLocal(c);
             setEditing(null);
           }}
           onDeleted={(id) => {
@@ -166,66 +180,209 @@ export function ClinicalSessionsView({
   );
 }
 
-function CaseEditorModal({
-  team,
-  initial,
+// ── Campos de contenido reutilizados por crear/editar ──
+function ContentFields({
+  status,
+  setStatus,
+  situation,
+  setSituation,
+  proposed,
+  setProposed,
+  consensus,
+  setConsensus,
+}: {
+  status: string;
+  setStatus: (v: string) => void;
+  situation: string;
+  setSituation: (v: string) => void;
+  proposed: string;
+  setProposed: (v: string) => void;
+  consensus: string;
+  setConsensus: (v: string) => void;
+}) {
+  return (
+    <>
+      <div>
+        <label className="text-xs text-neutral-500 block mb-1">Estado</label>
+        <select className="input text-sm" value={status} onChange={(e) => setStatus(e.target.value)}>
+          {STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className="text-xs text-neutral-500 block mb-1">Descripción de la situación</label>
+        <textarea className="input text-sm" rows={3} value={situation} onChange={(e) => setSituation(e.target.value)} />
+      </div>
+      <div>
+        <label className="text-xs text-neutral-500 block mb-1">Soluciones propuestas</label>
+        <textarea className="input text-sm" rows={3} value={proposed} onChange={(e) => setProposed(e.target.value)} />
+      </div>
+      <div>
+        <label className="text-xs text-neutral-500 block mb-1">Solución consensuada</label>
+        <textarea className="input text-sm" rows={3} value={consensus} onChange={(e) => setConsensus(e.target.value)} />
+      </div>
+    </>
+  );
+}
+
+function DerivedInfo({ fisio, zone }: { fisio: string; zone: string | null }) {
+  return (
+    <div className="bg-neutral-50 rounded-lg p-3 text-sm grid grid-cols-2 gap-2">
+      <div>
+        <div className="text-[10px] uppercase text-neutral-500">Fisioterapeuta</div>
+        <div className="font-medium">{fisio}</div>
+      </div>
+      <div>
+        <div className="text-[10px] uppercase text-neutral-500">Zona corporal</div>
+        <div className="font-medium">{zone || "—"}</div>
+      </div>
+    </div>
+  );
+}
+
+function ModalShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl max-w-lg w-full p-5 max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-semibold">{title}</h3>
+          <button onClick={onClose} className="text-neutral-400 text-xl leading-none">✕</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function NewCaseModal({
+  availablePatients,
+  proMap,
+  onClose,
+  onSaved,
+  onConflict,
+}: {
+  availablePatients: PatientOption[];
+  proMap: Record<string, string>;
+  onClose: () => void;
+  onSaved: (c: Case) => void;
+  onConflict: (existingId: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<PatientOption | null>(null);
+  const [status, setStatus] = useState("pendiente");
+  const [situation, setSituation] = useState("");
+  const [proposed, setProposed] = useState("");
+  const [consensus, setConsensus] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const matches = query.trim()
+    ? availablePatients.filter((p) => p.fullName.toLowerCase().includes(query.trim().toLowerCase())).slice(0, 8)
+    : [];
+
+  async function save() {
+    if (!selected) return;
+    setSaving(true);
+    setError("");
+    const res = await fetch("/api/clinical-cases", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ patientId: selected.id, status, situation, proposedSolutions: proposed, consensusSolution: consensus }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      onSaved(data);
+    } else if (res.status === 409 && data.existingId) {
+      onConflict(data.existingId);
+    } else {
+      setError(data.error || "No se pudo crear el caso.");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <ModalShell title="Nuevo caso clínico" onClose={onClose}>
+      <div className="space-y-3">
+        {!selected ? (
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Buscar paciente</label>
+            <input className="input text-sm" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Escribe un nombre..." autoFocus />
+            {matches.length > 0 && (
+              <div className="mt-2 border border-neutral-200 rounded-lg divide-y divide-neutral-100 max-h-60 overflow-y-auto">
+                {matches.map((p) => (
+                  <button key={p.id} onClick={() => setSelected(p)} className="w-full text-left px-3 py-2 hover:bg-neutral-50 text-sm">
+                    <div className="font-medium">{p.fullName}</div>
+                    <div className="text-xs text-neutral-500">
+                      {p.assignedToId && proMap[p.assignedToId] ? proMap[p.assignedToId] : "Sin fisio"}{p.bodyZone ? ` · ${p.bodyZone}` : ""}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            {query.trim() && matches.length === 0 && (
+              <p className="text-xs text-neutral-400 mt-2">Ningún paciente sin caso coincide con "{query}".</p>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center justify-between gap-2">
+              <div className="font-semibold">{selected.fullName}</div>
+              <button onClick={() => setSelected(null)} className="text-xs text-blue-600 hover:underline">Cambiar</button>
+            </div>
+            <DerivedInfo fisio={selected.assignedToId && proMap[selected.assignedToId] ? proMap[selected.assignedToId] : "Sin fisio asignado"} zone={selected.bodyZone} />
+            <ContentFields status={status} setStatus={setStatus} situation={situation} setSituation={setSituation} proposed={proposed} setProposed={setProposed} consensus={consensus} setConsensus={setConsensus} />
+            {error && <p className="text-sm text-red-600">{error}</p>}
+            <div className="flex justify-end gap-2 pt-2 border-t border-neutral-100">
+              <button onClick={onClose} className="text-sm text-neutral-500">Cancelar</button>
+              <button onClick={save} disabled={saving} className="btn btn-primary text-sm">{saving ? "Guardando..." : "Crear caso"}</button>
+            </div>
+          </>
+        )}
+      </div>
+    </ModalShell>
+  );
+}
+
+function EditCaseModal({
+  c,
+  proMap,
   onClose,
   onSaved,
   onDeleted,
 }: {
-  team: TeamMember[];
-  initial: Case | null;
+  c: Case;
+  proMap: Record<string, string>;
   onClose: () => void;
   onSaved: (c: Case) => void;
   onDeleted: (id: string) => void;
 }) {
-  const [patientName, setPatientName] = useState(initial?.patientName ?? "");
-  const [assignedToId, setAssignedToId] = useState(initial?.assignedToId ?? "");
-  const [status, setStatus] = useState(initial?.status ?? "pendiente");
-  const [bodyZone, setBodyZone] = useState(initial?.bodyZone ?? "");
-  const [situation, setSituation] = useState(initial?.situation ?? "");
-  const [proposedSolutions, setProposedSolutions] = useState(initial?.proposedSolutions ?? "");
-  const [consensusSolution, setConsensusSolution] = useState(initial?.consensusSolution ?? "");
+  const [status, setStatus] = useState(c.status);
+  const [situation, setSituation] = useState(c.situation ?? "");
+  const [proposed, setProposed] = useState(c.proposedSolutions ?? "");
+  const [consensus, setConsensus] = useState(c.consensusSolution ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   async function save() {
-    if (!patientName.trim()) {
-      setError("El nombre del paciente es obligatorio.");
-      return;
-    }
     setSaving(true);
     setError("");
-    const payload = {
-      patientName: patientName.trim(),
-      assignedToId: assignedToId || null,
-      status,
-      bodyZone,
-      situation,
-      proposedSolutions,
-      consensusSolution,
-    };
     const res = await fetch("/api/clinical-cases", {
-      method: initial ? "PATCH" : "POST",
+      method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(initial ? { id: initial.id, ...payload } : payload),
+      body: JSON.stringify({ id: c.id, status, situation, proposedSolutions: proposed, consensusSolution: consensus }),
     });
-    if (res.ok) {
-      const data = await res.json();
-      onSaved(data);
-    } else {
-      const d = await res.json().catch(() => ({}));
-      setError(d.error || "No se pudo guardar.");
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) onSaved(data);
+    else {
+      setError(data.error || "No se pudo guardar.");
       setSaving(false);
     }
   }
 
   async function remove() {
-    if (!initial) return;
-    if (!confirm("¿Eliminar este caso? No se puede deshacer.")) return;
+    if (!confirm("¿Eliminar este caso? Desaparecerá también de la ficha del paciente.")) return;
     setSaving(true);
-    const res = await fetch(`/api/clinical-cases?id=${initial.id}`, { method: "DELETE" });
-    if (res.ok) onDeleted(initial.id);
+    const res = await fetch(`/api/clinical-cases?id=${c.id}`, { method: "DELETE" });
+    if (res.ok) onDeleted(c.id);
     else {
       setError("No se pudo eliminar.");
       setSaving(false);
@@ -233,74 +390,19 @@ function CaseEditorModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl max-w-lg w-full p-5 max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="font-semibold">{initial ? "Editar caso" : "Nuevo caso"}</h3>
-          <button onClick={onClose} className="text-neutral-400 text-xl leading-none">✕</button>
-        </div>
-
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs text-neutral-500 block mb-1">Nombre del paciente *</label>
-            <input className="input text-sm" value={patientName} onChange={(e) => setPatientName(e.target.value)} autoFocus />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-neutral-500 block mb-1">Fisioterapeuta</label>
-              <select className="input text-sm" value={assignedToId} onChange={(e) => setAssignedToId(e.target.value)}>
-                <option value="">Sin asignar</option>
-                {team.map((t) => <option key={t.id} value={t.id}>{t.fullName}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-neutral-500 block mb-1">Estado</label>
-              <select className="input text-sm" value={status} onChange={(e) => setStatus(e.target.value)}>
-                {STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label className="text-xs text-neutral-500 block mb-1">Zona corporal</label>
-            <input className="input text-sm" value={bodyZone} onChange={(e) => setBodyZone(e.target.value)} placeholder="Ej: hombro, lumbar..." />
-          </div>
-
-          <div>
-            <label className="text-xs text-neutral-500 block mb-1">Descripción de la situación</label>
-            <textarea className="input text-sm" rows={3} value={situation} onChange={(e) => setSituation(e.target.value)} />
-          </div>
-
-          <div>
-            <label className="text-xs text-neutral-500 block mb-1">Soluciones propuestas</label>
-            <textarea className="input text-sm" rows={3} value={proposedSolutions} onChange={(e) => setProposedSolutions(e.target.value)} />
-          </div>
-
-          <div>
-            <label className="text-xs text-neutral-500 block mb-1">Solución consensuada</label>
-            <textarea className="input text-sm" rows={3} value={consensusSolution} onChange={(e) => setConsensusSolution(e.target.value)} />
-          </div>
-
-          {error && <p className="text-sm text-red-600">{error}</p>}
-
-          <div className="flex justify-between items-center gap-2 pt-2 border-t border-neutral-100">
-            <div>
-              {initial && (
-                <button onClick={remove} disabled={saving} className="text-sm text-red-600 hover:underline">
-                  Eliminar
-                </button>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <button onClick={onClose} className="text-sm text-neutral-500">Cancelar</button>
-              <button onClick={save} disabled={saving} className="btn btn-primary text-sm">
-                {saving ? "Guardando..." : "Guardar"}
-              </button>
-            </div>
+    <ModalShell title={c.patientName} onClose={onClose}>
+      <div className="space-y-3">
+        <DerivedInfo fisio={c.assignedToId && proMap[c.assignedToId] ? proMap[c.assignedToId] : "Sin fisio asignado"} zone={c.bodyZone} />
+        <ContentFields status={status} setStatus={setStatus} situation={situation} setSituation={setSituation} proposed={proposed} setProposed={setProposed} consensus={consensus} setConsensus={setConsensus} />
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <div className="flex justify-between items-center gap-2 pt-2 border-t border-neutral-100">
+          <button onClick={remove} disabled={saving} className="text-sm text-red-600 hover:underline">Eliminar</button>
+          <div className="flex gap-2">
+            <button onClick={onClose} className="text-sm text-neutral-500">Cancelar</button>
+            <button onClick={save} disabled={saving} className="btn btn-primary text-sm">{saving ? "Guardando..." : "Guardar"}</button>
           </div>
         </div>
       </div>
-    </div>
+    </ModalShell>
   );
 }

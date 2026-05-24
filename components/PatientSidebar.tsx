@@ -42,8 +42,17 @@ const SECTIONS = [
   },
 ];
 
-export function PatientSidebar({ patientId }: { patientId: string }) {
+// Aparece solo si el paciente está en una sesión clínica.
+const CLINICAL_SECTION = {
+  id: "sesiones-clinicas",
+  label: "Sesiones clínicas",
+  icon: "🧠",
+  desc: "Lo comentado en la sesión clínica",
+};
+
+export function PatientSidebar({ patientId, hasClinicalCase = false }: { patientId: string; hasClinicalCase?: boolean }) {
   const pathname = usePathname();
+  const sections = hasClinicalCase ? [...SECTIONS, CLINICAL_SECTION] : SECTIONS;
 
   function isActive(id: string) {
     return pathname?.includes(`/fisio/paciente/${patientId}/${id}`);
@@ -53,7 +62,7 @@ export function PatientSidebar({ patientId }: { patientId: string }) {
     <>
       {/* Móvil: tabs horizontales */}
       <nav className="md:hidden flex gap-1 overflow-x-auto pb-1">
-        {SECTIONS.map((s) => {
+        {sections.map((s) => {
           const active = isActive(s.id);
           return (
             <Link
@@ -72,7 +81,7 @@ export function PatientSidebar({ patientId }: { patientId: string }) {
       {/* Desktop: sidebar vertical */}
       <aside className="hidden md:block w-56 flex-shrink-0">
         <nav className="space-y-1">
-          {SECTIONS.map((s) => {
+          {sections.map((s) => {
             const active = isActive(s.id);
             return (
               <Link

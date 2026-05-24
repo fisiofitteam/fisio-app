@@ -10,6 +10,7 @@ type Patient = {
   fullName: string;
   sport: string;
   diagnosis: string;
+  bodyZone: string;
   appliedProfileName: string;
   appliedLevelName: string;
   subscriptionStartDate: string;
@@ -39,6 +40,7 @@ export function ClinicalFile({ patient, isManager }: { patient: Patient; isManag
   const [fullName, setFullName] = useState(patient.fullName);
   const [sport, setSport] = useState(patient.sport);
   const [diagnosis, setDiagnosis] = useState(patient.diagnosis);
+  const [bodyZone, setBodyZone] = useState(patient.bodyZone ?? "");
   const [subscriptionStartDate, setSubscriptionStartDate] = useState(patient.subscriptionStartDate);
   const [subscriptionPeriodMonths, setSubscriptionPeriodMonths] = useState(patient.subscriptionPeriodMonths);
   const [whatsappGroupUrl, setWhatsappGroupUrl] = useState(patient.whatsappGroupUrl);
@@ -59,6 +61,7 @@ export function ClinicalFile({ patient, isManager }: { patient: Patient; isManag
         fullName,
         sport,
         diagnosis,
+        bodyZone: bodyZone || null,
         subscriptionStartDate: subscriptionStartDate || null,
         subscriptionPeriodMonths: Number(subscriptionPeriodMonths) || 4,
         whatsappGroupUrl: whatsappGroupUrl || null,
@@ -94,6 +97,10 @@ export function ClinicalFile({ patient, isManager }: { patient: Patient; isManag
         <div>
           <label className="text-xs text-neutral-500 block mb-1">Diagnóstico / motivo</label>
           <textarea className="input" rows={3} value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-xs text-neutral-500 block mb-1">Zona corporal</label>
+          <input className="input" value={bodyZone} onChange={(e) => setBodyZone(e.target.value)} placeholder="Ej: hombro, lumbar, rodilla..." />
         </div>
         <div>
           <label className="text-xs text-neutral-500 block mb-1">

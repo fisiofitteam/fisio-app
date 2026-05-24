@@ -39,6 +39,10 @@ export default async function PatientLayout({
   const consumed = monthsConsumed(patient.subscriptionStartDate);
   const total = patient.subscriptionTotalMonths || 4;
   const adherence = await calculateAdherence(patient.id);
+  const clinicalCase = await prisma.clinicalSessionCase.findUnique({
+    where: { patientId: patient.id },
+    select: { id: true },
+  });
 
   return (
     <div>
@@ -73,7 +77,7 @@ export default async function PatientLayout({
       </header>
 
       <div className="flex flex-col md:flex-row gap-4">
-        <PatientSidebar patientId={patient.id} />
+        <PatientSidebar patientId={patient.id} hasClinicalCase={!!clinicalCase} />
         <main className="flex-1 min-w-0">{children}</main>
       </div>
     </div>

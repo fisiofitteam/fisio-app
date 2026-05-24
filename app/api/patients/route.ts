@@ -132,6 +132,7 @@ export async function PATCH(req: NextRequest) {
     email,
     sport,
     diagnosis,
+    bodyZone,
     subscriptionStartDate,
     subscriptionPeriodMonths,
     whatsappGroupUrl,
@@ -210,6 +211,7 @@ export async function PATCH(req: NextRequest) {
       ...(email !== undefined && { email: email?.trim().toLowerCase() || null }),
       ...(sport !== undefined && { sport: sport || "CrossFit" }),
       ...(diagnosis !== undefined && { diagnosis: diagnosis || null }),
+      ...(bodyZone !== undefined && { bodyZone: bodyZone || null }),
       ...(subscriptionStartDate !== undefined && {
         subscriptionStartDate: subscriptionStartDate ? new Date(subscriptionStartDate) : null,
       }),

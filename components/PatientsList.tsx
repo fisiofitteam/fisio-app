@@ -11,6 +11,7 @@ type Patient = {
   id: string;
   fullName: string;
   diagnosis: string;
+  bodyZone: string | null;
   appliedLevelName: string | null;
   whatsappGroupUrl: string | null;
   subscriptionStartDate: string | null;
@@ -221,6 +222,9 @@ function PatientRow({
           <span className="font-medium">{patient.fullName}</span>
           <PatientPill value={patient.programType} kind="program" />
           {isManager && <PatientPill value={patient.difficulty} kind="difficulty" />}
+          {patient.bodyZone && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600">{patient.bodyZone}</span>
+          )}
         </div>
         {patient.appliedLevelName && (
           <div className="text-xs text-emerald-700 mt-1">✓ Control de cargas · {patient.appliedLevelName}</div>

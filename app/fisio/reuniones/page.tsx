@@ -9,10 +9,17 @@ export default async function ReunionesPage() {
   const user = await getActiveProfessional();
   if (!user) redirect("/login");
 
-  const [cases, team] = await Promise.all([
-    prisma.clinicalSessionCase.findMany({ orderBy: { updatedAt: "desc" } }),
+  const [cases, patients, professionals] = await Promise.all([
+    prisma.clinicalSessionCase.findMany({
+      orderBy: { updatedAt: "desc" },
+      include: { patient: { select: { fullName: true, assignedProfessionalId: true, bodyZone: true } } },
+    }),
+    prisma.patient.findMany({
+      select: { id: true, fullName: true, assignedProfessionalId: true, bodyZone: true },
+      orderBy: { fullName: "asc" },
+    }),
     prisma.professional.findMany({
-      where: { active: true, role: { in: ["ceo", "head_success", "fisio"] } },
+      where: { active: true },
       select: { id: true, fullName: true },
       orderBy: { fullName: "asc" },
     }),
@@ -21,13 +28,21 @@ export default async function ReunionesPage() {
   return (
     <ClinicalSessionsView
       currentUserId={user.id}
-      team={team}
+      isCeo={user.role === "ceo"}
+      professionals={professionals}
+      patients={patients.map((p) => ({
+        id: p.id,
+        fullName: p.fullName,
+        assignedToId: p.assignedProfessionalId,
+        bodyZone: p.bodyZone,
+      }))}
       initialCases={cases.map((c) => ({
         id: c.id,
-        patientName: c.patientName,
-        assignedToId: c.assignedToId,
+        patientId: c.patientId,
+        patientName: c.patient.fullName,
+        assignedToId: c.patient.assignedProfessionalId,
+        bodyZone: c.patient.bodyZone,
         status: c.status,
-        bodyZone: c.bodyZone,
         situation: c.situation,
         proposedSolutions: c.proposedSolutions,
         consensusSolution: c.consensusSolution,
