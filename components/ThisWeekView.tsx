@@ -4,20 +4,27 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  FORMAT_TEMPLATES,
   DAY_LABELS,
   WEEK_TYPES,
   BODY_ZONES,
   WEEK_STATUS,
   PIECE_STATUS,
-  type FormatKey,
 } from "@/lib/content-templates";
+import {
+  formatIcon,
+  formatLabelOnly,
+  parseGoals,
+  goalColor,
+  goalLabel,
+  GOAL_COLOR_CLASSES,
+} from "@/lib/content-formats";
 
 type Piece = {
   id: string;
   dayOfWeek: number;
   format: string;
   title: string | null;
+  goals: string;
   status: string;
   scheduledAt: string | null;
   hook: string | null;
@@ -353,10 +360,11 @@ function PiecesProgress({ pieces }: { pieces: Piece[] }) {
 }
 
 function PieceCard({ piece, weekId }: { piece: Piece; weekId: string }) {
-  const formatKey = piece.format as FormatKey;
-  const tpl = FORMAT_TEMPLATES[formatKey];
+  const fmtLabel = formatLabelOnly(piece.format);
+  const fmtIcon = formatIcon(piece.format);
   const statusMeta = PIECE_STATUS.find((s) => s.value === piece.status);
   const dayLabel = DAY_LABELS[piece.dayOfWeek] ?? "—";
+  const goals = parseGoals(piece.goals);
 
   // Estos links irán a Entrega B (todavía no existe la página de pieza individual)
   return (
@@ -369,7 +377,19 @@ function PieceCard({ piece, weekId }: { piece: Piece; weekId: string }) {
           <div className="text-[10px] uppercase text-neutral-500 font-medium tracking-wide">
             {dayLabel}
           </div>
-          <div className="font-semibold text-sm mt-0.5">{piece.title || tpl?.label || piece.format}</div>
+          <div className="font-semibold text-sm mt-0.5 flex items-center gap-1.5">
+            <span>{fmtIcon}</span>
+            <span>{piece.title || fmtLabel || piece.format}</span>
+          </div>
+          {goals.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              {goals.map((g) => (
+                <span key={g} className={`text-[10px] px-1.5 py-0.5 rounded ${GOAL_COLOR_CLASSES[goalColor(g)]}`}>
+                  {goalLabel(g)}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
         {statusMeta && (
           <span className={`text-[10px] uppercase font-medium px-2 py-0.5 rounded-full border ${STATUS_COLORS[statusMeta.color]} whitespace-nowrap`}>
@@ -580,7 +600,7 @@ function PendingMetricsBanner({ pendingMetrics }: { pendingMetrics: PendingMetri
       {expanded && (
         <div className="mt-3 pt-3 border-t border-amber-200 space-y-1.5">
           {pendingMetrics.map((p) => {
-            const tpl = FORMAT_TEMPLATES[p.format as FormatKey];
+            const tpl = { label: formatLabelOnly(p.format) };
             return (
               <Link
                 key={p.id}

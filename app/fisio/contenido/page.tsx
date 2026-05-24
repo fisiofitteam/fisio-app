@@ -154,6 +154,7 @@ export default async function ContentPage({
             dayOfWeek: p.dayOfWeek,
             format: p.format,
             title: p.title,
+            goals: p.goals,
             status: p.status,
             scheduledAt: p.scheduledAt?.toISOString() ?? null,
             hook: p.hook,
