@@ -1456,3 +1456,12 @@ model LandingConfig {
   updatedAt   DateTime @updatedAt
   updatedById String?
 }
+
+// Mensaje de bienvenida de la home del paciente (fila única). content es JSON:
+// { rules: [...], fallbackLine1, fallbackLine2 }. Defaults en lib/welcome-content.ts.
+model WelcomeMessageConfig {
+  id          String   @id @default("singleton")
+  content     String
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+}

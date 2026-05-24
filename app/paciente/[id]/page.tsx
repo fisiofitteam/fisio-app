@@ -5,6 +5,9 @@ import { PatientHomePaused } from "@/components/PatientHomePaused";
 import { PatientHomeRolling } from "@/components/PatientHomeRolling";
 import { calculateAdherence } from "@/lib/adherence";
 import { getPauseSnapshot, weekStartDate } from "@/lib/program-pauses";
+import { getWelcomeConfig } from "@/lib/welcome-config";
+import { pickWelcomeMessage } from "@/lib/welcome-content";
+import { applyVars } from "@/lib/landing-content";
 
 export default async function PatientHome({ params }: { params: { id: string } }) {
   const patient = await prisma.patient.findUnique({
@@ -227,8 +230,27 @@ export default async function PatientHome({ params }: { params: { id: string } }
     orderBy: { createdAt: "asc" },
   });
 
+  // Mensaje de bienvenida (editable por CEO, varía por programa y semanas en programa)
+  const welcomeStart = patient.subscriptionStartDate ?? patient.programStartDate ?? patient.startedAt;
+  const daysInProgram = welcomeStart
+    ? Math.max(0, Math.floor((Date.now() - new Date(welcomeStart).getTime()) / 86400000))
+    : 0;
+  const weeksInProgram = Math.floor(daysInProgram / 7);
+  const welcomeConfig = await getWelcomeConfig();
+  const pickedWelcome = pickWelcomeMessage(welcomeConfig, { programType: patient.programType, weeksInProgram });
+  const welcomeVars = {
+    nombre: firstName,
+    semanas: String(weeksInProgram),
+    meses: String(Math.floor(daysInProgram / 30)),
+    programa: patient.programType ?? "",
+  };
+  const welcomeLine1 = applyVars(pickedWelcome.line1, welcomeVars);
+  const welcomeLine2 = applyVars(pickedWelcome.line2, welcomeVars);
+
   return (
     <PatientHomeDark
+      welcomeLine1={welcomeLine1}
+      welcomeLine2={welcomeLine2}
       patient={{
         id: patient.id,
         firstName,

@@ -51,6 +51,8 @@ export function PatientHomeDark({
   adherence,
   upcomingPause,
   notifications,
+  welcomeLine1 = "Lo difícil era empezar.",
+  welcomeLine2 = "Ya estás aquí.",
 }: {
   patient: Patient;
   todaySessions: TodaySession[];
@@ -58,6 +60,8 @@ export function PatientHomeDark({
   adherence: Adherence | null;
   upcomingPause?: { startDate: string; endDate: string } | null;
   notifications?: { id: string; type: string; title: string; body: string }[];
+  welcomeLine1?: string;
+  welcomeLine2?: string;
 }) {
   const dow = new Date().getDay() === 0 ? 7 : new Date().getDay();
   const todayDate = new Date();
@@ -173,8 +177,8 @@ export function PatientHomeDark({
               letterSpacing: "-0.035em",
             }}
           >
-            Lo difícil era empezar.<br />
-            <span className="brand-gradient-text">Ya estás aquí.</span>
+            {welcomeLine1}<br />
+            <span className="brand-gradient-text">{welcomeLine2}</span>
           </h1>
 
           <p className="text-xs mt-3" style={{ color: "#737373" }}>

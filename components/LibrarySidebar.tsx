@@ -55,10 +55,18 @@ const LANDINGS_SECTION = {
   icon: "✨",
   desc: "Textos de las páginas de pago (CEO)",
 };
+const MENSAJES_SECTION = {
+  id: "mensajes",
+  label: "Mensajes",
+  icon: "💬",
+  desc: "Bienvenida de la app del paciente (CEO)",
+};
 
 export function LibrarySidebar({ showOnboarding = false }: { showOnboarding?: boolean }) {
   const pathname = usePathname() ?? "";
-  const sections = showOnboarding ? [...SECTIONS, ONBOARDING_SECTION, LANDINGS_SECTION] : SECTIONS;
+  const sections = showOnboarding
+    ? [...SECTIONS, ONBOARDING_SECTION, LANDINGS_SECTION, MENSAJES_SECTION]
+    : SECTIONS;
 
   function isActive(id: string) {
     return pathname.startsWith(`/fisio/biblioteca/${id}`);
