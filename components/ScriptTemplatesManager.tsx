@@ -4,6 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { FORMATS, type FormatKey, formatLabel } from "@/lib/content-formats";
 
+// Plantillas de guion solo aplican a reel y carrusel
+const SCRIPT_FORMATS = FORMATS.filter((f) => f.value === "reel" || f.value === "carousel");
+
 type Block = { id: string; label: string; order: number };
 
 type ScriptTemplate = {
@@ -75,7 +78,7 @@ export function ScriptTemplatesManager({ initialTemplates, canEdit }: Props) {
 
   // Agrupar por formato
   const grouped: Record<string, ScriptTemplate[]> = {};
-  for (const f of FORMATS) grouped[f.value] = [];
+  for (const f of SCRIPT_FORMATS) grouped[f.value] = [];
   for (const t of templates) {
     if (!grouped[t.format]) grouped[t.format] = [];
     grouped[t.format].push(t);
@@ -108,7 +111,7 @@ export function ScriptTemplatesManager({ initialTemplates, canEdit }: Props) {
       )}
 
       <div className="space-y-6">
-        {FORMATS.map((f) => {
+        {SCRIPT_FORMATS.map((f) => {
           const list = grouped[f.value] || [];
           return (
             <div key={f.value}>
@@ -280,7 +283,7 @@ function TemplateForm({
             onChange={(e) => setFormat(e.target.value as FormatKey)}
             className="px-2 py-1.5 text-sm border border-neutral-300 rounded"
           >
-            {FORMATS.map((f) => (
+            {SCRIPT_FORMATS.map((f) => (
               <option key={f.value} value={f.value}>
                 {f.icon} {f.label}
               </option>
