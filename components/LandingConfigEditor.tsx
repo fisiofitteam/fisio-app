@@ -126,33 +126,55 @@ export function LandingConfigEditor({ initialRenewal }: { initialRenewal: Renewa
           </Field>
         </div>
 
-        {/* Vista previa */}
+        {/* Vista previa (mismo branding que la landing real) */}
         <div className="lg:sticky lg:top-4 self-start">
           <div className="text-[10px] uppercase tracking-wide text-neutral-400 font-medium mb-1.5">Vista previa (con datos de ejemplo)</div>
-          <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-5">
-            <div className="text-center mb-4">
-              <div className="text-xl font-bold" style={{ letterSpacing: "-0.03em" }}>
-                Fisio<span className="brand-gradient-text">Fit</span>
+          <div className="rounded-2xl p-5" style={{ background: "#0A0A0A" }}>
+            <div className="flex items-center justify-center gap-2 mb-6">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "#FFD400" }}>
+                <span className="text-base">⚡</span>
               </div>
+              <span className="text-sm font-semibold" style={{ color: "#FAFAFA" }}>FisioFit Team</span>
             </div>
-            <div className="bg-white rounded-xl border border-neutral-200 p-4">
-              <h1 className="font-bold text-lg leading-tight mb-1">{v(copy.headline)}</h1>
-              <p className="text-sm text-neutral-600 mb-3">{v(copy.subheadline)}</p>
-              <ul className="space-y-1.5 mb-4">
+
+            <div className="text-center mb-5">
+              <p className="text-[10px] uppercase tracking-widest mb-1.5" style={{ color: "#737373" }}>Tu renovación</p>
+              <h1 className="text-xl font-bold leading-tight mb-1.5" style={{ color: "#FAFAFA" }}>{v(copy.headline)}</h1>
+              <p className="text-xs" style={{ color: "#A3A3A3" }}>{v(copy.subheadline)}</p>
+            </div>
+
+            <div className="rounded-xl p-4" style={{ background: "rgba(20,20,20,0.85)", border: "1px solid #262626" }}>
+              <div className="flex items-center justify-between mb-4">
+                <span className="px-2.5 py-1 rounded-full text-[9px] font-semibold tracking-wider" style={{ background: "rgba(59,130,246,0.15)", color: "#60A5FA", border: "1px solid #2563EB" }}>
+                  {SAMPLE.programa.toUpperCase()}
+                </span>
+                <span className="px-2 py-1 rounded-md text-[9px] font-semibold" style={{ background: "rgba(255,212,0,0.1)", color: "#FFD400", border: "1px solid rgba(255,212,0,0.3)" }}>
+                  {SAMPLE.meses} MESES
+                </span>
+              </div>
+              <ul className="space-y-2 mb-4">
                 {copy.bullets.map((b, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-neutral-700">
-                    <span className="text-emerald-500 mt-0.5">✓</span>
+                  <li key={i} className="flex items-start gap-2 text-xs" style={{ color: "#D4D4D4" }}>
+                    <span style={{ color: "#FFD400" }}>✓</span>
                     <span>{v(b)}</span>
                   </li>
                 ))}
               </ul>
-              <div className="bg-neutral-50 rounded-lg p-3 mb-3 text-sm space-y-1">
-                <div className="flex justify-between"><span className="text-neutral-500">Programa</span><span className="font-medium">{SAMPLE.programa}</span></div>
-                <div className="flex justify-between"><span className="text-neutral-500">Duración</span><span className="font-medium">{SAMPLE.meses} meses</span></div>
-                <div className="flex justify-between pt-1 border-t border-neutral-200"><span className="text-neutral-500">Total</span><span className="font-bold">{SAMPLE.importe}</span></div>
+              <div className="my-4 h-px" style={{ background: "linear-gradient(to right, transparent, #404040, transparent)" }} />
+              <div className="flex items-baseline justify-between mb-4">
+                <div>
+                  <p className="text-[9px] uppercase tracking-wider mb-0.5" style={{ color: "#737373" }}>Total</p>
+                  <p className="text-2xl font-bold" style={{ color: "#FAFAFA" }}>{SAMPLE.importe}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[9px] uppercase tracking-wider mb-0.5" style={{ color: "#737373" }}>Duración</p>
+                  <p className="text-sm font-semibold" style={{ color: "#FAFAFA" }}>{SAMPLE.meses} meses</p>
+                </div>
               </div>
-              <button className="btn btn-primary w-full" disabled>{v(copy.ctaLabel)} · {SAMPLE.importe}</button>
-              <p className="text-[11px] text-neutral-400 text-center mt-2">{v(copy.reassurance)}</p>
+              <button className="w-full py-3 rounded-xl text-sm font-semibold" style={{ background: "#FFD400", color: "#0A0A0A" }} disabled>
+                {v(copy.ctaLabel)} · {SAMPLE.importe} →
+              </button>
+              <p className="text-[10px] text-center mt-3" style={{ color: "#737373" }}>{v(copy.reassurance)}</p>
             </div>
           </div>
         </div>
