@@ -4,18 +4,26 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  FORMAT_TEMPLATES,
   BODY_ZONES,
   WEEK_TYPES,
   WEEK_STATUS,
-  type FormatKey,
 } from "@/lib/content-templates";
+import {
+  FORMATS,
+  formatIcon,
+  formatLabelOnly,
+  parseGoals,
+  goalColor,
+  goalLabel,
+  GOAL_COLOR_CLASSES,
+} from "@/lib/content-formats";
 
 type Piece = {
   id: string;
   dayOfWeek: number;
   format: string;
   title: string | null;
+  goals: string;
   status: string;
   scheduledAt: string | null;
   hook: string | null;
@@ -47,31 +55,11 @@ type CalEvent = {
 const MONTH_NAMES = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 const DAY_HEADERS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
-const FORMAT_COLORS: Record<string, string> = {
-  belief_carousel: "bg-purple-100 text-purple-800",
-  case_reel: "bg-rose-100 text-rose-800",
-  value_carousel: "bg-blue-100 text-blue-800",
-  value_reel: "bg-cyan-100 text-cyan-800",
-  exercises_carousel: "bg-emerald-100 text-emerald-800",
-  infographic: "bg-amber-100 text-amber-800",
-  closing_reel: "bg-orange-100 text-orange-800",
-};
-
 const STATUS_COLORS: Record<string, string> = {
   neutral: "bg-neutral-100 text-neutral-700",
   amber: "bg-amber-100 text-amber-800",
   blue: "bg-blue-100 text-blue-800",
   emerald: "bg-emerald-100 text-emerald-800",
-};
-
-const FORMAT_INITIALS: Record<string, string> = {
-  belief_carousel: "Cr",
-  case_reel: "Ca",
-  value_carousel: "Cv",
-  value_reel: "Rv",
-  exercises_carousel: "Ej",
-  infographic: "If",
-  closing_reel: "Rc",
 };
 
 // Color para eventos custom
@@ -188,12 +176,10 @@ export function CalendarView({
       )}
 
       <section className="mt-4 text-xs text-neutral-500">
-        <span className="mr-3 font-medium">Leyenda formatos:</span>
-        {Object.entries(FORMAT_INITIALS).map(([key, ini]) => (
-          <span key={key} className={`inline-block mr-2 mb-1 px-2 py-0.5 rounded text-[10px] ${FORMAT_COLORS[key]}`}>
-            <span className="font-mono font-semibold">{ini}</span> · {FORMAT_TEMPLATES[key as FormatKey]?.label}
-          </span>
-        ))}
+        <span className="mr-3 font-medium">Leyenda objetivos:</span>
+        <span className={`inline-block mr-2 mb-1 px-2 py-0.5 rounded text-[10px] ${GOAL_COLOR_CLASSES.green}`}>🟢 Atraer / Conectar</span>
+        <span className={`inline-block mr-2 mb-1 px-2 py-0.5 rounded text-[10px] ${GOAL_COLOR_CLASSES.yellow}`}>🟡 Educar</span>
+        <span className={`inline-block mr-2 mb-1 px-2 py-0.5 rounded text-[10px] ${GOAL_COLOR_CLASSES.red}`}>🔴 Convertir / Lanzamiento</span>
       </section>
     </>
   );
@@ -344,21 +330,34 @@ function MonthGrid({
                     {/* Piezas */}
                     <div className="space-y-1">
                       {dayPieces.map((dp) => {
-                        const tpl = FORMAT_TEMPLATES[dp.piece.format as FormatKey];
-                        const label = dp.piece.title?.trim() || dp.piece.hook?.trim() || tpl?.label || "Pieza";
+                        const fmtLabel = formatLabelOnly(dp.piece.format);
+                        const fmtIcon = formatIcon(dp.piece.format);
+                        const label = dp.piece.title?.trim() || dp.piece.hook?.trim() || fmtLabel || "Pieza";
                         const statusIcon = dp.piece.status === "published" ? " ✓" : dp.piece.status === "scheduled" ? " 📅" : "";
+                        const goals = parseGoals(dp.piece.goals);
                         return (
                           <Link
                             key={dp.piece.id}
                             href={`/fisio/contenido/pieza/${dp.piece.id}`}
                             onClick={(e) => e.stopPropagation()}
-                            className={`flex items-start gap-1 text-[10px] px-1.5 py-0.5 rounded ${FORMAT_COLORS[dp.piece.format]} hover:opacity-80 leading-tight`}
-                            title={`${tpl?.label}${dp.piece.hook ? " · " + dp.piece.hook : ""}${dp.weekTheme ? " · " + dp.weekTheme : ""}`}
+                            className="flex flex-col gap-0.5 text-[10px] px-1.5 py-1 rounded bg-neutral-100 hover:bg-neutral-200 leading-tight"
+                            title={`${fmtLabel}${dp.piece.hook ? " · " + dp.piece.hook : ""}${dp.weekTheme ? " · " + dp.weekTheme : ""}`}
                           >
-                            <span className="font-mono font-semibold flex-shrink-0">{FORMAT_INITIALS[dp.piece.format]}</span>
-                            <span className="line-clamp-2 break-words">
-                              {label}{statusIcon}
-                            </span>
+                            <div className="flex items-start gap-1">
+                              <span className="flex-shrink-0">{fmtIcon}</span>
+                              <span className="line-clamp-2 break-words">
+                                {label}{statusIcon}
+                              </span>
+                            </div>
+                            {goals.length > 0 && (
+                              <div className="flex flex-wrap gap-0.5 mt-0.5">
+                                {goals.map((g) => (
+                                  <span key={g} className={`text-[8px] px-1 rounded ${GOAL_COLOR_CLASSES[goalColor(g)]}`}>
+                                    {goalLabel(g)}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </Link>
                         );
                       })}
