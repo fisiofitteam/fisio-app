@@ -43,6 +43,23 @@ export async function PATCH(req: NextRequest) {
     update.goals = JSON.stringify(goalsArr);
   }
 
+  // Mover de día/semana (drag & drop en calendario)
+  if (rest.dayOfWeek !== undefined) {
+    const dow = Number(rest.dayOfWeek);
+    if (dow < 1 || dow > 7) {
+      return NextResponse.json({ error: "dayOfWeek debe ser 1-7" }, { status: 400 });
+    }
+    update.dayOfWeek = dow;
+  }
+  if (rest.weekId !== undefined) {
+    // Verificar que la semana destino existe
+    const targetWeek = await prisma.contentWeek.findUnique({ where: { id: rest.weekId } });
+    if (!targetWeek) {
+      return NextResponse.json({ error: "Semana destino no existe" }, { status: 400 });
+    }
+    update.weekId = rest.weekId;
+  }
+
   // Métricas
   const metricFields = [
     "metricsReach", "metricsSaves", "metricsShares",

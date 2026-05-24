@@ -117,6 +117,7 @@ export function ThisWeekView({
 }) {
   const router = useRouter();
   const [showNew, setShowNew] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [showClose, setShowClose] = useState(false);
 
@@ -262,6 +263,9 @@ export function ThisWeekView({
                   🏁 Cerrar semana
                 </button>
               )}
+              <button onClick={() => setShowEdit(true)} className="btn text-xs">
+                ✏️ Editar
+              </button>
               <button onClick={() => setShowNew(true)} className="btn btn-primary text-xs">
                 + Nueva semana
               </button>
@@ -318,6 +322,17 @@ export function ThisWeekView({
           onCreated={(weekId) => {
             setShowNew(false);
             router.push(`/fisio/contenido?week=${weekId}`);
+            router.refresh();
+          }}
+        />
+      )}
+
+      {showEdit && (
+        <EditWeekModal
+          week={week}
+          onClose={() => setShowEdit(false)}
+          onSaved={() => {
+            setShowEdit(false);
             router.refresh();
           }}
         />
@@ -825,3 +840,114 @@ function Stat({ label, value }: { label: string; value: number }) {
     </div>
   );
 }
+
+function EditWeekModal({
+  week,
+  onClose,
+  onSaved,
+}: {
+  week: Week;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [centralTheme, setCentralTheme] = useState(week.centralTheme ?? "");
+  const [bodyZone, setBodyZone] = useState(week.bodyZone ?? "mixta");
+  const [weekType, setWeekType] = useState(week.weekType ?? "educativa");
+  const [leadMagnetName, setLeadMagnetName] = useState(week.leadMagnetName ?? "");
+  const [leadMagnetKeyword, setLeadMagnetKeyword] = useState(week.leadMagnetKeyword ?? "");
+  const [kpiName, setKpiName] = useState(week.kpiName ?? "");
+  const [kpiTarget, setKpiTarget] = useState(week.kpiTarget != null ? String(week.kpiTarget) : "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function save() {
+    setSaving(true);
+    setError("");
+    const res = await fetch("/api/content/weeks", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: week.id,
+        centralTheme, bodyZone, weekType,
+        leadMagnetName, leadMagnetKeyword,
+        kpiName,
+        kpiTarget: kpiTarget ? Number(kpiTarget) : null,
+      }),
+    });
+    if (res.ok) {
+      onSaved();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "Error al guardar");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl max-w-lg w-full p-5 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-1">
+          <h3 className="font-medium text-lg">Editar semana</h3>
+          <button onClick={onClose} className="text-neutral-400 text-xl">✕</button>
+        </div>
+        <p className="text-xs text-neutral-500 mb-4">
+          Semana {week.weekNumber}/{week.year}. Modifica solo lo que necesites.
+        </p>
+
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Tema central</label>
+            <input className="input text-sm" value={centralTheme} onChange={(e) => setCentralTheme(e.target.value)} autoFocus />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">Zona corporal</label>
+              <select className="input text-sm" value={bodyZone} onChange={(e) => setBodyZone(e.target.value)}>
+                {BODY_ZONES.map((z) => <option key={z.value} value={z.value}>{z.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">Tipo de semana</label>
+              <select className="input text-sm" value={weekType} onChange={(e) => setWeekType(e.target.value)}>
+                {WEEK_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">Lead magnet</label>
+              <input className="input text-sm" value={leadMagnetName} onChange={(e) => setLeadMagnetName(e.target.value)} placeholder="Ej: Guía hombro CrossFit" />
+            </div>
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">Palabra clave DM</label>
+              <input className="input text-sm font-mono uppercase" value={leadMagnetKeyword} onChange={(e) => setLeadMagnetKeyword(e.target.value.toUpperCase())} placeholder="Ej: HOMBRO" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">KPI · Nombre</label>
+              <input className="input text-sm" value={kpiName} onChange={(e) => setKpiName(e.target.value)} placeholder="Ej: DMs con palabra clave" />
+            </div>
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">KPI · Objetivo</label>
+              <input type="number" step="any" className="input text-sm" value={kpiTarget} onChange={(e) => setKpiTarget(e.target.value)} placeholder="Ej: 25" />
+            </div>
+          </div>
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-neutral-100">
+            <button onClick={onClose} className="text-sm text-neutral-500">Cancelar</button>
+            <button onClick={save} disabled={saving} className="btn btn-primary text-sm">
+              {saving ? "Guardando..." : "Guardar cambios"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
