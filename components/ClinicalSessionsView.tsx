@@ -132,11 +132,17 @@ export function ClinicalSessionsView({
                     <div className="text-xs text-neutral-500 mt-0.5">
                       {c.assignedToId && proMap[c.assignedToId] ? proMap[c.assignedToId] : "Sin fisio asignado"}
                     </div>
-                    {c.situation && <p className="text-xs text-neutral-600 mt-1.5 line-clamp-2">{c.situation}</p>}
                   </div>
                   <span className={`text-[10px] uppercase font-medium px-2 py-0.5 rounded-full border whitespace-nowrap flex-shrink-0 ${meta.cls}`}>
                     {meta.label}
                   </span>
+                </div>
+
+                {/* Columnas tipo Notion: visibles sin entrar en la ficha */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3 pt-3 border-t border-neutral-100">
+                  <CaseColumn label="Situación" text={c.situation} />
+                  <CaseColumn label="Soluciones propuestas" text={c.proposedSolutions} />
+                  <CaseColumn label="Solución consensuada" text={c.consensusSolution} />
                 </div>
               </button>
             );
@@ -175,6 +181,20 @@ export function ClinicalSessionsView({
             setEditing(null);
           }}
         />
+      )}
+    </div>
+  );
+}
+
+// Columna de la tarjeta (estilo Notion): etiqueta + texto recortado.
+function CaseColumn({ label, text }: { label: string; text: string | null }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-[10px] uppercase tracking-wide text-neutral-400 font-medium mb-0.5">{label}</div>
+      {text?.trim() ? (
+        <p className="text-xs text-neutral-700 whitespace-pre-wrap line-clamp-4">{text}</p>
+      ) : (
+        <p className="text-xs text-neutral-300 italic">—</p>
       )}
     </div>
   );
