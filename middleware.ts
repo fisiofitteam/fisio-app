@@ -15,6 +15,8 @@ const PUBLIC_PATHS = [
   "/contratar",     // landing pública de contratación post-pago
   "/pagar",         // página de gracias tras pago (/pagar/gracias)
   "/api/sale",      // endpoints públicos del flujo de venta (status, checkout, create-account)
+  "/renovar",       // landing pública de renovación (paciente existente)
+  "/api/renewal",   // endpoints públicos del flujo de renovación (status, checkout)
   "/api/webhooks",  // webhooks externos (Stripe) — los llama Stripe sin cookie
 ];
 

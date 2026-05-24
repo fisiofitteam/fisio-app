@@ -105,6 +105,7 @@ model Patient {
   fisioTasks      FisioTask[]
   scheduledCalls  ScheduledCall[]
   renewals        SubscriptionRenewal[]
+  renewalCheckouts RenewalCheckout[]
   transactions    Transaction[]
   leadsConverted  Lead[]
   sessions        Session[]
@@ -1412,4 +1413,36 @@ model OnboardingConfig {
   contractVersion String
   updatedAt       DateTime @updatedAt
   updatedById     String?
+}
+
+// Enlace de pago de RENOVACIÓN (paciente existente). Mismo patrón que Sale pero
+// vinculado al Patient y con precio definido al vuelo. Al pagar, el webhook crea
+// el SubscriptionRenewal correspondiente.
+model RenewalCheckout {
+  id            String   @id @default(cuid())
+  patientId     String
+  patient       Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  createdById   String?                              // profesional que generó el enlace
+
+  programType    String                              // "RECUPERA" | "CONSOLIDA" | "ADVANCE"
+  durationMonths Int
+  amountCents    Int                                 // importe definido al generar el enlace
+  currency       String   @default("eur")
+
+  stripeSessionId       String?  @unique
+  stripePaymentIntentId String?
+  paymentMethod         String?
+
+  status        String   @default("pending")         // "pending" | "paid" | "failed" | "expired"
+  paidAt        DateTime?
+  renewalId     String?                              // SubscriptionRenewal creado al pagar
+
+  paymentToken   String   @unique
+  tokenExpiresAt DateTime
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([patientId])
+  @@index([status])
 }

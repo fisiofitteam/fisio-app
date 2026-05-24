@@ -24,6 +24,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { prisma } from "@/lib/prisma";
 import { notifyHeadSuccess, notifyProfessional } from "@/lib/notifications";
+import { applyRenewal } from "@/lib/renewals";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -81,10 +82,74 @@ export async function POST(req: NextRequest) {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// HANDLER: renovación pagada (kind=renewal)
+// Paciente existente → creamos el SubscriptionRenewal y marcamos el checkout.
+// ────────────────────────────────────────────────────────────────────────────
+async function handleRenewalCompleted(session: Stripe.Checkout.Session) {
+  const paymentToken = session.metadata?.paymentToken;
+  if (!paymentToken) {
+    console.warn("[stripe-webhook] renewal sin metadata.paymentToken", { sessionId: session.id });
+    return;
+  }
+
+  const checkout = await prisma.renewalCheckout.findUnique({ where: { paymentToken } });
+  if (!checkout) {
+    console.warn("[stripe-webhook] RenewalCheckout no encontrado", { paymentToken });
+    return;
+  }
+
+  // IDEMPOTENCIA: si ya está pagado y tiene renovación creada, salimos OK.
+  if (checkout.status === "paid" && checkout.renewalId) {
+    console.log("[stripe-webhook] Renovación ya procesada, skipping", { id: checkout.id });
+    return;
+  }
+
+  if (session.amount_total && session.amount_total !== checkout.amountCents) {
+    console.error("[stripe-webhook] RENEWAL AMOUNT MISMATCH", {
+      id: checkout.id,
+      expected: checkout.amountCents,
+      received: session.amount_total,
+    });
+  }
+
+  const paymentMethod = Array.isArray(session.payment_method_types) && session.payment_method_types.length > 0
+    ? session.payment_method_types[0]
+    : null;
+
+  const { renewalId, status } = await applyRenewal({
+    patientId: checkout.patientId,
+    programType: checkout.programType,
+    periodMonths: checkout.durationMonths,
+    amountPaid: checkout.amountCents / 100,
+    professionalId: checkout.createdById,
+    notes: "Renovación (pago Stripe)",
+  });
+
+  await prisma.renewalCheckout.update({
+    where: { id: checkout.id },
+    data: {
+      status: "paid",
+      paidAt: new Date(),
+      stripePaymentIntentId: typeof session.payment_intent === "string" ? session.payment_intent : null,
+      paymentMethod,
+      renewalId,
+    },
+  });
+
+  console.log("[stripe-webhook] Renovación aplicada", { id: checkout.id, renewalId, status });
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // HANDLER: checkout.session.completed
 // Pago confirmado → creamos Patient, marcamos Sale paid, notificamos a Miguel.
 // ────────────────────────────────────────────────────────────────────────────
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
+  // Renovaciones: flujo aparte (paciente existente, sin crear cuenta).
+  if (session.metadata?.kind === "renewal") {
+    await handleRenewalCompleted(session);
+    return;
+  }
+
   const paymentToken = session.metadata?.paymentToken;
   if (!paymentToken) {
     console.warn("[stripe-webhook] checkout.completed sin metadata.paymentToken", { sessionId: session.id });
