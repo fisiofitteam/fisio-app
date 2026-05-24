@@ -86,6 +86,10 @@ model Patient {
   contractVersion        String?     // "v1", "v2"... para versionar el contrato
   contractTextSnapshot   String?     // texto exacto firmado (legal evidence)
 
+  // Anamnesis (cuestionario inicial del onboarding) — respuestas en JSON
+  anamnesisData          String?     // JSON: { [clavePregunta]: valor }
+  anamnesisCompletedAt   DateTime?
+
   // Checklist de tareas iniciales (JSON)
   // Estructura: { "anamnesis": false, "contract": false, "firstSession": false }
   onboardingTasks        Json?

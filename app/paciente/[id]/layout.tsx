@@ -1,41 +1,28 @@
 // Layout común para todas las páginas del paciente.
-// Fondo: foto de box de CrossFit oscurecida + halo amarillo + grano.
-const BOX_IMAGE_URL = "/box.jpg";
+// Además del envoltorio visual (PatientShell), aplica el GATE de onboarding: si
+// el paciente no ha completado anamnesis + contrato, se le redirige al onboarding
+// y no puede usar la app hasta terminarlo. (El onboarding vive en
+// /paciente/onboarding, fuera de este layout, para evitar bucles de redirección.)
+import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import { PatientShell } from "@/components/PatientShell";
+import { needsOnboarding } from "@/lib/onboarding-content";
 
-export default function PatientLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      className="min-h-screen relative"
-      style={{
-        backgroundImage: `
-          linear-gradient(180deg, rgba(10,10,10,0.90) 0%, rgba(10,10,10,0.96) 100%),
-          url(${BOX_IMAGE_URL})
-        `,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        backgroundAttachment: "fixed",
-        backgroundRepeat: "no-repeat",
-      }}
-    >
-      {/* Halo cálido amarillo en esquina superior derecha */}
-      <div
-        className="fixed inset-0 pointer-events-none"
-        style={{
-          backgroundImage:
-            "radial-gradient(circle at 85% -10%, rgba(252, 211, 77, 0.18) 0, transparent 45%), radial-gradient(circle at 5% 105%, rgba(245, 158, 11, 0.10) 0, transparent 40%)",
-        }}
-      />
-      {/* Grano sutil */}
-      <div
-        className="fixed inset-0 pointer-events-none"
-        style={{
-          backgroundImage:
-            "radial-gradient(rgba(255,255,255,0.035) 1px, transparent 1px)",
-          backgroundSize: "22px 22px",
-        }}
-      />
+export default async function PatientLayout({
+  children,
+  params,
+}: {
+  children: React.ReactNode;
+  params: { id: string };
+}) {
+  const patient = await prisma.patient.findUnique({
+    where: { id: params.id },
+    select: { onboardingTasks: true },
+  });
 
-      <div className="relative patient-scope">{children}</div>
-    </div>
-  );
+  if (patient && needsOnboarding(patient.onboardingTasks)) {
+    redirect("/paciente/onboarding");
+  }
+
+  return <PatientShell>{children}</PatientShell>;
 }
