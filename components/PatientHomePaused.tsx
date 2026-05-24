@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { patientLogout } from "@/components/PatientSessionMenu";
 
 export function PatientHomePaused({
   firstName,
@@ -33,9 +34,12 @@ export function PatientHomePaused({
           <ArrowLeft size={12} /> Cambiar usuario
         </Link>
 
-        {/* Avatar */}
-        <div
-          className="flex items-center justify-center font-bold flex-shrink-0 mx-auto mb-5"
+        {/* Avatar (pulsar para cerrar sesión) */}
+        <button
+          type="button"
+          title="Cerrar sesión"
+          onClick={() => { if (confirm("¿Cerrar sesión?")) patientLogout(); }}
+          className="flex items-center justify-center font-bold flex-shrink-0 mx-auto mb-5 cursor-pointer"
           style={{
             width: 64,
             height: 64,
@@ -44,10 +48,11 @@ export function PatientHomePaused({
             color: "#0A0A0A",
             fontSize: 28,
             letterSpacing: "-0.03em",
+            border: "none",
           }}
         >
           {initial}
-        </div>
+        </button>
 
         <h1 className="text-3xl font-bold text-center mb-2" style={{ letterSpacing: "-0.03em" }}>
           Tu programa está

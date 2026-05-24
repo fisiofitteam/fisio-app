@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { PatientSessionMenu, patientLogout } from "@/components/PatientSessionMenu";
 
 type RollingTask = {
   id: string;
@@ -99,25 +100,26 @@ export function PatientHomeRolling({
             <Link href="/" className="inline-flex items-center gap-1 text-xs" style={{ color: "#737373" }}>
               <ArrowLeft size={12} /> Cambiar usuario
             </Link>
-            <div className="inline-flex items-center gap-1.5 text-[11px] font-medium" style={{ color: "#A3A3A3" }}>
-              <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: "#22C55E" }} />
-              Sesión activa
-            </div>
+            <PatientSessionMenu />
           </div>
 
           <div className="flex items-center gap-3 mb-5">
-            <div
-              className="flex items-center justify-center font-bold flex-shrink-0"
+            <button
+              type="button"
+              title="Cerrar sesión"
+              onClick={() => { if (confirm("¿Cerrar sesión?")) patientLogout(); }}
+              className="flex items-center justify-center font-bold flex-shrink-0 cursor-pointer"
               style={{
                 width: 52, height: 52, borderRadius: 14,
                 background: "linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)",
                 color: "#0A0A0A",
                 fontSize: 22,
                 letterSpacing: "-0.03em",
+                border: "none",
               }}
             >
               {initial}
-            </div>
+            </button>
             <div>
               <div className="text-2xl font-bold" style={{ letterSpacing: "-0.03em" }}>
                 Hola, {firstName}

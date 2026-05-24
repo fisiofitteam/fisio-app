@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AnamnesisField, AnamnesisStep } from "@/lib/onboarding-content";
+import { PatientSessionMenu } from "@/components/PatientSessionMenu";
 
 type Answers = Record<string, unknown>;
 
@@ -33,6 +34,9 @@ export function OnboardingFlow({
   return (
     <div className="max-w-xl mx-auto px-4 py-8 pb-16">
       <header className="mb-6">
+        <div className="flex justify-end mb-2">
+          <PatientSessionMenu />
+        </div>
         <h1 className="text-2xl font-bold text-white mb-1">Bienvenido/a, {firstName}</h1>
         <p className="text-sm text-neutral-300">
           Antes de empezar necesitamos dos cosas: tu cuestionario inicial y la firma del contrato.
