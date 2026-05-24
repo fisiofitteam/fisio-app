@@ -157,7 +157,7 @@ export function FisioSidebar({
       </nav>
 
       {/* Desktop */}
-      <aside className="hidden md:block w-52 flex-shrink-0">
+      <aside className="hidden md:block w-48 flex-shrink-0">
         <div className="px-3 mb-3 flex items-center justify-between">
           <LogoFull size={28} />
           {user && <NotificationsBell />}

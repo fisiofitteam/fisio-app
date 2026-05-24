@@ -50,13 +50,6 @@ export function RenewalThankYouClient({ token }: { token: string }) {
     >
       <div className="min-h-screen w-full flex items-center justify-center px-5 py-10" style={{ background: "rgba(10, 10, 10, 0.78)" }}>
         <div className="max-w-md w-full">
-          <div className="flex items-center justify-center gap-2 mb-8">
-            <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: "#FFD400" }}>
-              <span className="text-lg">⚡</span>
-            </div>
-            <span className="text-lg font-semibold tracking-tight" style={{ color: "#FAFAFA" }}>FisioFit Team</span>
-          </div>
-
           <div
             className="rounded-2xl p-8 text-center"
             style={{ background: "rgba(20, 20, 20, 0.85)", border: "1px solid #262626", backdropFilter: "blur(8px)" }}

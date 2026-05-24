@@ -118,16 +118,6 @@ export function ThankYouClient({ token, sessionId }: { token: string; sessionId:
     >
       <div className="min-h-screen w-full" style={{ background: "rgba(10, 10, 10, 0.82)" }}>
         <div className="max-w-md mx-auto px-4 py-12 sm:py-16">
-          {/* Logo */}
-          <div className="flex items-center justify-center gap-2 mb-10">
-            <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: "#FFD400" }}>
-              <span className="text-lg">⚡</span>
-            </div>
-            <span className="text-lg font-semibold tracking-tight" style={{ color: "#FAFAFA" }}>
-              FisioFit Team
-            </span>
-          </div>
-
           {/* Checking pago */}
           {status.phase === "checking" && (
             <div

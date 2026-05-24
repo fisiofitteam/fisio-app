@@ -8,8 +8,8 @@ export default async function FisioLayout({ children }: { children: React.ReactN
     redirect("/");
   }
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6">
-      <div className="flex flex-col md:flex-row gap-4">
+    <div className="max-w-[1600px] px-3 py-6">
+      <div className="flex flex-col md:flex-row gap-3">
         <FisioSidebar user={user} />
         <div className="flex-1 min-w-0">{children}</div>
       </div>

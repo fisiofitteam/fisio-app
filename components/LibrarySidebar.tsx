@@ -66,51 +66,27 @@ export function LibrarySidebar({ showOnboarding = false }: { showOnboarding?: bo
 
   return (
     <>
-      {/* Móvil: tabs horizontales */}
-      <nav className="md:hidden flex gap-1 overflow-x-auto pb-1 -mx-4 px-4">
+      {/* Pestañas horizontales arriba (todas las pantallas) */}
+      <nav className="flex gap-1 overflow-x-auto border-b border-neutral-200 -mx-4 px-4 sm:mx-0 sm:px-0">
         {sections.map((s) => {
           const active = isActive(s.id);
           return (
             <Link
               key={s.id}
               href={`/fisio/biblioteca/${s.id}`}
-              className={`px-3 py-2 text-xs rounded-lg whitespace-nowrap ${
-                active ? "bg-neutral-900 text-white" : "bg-white border border-neutral-200"
+              title={s.desc}
+              className={`px-3 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
+                active
+                  ? "border-neutral-900 text-neutral-900"
+                  : "border-transparent text-neutral-500 hover:text-neutral-900"
               }`}
             >
-              {s.icon} {s.label}
+              <span className="mr-1">{s.icon}</span>
+              {s.label}
             </Link>
           );
         })}
       </nav>
-
-      {/* Desktop: sidebar vertical */}
-      <aside className="hidden md:block w-52 flex-shrink-0">
-        <nav className="space-y-1">
-          {sections.map((s) => {
-            const active = isActive(s.id);
-            return (
-              <Link
-                key={s.id}
-                href={`/fisio/biblioteca/${s.id}`}
-                className={`block p-3 rounded-lg transition-colors ${
-                  active ? "bg-neutral-900 text-white" : "hover:bg-neutral-100"
-                }`}
-              >
-                <div className="flex items-start gap-2">
-                  <span className="text-lg">{s.icon}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm">{s.label}</div>
-                    <div className={`text-xs mt-0.5 ${active ? "text-neutral-300" : "text-neutral-500"}`}>
-                      {s.desc}
-                    </div>
-                  </div>
-                </div>
-              </Link>
-            );
-          })}
-        </nav>
-      </aside>
     </>
   );
 }

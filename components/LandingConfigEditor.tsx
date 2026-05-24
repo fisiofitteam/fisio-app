@@ -130,13 +130,6 @@ export function LandingConfigEditor({ initialRenewal }: { initialRenewal: Renewa
         <div className="lg:sticky lg:top-4 self-start">
           <div className="text-[10px] uppercase tracking-wide text-neutral-400 font-medium mb-1.5">Vista previa (con datos de ejemplo)</div>
           <div className="rounded-2xl p-5" style={{ background: "#0A0A0A" }}>
-            <div className="flex items-center justify-center gap-2 mb-6">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "#FFD400" }}>
-                <span className="text-base">⚡</span>
-              </div>
-              <span className="text-sm font-semibold" style={{ color: "#FAFAFA" }}>FisioFit Team</span>
-            </div>
-
             <div className="text-center mb-5">
               <p className="text-[10px] uppercase tracking-widest mb-1.5" style={{ color: "#737373" }}>Tu renovación</p>
               <h1 className="text-xl font-bold leading-tight mb-1.5" style={{ color: "#FAFAFA" }}>{v(copy.headline)}</h1>
