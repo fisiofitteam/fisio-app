@@ -21,6 +21,7 @@ import {
   UserCog,
   Settings,
   LogOut,
+  Stethoscope,
   LucideIcon,
 } from "lucide-react";
 
@@ -40,6 +41,7 @@ const FOLLOWUP: Item = { id: "followup", label: "Follow-up", Icon: Repeat, href:
 const PARCHES: Item = { id: "parches", label: "Parches", Icon: Gift, href: "/fisio/parches", match: (p) => p.startsWith("/fisio/parches") };
 const CONTENIDO: Item = { id: "contenido", label: "Contenido", Icon: Sparkles, href: "/fisio/contenido/calendario", match: (p) => p.startsWith("/fisio/contenido") };
 const BIBLIOTECA: Item = { id: "biblioteca", label: "Biblioteca", Icon: BookOpen, href: "/fisio/biblioteca", match: (p) => p.startsWith("/fisio/biblioteca") };
+const REUNIONES: Item = { id: "reuniones", label: "Reuniones", Icon: Stethoscope, href: "/fisio/reuniones", match: (p) => p.startsWith("/fisio/reuniones") };
 const TAREAS: Item = { id: "tareas", label: "Tareas", Icon: CheckSquare, href: "/fisio/tareas", match: (p) => p.startsWith("/fisio/tareas") };
 const LLAMADAS: Item = { id: "llamadas", label: "Llamadas", Icon: Phone, href: "/fisio/llamadas", match: (p) => p.startsWith("/fisio/llamadas") };
 const RECURSOS: Item = { id: "recursos", label: "Recursos", Icon: Package, href: "/fisio/recursos", match: (p) => p.startsWith("/fisio/recursos") };
@@ -49,19 +51,19 @@ const AJUSTES: Item = { id: "ajustes", label: "Ajustes", Icon: Settings, href: "
 
 function itemsForRole(role: string): Item[] {
   if (role === "ceo") {
-    return [PANEL, PACIENTES, LLAMADAS_VENTA, FOLLOWUP, CONTENIDO, BIBLIOTECA, TAREAS, RECURSOS, FINANZAS, EQUIPO, AJUSTES];
+    return [PANEL, PACIENTES, LLAMADAS_VENTA, FOLLOWUP, CONTENIDO, BIBLIOTECA, REUNIONES, TAREAS, RECURSOS, FINANZAS, EQUIPO, AJUSTES];
   }
   if (role === "head_success") {
-    return [PANEL, PACIENTES, BIBLIOTECA, TAREAS, LLAMADAS, RECURSOS, EQUIPO, AJUSTES];
+    return [PANEL, PACIENTES, BIBLIOTECA, REUNIONES, TAREAS, LLAMADAS, RECURSOS, EQUIPO, AJUSTES];
   }
   if (role === "setter") {
-    return [LEADS, PARCHES, TAREAS, CONTENIDO, EQUIPO];
+    return [LEADS, PARCHES, TAREAS, CONTENIDO, REUNIONES, EQUIPO];
   }
   if (role === "closer") {
-    return [PANEL, LLAMADAS_VENTA, FOLLOWUP, TAREAS, EQUIPO];
+    return [PANEL, LLAMADAS_VENTA, FOLLOWUP, TAREAS, REUNIONES, EQUIPO];
   }
   // fisio normal
-  return [PANEL, PACIENTES, BIBLIOTECA, TAREAS, LLAMADAS, RECURSOS, EQUIPO];
+  return [PANEL, PACIENTES, BIBLIOTECA, REUNIONES, TAREAS, LLAMADAS, RECURSOS, EQUIPO];
 }
 
 const ROLE_LABEL: Record<string, string> = {

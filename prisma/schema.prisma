@@ -1465,3 +1465,22 @@ model WelcomeMessageConfig {
   updatedAt   DateTime @updatedAt
   updatedById String?
 }
+
+// Reuniones → Sesiones clínicas: tabla viva de casos clínicos que el equipo
+// comenta cada semana. assignedToId es el id del Professional (sin relación FK).
+model ClinicalSessionCase {
+  id                String   @id @default(cuid())
+  patientName       String                              // Nombre del paciente
+  assignedToId      String?                             // fisioterapeuta asignado
+  status            String   @default("pendiente")      // "pendiente" | "supervision" | "resuelto"
+  bodyZone          String?                             // zona corporal (texto libre)
+  situation         String?                             // descripción de la situación
+  proposedSolutions String?                             // soluciones propuestas
+  consensusSolution String?                             // solución consensuada
+  createdById       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([status])
+  @@index([assignedToId])
+}
