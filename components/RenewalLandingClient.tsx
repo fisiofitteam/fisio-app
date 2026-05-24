@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { applyVars, type RenewalLandingCopy } from "@/lib/landing-content";
 
 type Data = {
   status: string;
@@ -16,7 +17,7 @@ function formatAmount(cents: number, currency: string) {
   return (cents / 100).toLocaleString("es-ES", { style: "currency", currency: (currency || "eur").toUpperCase() });
 }
 
-export function RenewalLandingClient({ token }: { token: string }) {
+export function RenewalLandingClient({ token, copy }: { token: string; copy: RenewalLandingCopy }) {
   const [data, setData] = useState<Data | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [errorMsg, setErrorMsg] = useState("");
@@ -94,39 +95,60 @@ export function RenewalLandingClient({ token }: { token: string }) {
                 <p className="text-sm text-neutral-500">Pide a tu coach que te genere uno nuevo.</p>
               </div>
             ) : (
-              <>
-                <h1 className="font-semibold text-lg mb-1">Renovar tu programa</h1>
-                <p className="text-sm text-neutral-500 mb-4">Hola {data.patientName.split(" ")[0]}, este es el resumen de tu renovación:</p>
+              (() => {
+                const amount = formatAmount(data.amountCents, data.currency);
+                const vars = {
+                  nombre: data.patientName.split(" ")[0],
+                  programa: data.programType,
+                  meses: String(data.durationMonths),
+                  importe: amount,
+                };
+                const v = (t: string) => applyVars(t, vars);
+                return (
+                  <>
+                    <h1 className="font-bold text-xl leading-tight mb-1.5">{v(copy.headline)}</h1>
+                    <p className="text-sm text-neutral-600 mb-4">{v(copy.subheadline)}</p>
 
-                <div className="bg-neutral-50 rounded-lg p-4 mb-4 space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-neutral-500">Programa</span>
-                    <span className="font-medium">{data.programType}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-neutral-500">Duración</span>
-                    <span className="font-medium">{data.durationMonths} {data.durationMonths === 1 ? "mes" : "meses"}</span>
-                  </div>
-                  <div className="flex justify-between pt-2 border-t border-neutral-200">
-                    <span className="text-neutral-500">Total</span>
-                    <span className="font-bold text-base">{formatAmount(data.amountCents, data.currency)}</span>
-                  </div>
-                </div>
+                    {copy.bullets.length > 0 && (
+                      <ul className="space-y-2 mb-4">
+                        {copy.bullets.map((b, i) => (
+                          <li key={i} className="flex items-start gap-2 text-sm text-neutral-700">
+                            <span className="text-emerald-500 mt-0.5">✓</span>
+                            <span>{v(b)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
 
-                {cancelled && (
-                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-3">
-                    Has cancelado el pago. Puedes intentarlo de nuevo cuando quieras.
-                  </p>
-                )}
-                {errorMsg && <p className="text-sm text-red-600 mb-3">{errorMsg}</p>}
+                    <div className="bg-neutral-50 rounded-lg p-4 mb-4 space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-neutral-500">Programa</span>
+                        <span className="font-medium">{data.programType}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-neutral-500">Duración</span>
+                        <span className="font-medium">{data.durationMonths} {data.durationMonths === 1 ? "mes" : "meses"}</span>
+                      </div>
+                      <div className="flex justify-between pt-2 border-t border-neutral-200">
+                        <span className="text-neutral-500">Total</span>
+                        <span className="font-bold text-base">{amount}</span>
+                      </div>
+                    </div>
 
-                <button onClick={pay} disabled={paying} className="btn btn-primary w-full">
-                  {paying ? "Redirigiendo a pago seguro..." : `Pagar ${formatAmount(data.amountCents, data.currency)}`}
-                </button>
-                <p className="text-[11px] text-neutral-400 text-center mt-3">
-                  Pago seguro procesado por Stripe.
-                </p>
-              </>
+                    {cancelled && (
+                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-3">
+                        Has cancelado el pago. Puedes intentarlo de nuevo cuando quieras.
+                      </p>
+                    )}
+                    {errorMsg && <p className="text-sm text-red-600 mb-3">{errorMsg}</p>}
+
+                    <button onClick={pay} disabled={paying} className="btn btn-primary w-full">
+                      {paying ? "Redirigiendo a pago seguro..." : `${v(copy.ctaLabel)} · ${amount}`}
+                    </button>
+                    <p className="text-[11px] text-neutral-400 text-center mt-3">{v(copy.reassurance)}</p>
+                  </>
+                );
+              })()
             )}
           </div>
         )}

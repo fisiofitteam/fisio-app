@@ -42,17 +42,23 @@ const SECTIONS = [
   },
 ];
 
-// Sección solo-CEO: configuración del onboarding del paciente.
+// Secciones solo-CEO.
 const ONBOARDING_SECTION = {
   id: "onboarding",
   label: "Onboarding",
   icon: "🚀",
   desc: "Cuestionario y contrato (CEO)",
 };
+const LANDINGS_SECTION = {
+  id: "landings",
+  label: "Landings",
+  icon: "✨",
+  desc: "Textos de las páginas de pago (CEO)",
+};
 
 export function LibrarySidebar({ showOnboarding = false }: { showOnboarding?: boolean }) {
   const pathname = usePathname() ?? "";
-  const sections = showOnboarding ? [...SECTIONS, ONBOARDING_SECTION] : SECTIONS;
+  const sections = showOnboarding ? [...SECTIONS, ONBOARDING_SECTION, LANDINGS_SECTION] : SECTIONS;
 
   function isActive(id: string) {
     return pathname.startsWith(`/fisio/biblioteca/${id}`);

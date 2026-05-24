@@ -1446,3 +1446,13 @@ model RenewalCheckout {
   @@index([patientId])
   @@index([status])
 }
+
+// Copy editable de las landings (clave = identificador de la landing, p.ej.
+// "renewal"). content es JSON con los campos de texto. Si no existe, el código
+// cae a los valores por defecto de lib/landing-content.ts.
+model LandingConfig {
+  id          String   @id                            // "renewal" | "contract" | ...
+  content     String                                  // JSON con los campos de copy
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+}
