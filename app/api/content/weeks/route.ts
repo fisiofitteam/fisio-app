@@ -111,6 +111,7 @@ export async function PATCH(req: NextRequest) {
     if (rest[k] !== undefined) update[k] = rest[k] || null;
   }
   if (rest.limitingBeliefs !== undefined) update.limitingBeliefs = JSON.stringify(rest.limitingBeliefs);
+  if (rest.weekStories !== undefined) update.weekStories = JSON.stringify(rest.weekStories);
   if (rest.mixValue !== undefined) update.mixValue = Number(rest.mixValue);
   if (rest.mixBeliefs !== undefined) update.mixBeliefs = Number(rest.mixBeliefs);
   if (rest.mixConversion !== undefined) update.mixConversion = Number(rest.mixConversion);

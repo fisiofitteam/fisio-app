@@ -69,7 +69,6 @@ export default async function ContentPage({
     include: {
       pieces: {
         orderBy: { dayOfWeek: "asc" },
-        include: { supportStories: { orderBy: { order: "asc" } } },
       },
     },
   });
@@ -159,6 +158,7 @@ export default async function ContentPage({
           closingNotes: week.closingNotes,
           winningHooks: week.winningHooks,
           ideasEmerged: week.ideasEmerged,
+          weekStories: week.weekStories,
           pieces: week.pieces.map((p) => ({
             id: p.id,
             dayOfWeek: p.dayOfWeek,
@@ -167,8 +167,6 @@ export default async function ContentPage({
             goals: p.goals,
             status: p.status,
             hook: p.hook,
-            storiesCount: p.supportStories.length,
-            storiesDone: p.supportStories.filter((s) => s.published).length,
             metricsFilledAt: p.metricsFilledAt?.toISOString() ?? null,
           })),
         }}

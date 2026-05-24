@@ -11,7 +11,6 @@ export default async function PiecePage({ params }: { params: { id: string } }) 
     where: { id: params.id },
     include: {
       week: true,
-      supportStories: { orderBy: { order: "asc" } },
     },
   });
   if (!piece) notFound();
@@ -64,12 +63,6 @@ export default async function PiecePage({ params }: { params: { id: string } }) 
         centralTheme: piece.week.centralTheme,
         leadMagnetKeyword: piece.week.leadMagnetKeyword,
       }}
-      stories={piece.supportStories.map((s) => ({
-        id: s.id,
-        description: s.description,
-        published: s.published,
-        order: s.order,
-      }))}
       prevId={prevId}
       nextId={nextId}
     />

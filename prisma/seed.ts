@@ -1478,9 +1478,6 @@ C) Cierre - estiramientos`,
           metricsDmKeyword: m?.dm ?? null,
           metricsConversions: m?.conv ?? null,
           metricsFilledAt: m ? new Date() : null,
-          supportStories: {
-            create: f.stories.map((desc, idx) => ({ order: idx, description: desc, published: opts.pieceStatesByDay[dow] === "published" })),
-          },
         },
       });
     }

@@ -772,6 +772,9 @@ model ContentWeek {
   winningHooks    String?                             // hooks ganadores en texto libre
   ideasEmerged    String?                             // ideas surgidas
 
+  // Historias de la semana: JSON array de 7 strings (índice 0=Lun ... 6=Dom)
+  weekStories     String   @default("[]")
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   closedAt        DateTime?
@@ -823,24 +826,8 @@ model ContentPiece {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  supportStories  ContentStory[]
-
   @@index([weekId, dayOfWeek])
   @@index([status])
-}
-
-model ContentStory {
-  id          String   @id @default(cuid())
-  pieceId     String
-  piece       ContentPiece @relation(fields: [pieceId], references: [id], onDelete: Cascade)
-
-  order       Int
-  description String                              // "Caja de preguntas sobre el tema"
-  published   Boolean  @default(false)
-
-  createdAt   DateTime @default(now())
-
-  @@index([pieceId, order])
 }
 
 // ============================================================================

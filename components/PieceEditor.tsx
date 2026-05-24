@@ -21,13 +21,6 @@ import {
 
 type Block = { id: string; label: string; content: string; order: number };
 
-type Story = {
-  id: string;
-  description: string;
-  published: boolean;
-  order: number;
-};
-
 type Piece = {
   id: string;
   weekId: string;
@@ -71,20 +64,16 @@ const AUTOSAVE_DEBOUNCE_MS = 1500;
 export function PieceEditor({
   piece: initialPiece,
   week,
-  stories: initialStories,
   prevId,
   nextId,
 }: {
   piece: Piece;
   week: { id: string; centralTheme: string; leadMagnetKeyword: string | null };
-  stories: Story[];
   prevId: string | null;
   nextId: string | null;
 }) {
   const router = useRouter();
   const [piece, setPiece] = useState(initialPiece);
-  const [stories, setStories] = useState(initialStories);
-  const [activeTab, setActiveTab] = useState<"feed" | "stories">("feed");
   const [recordingMode, setRecordingMode] = useState(false);
   const [saving, setSaving] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
@@ -323,33 +312,7 @@ export function PieceEditor({
         </div>
       </header>
 
-      {/* Tabs Feed / Stories */}
-      <div className="flex gap-1 mb-4 border-b border-neutral-200">
-        <button
-          onClick={() => setActiveTab("feed")}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "feed" ? "border-neutral-900 text-neutral-900" : "border-transparent text-neutral-500 hover:text-neutral-900"
-          }`}
-        >
-          📰 Feed
-        </button>
-        <button
-          onClick={() => setActiveTab("stories")}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
-            activeTab === "stories" ? "border-neutral-900 text-neutral-900" : "border-transparent text-neutral-500 hover:text-neutral-900"
-          }`}
-        >
-          📲 Stories
-          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${activeTab === "stories" ? "bg-neutral-900 text-white" : "bg-neutral-100 text-neutral-600"}`}>
-            {stories.filter((s) => s.published).length}/{stories.length}
-          </span>
-        </button>
-      </div>
-
-      {activeTab === "stories" ? (
-        <StoriesPanel pieceId={piece.id} stories={stories} setStories={setStories} />
-      ) : (
-      /* Layout 2 columnas */
+      {/* Layout 2 columnas */}
       <div className="grid grid-cols-1 lg:grid-cols-[60%_40%] gap-4">
         {/* COLUMNA IZQUIERDA: guion editable */}
         <section className="space-y-3">
@@ -422,7 +385,6 @@ export function PieceEditor({
           </ProductionBlock>
         </aside>
       </div>
-      )}
     </main>
   );
 }
@@ -628,117 +590,6 @@ function Field({ label, value, onChange, placeholder }: { label: string; value: 
         placeholder={placeholder}
       />
     </div>
-  );
-}
-
-// ============================================================================
-// Stories de apoyo: panel dedicado (tab Stories)
-// ============================================================================
-
-function StoriesPanel({
-  pieceId,
-  stories,
-  setStories,
-}: {
-  pieceId: string;
-  stories: Story[];
-  setStories: (s: Story[]) => void;
-}) {
-  async function togglePublished(s: Story) {
-    setStories(stories.map((x) => (x.id === s.id ? { ...x, published: !x.published } : x)));
-    await fetch("/api/content/stories", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: s.id, published: !s.published }),
-    });
-  }
-
-  async function updateDescription(s: Story, newDesc: string) {
-    setStories(stories.map((x) => (x.id === s.id ? { ...x, description: newDesc } : x)));
-    await fetch("/api/content/stories", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: s.id, description: newDesc }),
-    });
-  }
-
-  async function addStory() {
-    const res = await fetch("/api/content/stories", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pieceId, description: "" }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setStories([...stories, data]);
-    }
-  }
-
-  async function removeStory(s: Story) {
-    if (!confirm("¿Eliminar esta story?")) return;
-    setStories(stories.filter((x) => x.id !== s.id));
-    await fetch(`/api/content/stories?id=${s.id}`, { method: "DELETE" });
-  }
-
-  const done = stories.filter((s) => s.published).length;
-
-  return (
-    <section className="max-w-2xl">
-      <div className="mb-4">
-        <p className="text-sm text-neutral-600">
-          Stories que acompañan a esta pieza. Marca cada una cuando la publiques.
-        </p>
-        <p className="text-xs text-neutral-500 mt-1">
-          {done}/{stories.length} publicadas
-        </p>
-      </div>
-
-      <div className="card">
-        {stories.length === 0 ? (
-          <p className="text-sm text-neutral-400 text-center py-6 italic">
-            Aún no hay stories de apoyo. Pulsa "+ Añadir story" para empezar.
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {stories.map((s) => (
-              <div key={s.id} className="flex items-start gap-3 p-2 -mx-2 rounded hover:bg-neutral-50 group">
-                <input
-                  type="checkbox"
-                  checked={s.published}
-                  onChange={() => togglePublished(s)}
-                  className="w-5 h-5 accent-emerald-600 flex-shrink-0 mt-0.5"
-                />
-                <textarea
-                  className={`flex-1 text-sm bg-transparent border-0 outline-none resize-none ${s.published ? "line-through text-neutral-400" : ""}`}
-                  rows={1}
-                  value={s.description}
-                  onChange={(e) => updateDescription(s, e.target.value)}
-                  placeholder="Describe esta story..."
-                  onInput={(e) => {
-                    const t = e.currentTarget;
-                    t.style.height = "auto";
-                    t.style.height = t.scrollHeight + "px";
-                  }}
-                />
-                <button
-                  onClick={() => removeStory(s)}
-                  className="text-xs text-neutral-300 hover:text-red-600 opacity-0 group-hover:opacity-100 flex-shrink-0 mt-1"
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <button
-          onClick={addStory}
-          className="mt-3 text-sm text-blue-600 hover:underline"
-        >
-          + Añadir story
-        </button>
-      </div>
-    </section>
   );
 }
 

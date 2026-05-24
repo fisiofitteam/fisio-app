@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -27,8 +27,6 @@ type Piece = {
   goals: string;
   status: string;
   hook: string | null;
-  storiesCount: number;
-  storiesDone: number;
   metricsFilledAt: string | null;
 };
 
@@ -49,6 +47,7 @@ type Week = {
   closingNotes?: string | null;
   winningHooks?: string | null;
   ideasEmerged?: string | null;
+  weekStories?: string | null;
   pieces: Piece[];
 };
 
@@ -314,6 +313,9 @@ export function ThisWeekView({
         ))}
       </div>
 
+      {/* Historias de la semana */}
+      <WeekStoriesSection week={week} />
+
       {showNew && (
         <NewWeekModal
           defaultYear={suggestion.year}
@@ -417,19 +419,104 @@ function PieceCard({ piece, weekId }: { piece: Piece; weekId: string }) {
         </p>
       )}
 
-      <div className="flex justify-between items-center text-[11px] text-neutral-500 mt-2 pt-2 border-t border-neutral-100">
-        
-        <span>
-          Stories {piece.storiesDone}/{piece.storiesCount}
-        </span>
-      </div>
-
       {piece.status === "published" && !piece.metricsFilledAt && (
         <div className="text-[10px] text-amber-700 mt-2 bg-amber-50 rounded px-2 py-1 flex items-center gap-1">
           ⚠ Pendiente rellenar métricas
         </div>
       )}
     </Link>
+  );
+}
+
+// ============================================================================
+// Historias de la semana: 7 bloques de texto libre (1 por día), a nivel semana
+// ============================================================================
+
+function parseWeekStories(raw: string | null | undefined): string[] {
+  let arr: string[] = [];
+  try {
+    const parsed = JSON.parse(raw || "[]");
+    if (Array.isArray(parsed)) arr = parsed.map((x) => (typeof x === "string" ? x : ""));
+  } catch {}
+  while (arr.length < 7) arr.push("");
+  return arr.slice(0, 7);
+}
+
+function WeekStoriesSection({ week }: { week: Week }) {
+  const [values, setValues] = useState<string[]>(() => parseWeekStories(week.weekStories));
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Si cambiamos de semana (mismo componente, distinto week.id), resetear
+  useEffect(() => {
+    setValues(parseWeekStories(week.weekStories));
+    setSaveState("idle");
+  }, [week.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function scheduleSave(next: string[]) {
+    setSaveState("saving");
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(async () => {
+      await fetch("/api/content/weeks", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: week.id, weekStories: next }),
+      });
+      setSaveState("saved");
+      setTimeout(() => setSaveState("idle"), 1500);
+    }, 1000);
+  }
+
+  function setDay(idx: number, val: string) {
+    const next = values.map((v, i) => (i === idx ? val : v));
+    setValues(next);
+    scheduleSave(next);
+  }
+
+  return (
+    <section className="mt-10">
+      <div className="flex items-center justify-between gap-3 mb-1">
+        <h2 className="text-xl font-bold flex items-center gap-2">📲 Historias de la semana</h2>
+        <span className="text-xs text-neutral-400 min-w-[70px] text-right">
+          {saveState === "saving" ? "Guardando…" : saveState === "saved" ? "Guardado ✓" : ""}
+        </span>
+      </div>
+      <p className="text-sm text-neutral-500 mb-3">
+        Una idea de stories por día para acompañar la semana. Texto libre; se guarda solo.
+      </p>
+      <div className="border-t border-neutral-200 mb-4" />
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {values.map((val, idx) => {
+          const dow = idx + 1;
+          return (
+            <div key={dow} className="card">
+              <div className="flex justify-between items-center mb-1.5">
+                <div className="text-[10px] uppercase text-neutral-500 font-medium tracking-wide">
+                  {DAY_LABELS[dow]}
+                </div>
+                {val && (
+                  <button
+                    onClick={() => setDay(idx, "")}
+                    className="text-[11px] text-neutral-300 hover:text-red-600"
+                    title="Borrar contenido de este día"
+                  >
+                    Borrar
+                  </button>
+                )}
+              </div>
+              <textarea
+                className="w-full bg-transparent border-0 outline-none text-sm resize-none min-h-[64px]"
+                rows={3}
+                value={val}
+                onChange={(e) => setDay(idx, e.target.value)}
+                placeholder="Ej: Caja de preguntas sobre el tema, encuesta, BTS de la grabación…"
+              />
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
