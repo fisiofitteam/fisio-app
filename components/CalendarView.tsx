@@ -383,7 +383,7 @@ function MonthGrid({
                         const fmtLabel = formatLabelOnly(dp.piece.format);
                         const fmtIcon = formatIcon(dp.piece.format);
                         const label = dp.piece.title?.trim() || dp.piece.hook?.trim() || fmtLabel || "Pieza";
-                        const statusIcon = dp.piece.status === "published" ? " ✓" : dp.piece.status === "scheduled" ? " 📅" : "";
+                        const statusIcon = dp.piece.status === "published" ? "✓" : dp.piece.status === "scheduled" ? "📅" : "";
                         const goals = parseGoals(dp.piece.goals);
                         return (
                           <Link
@@ -397,13 +397,18 @@ function MonthGrid({
                               e.dataTransfer.setData("text/source-dayofweek", String(dp.piece.dayOfWeek));
                               e.dataTransfer.effectAllowed = "move";
                             }}
-                            className="flex flex-col gap-0.5 text-[10px] px-1.5 py-1 rounded bg-neutral-100 hover:bg-neutral-200 leading-tight cursor-move"
+                            className="relative flex flex-col gap-0.5 text-[10px] px-1.5 py-1 rounded bg-neutral-100 hover:bg-neutral-200 leading-tight cursor-move overflow-hidden"
                             title={`${fmtLabel}${dp.piece.hook ? " · " + dp.piece.hook : ""}${dp.weekTheme ? " · " + dp.weekTheme : ""}`}
                           >
-                            <div className="flex items-start gap-1">
+                            {statusIcon && (
+                              <span className="absolute top-0.5 right-0.5 text-emerald-700 font-bold text-[11px] leading-none">
+                                {statusIcon}
+                              </span>
+                            )}
+                            <div className="flex items-start gap-1 pr-3">
                               <span className="flex-shrink-0">{fmtIcon}</span>
-                              <span className="line-clamp-2 break-words">
-                                {label}{statusIcon}
+                              <span className="line-clamp-2 break-words flex-1 min-w-0">
+                                {label}
                               </span>
                             </div>
                             {goals.length > 0 && (

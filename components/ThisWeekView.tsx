@@ -390,8 +390,8 @@ function PieceCard({ piece, weekId }: { piece: Piece; weekId: string }) {
           <div className="text-[10px] uppercase text-neutral-500 font-medium tracking-wide">
             {dayLabel}
           </div>
-          <div className="font-semibold text-sm mt-0.5 flex items-center gap-1.5">
-            <span>{fmtIcon}</span>
+          <div className="font-semibold text-sm mt-0.5">
+            <span className="mr-1.5">{fmtIcon}</span>
             <span>{piece.title || fmtLabel || piece.format}</span>
           </div>
           {goals.length > 0 && (
