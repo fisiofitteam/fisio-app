@@ -1484,3 +1484,34 @@ model ClinicalSessionCase {
 
   @@index([status])
 }
+
+// Comunidad: calendario de contenido interno del programa (independiente del de
+// redes). Un post por día. category: entretener|conectar|ayudar|educar|convertir.
+model CommunityPost {
+  id           String   @id @default(cuid())
+  date         DateTime @unique                          // día del post (UTC midnight)
+  category     String
+  assignedToId String?                                   // fisio que publica (manual)
+  text         String?                                   // idea / contenido del día
+  done         Boolean  @default(false)
+  createdById  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([date])
+}
+
+// Banco de ideas de contenido de comunidad, clasificadas por categoría.
+// Al programar una idea, se marca used=true y se crea un CommunityPost.
+model CommunityIdea {
+  id          String   @id @default(cuid())
+  category    String
+  text        String
+  used        Boolean  @default(false)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([used])
+  @@index([category])
+}
