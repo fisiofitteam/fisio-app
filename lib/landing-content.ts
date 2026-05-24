@@ -123,13 +123,16 @@ export function normalizeContractCopy(raw: unknown): ContractLandingCopy {
 // ============================================================================
 
 export type AgendaStat = { value: string; label: string };
+export type AgendaBlock = { id: string; title: string; text: string; imageUrl: string };
 export type AgendaLandingCopy = {
   heroTitle1: string;
   heroTitle2: string; // segunda línea (degradado)
   heroSubtitle: string;
   authorityTitle: string;
   authorityText: string;
+  groupImageUrl: string; // foto de grupo del equipo (prueba social); "" = placeholder
   stats: AgendaStat[]; // exactamente 3
+  blocks: AgendaBlock[]; // bloques libres (casos de éxito, etc.)
 };
 
 export const AGENDA_LANDING_DEFAULTS: AgendaLandingCopy = {
@@ -140,28 +143,43 @@ export const AGENDA_LANDING_DEFAULTS: AgendaLandingCopy = {
   authorityTitle: "Un equipo de fisios especializado en CrossFit",
   authorityText:
     "Llevamos +10 años en boxes, entrenando y tratando a atletas como tú. No somos fisios genéricos: entendemos las exigencias del CrossFit porque las hemos vivido en primera persona.",
+  groupImageUrl: "",
   stats: [
     { value: "+600", label: "atletas recuperados" },
     { value: "+10", label: "años en boxes" },
     { value: "✓", label: "Fisios colegiados" },
   ],
+  blocks: [],
 };
 
 export function normalizeAgendaCopy(raw: unknown): AgendaLandingCopy {
   const d = AGENDA_LANDING_DEFAULTS;
   const o = (raw && typeof raw === "object" ? raw : {}) as any;
   const str = (v: unknown, fb: string) => (typeof v === "string" && v.trim() ? v : fb);
+  const optStr = (v: unknown) => (typeof v === "string" ? v : "");
   const rawStats = Array.isArray(o.stats) ? o.stats : [];
   const stats: AgendaStat[] = [0, 1, 2].map((i) => ({
     value: str(rawStats[i]?.value, d.stats[i].value),
     label: str(rawStats[i]?.label, d.stats[i].label),
   }));
+  const rawBlocks = Array.isArray(o.blocks) ? o.blocks : [];
+  const blocks: AgendaBlock[] = [];
+  rawBlocks.forEach((b: any, i: number) => {
+    if (!b || typeof b !== "object") return;
+    const title = optStr(b.title);
+    const text = optStr(b.text);
+    const imageUrl = optStr(b.imageUrl);
+    if (!title.trim() && !text.trim() && !imageUrl.trim()) return; // bloque vacío
+    blocks.push({ id: typeof b.id === "string" && b.id ? b.id : `b_${i}`, title, text, imageUrl });
+  });
   return {
     heroTitle1: str(o.heroTitle1, d.heroTitle1),
     heroTitle2: str(o.heroTitle2, d.heroTitle2),
     heroSubtitle: str(o.heroSubtitle, d.heroSubtitle),
     authorityTitle: str(o.authorityTitle, d.authorityTitle),
     authorityText: str(o.authorityText, d.authorityText),
+    groupImageUrl: optStr(o.groupImageUrl),
     stats,
+    blocks,
   };
 }

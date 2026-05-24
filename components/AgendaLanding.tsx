@@ -645,6 +645,31 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
           <TeamAuthorityBlock copy={copy} />
         </div>
 
+        {/* ━━━ Bloques libres (casos de éxito, etc.) ━━━ */}
+        {copy.blocks.map((b) => (
+          <section
+            key={b.id}
+            className="rounded-2xl p-5 sm:p-6 mb-4"
+            style={{ background: "rgba(20, 20, 20, 0.85)", border: "1px solid #262626", backdropFilter: "blur(8px)" }}
+          >
+            {b.imageUrl && (
+              <div className="rounded-xl overflow-hidden mb-4" style={{ border: "1px solid #404040" }}>
+                <img src={b.imageUrl} alt={b.title} className="w-full h-auto block" />
+              </div>
+            )}
+            {b.title && (
+              <h2 className="text-base sm:text-lg font-semibold mb-2" style={{ letterSpacing: "-0.015em", color: "#FAFAFA" }}>
+                {b.title}
+              </h2>
+            )}
+            {b.text && (
+              <p className="text-sm leading-relaxed whitespace-pre-line" style={{ color: "#A3A3A3" }}>
+                {b.text}
+              </p>
+            )}
+          </section>
+        ))}
+
         <footer className="mt-10 text-center text-xs" style={{ color: "#525252" }}>
           FisioFit Team · Readaptación deportiva online · {new Date().getFullYear()}
         </footer>
@@ -706,39 +731,10 @@ function DayBlock({
 }
 
 // ============================================================================
-// Bloque de autoridad: foto del equipo + credenciales
+// Bloque de autoridad: foto de grupo del equipo + credenciales
+// (la imagen y los textos se editan desde Biblioteca → Landings → Agenda)
 // ============================================================================
-//
-// Para añadir/editar miembros:
-//  1. Sube la foto a /public/team/{nombre-archivo}.jpg
-//  2. Añade entrada en TEAM_MEMBERS abajo (foto + nombre + rol)
-//  3. Deploy
-//
-// El layout se elige automáticamente según el número de miembros:
-//  - 3 fotos: fila horizontal
-//  - 4 fotos: grid 2x2
-//  - 5+ fotos: grid 3 columnas (4-5 quedan equilibradas)
-//
-type TeamMember = { photo: string; name: string; role: string };
-
-const TEAM_MEMBERS: TeamMember[] = [
-  // TODO: Ales subirá las fotos a /public/team/ y rellenará este array.
-  // Ejemplo:
-  // { photo: "/team/ales.jpg", name: "Ales Faus", role: "CEO y Fisioterapeuta" },
-  // { photo: "/team/alba.jpg", name: "Alba Maldonado", role: "Fisioterapeuta" },
-  // { photo: "/team/miguel.jpg", name: "Miguel Castro", role: "Head of Success" },
-];
-
 function TeamAuthorityBlock({ copy }: { copy: AgendaLandingCopy }) {
-  const hasPhotos = TEAM_MEMBERS.length > 0;
-  // Layout dinámico según cantidad de miembros
-  const gridCols =
-    TEAM_MEMBERS.length <= 3
-      ? "grid-cols-3"
-      : TEAM_MEMBERS.length === 4
-      ? "grid-cols-2 sm:grid-cols-4"
-      : "grid-cols-3";
-
   return (
     <section
       className="rounded-2xl p-5 sm:p-6 mb-6"
@@ -748,36 +744,12 @@ function TeamAuthorityBlock({ copy }: { copy: AgendaLandingCopy }) {
         backdropFilter: "blur(8px)",
       }}
     >
-      {/* Foto/collage del equipo */}
-      {hasPhotos ? (
-        <div className={`grid ${gridCols} gap-3 mb-5`}>
-          {TEAM_MEMBERS.map((m) => (
-            <div key={m.name} className="text-center">
-              <div
-                className="w-full rounded-xl overflow-hidden mb-2"
-                style={{
-                  aspectRatio: "1/1",
-                  background: "#262626",
-                  border: "1px solid #404040",
-                }}
-              >
-                <img
-                  src={m.photo}
-                  alt={m.name}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="text-xs font-semibold leading-tight" style={{ color: "#FAFAFA" }}>
-                {m.name}
-              </div>
-              <div className="text-[10px] mt-0.5" style={{ color: "#A3A3A3" }}>
-                {m.role}
-              </div>
-            </div>
-          ))}
+      {/* Foto de grupo del equipo (prueba social) */}
+      {copy.groupImageUrl ? (
+        <div className="rounded-xl overflow-hidden mb-5" style={{ border: "1px solid #404040" }}>
+          <img src={copy.groupImageUrl} alt="Equipo FisioFit" className="w-full h-auto block" />
         </div>
       ) : (
-        // Placeholder elegante mientras no hay fotos cargadas
         <div
           className="rounded-xl mb-5 text-center"
           style={{
