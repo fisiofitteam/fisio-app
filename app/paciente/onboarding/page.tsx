@@ -4,6 +4,7 @@ import { getActivePatient } from "@/lib/auth";
 import { PatientShell } from "@/components/PatientShell";
 import { OnboardingFlow } from "@/components/OnboardingFlow";
 import { needsOnboarding, parseOnboardingTasks } from "@/lib/onboarding-content";
+import { getOnboardingConfig } from "@/lib/onboarding-config";
 
 export default async function OnboardingPage() {
   const active = await getActivePatient();
@@ -35,6 +36,8 @@ export default async function OnboardingPage() {
     } catch {}
   }
 
+  const config = await getOnboardingConfig();
+
   return (
     <PatientShell>
       <OnboardingFlow
@@ -42,6 +45,8 @@ export default async function OnboardingPage() {
         firstName={patient.fullName.split(" ")[0]}
         initialTasks={{ anamnesis: Boolean(tasks.anamnesis), contract: Boolean(tasks.contract) }}
         initialAnamnesis={anamnesisAnswers}
+        steps={config.anamnesisSteps}
+        contractText={config.contractText}
       />
     </PatientShell>
   );

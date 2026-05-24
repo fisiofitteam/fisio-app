@@ -2,11 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  ANAMNESIS_STEPS,
-  CONTRACT_TEXT,
-  type AnamnesisField,
-} from "@/lib/onboarding-content";
+import type { AnamnesisField, AnamnesisStep } from "@/lib/onboarding-content";
 
 type Answers = Record<string, unknown>;
 
@@ -15,11 +11,15 @@ export function OnboardingFlow({
   firstName,
   initialTasks,
   initialAnamnesis,
+  steps,
+  contractText,
 }: {
   patientId: string;
   firstName: string;
   initialTasks: { anamnesis: boolean; contract: boolean };
   initialAnamnesis: Answers;
+  steps: AnamnesisStep[];
+  contractText: string;
 }) {
   const [tasks, setTasks] = useState(initialTasks);
 
@@ -48,13 +48,17 @@ export function OnboardingFlow({
 
       {phase === "anamnesis" && (
         <AnamnesisWizard
+          steps={steps}
           initial={initialAnamnesis}
           onDone={() => setTasks((t) => ({ ...t, anamnesis: true }))}
         />
       )}
 
       {phase === "contract" && (
-        <ContractSign onDone={() => setTasks((t) => ({ ...t, contract: true }))} />
+        <ContractSign
+          contractText={contractText}
+          onDone={() => setTasks((t) => ({ ...t, contract: true }))}
+        />
       )}
 
       {phase === "done" && <DoneScreen patientId={patientId} />}
@@ -83,14 +87,22 @@ function PhasePill({ label, active, done }: { label: string; active: boolean; do
 // Anamnesis — cuestionario por pasos
 // ============================================================================
 
-function AnamnesisWizard({ initial, onDone }: { initial: Answers; onDone: () => void }) {
+function AnamnesisWizard({
+  steps,
+  initial,
+  onDone,
+}: {
+  steps: AnamnesisStep[];
+  initial: Answers;
+  onDone: () => void;
+}) {
   const [stepIndex, setStepIndex] = useState(0);
   const [answers, setAnswers] = useState<Answers>(initial);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const step = ANAMNESIS_STEPS[stepIndex];
-  const isLast = stepIndex === ANAMNESIS_STEPS.length - 1;
+  const step = steps[stepIndex];
+  const isLast = stepIndex === steps.length - 1;
 
   function setValue(key: string, value: unknown) {
     setAnswers((a) => ({ ...a, [key]: value }));
@@ -141,7 +153,7 @@ function AnamnesisWizard({ initial, onDone }: { initial: Answers; onDone: () => 
   return (
     <div>
       <div className="text-xs text-neutral-400 mb-2">
-        Paso {stepIndex + 1} de {ANAMNESIS_STEPS.length}
+        Paso {stepIndex + 1} de {steps.length}
       </div>
 
       <div className="card">
@@ -290,7 +302,7 @@ function FieldInput({
 // Contrato — lectura + firma con DNI
 // ============================================================================
 
-function ContractSign({ onDone }: { onDone: () => void }) {
+function ContractSign({ contractText, onDone }: { contractText: string; onDone: () => void }) {
   const [dni, setDni] = useState("");
   const [accepted, setAccepted] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -322,7 +334,7 @@ function ContractSign({ onDone }: { onDone: () => void }) {
       <div className="card">
         <h2 className="text-lg font-semibold mb-3">Contrato de servicios</h2>
         <div className="max-h-72 overflow-y-auto text-xs text-neutral-700 whitespace-pre-wrap border border-neutral-200 rounded-lg p-3 bg-neutral-50 leading-relaxed">
-          {CONTRACT_TEXT}
+          {contractText}
         </div>
 
         <div className="mt-4 space-y-3">

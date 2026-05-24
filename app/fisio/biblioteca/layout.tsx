@@ -1,6 +1,10 @@
 import { LibrarySidebar } from "@/components/LibrarySidebar";
+import { getActiveProfessional } from "@/lib/session";
 
-export default function LibraryLayout({ children }: { children: React.ReactNode }) {
+export default async function LibraryLayout({ children }: { children: React.ReactNode }) {
+  const user = await getActiveProfessional();
+  const isCeo = user?.role === "ceo";
+
   return (
     <div>
       <header className="mb-4">
@@ -9,7 +13,7 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
       </header>
 
       <div className="flex flex-col md:flex-row gap-4">
-        <LibrarySidebar />
+        <LibrarySidebar showOnboarding={isCeo} />
         <main className="flex-1 min-w-0">{children}</main>
       </div>
     </div>

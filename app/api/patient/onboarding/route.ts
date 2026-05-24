@@ -1,12 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActivePatient } from "@/lib/auth";
-import {
-  CONTRACT_TEXT,
-  CONTRACT_VERSION,
-  missingRequiredAnamnesis,
-  parseOnboardingTasks,
-} from "@/lib/onboarding-content";
+import { missingRequiredAnamnesis, parseOnboardingTasks } from "@/lib/onboarding-content";
+import { getOnboardingConfig } from "@/lib/onboarding-config";
 
 // POST /api/patient/onboarding
 // body: { action: "anamnesis", data: {...} }
@@ -35,7 +31,8 @@ export async function POST(req: NextRequest) {
     if (!data || typeof data !== "object") {
       return NextResponse.json({ error: "Faltan respuestas" }, { status: 400 });
     }
-    const missing = missingRequiredAnamnesis(data as Record<string, unknown>);
+    const config = await getOnboardingConfig();
+    const missing = missingRequiredAnamnesis(data as Record<string, unknown>, config.anamnesisSteps);
     if (missing.length > 0) {
       return NextResponse.json(
         { error: "Faltan campos obligatorios", missing },
@@ -69,6 +66,9 @@ export async function POST(req: NextRequest) {
     const ip = fwd.split(",")[0].trim() || req.headers.get("x-real-ip") || null;
     const userAgent = req.headers.get("user-agent") || null;
 
+    // Texto/versión vigentes (editables por el CEO) — se guarda el snapshot
+    const config = await getOnboardingConfig();
+
     const updated = await prisma.patient.update({
       where: { id: patient.id },
       data: {
@@ -76,8 +76,8 @@ export async function POST(req: NextRequest) {
         contractSignedAt: new Date(),
         contractSignedFromIP: ip,
         contractSignedUserAgent: userAgent,
-        contractVersion: CONTRACT_VERSION,
-        contractTextSnapshot: CONTRACT_TEXT,
+        contractVersion: config.contractVersion,
+        contractTextSnapshot: config.contractText,
         onboardingTasks: { ...tasks, contract: true },
       },
       select: { onboardingTasks: true },

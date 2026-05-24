@@ -123,9 +123,13 @@ export const ANAMNESIS_STEPS: AnamnesisStep[] = [
 ];
 
 // Devuelve las claves obligatorias que falten en las respuestas dadas.
-export function missingRequiredAnamnesis(answers: Record<string, unknown>): string[] {
+// `steps` por defecto son los del código, pero se pueden pasar los editables (BD).
+export function missingRequiredAnamnesis(
+  answers: Record<string, unknown>,
+  steps: AnamnesisStep[] = ANAMNESIS_STEPS
+): string[] {
   const missing: string[] = [];
-  for (const step of ANAMNESIS_STEPS) {
+  for (const step of steps) {
     for (const f of step.fields) {
       if (!f.required) continue;
       const v = answers[f.key];

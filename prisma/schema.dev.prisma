@@ -1402,3 +1402,14 @@ model Sale {
   @@index([status])
   @@index([paymentToken])
 }
+
+// Configuración editable del onboarding (fila única, id = "singleton").
+// Si no existe, el código cae a los valores por defecto de lib/onboarding-content.ts.
+model OnboardingConfig {
+  id              String   @id @default("singleton")
+  anamnesisSteps  String                              // JSON: AnamnesisStep[]
+  contractText    String
+  contractVersion String
+  updatedAt       DateTime @updatedAt
+  updatedById     String?
+}

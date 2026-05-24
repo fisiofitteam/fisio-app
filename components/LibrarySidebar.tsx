@@ -42,8 +42,17 @@ const SECTIONS = [
   },
 ];
 
-export function LibrarySidebar() {
+// Sección solo-CEO: configuración del onboarding del paciente.
+const ONBOARDING_SECTION = {
+  id: "onboarding",
+  label: "Onboarding",
+  icon: "🚀",
+  desc: "Cuestionario y contrato (CEO)",
+};
+
+export function LibrarySidebar({ showOnboarding = false }: { showOnboarding?: boolean }) {
   const pathname = usePathname() ?? "";
+  const sections = showOnboarding ? [...SECTIONS, ONBOARDING_SECTION] : SECTIONS;
 
   function isActive(id: string) {
     return pathname.startsWith(`/fisio/biblioteca/${id}`);
@@ -53,7 +62,7 @@ export function LibrarySidebar() {
     <>
       {/* Móvil: tabs horizontales */}
       <nav className="md:hidden flex gap-1 overflow-x-auto pb-1 -mx-4 px-4">
-        {SECTIONS.map((s) => {
+        {sections.map((s) => {
           const active = isActive(s.id);
           return (
             <Link
@@ -72,7 +81,7 @@ export function LibrarySidebar() {
       {/* Desktop: sidebar vertical */}
       <aside className="hidden md:block w-52 flex-shrink-0">
         <nav className="space-y-1">
-          {SECTIONS.map((s) => {
+          {sections.map((s) => {
             const active = isActive(s.id);
             return (
               <Link
