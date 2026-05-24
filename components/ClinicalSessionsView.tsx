@@ -133,13 +133,15 @@ export function ClinicalSessionsView({
               <button key={c.id} onClick={() => setEditing(c)} className="card w-full text-left hover:border-neutral-400 transition-colors block">
                 <div className="flex justify-between items-start gap-3">
                   <div className="flex items-start gap-3 min-w-0 flex-1">
-                    {/* Círculos a la izquierda */}
-                    <div className="flex flex-col gap-1.5 flex-shrink-0">
+                    {/* Círculos a la izquierda (en horizontal) */}
+                    <div className="flex items-center gap-3 flex-shrink-0">
                       {c.hasSubscription && (
                         <ProgressRing value={c.subConsumed} max={c.subTotal} size={40} stroke={4} label="suscripción" mode="subscription" />
                       )}
                       <ProgressRing value={c.adhCompleted} max={c.adhTotal} size={40} stroke={4} label="cumplimiento" mode="adherence" />
                     </div>
+                    {/* Barra divisoria */}
+                    <div className="w-px self-stretch bg-neutral-200 flex-shrink-0" />
                     {/* Info del paciente */}
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
