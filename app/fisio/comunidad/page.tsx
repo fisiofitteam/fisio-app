@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
+import { parseCategories } from "@/lib/community";
 import { CommunityView } from "@/components/CommunityView";
 
 export const dynamic = "force-dynamic";
@@ -41,7 +42,7 @@ export default async function ComunidadPage() {
         text: p.text,
         done: p.done,
       }))}
-      initialIdeas={ideas.map((i) => ({ id: i.id, category: i.category, text: i.text }))}
+      initialIdeas={ideas.map((i) => ({ id: i.id, categories: parseCategories(i.categories), text: i.text }))}
     />
   );
 }

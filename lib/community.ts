@@ -20,3 +20,15 @@ export const COMMUNITY_CATEGORY_VALUES = COMMUNITY_CATEGORIES.map((c) => c.value
 export function categoryMeta(value: string) {
   return COMMUNITY_CATEGORIES.find((c) => c.value === value);
 }
+
+// Parsea el campo categories (JSON string) a un array de valores válidos.
+export function parseCategories(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw.filter((c) => COMMUNITY_CATEGORY_VALUES.includes(c));
+  if (typeof raw === "string") {
+    try {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) return arr.filter((c) => COMMUNITY_CATEGORY_VALUES.includes(c));
+    } catch {}
+  }
+  return [];
+}

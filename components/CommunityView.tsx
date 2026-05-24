@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { COMMUNITY_CATEGORIES, categoryMeta } from "@/lib/community";
 
 type Post = { id: string; date: string; category: string; assignedToId: string | null; text: string | null; done: boolean };
-type Idea = { id: string; category: string; text: string };
+type Idea = { id: string; categories: string[]; text: string };
 type TeamMember = { id: string; fullName: string };
 
 const WEEKDAYS = ["L", "M", "X", "J", "V", "S", "D"];
@@ -89,7 +89,7 @@ export function CommunityView({
     });
   }
 
-  const filteredIdeas = ideaFilter === "todas" ? ideas : ideas.filter((i) => i.category === ideaFilter);
+  const filteredIdeas = ideaFilter === "todas" ? ideas : ideas.filter((i) => i.categories.includes(ideaFilter));
 
   return (
     <div>
@@ -167,24 +167,26 @@ export function CommunityView({
           </p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {filteredIdeas.map((idea) => {
-              const meta = categoryMeta(idea.category);
-              return (
-                <div key={idea.id} className="card flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    {meta && (
-                      <span className={`inline-block text-[9px] uppercase font-medium px-1.5 py-0.5 rounded border ${meta.badge} mb-1`}>
-                        {meta.label}
-                      </span>
-                    )}
-                    <p className="text-sm text-neutral-700">{idea.text}</p>
+            {filteredIdeas.map((idea) => (
+              <div key={idea.id} className="card flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap gap-1 mb-1">
+                    {idea.categories.map((cat) => {
+                      const meta = categoryMeta(cat);
+                      return meta ? (
+                        <span key={cat} className={`inline-block text-[9px] uppercase font-medium px-1.5 py-0.5 rounded border ${meta.badge}`}>
+                          {meta.label}
+                        </span>
+                      ) : null;
+                    })}
                   </div>
-                  <button onClick={() => setProgramming(idea)} className="btn btn-primary text-xs whitespace-nowrap flex-shrink-0">
-                    📅 Programar
-                  </button>
+                  <p className="text-sm text-neutral-700 whitespace-pre-wrap">{idea.text}</p>
                 </div>
-              );
-            })}
+                <button onClick={() => setProgramming(idea)} className="btn btn-primary text-xs whitespace-nowrap flex-shrink-0">
+                  📅 Programar
+                </button>
+              </div>
+            ))}
           </div>
         )}
       </section>
@@ -344,19 +346,24 @@ function PostModal({
 }
 
 function IdeaModal({ onClose, onSaved }: { onClose: () => void; onSaved: (i: Idea) => void }) {
-  const [category, setCategory] = useState<string>("educar");
+  const [categories, setCategories] = useState<string[]>([]);
   const [text, setText] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  function toggle(cat: string) {
+    setCategories((prev) => (prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]));
+  }
+
   async function save() {
     if (!text.trim()) { setError("Escribe la idea."); return; }
+    if (categories.length === 0) { setError("Elige al menos una categoría."); return; }
     setSaving(true);
     setError("");
     const res = await fetch("/api/community/ideas", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ category, text }),
+      body: JSON.stringify({ categories, text }),
     });
     const data = await res.json().catch(() => ({}));
     if (res.ok) onSaved(data);
@@ -367,8 +374,22 @@ function IdeaModal({ onClose, onSaved }: { onClose: () => void; onSaved: (i: Ide
     <ModalShell title="Nueva idea" onClose={onClose}>
       <div className="space-y-3">
         <div>
-          <label className="text-xs text-neutral-500 block mb-1">Categoría</label>
-          <CategorySelect value={category} onChange={setCategory} />
+          <label className="text-xs text-neutral-500 block mb-1">Categorías (una o varias)</label>
+          <div className="flex flex-wrap gap-1.5">
+            {COMMUNITY_CATEGORIES.map((c) => {
+              const on = categories.includes(c.value);
+              return (
+                <button
+                  key={c.value}
+                  type="button"
+                  onClick={() => toggle(c.value)}
+                  className={`text-xs px-2.5 py-1 rounded-full border ${on ? "bg-neutral-900 text-white border-neutral-900" : "bg-white border-neutral-200 text-neutral-600 hover:border-neutral-400"}`}
+                >
+                  {c.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
         <div>
           <label className="text-xs text-neutral-500 block mb-1">Idea</label>
@@ -396,9 +417,9 @@ function ProgramModal({
   onScheduled: (post: Post) => void;
 }) {
   const [date, setDate] = useState(monthHint);
+  const [category, setCategory] = useState(idea.categories[0] ?? "educar");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const meta = categoryMeta(idea.category);
 
   async function schedule() {
     setSaving(true);
@@ -406,7 +427,7 @@ function ProgramModal({
     const res = await fetch("/api/community/posts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date, category: idea.category, text: idea.text, fromIdeaId: idea.id }),
+      body: JSON.stringify({ date, category, text: idea.text, fromIdeaId: idea.id }),
     });
     const data = await res.json().catch(() => ({}));
     if (res.ok) onScheduled(data);
@@ -416,10 +437,26 @@ function ProgramModal({
   return (
     <ModalShell title="Programar idea" onClose={onClose}>
       <div className="space-y-3">
-        {meta && (
-          <span className={`inline-block text-[9px] uppercase font-medium px-1.5 py-0.5 rounded border ${meta.badge}`}>{meta.label}</span>
+        <div className="flex flex-wrap gap-1">
+          {idea.categories.map((cat) => {
+            const m = categoryMeta(cat);
+            return m ? (
+              <span key={cat} className={`inline-block text-[9px] uppercase font-medium px-1.5 py-0.5 rounded border ${m.badge}`}>{m.label}</span>
+            ) : null;
+          })}
+        </div>
+        <p className="text-sm text-neutral-700 whitespace-pre-wrap">{idea.text}</p>
+        {idea.categories.length > 1 && (
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Etiqueta para este día</label>
+            <select className="input text-sm" value={category} onChange={(e) => setCategory(e.target.value)}>
+              {idea.categories.map((cat) => {
+                const m = categoryMeta(cat);
+                return <option key={cat} value={cat}>{m?.label ?? cat}</option>;
+              })}
+            </select>
+          </div>
         )}
-        <p className="text-sm text-neutral-700">{idea.text}</p>
         <div>
           <label className="text-xs text-neutral-500 block mb-1">¿Qué día se publica?</label>
           <input type="date" className="input text-sm" value={date} onChange={(e) => setDate(e.target.value)} />
