@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -455,7 +455,17 @@ function NewWeekModal({
   const [weekType, setWeekType] = useState("educativa");
   const [kpiName, setKpiName] = useState("DMs con palabra clave");
   const [kpiTarget, setKpiTarget] = useState("");
-  const [useTemplate, setUseTemplate] = useState(true);
+  const [weeklyTemplateId, setWeeklyTemplateId] = useState<string | null>(null);
+  const [weeklyTemplates, setWeeklyTemplates] = useState<Array<{ id: string; name: string; description: string | null }>>([]);
+  const [loadingTpls, setLoadingTpls] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/weekly-templates")
+      .then((r) => r.json())
+      .then((data) => setWeeklyTemplates(data.templates || []))
+      .catch(() => setWeeklyTemplates([]))
+      .finally(() => setLoadingTpls(false));
+  }, []);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -469,7 +479,7 @@ function NewWeekModal({
       body: JSON.stringify({
         year, weekNumber, centralTheme, bodyZone, weekType,
         kpiName, kpiTarget: kpiTarget ? Number(kpiTarget) : null,
-        useTemplate,
+        weeklyTemplateId,
       }),
     });
     if (res.ok) {
@@ -540,35 +550,48 @@ function NewWeekModal({
             </div>
           </div>
 
-          {/* Selector plantilla vs vacía */}
+          {/* Selector plantilla semanal */}
           <div className="border-t border-neutral-100 pt-3">
-            <label className="text-xs text-neutral-500 block mb-2">¿Cómo quieres generar las 7 piezas?</label>
-            <div className="grid grid-cols-1 gap-2">
-              <button
-                type="button"
-                onClick={() => setUseTemplate(true)}
-                className={`text-left px-4 py-3 rounded-lg border transition ${
-                  useTemplate ? "bg-neutral-900 text-white border-neutral-900" : "bg-white border-neutral-200 hover:border-neutral-400"
-                }`}
-              >
-                <div className="font-medium text-sm">🧩 Usar plantilla actual</div>
-                <div className={`text-xs mt-0.5 ${useTemplate ? "text-neutral-300" : "text-neutral-500"}`}>
-                  Cada día tendrá su formato y bloques predefinidos según la pestaña "Plantilla".
-                </div>
-              </button>
-              <button
-                type="button"
-                onClick={() => setUseTemplate(false)}
-                className={`text-left px-4 py-3 rounded-lg border transition ${
-                  !useTemplate ? "bg-neutral-900 text-white border-neutral-900" : "bg-white border-neutral-200 hover:border-neutral-400"
-                }`}
-              >
-                <div className="font-medium text-sm">📝 Crear 7 piezas vacías</div>
-                <div className={`text-xs mt-0.5 ${!useTemplate ? "text-neutral-300" : "text-neutral-500"}`}>
-                  Tú decides formato y bloques de cada día desde cero.
-                </div>
-              </button>
-            </div>
+            <label className="text-xs text-neutral-500 block mb-2">Plantilla semanal (opcional)</label>
+            {loadingTpls ? (
+              <p className="text-xs text-neutral-400 italic">Cargando plantillas...</p>
+            ) : weeklyTemplates.length === 0 ? (
+              <p className="text-xs text-neutral-400 italic">
+                No hay plantillas semanales. Créalas en la pestaña Plantillas. Se crearán 7 piezas vacías.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setWeeklyTemplateId(null)}
+                  className={`text-left px-3 py-2 rounded-lg border transition ${
+                    weeklyTemplateId === null ? "bg-neutral-900 text-white border-neutral-900" : "bg-white border-neutral-200 hover:border-neutral-400"
+                  }`}
+                >
+                  <div className="font-medium text-sm">📝 Sin plantilla</div>
+                  <div className={`text-xs mt-0.5 ${weeklyTemplateId === null ? "text-neutral-300" : "text-neutral-500"}`}>
+                    Crear las 7 piezas vacías.
+                  </div>
+                </button>
+                {weeklyTemplates.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setWeeklyTemplateId(t.id)}
+                    className={`text-left px-3 py-2 rounded-lg border transition ${
+                      weeklyTemplateId === t.id ? "bg-neutral-900 text-white border-neutral-900" : "bg-white border-neutral-200 hover:border-neutral-400"
+                    }`}
+                  >
+                    <div className="font-medium text-sm">🧩 {t.name}</div>
+                    {t.description && (
+                      <div className={`text-xs mt-0.5 ${weeklyTemplateId === t.id ? "text-neutral-300" : "text-neutral-500"}`}>
+                        {t.description}
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {error && <p className="text-sm text-red-600">{error}</p>}

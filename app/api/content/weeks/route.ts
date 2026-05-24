@@ -53,61 +53,39 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // Generar las 7 piezas según useTemplate (default true)
-  const useTemplate = data.useTemplate !== false; // por defecto sí usa plantilla
+  // Generar las 7 piezas. Si llega `weeklyTemplateId`, se aplican los datos de
+  // esa plantilla (titulo, formato y objetivos por dia). Si no, se crean vacias.
+  const weeklyTemplateId = data.weeklyTemplateId ? String(data.weeklyTemplateId) : null;
 
-  // Si usamos plantilla, cargamos los 7 días desde BD
-  const templateDays = useTemplate
-    ? await prisma.contentTemplateDay.findMany({ orderBy: { dayOfWeek: "asc" } })
-    : [];
-  const tplByDow: Record<number, typeof templateDays[number]> = {};
+  let templateDays: Array<{ dayOfWeek: number; title: string; format: string; goals: string[] }> = [];
+  if (weeklyTemplateId) {
+    const tpl = await prisma.weeklyTemplate.findUnique({ where: { id: weeklyTemplateId } });
+    if (tpl) {
+      try {
+        const parsed = JSON.parse(tpl.days);
+        if (Array.isArray(parsed)) templateDays = parsed;
+      } catch {}
+    }
+  }
+  const tplByDow: Record<number, { dayOfWeek: number; title: string; format: string; goals: string[] }> = {};
   for (const d of templateDays) tplByDow[d.dayOfWeek] = d;
 
   for (let dow = 1; dow <= 7; dow++) {
-
-    if (useTemplate && tplByDow[dow]) {
-      // Vuelca desde plantilla BD
-      const tpl = tplByDow[dow];
-      // Los bloques de la plantilla son [{id, label, order}]. Las piezas necesitan
-      // [{id, label, order, content}] — añadimos content vacío.
-      const tplBlocks = JSON.parse(tpl.blocks) as Array<{ id: string; label: string; order: number }>;
-      const pieceBlocks = tplBlocks.map((b) => ({ ...b, content: "" }));
-      const storyChecklist = JSON.parse(tpl.storyChecklist) as string[];
-
-      await prisma.contentPiece.create({
-        data: {
-          weekId: week.id,
-          dayOfWeek: dow,
-          format: tpl.format,
-          goal: tpl.goal,
-          goals: tpl.goals,
-          ctaType: tpl.ctaType,
-          dmKeyword: tpl.defaultDmKeyword || (data.leadMagnetKeyword ?? null),
-          blocks: JSON.stringify(pieceBlocks),
-          status: "idea",
-          supportStories: {
-            create: storyChecklist.map((desc, idx) => ({
-              order: idx,
-              description: desc,
-            })),
-          },
-        },
-      });
-    } else {
-      // Pieza vacía: el editor elige formato y rellena todo desde cero
-      await prisma.contentPiece.create({
-        data: {
-          weekId: week.id,
-          dayOfWeek: dow,
-          format: "",
-          goal: "",
-          ctaType: "",
-          dmKeyword: data.leadMagnetKeyword ?? null,
-          blocks: "[]",
-          status: "idea",
-        },
-      });
-    }
+    const tplDay = tplByDow[dow];
+    await prisma.contentPiece.create({
+      data: {
+        weekId: week.id,
+        dayOfWeek: dow,
+        format: tplDay?.format || "",
+        goal: "",
+        goals: tplDay?.goals ? JSON.stringify(tplDay.goals) : "[]",
+        ctaType: "",
+        dmKeyword: data.leadMagnetKeyword ?? null,
+        title: tplDay?.title || null,
+        blocks: "[]",
+        status: "idea",
+      },
+    });
   }
 
   return NextResponse.json({ id: week.id });

@@ -696,28 +696,23 @@ model MessageTemplate {
 // ============================================================================
 
 // ============================================================================
-// PLANTILLA SEMANAL DE CONTENIDO
+// PLANTILLAS SEMANALES DE CONTENIDO
 // ============================================================================
-// Define el formato y bloques iniciales que se vuelcan al crear una semana
-// nueva con la opción "usar plantilla". Hay exactamente 7 filas, una por día
-// de la semana (1=Lunes, ..., 7=Domingo). Editable desde /fisio/contenido/plantilla.
+// El usuario puede crear N plantillas semanales reutilizables. Cada plantilla
+// tiene un nombre y los 7 días (Lun-Dom), donde cada día define: título
+// opcional, formato y objetivos. Al crear una nueva semana, se puede aplicar
+// una plantilla concreta o crear las 7 piezas vacías.
+// Editable desde /fisio/contenido/plantilla.
 // ============================================================================
 
-model ContentTemplateDay {
-  id                String   @id @default(cuid())
-  dayOfWeek         Int      @unique             // 1=Lun ... 7=Dom
-  format            String                       // "reel" | "carousel" | "infographic" | "image" | "live"
-  goal              String   @default("")
-  goals             String   @default("[]")     // JSON array: ["atraer","educar"...] objetivos múltiples
-  ctaType           String   @default("")
-  defaultDmKeyword  String   @default("")
-
-  // JSON arrays
-  blocks            String   @default("[]")     // [{id, label, order}] sin "content"
-  storyChecklist    String   @default("[]")     // ["Story con...", "Caja de preguntas..."]
-
-  updatedAt         DateTime @updatedAt
-  updatedById       String?
+model WeeklyTemplate {
+  id          String   @id @default(cuid())
+  name        String                              // ej. "Semana educativa estándar"
+  description String?                             // descripción opcional
+  days        String   @default("[]")            // JSON: array de 7 objetos {dayOfWeek, title, format, goals[]}
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?
 }
 
 // ============================================================================
