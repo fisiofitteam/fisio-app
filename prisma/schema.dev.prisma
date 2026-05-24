@@ -706,8 +706,9 @@ model MessageTemplate {
 model ContentTemplateDay {
   id                String   @id @default(cuid())
   dayOfWeek         Int      @unique             // 1=Lun ... 7=Dom
-  format            String                       // ver content-templates.ts: "belief_carousel" | "case_reel" | ...
+  format            String                       // "reel" | "carousel" | "infographic" | "image" | "live"
   goal              String   @default("")
+  goals             String   @default("[]")     // JSON array: ["atraer","educar"...] objetivos múltiples
   ctaType           String   @default("")
   defaultDmKeyword  String   @default("")
 
@@ -717,6 +718,29 @@ model ContentTemplateDay {
 
   updatedAt         DateTime @updatedAt
   updatedById       String?
+}
+
+// ============================================================================
+// PLANTILLAS DE GUION (reutilizables por pieza)
+// ============================================================================
+// Plantillas que el usuario crea libremente para reutilizar dentro de cualquier
+// pieza de su mismo formato (ej. "Antes-Después-Puente" para Reels,
+// "5 errores comunes" para Carruseles).
+// Cada plantilla tiene: nombre, formato al que aplica, y una lista de bloques
+// con sus títulos descriptivos (NO temporales).
+// ============================================================================
+
+model ScriptTemplate {
+  id          String   @id @default(cuid())
+  name        String                              // ej. "Antes-Después-Puente"
+  format      String                              // "reel" | "carousel" | "infographic" | "image" | "live"
+  blocks      String   @default("[]")            // JSON: [{id, label, order}]
+  description String?                             // descripción opcional para Ales (cuándo usar)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?
+
+  @@index([format])
 }
 
 model ContentWeek {
@@ -769,9 +793,10 @@ model ContentPiece {
   week            ContentWeek @relation(fields: [weekId], references: [id], onDelete: Cascade)
 
   dayOfWeek       Int                                 // 1=Lun ... 7=Dom
-  format          String                              // ver content-templates.ts: "belief_carousel" | "case_reel" | "value_carousel" | "value_reel" | "exercises_carousel" | "infographic" | "closing_reel"
+  format          String                              // "reel" | "carousel" | "infographic" | "image" | "live"
   title           String?                             // título libre editable; si null se muestra el label del formato
   goal            String                              // autopoblado por formato
+  goals           String   @default("[]")     // JSON array de objetivos: ["atraer","educar"...]
   ctaType         String                              // autopoblado por formato
   dmKeyword       String?                             // palabra clave de DM si aplica
 

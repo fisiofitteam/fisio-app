@@ -83,6 +83,7 @@ export async function POST(req: NextRequest) {
           dayOfWeek: dow,
           format: tpl.format,
           goal: tpl.goal,
+          goals: tpl.goals,
           ctaType: tpl.ctaType,
           dmKeyword: tpl.defaultDmKeyword || (data.leadMagnetKeyword ?? null),
           blocks: JSON.stringify(pieceBlocks),

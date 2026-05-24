@@ -21,6 +21,7 @@ export async function PATCH(req: NextRequest) {
   // Campos directos
   const textFields = [
     "title", "hook", "caption",
+    "format", "goal", "ctaType",
     "recordingLocation", "recordingOutfit", "recordingMaterial",
     "editorNotes", "finalFileUrl", "dmKeyword", "status",
   ];
@@ -37,6 +38,13 @@ export async function PATCH(req: NextRequest) {
   // Blocks: viene como array, lo guardamos como JSON string
   if (rest.blocks !== undefined) {
     update.blocks = JSON.stringify(rest.blocks);
+  }
+
+  // Goals: array de objetivos (selección múltiple). Validamos los valores.
+  if (rest.goals !== undefined) {
+    const validGoals = ["atraer", "conectar", "educar", "convertir", "lanzamiento"];
+    const goalsArr = Array.isArray(rest.goals) ? rest.goals.filter((g: any) => validGoals.includes(g)) : [];
+    update.goals = JSON.stringify(goalsArr);
   }
 
   // Métricas

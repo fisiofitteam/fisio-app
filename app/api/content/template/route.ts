@@ -32,6 +32,7 @@ export async function GET() {
       goal: d.goal,
       ctaType: d.ctaType,
       defaultDmKeyword: d.defaultDmKeyword,
+      goals: (() => { try { return JSON.parse(d.goals); } catch { return []; } })(),
       blocks: JSON.parse(d.blocks),
       storyChecklist: JSON.parse(d.storyChecklist),
       updatedAt: d.updatedAt.toISOString(),
@@ -57,6 +58,11 @@ export async function PATCH(req: NextRequest) {
   if (data.goal !== undefined) update.goal = String(data.goal);
   if (data.ctaType !== undefined) update.ctaType = String(data.ctaType);
   if (data.defaultDmKeyword !== undefined) update.defaultDmKeyword = String(data.defaultDmKeyword);
+  if (data.goals !== undefined) {
+    const validGoals = ["atraer", "conectar", "educar", "convertir", "lanzamiento"];
+    const goalsArr = Array.isArray(data.goals) ? data.goals.filter((g: any) => validGoals.includes(g)) : [];
+    update.goals = JSON.stringify(goalsArr);
+  }
   if (data.blocks !== undefined) {
     // Aceptamos array u objeto; normalizamos a array de {id, label, order}
     if (!Array.isArray(data.blocks)) {
@@ -90,6 +96,7 @@ export async function PATCH(req: NextRequest) {
       goal: updated.goal,
       ctaType: updated.ctaType,
       defaultDmKeyword: updated.defaultDmKeyword,
+      goals: (() => { try { return JSON.parse(updated.goals); } catch { return []; } })(),
       blocks: JSON.parse(updated.blocks),
       storyChecklist: JSON.parse(updated.storyChecklist),
       updatedAt: updated.updatedAt.toISOString(),
