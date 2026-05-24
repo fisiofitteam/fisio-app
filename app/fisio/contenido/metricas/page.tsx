@@ -70,7 +70,6 @@ export default async function MetricsPage({
 
   const piecesWhere: any = {
     status: "published",
-    scheduledAt: { gte: start, lte: end },
     week: weeksWhere,
   };
   if (formatsFilter.length > 0) piecesWhere.format = { in: formatsFilter };
@@ -78,15 +77,15 @@ export default async function MetricsPage({
   const [piecesCurrent, piecesPrev, allWeeksInRange, leadMagnets] = await Promise.all([
     prisma.contentPiece.findMany({
       where: piecesWhere,
-      include: { week: { select: { id: true, year: true, weekNumber: true, centralTheme: true, bodyZone: true, weekType: true, kpiName: true, kpiTarget: true } } },
+      include: { week: { select: { id: true, year: true, weekNumber: true, centralTheme: true, bodyZone: true, weekType: true, kpiName: true, kpiTarget: true, startDate: true } } },
     }),
     prisma.contentPiece.findMany({
       where: {
         status: "published",
-        scheduledAt: { gte: prevStart, lte: prevEnd },
         week: weeksWhere,
         ...(formatsFilter.length > 0 ? { format: { in: formatsFilter } } : {}),
       },
+      include: { week: { select: { id: true, year: true, weekNumber: true, centralTheme: true, bodyZone: true, weekType: true, kpiName: true, kpiTarget: true, startDate: true } } },
     }),
     prisma.contentWeek.findMany({
       where: {
@@ -100,8 +99,23 @@ export default async function MetricsPage({
     prisma.leadMagnet.findMany({ orderBy: [{ active: "desc" }, { lastPromotedAt: "desc" }] }),
   ]);
 
+  // Filtrar por fecha en JS (la fecha real se deriva de week.startDate + dayOfWeek - 1)
+  function publishDateOf(p: { dayOfWeek: number; week: { startDate: Date } }): Date {
+    const d = new Date(p.week.startDate);
+    d.setUTCDate(d.getUTCDate() + (p.dayOfWeek - 1));
+    return d;
+  }
+  const piecesCurrentFiltered = piecesCurrent.filter((p) => {
+    const d = publishDateOf(p).getTime();
+    return d >= start.getTime() && d <= end.getTime();
+  });
+  const piecesPrevFiltered = piecesPrev.filter((p) => {
+    const d = publishDateOf(p).getTime();
+    return d >= prevStart.getTime() && d <= prevEnd.getTime();
+  });
+
   // === Agregados período actual vs período anterior ===
-  function aggregate(pieces: typeof piecesCurrent) {
+  function aggregate(pieces: typeof piecesCurrentFiltered) {
     return pieces.reduce((acc, p) => {
       acc.reach += p.metricsReach ?? 0;
       acc.saves += p.metricsSaves ?? 0;
@@ -112,8 +126,8 @@ export default async function MetricsPage({
       return acc;
     }, { reach: 0, saves: 0, shares: 0, comments: 0, dmKeyword: 0, conversions: 0 });
   }
-  const currentTotals = aggregate(piecesCurrent);
-  const prevTotals = aggregate(piecesPrev);
+  const currentTotals = aggregate(piecesCurrentFiltered);
+  const prevTotals = aggregate(piecesPrevFiltered);
 
   function delta(curr: number, prev: number): number | null {
     if (prev === 0) return curr > 0 ? null : null; // sin base de comparación

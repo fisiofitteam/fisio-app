@@ -605,7 +605,7 @@ model ScheduledCall {
   patientId   String
   patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
-  scheduledAt DateTime                              // fecha y hora
+  scheduledAt DateTime                                // momento de la llamada agendada
   type        String   @default("optimizacion")     // "optimizacion" | "renovacion"
   notes       String?
   completedAt DateTime?
@@ -815,7 +815,6 @@ model ContentPiece {
 
   // Estado de la pieza
   status          String   @default("idea")           // "idea" | "script" | "recorded" | "edited" | "scheduled" | "published"
-  scheduledAt     DateTime?                           // hora de publicación
 
   // Métricas (rellenadas tras publicar)
   metricsReach           Int?
@@ -833,7 +832,6 @@ model ContentPiece {
 
   @@index([weekId, dayOfWeek])
   @@index([status])
-  @@index([scheduledAt])
 }
 
 model ContentStory {

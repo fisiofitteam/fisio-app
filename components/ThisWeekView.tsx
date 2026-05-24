@@ -26,7 +26,6 @@ type Piece = {
   title: string | null;
   goals: string;
   status: string;
-  scheduledAt: string | null;
   hook: string | null;
   storiesCount: number;
   storiesDone: number;
@@ -64,7 +63,6 @@ type PendingMetric = {
   id: string;
   dayOfWeek: number;
   format: string;
-  scheduledAt: string | null;
   weekTheme: string;
   weekNumber: number;
   weekYear: number;
@@ -405,7 +403,7 @@ function PieceCard({ piece, weekId }: { piece: Piece; weekId: string }) {
       )}
 
       <div className="flex justify-between items-center text-[11px] text-neutral-500 mt-2 pt-2 border-t border-neutral-100">
-        <span>🕐 {formatTime(piece.scheduledAt)}</span>
+        
         <span>
           Stories {piece.storiesDone}/{piece.storiesCount}
         </span>

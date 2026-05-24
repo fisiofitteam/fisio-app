@@ -25,7 +25,6 @@ type Piece = {
   title: string | null;
   goals: string;
   status: string;
-  scheduledAt: string | null;
   hook: string | null;
 };
 

@@ -51,7 +51,6 @@ export default async function PiecePage({ params }: { params: { id: string } }) 
         finalFileUrl: piece.finalFileUrl,
         editorNotes: piece.editorNotes,
         status: piece.status,
-        scheduledAt: piece.scheduledAt?.toISOString() ?? null,
         metricsReach: piece.metricsReach,
         metricsSaves: piece.metricsSaves,
         metricsShares: piece.metricsShares,

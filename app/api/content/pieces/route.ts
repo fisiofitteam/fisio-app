@@ -31,10 +31,6 @@ export async function PATCH(req: NextRequest) {
 
   if (rest.consentSigned !== undefined) update.consentSigned = !!rest.consentSigned;
 
-  if (rest.scheduledAt !== undefined) {
-    update.scheduledAt = rest.scheduledAt ? new Date(rest.scheduledAt) : null;
-  }
-
   // Blocks: viene como array, lo guardamos como JSON string
   if (rest.blocks !== undefined) {
     update.blocks = JSON.stringify(rest.blocks);

@@ -85,3 +85,26 @@ export function parseGoals(raw: string | null | undefined): GoalKey[] {
 export function stringifyGoals(goals: GoalKey[]): string {
   return JSON.stringify(goals);
 }
+
+
+/**
+ * Calcula la fecha real de publicación de una pieza a partir del startDate de su
+ * semana y su dayOfWeek (1=lunes, 7=domingo). Reemplaza el antiguo scheduledAt.
+ * Devuelve un objeto Date o null si falta info.
+ */
+export function piecePublishDate(weekStartDate: string | Date | null, dayOfWeek: number): Date | null {
+  if (!weekStartDate) return null;
+  const start = typeof weekStartDate === "string" ? new Date(weekStartDate) : weekStartDate;
+  if (isNaN(start.getTime())) return null;
+  const d = new Date(start);
+  d.setUTCDate(d.getUTCDate() + (dayOfWeek - 1));
+  return d;
+}
+
+/**
+ * Versión que devuelve directamente el ISO string para pasar a un componente cliente.
+ */
+export function piecePublishDateIso(weekStartDate: string | Date | null, dayOfWeek: number): string | null {
+  const d = piecePublishDate(weekStartDate, dayOfWeek);
+  return d ? d.toISOString() : null;
+}

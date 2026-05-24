@@ -48,7 +48,6 @@ type Piece = {
   finalFileUrl: string | null;
   editorNotes: string | null;
   status: string;
-  scheduledAt: string | null;
   metricsReach: number | null;
   metricsSaves: number | null;
   metricsShares: number | null;
@@ -310,15 +309,6 @@ export function PieceEditor({
 
         {/* Fecha publicación + DM keyword */}
         <div className="flex gap-4 items-center mt-3 text-xs text-neutral-600">
-          <div className="flex items-center gap-2">
-            <span className="text-neutral-500">📅</span>
-            <input
-              type="datetime-local"
-              className="input text-xs w-auto"
-              value={piece.scheduledAt ? new Date(piece.scheduledAt).toISOString().slice(0, 16) : ""}
-              onChange={(e) => update("scheduledAt", e.target.value || null)}
-            />
-          </div>
           {piece.dmKeyword !== null && (
             <div className="flex items-center gap-2">
               <span className="text-neutral-500">🔑 Palabra clave DM:</span>

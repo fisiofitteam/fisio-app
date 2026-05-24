@@ -64,9 +64,6 @@ export async function POST(req: NextRequest) {
   for (const d of templateDays) tplByDow[d.dayOfWeek] = d;
 
   for (let dow = 1; dow <= 7; dow++) {
-    const scheduledDate = new Date(start);
-    scheduledDate.setUTCDate(start.getUTCDate() + (dow - 1));
-    scheduledDate.setUTCHours(19, 0, 0, 0); // 19:00 UTC default
 
     if (useTemplate && tplByDow[dow]) {
       // Vuelca desde plantilla BD
@@ -87,7 +84,6 @@ export async function POST(req: NextRequest) {
           ctaType: tpl.ctaType,
           dmKeyword: tpl.defaultDmKeyword || (data.leadMagnetKeyword ?? null),
           blocks: JSON.stringify(pieceBlocks),
-          scheduledAt: scheduledDate,
           status: "idea",
           supportStories: {
             create: storyChecklist.map((desc, idx) => ({
@@ -108,7 +104,6 @@ export async function POST(req: NextRequest) {
           ctaType: "",
           dmKeyword: data.leadMagnetKeyword ?? null,
           blocks: "[]",
-          scheduledAt: scheduledDate,
           status: "idea",
         },
       });

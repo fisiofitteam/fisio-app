@@ -88,15 +88,25 @@ export default async function ContentPage({
   const reminderCutoff = new Date();
   reminderCutoff.setDate(reminderCutoff.getDate() - reminderThresholdDays);
 
-  const pendingMetricsPieces = await prisma.contentPiece.findMany({
+  // Buscamos todas las piezas published sin métricas. El filtro temporal
+  // (publicadas hace más de N días) se aplica en JS porque la fecha real
+  // se deriva de week.startDate + (dayOfWeek - 1).
+  const allPublishedNoMetrics = await prisma.contentPiece.findMany({
     where: {
       status: "published",
       metricsFilledAt: null,
-      scheduledAt: { lte: reminderCutoff },
     },
-    include: { week: { select: { id: true, year: true, weekNumber: true, centralTheme: true } } },
-    orderBy: { scheduledAt: "asc" },
+    include: { week: { select: { id: true, year: true, weekNumber: true, centralTheme: true, startDate: true } } },
   });
+  const pendingMetricsPieces = allPublishedNoMetrics
+    .map((p) => {
+      const start = new Date(p.week.startDate);
+      const publishDate = new Date(start);
+      publishDate.setUTCDate(publishDate.getUTCDate() + (p.dayOfWeek - 1));
+      return { ...p, _publishDate: publishDate };
+    })
+    .filter((p) => p._publishDate.getTime() <= reminderCutoff.getTime())
+    .sort((a, b) => a._publishDate.getTime() - b._publishDate.getTime());
 
   // Stats agregadas de esta semana (para mostrar contexto al cerrar)
   const weekStats = (() => {
@@ -156,7 +166,6 @@ export default async function ContentPage({
             title: p.title,
             goals: p.goals,
             status: p.status,
-            scheduledAt: p.scheduledAt?.toISOString() ?? null,
             hook: p.hook,
             storiesCount: p.supportStories.length,
             storiesDone: p.supportStories.filter((s) => s.published).length,
@@ -168,7 +177,6 @@ export default async function ContentPage({
           id: p.id,
           dayOfWeek: p.dayOfWeek,
           format: p.format,
-          scheduledAt: p.scheduledAt?.toISOString() ?? null,
           weekTheme: p.week.centralTheme,
           weekNumber: p.week.weekNumber,
           weekYear: p.week.year,

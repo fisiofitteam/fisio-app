@@ -3,25 +3,23 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 import { ContentNav } from "@/components/ContentNav";
-import { FORMAT_TEMPLATES, DAY_LABELS, type FormatKey } from "@/lib/content-templates";
+import { DAY_LABELS } from "@/lib/content-templates";
+import { formatLabelOnly, formatIcon, piecePublishDate, parseGoals, goalColor, goalLabel, GOAL_COLOR_CLASSES } from "@/lib/content-formats";
 
 export const dynamic = "force-dynamic";
 
-function formatDate(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
+function formatDate(d: Date | null): string {
+  if (!d) return "—";
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const dayStart = new Date(d);
   dayStart.setHours(0, 0, 0, 0);
   const diff = Math.round((dayStart.getTime() - today.getTime()) / 86400000);
-  const time = d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
-  if (diff === 0) return `Hoy ${time}`;
-  if (diff === 1) return `Mañana ${time}`;
-  if (diff === -1) return `Ayer ${time}`;
-  if (diff > 1 && diff < 7)
-    return `${d.toLocaleDateString("es-ES", { weekday: "short" })} ${time}`;
-  return `${d.toLocaleDateString("es-ES", { day: "numeric", month: "short" })} ${time}`;
+  if (diff === 0) return "Hoy";
+  if (diff === 1) return "Mañana";
+  if (diff === -1) return "Ayer";
+  if (diff > 1 && diff < 7) return d.toLocaleDateString("es-ES", { weekday: "long" });
+  return d.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
 }
 
 export default async function ToRecordPage() {
@@ -29,9 +27,8 @@ export default async function ToRecordPage() {
   if (!user) redirect("/login");
   if (user.role !== "ceo" && user.role !== "setter") redirect("/fisio");
 
-  const pieces = await prisma.contentPiece.findMany({
+  const piecesRaw = await prisma.contentPiece.findMany({
     where: { status: "script" },
-    orderBy: [{ scheduledAt: "asc" }, { dayOfWeek: "asc" }],
     include: {
       week: {
         select: {
@@ -40,10 +37,16 @@ export default async function ToRecordPage() {
           year: true,
           centralTheme: true,
           bodyZone: true,
+          startDate: true,
         },
       },
     },
   });
+
+  // Calcular fecha de publicación y ordenar
+  const pieces = piecesRaw
+    .map((p) => ({ ...p, _publishDate: piecePublishDate(p.week.startDate, p.dayOfWeek) }))
+    .sort((a, b) => (a._publishDate?.getTime() ?? 0) - (b._publishDate?.getTime() ?? 0));
 
   return (
     <main>
@@ -66,10 +69,11 @@ export default async function ToRecordPage() {
         <section className="card">
           <div className="divide-y divide-neutral-100">
             {pieces.map((p) => {
-              const tpl = FORMAT_TEMPLATES[p.format as FormatKey];
-              const formatLabel = tpl?.label ?? p.format;
-              const displayTitle = p.title?.trim() || formatLabel;
+              const fmtLabel = formatLabelOnly(p.format);
+              const fmtIcon = formatIcon(p.format);
+              const displayTitle = p.title?.trim() || fmtLabel;
               const dayLabel = DAY_LABELS[p.dayOfWeek] ?? "";
+              const goals = parseGoals(p.goals);
               return (
                 <Link
                   key={p.id}
@@ -79,12 +83,22 @@ export default async function ToRecordPage() {
                   <div className="flex justify-between items-start gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-baseline gap-2 flex-wrap">
+                        <span>{fmtIcon}</span>
                         <span className="font-medium">{displayTitle}</span>
                         {p.title?.trim() && (
-                          <span className="text-[11px] text-neutral-400 italic">({formatLabel})</span>
+                          <span className="text-[11px] text-neutral-400 italic">({fmtLabel})</span>
                         )}
                       </div>
-                      <div className="text-xs text-neutral-500 mt-0.5">
+                      {goals.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {goals.map((g) => (
+                            <span key={g} className={`text-[10px] px-1.5 py-0.5 rounded ${GOAL_COLOR_CLASSES[goalColor(g)]}`}>
+                              {goalLabel(g)}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <div className="text-xs text-neutral-500 mt-1">
                         Semana {p.week.weekNumber}/{p.week.year} · {p.week.centralTheme || "Sin tema"} · {p.week.bodyZone}
                       </div>
                       {p.hook && (
@@ -101,7 +115,7 @@ export default async function ToRecordPage() {
                     </div>
                     <div className="text-right flex-shrink-0">
                       <div className="text-xs font-medium text-blue-700">
-                        📅 {formatDate(p.scheduledAt?.toISOString() ?? null)}
+                        📅 {formatDate(p._publishDate)}
                       </div>
                       <div className="text-[11px] text-neutral-500 mt-1">{dayLabel}</div>
                     </div>

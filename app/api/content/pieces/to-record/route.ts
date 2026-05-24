@@ -2,15 +2,13 @@
  * GET /api/content/pieces/to-record
  *
  * Devuelve todas las piezas en estado "script" (guion listo, pendientes de
- * grabar/diseñar), ordenadas por fecha programada ascendente (más próxima
- * primero).
- *
- * Pensado para la pestaña "Para grabar": ver de un vistazo todo lo que
- * Ales tiene que producir en el box, sin tener que navegar entre semanas.
+ * grabar/diseñar), ordenadas por fecha de publicación ascendente (más próxima
+ * primero). La fecha se deriva de week.startDate + (dayOfWeek - 1).
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
+import { piecePublishDate } from "@/lib/content-formats";
 
 export const dynamic = "force-dynamic";
 
@@ -23,10 +21,6 @@ export async function GET() {
 
   const pieces = await prisma.contentPiece.findMany({
     where: { status: "script" },
-    orderBy: [
-      { scheduledAt: "asc" },
-      { dayOfWeek: "asc" },
-    ],
     include: {
       week: {
         select: {
@@ -35,22 +29,38 @@ export async function GET() {
           year: true,
           centralTheme: true,
           bodyZone: true,
+          startDate: true,
         },
       },
     },
   });
 
+  // Ordenar en JS por fecha de publicación derivada
+  const sorted = pieces
+    .map((p) => ({ ...p, _publishDate: piecePublishDate(p.week.startDate, p.dayOfWeek) }))
+    .sort((a, b) => {
+      const aTime = a._publishDate?.getTime() ?? 0;
+      const bTime = b._publishDate?.getTime() ?? 0;
+      return aTime - bTime;
+    });
+
   return NextResponse.json({
-    pieces: pieces.map((p) => ({
+    pieces: sorted.map((p) => ({
       id: p.id,
       dayOfWeek: p.dayOfWeek,
       format: p.format,
       title: p.title,
       hook: p.hook,
-      scheduledAt: p.scheduledAt?.toISOString() ?? null,
+      publishDate: p._publishDate?.toISOString() ?? null,
       recordingLocation: p.recordingLocation,
       recordingOutfit: p.recordingOutfit,
-      week: p.week,
+      week: {
+        id: p.week.id,
+        weekNumber: p.week.weekNumber,
+        year: p.week.year,
+        centralTheme: p.week.centralTheme,
+        bodyZone: p.week.bodyZone,
+      },
     })),
   });
 }
