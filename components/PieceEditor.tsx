@@ -4,11 +4,20 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  FORMAT_TEMPLATES,
   DAY_LABELS,
   PIECE_STATUS,
-  type FormatKey,
 } from "@/lib/content-templates";
+import {
+  FORMATS,
+  formatIcon,
+  formatLabelOnly,
+  GOALS,
+  parseGoals,
+  goalColor,
+  goalLabel,
+  GOAL_COLOR_CLASSES,
+  type GoalKey,
+} from "@/lib/content-formats";
 
 type Block = { id: string; label: string; content: string; order: number };
 
@@ -25,6 +34,7 @@ type Piece = {
   dayOfWeek: number;
   format: string;
   title: string | null;
+  goals: string;
   goal: string;
   ctaType: string;
   dmKeyword: string | null;
@@ -147,9 +157,18 @@ export function PieceEditor({
     };
   }, [piece.id]);
 
-  const tpl = FORMAT_TEMPLATES[piece.format as FormatKey];
+  const fmtLabel = formatLabelOnly(piece.format);
+  const fmtIcon = formatIcon(piece.format);
+  const currentGoals: GoalKey[] = parseGoals(piece.goals);
   const statusMeta = PIECE_STATUS.find((s) => s.value === piece.status);
   const dayLabel = DAY_LABELS[piece.dayOfWeek];
+
+  function toggleGoal(g: GoalKey) {
+    const next = currentGoals.includes(g)
+      ? currentGoals.filter((x) => x !== g)
+      : [...currentGoals, g];
+    update("goals", JSON.stringify(next) as any);
+  }
 
   // ===== MODO GRABACIÓN =====
   if (recordingMode) {
@@ -181,9 +200,9 @@ export function PieceEditor({
               <input
                 type="text"
                 className="text-xl font-semibold bg-transparent border-0 outline-none focus:bg-neutral-50 rounded px-1 -mx-1 min-w-0 flex-shrink"
-                style={{ width: `${Math.max((piece.title || tpl?.label || piece.format || "Sin título").length, 10)}ch` }}
+                style={{ width: `${Math.max((piece.title || fmtLabel || piece.format || "Sin título").length, 10)}ch` }}
                 value={piece.title ?? ""}
-                placeholder={tpl?.label ?? piece.format}
+                placeholder={fmtLabel || piece.format}
                 onChange={(e) => update("title", e.target.value)}
                 onBlur={(e) => {
                   // Si se queda vacío, lo guardamos como null (volverá al fallback)
@@ -192,7 +211,16 @@ export function PieceEditor({
                   }
                 }}
               />
-              <span className="text-xs text-neutral-400 italic">({tpl?.label ?? piece.format})</span>
+              <select
+                className="text-xs bg-neutral-50 border border-neutral-200 rounded px-2 py-0.5 cursor-pointer"
+                value={piece.format}
+                onChange={(e) => update("format", e.target.value)}
+                title="Cambiar formato"
+              >
+                {FORMATS.map((f) => (
+                  <option key={f.value} value={f.value}>{f.icon} {f.label}</option>
+                ))}
+              </select>
               <span className="text-sm text-neutral-500">{dayLabel}</span>
               {statusMeta && (
                 <span className={`text-[10px] uppercase font-medium px-2 py-0.5 rounded-full border ${STATUS_BADGE[statusMeta.color]}`}>
@@ -200,9 +228,32 @@ export function PieceEditor({
                 </span>
               )}
             </div>
-            <p className="text-xs text-neutral-500 mt-1">
-              Objetivo: {piece.goal} · CTA: {piece.ctaType}
-            </p>
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              <span className="text-xs text-neutral-500">Objetivos:</span>
+              {GOALS.map((g) => {
+                const active = currentGoals.includes(g.value);
+                return (
+                  <button
+                    key={g.value}
+                    onClick={() => toggleGoal(g.value)}
+                    className={`text-[11px] px-2 py-0.5 rounded-full border transition ${
+                      active
+                        ? GOAL_COLOR_CLASSES[g.color]
+                        : "bg-white border-neutral-200 text-neutral-400 hover:border-neutral-400"
+                    }`}
+                  >
+                    {g.label}
+                  </button>
+                );
+              })}
+            </div>
+            {(piece.goal || piece.ctaType) && (
+              <p className="text-[11px] text-neutral-400 mt-1">
+                {piece.goal && <span>Nota: {piece.goal}</span>}
+                {piece.goal && piece.ctaType && <span> · </span>}
+                {piece.ctaType && <span>CTA: {piece.ctaType}</span>}
+              </p>
+            )}
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
@@ -257,14 +308,14 @@ export function PieceEditor({
               onChange={(e) => update("scheduledAt", e.target.value || null)}
             />
           </div>
-          {(piece.dmKeyword || tpl?.defaultDmKeyword) && (
+          {piece.dmKeyword !== null && (
             <div className="flex items-center gap-2">
               <span className="text-neutral-500">🔑 Palabra clave DM:</span>
               <input
                 className="input text-xs w-auto font-mono uppercase"
                 value={piece.dmKeyword ?? ""}
                 onChange={(e) => update("dmKeyword", e.target.value.toUpperCase())}
-                placeholder={tpl?.defaultDmKeyword ?? ""}
+                placeholder="Ej: HOMBRO"
               />
             </div>
           )}
@@ -667,7 +718,7 @@ function RecordingMode({
   week: { centralTheme: string; leadMagnetKeyword: string | null };
   onExit: () => void;
 }) {
-  const tpl = FORMAT_TEMPLATES[piece.format as FormatKey];
+  const fmtLabel = formatLabelOnly(piece.format);
   const dayLabel = DAY_LABELS[piece.dayOfWeek];
 
   return (
@@ -676,7 +727,7 @@ function RecordingMode({
       <div className="sticky top-0 z-10 flex justify-between items-center px-6 py-3" style={{ background: "rgba(255,255,255,0.95)", borderBottom: "1px solid #E5E5E5", backdropFilter: "blur(8px)" }}>
         <div>
           <div className="text-xs uppercase tracking-wide" style={{ color: "#737373" }}>
-            {dayLabel} · {tpl?.label}
+            {dayLabel} · {fmtLabel}
           </div>
           <div className="text-sm" style={{ color: "#0A0A0A" }}>
             {week.centralTheme}
