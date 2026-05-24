@@ -132,30 +132,37 @@ export function ClinicalSessionsView({
             return (
               <button key={c.id} onClick={() => setEditing(c)} className="card w-full text-left hover:border-neutral-400 transition-colors block">
                 <div className="flex justify-between items-start gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-sm">{c.patientName}</span>
-                      <PatientPill value={c.programType} kind="program" />
-                      {c.bodyZone && <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600">{c.bodyZone}</span>}
+                  <div className="flex items-start gap-3 min-w-0 flex-1">
+                    {/* Círculos a la izquierda */}
+                    {(c.hasSubscription || c.adhTotal > 0) && (
+                      <div className="flex flex-col gap-1.5 flex-shrink-0">
+                        {c.hasSubscription && (
+                          <ProgressRing value={c.subConsumed} max={c.subTotal} size={40} stroke={4} label="suscripción" mode="subscription" />
+                        )}
+                        {c.adhTotal > 0 && (
+                          <ProgressRing value={c.adhCompleted} max={c.adhTotal} size={40} stroke={4} label="cumplimiento" mode="adherence" />
+                        )}
+                      </div>
+                    )}
+                    {/* Info del paciente */}
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-sm">{c.patientName}</span>
+                        <PatientPill value={c.programType} kind="program" />
+                        {c.bodyZone && <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600">{c.bodyZone}</span>}
+                      </div>
+                      <div className="text-xs text-neutral-500 mt-0.5">
+                        {c.assignedToId && proMap[c.assignedToId] ? proMap[c.assignedToId] : "Sin fisio asignado"}
+                      </div>
+                      {c.appliedLevelName && (
+                        <div className="text-xs text-emerald-700 mt-0.5">✓ Control de cargas · {c.appliedLevelName}</div>
+                      )}
                     </div>
-                    <div className="text-xs text-neutral-500 mt-0.5">
-                      {c.assignedToId && proMap[c.assignedToId] ? proMap[c.assignedToId] : "Sin fisio asignado"}
-                    </div>
-                    {c.appliedLevelName && (
-                      <div className="text-xs text-emerald-700 mt-0.5">✓ Control de cargas · {c.appliedLevelName}</div>
-                    )}
                   </div>
-                  <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                    <span className={`text-[10px] uppercase font-medium px-2 py-0.5 rounded-full border whitespace-nowrap ${meta.cls}`}>
-                      {meta.label}
-                    </span>
-                    {c.hasSubscription && (
-                      <ProgressRing value={c.subConsumed} max={c.subTotal} size={40} stroke={4} label="suscripción" mode="subscription" />
-                    )}
-                    {c.adhTotal > 0 && (
-                      <ProgressRing value={c.adhCompleted} max={c.adhTotal} size={40} stroke={4} label="cumplimiento" mode="adherence" />
-                    )}
-                  </div>
+                  {/* Estado a la derecha */}
+                  <span className={`text-[10px] uppercase font-medium px-2 py-0.5 rounded-full border whitespace-nowrap flex-shrink-0 ${meta.cls}`}>
+                    {meta.label}
+                  </span>
                 </div>
 
                 {/* Columnas tipo Notion: visibles sin entrar en la ficha */}
