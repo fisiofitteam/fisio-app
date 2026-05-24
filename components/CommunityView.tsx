@@ -93,12 +93,9 @@ export function CommunityView({
 
   return (
     <div>
-      <header className="flex justify-between items-start gap-3 flex-wrap mb-4">
-        <div>
-          <h1 className="text-xl font-semibold">Comunidad</h1>
-          <p className="text-xs text-neutral-500 mt-0.5">Calendario de contenido interno del programa</p>
-        </div>
-        <button onClick={() => setNewIdea(true)} className="btn text-sm">+ Nueva idea</button>
+      <header className="mb-4">
+        <h1 className="text-xl font-semibold">Comunidad</h1>
+        <p className="text-xs text-neutral-500 mt-0.5">Calendario de contenido interno del programa</p>
       </header>
 
       {/* Navegación de mes */}
@@ -152,7 +149,10 @@ export function CommunityView({
       {/* Banco de ideas */}
       <section>
         <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
-          <h2 className="font-semibold">Banco de ideas</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="font-semibold">Banco de ideas</h2>
+            <button onClick={() => setNewIdea(true)} className="btn text-sm">+ Nueva idea</button>
+          </div>
           <div className="flex gap-1 flex-wrap">
             <FilterChip label="Todas" active={ideaFilter === "todas"} onClick={() => setIdeaFilter("todas")} />
             {COMMUNITY_CATEGORIES.map((c) => (
