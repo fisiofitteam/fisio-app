@@ -387,29 +387,33 @@ function PieceCard({ piece, weekId }: { piece: Piece; weekId: string }) {
       href={`/fisio/contenido/pieza/${piece.id}`}
       className="card hover:border-neutral-400 hover:shadow-sm transition-all block group"
     >
-      <div className="flex justify-between items-start gap-2 mb-2">
-        <div className="flex-1 min-w-0">
-          <div className="text-[10px] uppercase text-neutral-500 font-medium tracking-wide">
+      <div className="mb-2">
+        {/* Fila superior: día (izq) + estado (der), ambos cortos */}
+        <div className="flex justify-between items-center gap-2 mb-1">
+          <div className="text-[10px] uppercase text-neutral-500 font-medium tracking-wide truncate">
             {dayLabel}
           </div>
-          <div className="font-semibold text-sm mt-0.5 break-words">
-            <span className="mr-1.5">{fmtIcon}</span>
-            <span>{piece.title || fmtLabel || piece.format}</span>
-          </div>
-          {goals.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-1.5">
-              {goals.map((g) => (
-                <span key={g} className={`text-[10px] px-1.5 py-0.5 rounded ${GOAL_COLOR_CLASSES[goalColor(g)]}`}>
-                  {goalLabel(g)}
-                </span>
-              ))}
-            </div>
+          {statusMeta && (
+            <span className={`text-[10px] uppercase font-medium px-2 py-0.5 rounded-full border ${STATUS_COLORS[statusMeta.color]} whitespace-nowrap flex-shrink-0`}>
+              {statusMeta.label}
+            </span>
           )}
         </div>
-        {statusMeta && (
-          <span className={`text-[10px] uppercase font-medium px-2 py-0.5 rounded-full border ${STATUS_COLORS[statusMeta.color]} whitespace-nowrap flex-shrink-0`}>
-            {statusMeta.label}
-          </span>
+
+        {/* Título a todo el ancho de la tarjeta */}
+        <div className="font-semibold text-sm break-words">
+          <span className="mr-1.5">{fmtIcon}</span>
+          <span>{piece.title || fmtLabel || piece.format}</span>
+        </div>
+
+        {goals.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1.5">
+            {goals.map((g) => (
+              <span key={g} className={`text-[10px] px-1.5 py-0.5 rounded ${GOAL_COLOR_CLASSES[goalColor(g)]}`}>
+                {goalLabel(g)}
+              </span>
+            ))}
+          </div>
         )}
       </div>
 
