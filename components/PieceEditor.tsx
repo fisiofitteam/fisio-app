@@ -368,7 +368,7 @@ export function PieceEditor({
           </div>
 
           {/* Bloques de la estructura */}
-          <BlocksEditor blocks={piece.blocks} onChange={updateBlocks} />
+          <BlocksEditor blocks={piece.blocks} onChange={updateBlocks} format={piece.format} />
 
           {/* Caption */}
           <div className="bg-neutral-50 border border-neutral-200 rounded-lg p-3">
@@ -443,7 +443,55 @@ function SaveIndicator({ saving, lastSavedAt }: { saving: string; lastSavedAt: D
 // Editor de bloques: añadir / quitar / reordenar / editar título y contenido
 // ============================================================================
 
-function BlocksEditor({ blocks, onChange }: { blocks: Block[]; onChange: (b: Block[]) => void }) {
+function BlocksEditor({
+  blocks,
+  onChange,
+  format,
+}: {
+  blocks: Block[];
+  onChange: (b: Block[]) => void;
+  format: string;
+}) {
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [templates, setTemplates] = useState<Array<{ id: string; name: string; description: string | null; blocks: Array<{ id: string; label: string; order: number }> }> | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const supportsTemplates = format === "reel" || format === "carousel";
+
+  async function openTemplatePicker() {
+    setShowTemplates(true);
+    if (templates !== null) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/script-templates?format=${encodeURIComponent(format)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setTemplates(data.templates || []);
+      } else {
+        setTemplates([]);
+      }
+    } catch {
+      setTemplates([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function applyTemplate(tpl: { blocks: Array<{ id: string; label: string; order: number }> }) {
+    const hasContent = blocks.some((b) => b.content?.trim() || b.label?.trim());
+    if (hasContent && !confirm("Esto sobrescribirá los bloques actuales. ¿Continuar?")) {
+      return;
+    }
+    const newBlocks: Block[] = tpl.blocks.map((b, i) => ({
+      id: `b_${Date.now()}_${i}`,
+      label: b.label,
+      content: "",
+      order: i,
+    }));
+    onChange(newBlocks);
+    setShowTemplates(false);
+  }
+
   function updateBlock(index: number, field: "label" | "content", value: string) {
     const newBlocks = blocks.map((b, i) => (i === index ? { ...b, [field]: value } : b));
     onChange(newBlocks);
@@ -469,6 +517,53 @@ function BlocksEditor({ blocks, onChange }: { blocks: Block[]; onChange: (b: Blo
 
   return (
     <div className="space-y-2">
+      {supportsTemplates && (
+        <div className="flex justify-between items-center">
+          <span className="text-[10px] uppercase text-neutral-500 font-semibold tracking-wide">
+            Bloques del guion
+          </span>
+          <div className="relative">
+            <button
+              onClick={openTemplatePicker}
+              className="text-xs px-2 py-1 rounded border border-neutral-300 bg-white hover:bg-neutral-50"
+            >
+              📋 Usar plantilla
+            </button>
+            {showTemplates && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setShowTemplates(false)}
+                />
+                <div className="absolute right-0 top-full mt-1 z-50 w-80 max-h-96 overflow-y-auto bg-white border border-neutral-200 rounded-lg shadow-lg p-2">
+                  {loading && <p className="text-xs text-neutral-500 p-2">Cargando...</p>}
+                  {!loading && templates && templates.length === 0 && (
+                    <p className="text-xs text-neutral-500 p-2 italic">
+                      No hay plantillas para este formato. Créalas en la pestaña Plantillas.
+                    </p>
+                  )}
+                  {!loading && templates && templates.map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => applyTemplate(t)}
+                      className="w-full text-left p-2 rounded hover:bg-neutral-50 border-b border-neutral-100 last:border-b-0"
+                    >
+                      <div className="text-sm font-medium">{t.name}</div>
+                      {t.description && (
+                        <div className="text-[11px] text-neutral-500 mt-0.5">{t.description}</div>
+                      )}
+                      <div className="text-[10px] text-neutral-400 mt-1">
+                        {t.blocks.length} bloque{t.blocks.length !== 1 ? "s" : ""}: {t.blocks.map((b) => b.label).join(" · ")}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {blocks.map((b, i) => (
         <div key={b.id} className="border border-neutral-200 rounded-lg p-3 hover:border-neutral-300 group">
           <div className="flex items-center gap-2 mb-2">
@@ -491,7 +586,6 @@ function BlocksEditor({ blocks, onChange }: { blocks: Block[]; onChange: (b: Blo
             onChange={(e) => updateBlock(i, "content", e.target.value)}
             placeholder="Contenido del bloque..."
           />
-          {/* Botón insertar bloque después */}
           <button
             onClick={() => addBlock(i)}
             className="text-[10px] text-neutral-400 hover:text-neutral-900 mt-1 opacity-0 group-hover:opacity-100 transition-opacity"
