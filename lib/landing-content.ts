@@ -152,6 +152,105 @@ export const AGENDA_LANDING_DEFAULTS: AgendaLandingCopy = {
   blocks: [],
 };
 
+// ============================================================================
+// Landing de CONFIRMACIÓN de reserva (agenda/gracias).
+// ============================================================================
+
+export type AgendaGraciasCopy = {
+  heroTitleWithName: string; // usa {nombre}
+  heroTitleNoName: string;
+  reservedWithDate: string; // usa {fecha}
+  reservedNoDate: string;
+  callTitle: string;
+  callText: string;
+  videoBadge: string;
+  videoTitle: string;
+  videoIntro: string;
+  videoId: string; // ID de YouTube
+  videoBullets: string[];
+  prepTitle: string;
+  prepText: string;
+  stepsTitle: string;
+  steps: string[];
+  policyTitle: string;
+  policyText: string;
+  policyWarning: string;
+  contactText: string;
+  whatsappNumber: string;
+  instagramHandle: string;
+};
+
+export const AGENDA_GRACIAS_DEFAULTS: AgendaGraciasCopy = {
+  heroTitleWithName: "Listo, {nombre}.",
+  heroTitleNoName: "Reserva confirmada",
+  reservedWithDate: "Tu videoconsulta está reservada para el {fecha}.",
+  reservedNoDate: "Tu videoconsulta está reservada.",
+  callTitle: "Cómo será tu videoconsulta",
+  callText:
+    "Será una llamada de 45-60 minutos. Un especialista de FisioFit te atenderá.\n\nHablaremos para conocer tu problema a fondo y saber qué errores te mantienen en el bucle. Luego te daremos claridad sobre cómo puedes volver a disfrutar de CrossFit sin dolor.",
+  videoBadge: "IMPORTANTE",
+  videoTitle: "Mira esto antes de la llamada",
+  videoIntro:
+    "Hemos preparado un vídeo corto para que llegues a la videoconsulta con todo el contexto. Es la mejor forma de aprovechar al máximo nuestra sesión:",
+  videoId: "DnEAQXs09BI",
+  videoBullets: [
+    "Conocerás cómo trabajamos y nuestra metodología",
+    "Llegarás con las preguntas correctas",
+    "Aprovecharás cada minuto de la videoconsulta",
+  ],
+  prepTitle: "Cómo prepararte",
+  prepText:
+    "Busca un sitio tranquilo, sin distracciones. Evita conectarte por la calle o conduciendo: necesitamos toda tu atención para sacar el máximo partido de la llamada.",
+  stepsTitle: "Qué pasará antes de la llamada",
+  steps: [
+    "En breve recibirás un mensaje por WhatsApp para presentarte al especialista que te atenderá y resolver cualquier duda inicial.",
+    "24 horas antes de la llamada te enviaremos un recordatorio con el link de Google Meet para conectarte.",
+    "Hablamos a la hora que has reservado. Solo tienes que entrar en el link que te enviaremos por WhatsApp.",
+  ],
+  policyTitle: "Política de cancelación",
+  policyText:
+    "Atendemos a un número muy limitado de personas cada semana. Si reservas, comprométete con tu cita.\n\nSi necesitas cancelar o reprogramar, avísanos con la mayor antelación posible. Liberamos tu hueco para otra persona que también lo está esperando.",
+  policyWarning:
+    "⚠️ Importante: si no acudes sin avisar, no podrás volver a agendar con nosotros. Nuestro tiempo es limitado y solo trabajamos con personas verdaderamente comprometidas con su recuperación.",
+  contactText: "¿Te ha surgido un imprevisto o tienes dudas antes de la llamada?",
+  whatsappNumber: "+34621495367",
+  instagramHandle: "fisiofitcross",
+};
+
+export function normalizeAgendaGraciasCopy(raw: unknown): AgendaGraciasCopy {
+  const d = AGENDA_GRACIAS_DEFAULTS;
+  const o = (raw && typeof raw === "object" ? raw : {}) as any;
+  const str = (v: unknown, fb: string) => (typeof v === "string" && v.trim() ? v : fb);
+  const list = (v: unknown, fb: string[]) => {
+    if (!Array.isArray(v)) return fb;
+    const arr = v.map((x) => String(x)).filter((x) => x.trim() !== "");
+    return arr.length ? arr : fb;
+  };
+  return {
+    heroTitleWithName: str(o.heroTitleWithName, d.heroTitleWithName),
+    heroTitleNoName: str(o.heroTitleNoName, d.heroTitleNoName),
+    reservedWithDate: str(o.reservedWithDate, d.reservedWithDate),
+    reservedNoDate: str(o.reservedNoDate, d.reservedNoDate),
+    callTitle: str(o.callTitle, d.callTitle),
+    callText: str(o.callText, d.callText),
+    videoBadge: str(o.videoBadge, d.videoBadge),
+    videoTitle: str(o.videoTitle, d.videoTitle),
+    videoIntro: str(o.videoIntro, d.videoIntro),
+    videoId: str(o.videoId, d.videoId),
+    videoBullets: list(o.videoBullets, d.videoBullets),
+    prepTitle: str(o.prepTitle, d.prepTitle),
+    prepText: str(o.prepText, d.prepText),
+    stepsTitle: str(o.stepsTitle, d.stepsTitle),
+    steps: list(o.steps, d.steps),
+    policyTitle: str(o.policyTitle, d.policyTitle),
+    policyText: str(o.policyText, d.policyText),
+    policyWarning: str(o.policyWarning, d.policyWarning),
+    contactText: str(o.contactText, d.contactText),
+    whatsappNumber: str(o.whatsappNumber, d.whatsappNumber),
+    instagramHandle: str(o.instagramHandle, d.instagramHandle),
+  };
+}
+
 export function normalizeAgendaCopy(raw: unknown): AgendaLandingCopy {
   const d = AGENDA_LANDING_DEFAULTS;
   const o = (raw && typeof raw === "object" ? raw : {}) as any;

@@ -1,20 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
-import { normalizeRenewalCopy, normalizeContractCopy, normalizeAgendaCopy } from "@/lib/landing-content";
-import { getRenewalLandingCopy, getContractLandingCopy, getAgendaLandingCopy } from "@/lib/landing-config";
+import { normalizeRenewalCopy, normalizeContractCopy, normalizeAgendaCopy, normalizeAgendaGraciasCopy } from "@/lib/landing-content";
+import { getRenewalLandingCopy, getContractLandingCopy, getAgendaLandingCopy, getAgendaGraciasCopy } from "@/lib/landing-config";
 
-const KEYS = ["renewal", "contract", "agenda"];
+const KEYS = ["renewal", "contract", "agenda", "agenda_gracias"];
 
 function normalizeByKey(key: string, content: unknown) {
   if (key === "renewal") return normalizeRenewalCopy(content);
   if (key === "contract") return normalizeContractCopy(content);
+  if (key === "agenda_gracias") return normalizeAgendaGraciasCopy(content);
   return normalizeAgendaCopy(content);
 }
 
 async function getByKey(key: string) {
   if (key === "renewal") return getRenewalLandingCopy();
   if (key === "contract") return getContractLandingCopy();
+  if (key === "agenda_gracias") return getAgendaGraciasCopy();
   return getAgendaLandingCopy();
 }
 

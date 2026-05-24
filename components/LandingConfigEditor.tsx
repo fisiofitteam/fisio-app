@@ -8,6 +8,7 @@ import {
   type ContractLandingCopy,
   type AgendaLandingCopy,
   type AgendaBlock,
+  type AgendaGraciasCopy,
 } from "@/lib/landing-content";
 
 const SAMPLE = { nombre: "Marta", programa: "CONSOLIDA", meses: "4", importe: "199 €" };
@@ -77,12 +78,14 @@ export function LandingConfigEditor({
   initialRenewal,
   initialContract,
   initialAgenda,
+  initialGracias,
 }: {
   initialRenewal: RenewalLandingCopy;
   initialContract: ContractLandingCopy;
   initialAgenda: AgendaLandingCopy;
+  initialGracias: AgendaGraciasCopy;
 }) {
-  const [tab, setTab] = useState<"renewal" | "contract" | "agenda">("renewal");
+  const [tab, setTab] = useState<"renewal" | "contract" | "agenda" | "agenda_gracias">("renewal");
 
   return (
     <div>
@@ -92,7 +95,7 @@ export function LandingConfigEditor({
       </div>
 
       <div className="flex gap-1 mb-4 border-b border-neutral-200">
-        {([["renewal", "💳 Renovación"], ["contract", "🧾 Contratar"], ["agenda", "📅 Agenda"]] as const).map(([k, label]) => (
+        {([["renewal", "💳 Renovación"], ["contract", "🧾 Contratar"], ["agenda", "📅 Agenda"], ["agenda_gracias", "✅ Confirmación"]] as const).map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)} className={`px-4 py-2 text-sm font-medium border-b-2 ${tab === k ? "border-neutral-900 text-neutral-900" : "border-transparent text-neutral-500"}`}>
             {label}
           </button>
@@ -102,6 +105,72 @@ export function LandingConfigEditor({
       {tab === "renewal" && <RenewalEditor initial={initialRenewal} />}
       {tab === "contract" && <ContractEditor initial={initialContract} />}
       {tab === "agenda" && <AgendaEditor initial={initialAgenda} />}
+      {tab === "agenda_gracias" && <GraciasEditor initial={initialGracias} />}
+    </div>
+  );
+}
+
+// ── Confirmación de reserva ──
+function GraciasEditor({ initial }: { initial: AgendaGraciasCopy }) {
+  const [copy, setCopy] = useState(initial);
+  const { save, saving, msg } = useSaver("agenda_gracias");
+  function set<K extends keyof AgendaGraciasCopy>(k: K, val: AgendaGraciasCopy[K]) { setCopy((c) => ({ ...c, [k]: val })); }
+
+  return (
+    <div>
+      <div className="flex justify-end mb-3">
+        <button onClick={() => save(copy, (c) => c && setCopy(c))} disabled={saving} className="btn btn-primary text-sm">{saving ? "Guardando..." : "Guardar"}</button>
+      </div>
+      <Banner msg={msg} />
+      <p className="text-[11px] text-neutral-500 bg-neutral-50 border border-neutral-200 rounded p-2 mb-4">
+        Variables: <code>{"{nombre}"}</code> (nombre del lead) y <code>{"{fecha}"}</code> (fecha de la reserva).
+      </p>
+      <div className="space-y-4">
+        <div className="card space-y-3">
+          <h3 className="font-medium text-sm">Cabecera</h3>
+          <Field label="Título con nombre"><input className="input text-sm" value={copy.heroTitleWithName} onChange={(e) => set("heroTitleWithName", e.target.value)} /></Field>
+          <Field label="Título sin nombre"><input className="input text-sm" value={copy.heroTitleNoName} onChange={(e) => set("heroTitleNoName", e.target.value)} /></Field>
+          <Field label="Línea de reserva (con fecha)"><input className="input text-sm" value={copy.reservedWithDate} onChange={(e) => set("reservedWithDate", e.target.value)} /></Field>
+          <Field label="Línea de reserva (sin fecha)"><input className="input text-sm" value={copy.reservedNoDate} onChange={(e) => set("reservedNoDate", e.target.value)} /></Field>
+        </div>
+        <div className="card space-y-3">
+          <h3 className="font-medium text-sm">Cómo será la videoconsulta</h3>
+          <Field label="Título"><input className="input text-sm" value={copy.callTitle} onChange={(e) => set("callTitle", e.target.value)} /></Field>
+          <Field label="Texto"><textarea className="input text-sm" rows={4} value={copy.callText} onChange={(e) => set("callText", e.target.value)} /></Field>
+        </div>
+        <div className="card space-y-3">
+          <h3 className="font-medium text-sm">Vídeo pre-llamada</h3>
+          <Field label="Etiqueta"><input className="input text-sm" value={copy.videoBadge} onChange={(e) => set("videoBadge", e.target.value)} /></Field>
+          <Field label="Título"><input className="input text-sm" value={copy.videoTitle} onChange={(e) => set("videoTitle", e.target.value)} /></Field>
+          <Field label="Intro"><textarea className="input text-sm" rows={2} value={copy.videoIntro} onChange={(e) => set("videoIntro", e.target.value)} /></Field>
+          <Field label="ID de YouTube"><input className="input text-sm font-mono" value={copy.videoId} onChange={(e) => set("videoId", e.target.value)} placeholder="DnEAQXs09BI" /></Field>
+          <BulletsEditor bullets={copy.videoBullets} onChange={(b) => set("videoBullets", b)} />
+        </div>
+        <div className="card space-y-3">
+          <h3 className="font-medium text-sm">Cómo prepararte</h3>
+          <Field label="Título"><input className="input text-sm" value={copy.prepTitle} onChange={(e) => set("prepTitle", e.target.value)} /></Field>
+          <Field label="Texto"><textarea className="input text-sm" rows={3} value={copy.prepText} onChange={(e) => set("prepText", e.target.value)} /></Field>
+        </div>
+        <div className="card space-y-3">
+          <h3 className="font-medium text-sm">Qué pasará antes (pasos)</h3>
+          <Field label="Título"><input className="input text-sm" value={copy.stepsTitle} onChange={(e) => set("stepsTitle", e.target.value)} /></Field>
+          <BulletsEditor bullets={copy.steps} onChange={(b) => set("steps", b)} />
+        </div>
+        <div className="card space-y-3">
+          <h3 className="font-medium text-sm">Política de cancelación</h3>
+          <Field label="Título"><input className="input text-sm" value={copy.policyTitle} onChange={(e) => set("policyTitle", e.target.value)} /></Field>
+          <Field label="Texto"><textarea className="input text-sm" rows={4} value={copy.policyText} onChange={(e) => set("policyText", e.target.value)} /></Field>
+          <Field label="Aviso importante (recuadro rojo)"><textarea className="input text-sm" rows={3} value={copy.policyWarning} onChange={(e) => set("policyWarning", e.target.value)} /></Field>
+        </div>
+        <div className="card space-y-3">
+          <h3 className="font-medium text-sm">Contacto</h3>
+          <Field label="Texto"><input className="input text-sm" value={copy.contactText} onChange={(e) => set("contactText", e.target.value)} /></Field>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Field label="WhatsApp (número)"><input className="input text-sm" value={copy.whatsappNumber} onChange={(e) => set("whatsappNumber", e.target.value)} placeholder="+34..." /></Field>
+            <Field label="Instagram (sin @)"><input className="input text-sm" value={copy.instagramHandle} onChange={(e) => set("instagramHandle", e.target.value)} placeholder="fisiofitcross" /></Field>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

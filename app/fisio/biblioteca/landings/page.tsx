@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getActiveProfessional } from "@/lib/session";
-import { getRenewalLandingCopy, getContractLandingCopy, getAgendaLandingCopy } from "@/lib/landing-config";
+import { getRenewalLandingCopy, getContractLandingCopy, getAgendaLandingCopy, getAgendaGraciasCopy } from "@/lib/landing-config";
 import { LandingConfigEditor } from "@/components/LandingConfigEditor";
 
 export default async function LandingsConfigPage() {
@@ -8,11 +8,12 @@ export default async function LandingsConfigPage() {
   if (!user) redirect("/login");
   if (user.role !== "ceo") redirect("/fisio/biblioteca");
 
-  const [renewal, contract, agenda] = await Promise.all([
+  const [renewal, contract, agenda, gracias] = await Promise.all([
     getRenewalLandingCopy(),
     getContractLandingCopy(),
     getAgendaLandingCopy(),
+    getAgendaGraciasCopy(),
   ]);
 
-  return <LandingConfigEditor initialRenewal={renewal} initialContract={contract} initialAgenda={agenda} />;
+  return <LandingConfigEditor initialRenewal={renewal} initialContract={contract} initialAgenda={agenda} initialGracias={gracias} />;
 }

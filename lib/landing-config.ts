@@ -5,9 +5,11 @@ import {
   normalizeRenewalCopy,
   normalizeContractCopy,
   normalizeAgendaCopy,
+  normalizeAgendaGraciasCopy,
   type RenewalLandingCopy,
   type ContractLandingCopy,
   type AgendaLandingCopy,
+  type AgendaGraciasCopy,
 } from "@/lib/landing-content";
 
 async function readContent(id: string): Promise<unknown> {
@@ -29,4 +31,7 @@ export async function getContractLandingCopy(): Promise<ContractLandingCopy> {
 }
 export async function getAgendaLandingCopy(): Promise<AgendaLandingCopy> {
   return normalizeAgendaCopy(await readContent("agenda"));
+}
+export async function getAgendaGraciasCopy(): Promise<AgendaGraciasCopy> {
+  return normalizeAgendaGraciasCopy(await readContent("agenda_gracias"));
 }
