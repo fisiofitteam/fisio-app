@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import type { AgendaLandingCopy } from "@/lib/landing-content";
 
 type Slot = {
   startISO: string;
@@ -55,7 +56,7 @@ function getUserTimezone(): string | null {
   }
 }
 
-export function AgendaLanding() {
+export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
   const router = useRouter();
   const [step, setStep] = useState<1 | 2>(1);
 
@@ -287,13 +288,11 @@ export function AgendaLanding() {
               letterSpacing: "-0.035em",
             }}
           >
-            Vuelve a entrenar<br />
-            <span className="brand-gradient-text">sin dolor.</span>
+            {copy.heroTitle1}<br />
+            <span className="brand-gradient-text">{copy.heroTitle2}</span>
           </h1>
-          <p className="text-sm sm:text-base" style={{ color: "#A3A3A3" }}>
-            Reserva una <strong style={{ color: "#FAFAFA" }}>videoconsulta gratuita</strong> de valoración con el equipo
-            FisioFit Team. Te ayudamos a entender qué le pasa a tu cuerpo y diseñamos el plan para que vuelvas al box
-            cuanto antes.
+          <p className="text-sm sm:text-base whitespace-pre-line" style={{ color: "#A3A3A3" }}>
+            {copy.heroSubtitle}
           </p>
         </header>
 
@@ -643,7 +642,7 @@ export function AgendaLanding() {
 
         {/* ━━━ Bloque de autoridad: equipo + credenciales (debajo del form) ━━━ */}
         <div className="mt-8">
-          <TeamAuthorityBlock />
+          <TeamAuthorityBlock copy={copy} />
         </div>
 
         <footer className="mt-10 text-center text-xs" style={{ color: "#525252" }}>
@@ -730,7 +729,7 @@ const TEAM_MEMBERS: TeamMember[] = [
   // { photo: "/team/miguel.jpg", name: "Miguel Castro", role: "Head of Success" },
 ];
 
-function TeamAuthorityBlock() {
+function TeamAuthorityBlock({ copy }: { copy: AgendaLandingCopy }) {
   const hasPhotos = TEAM_MEMBERS.length > 0;
   // Layout dinámico según cantidad de miembros
   const gridCols =
@@ -798,58 +797,28 @@ function TeamAuthorityBlock() {
 
       {/* Copy de autoridad: combinación credenciales + cercanía */}
       <h2 className="text-base sm:text-lg font-semibold mb-2" style={{ letterSpacing: "-0.015em" }}>
-        Un equipo de fisios especializado en CrossFit
+        {copy.authorityTitle}
       </h2>
-      <p className="text-sm leading-relaxed" style={{ color: "#A3A3A3" }}>
-        Llevamos <strong style={{ color: "#FAFAFA" }}>+10 años en boxes</strong>, entrenando y tratando a atletas
-        como tú. No somos fisios genéricos: entendemos las exigencias del CrossFit porque las hemos vivido en
-        primera persona.
+      <p className="text-sm leading-relaxed whitespace-pre-line" style={{ color: "#A3A3A3" }}>
+        {copy.authorityText}
       </p>
 
       {/* Cards de credenciales */}
       <div className="grid grid-cols-3 gap-2 mt-5">
-        <div
-          className="rounded-lg p-3 text-center"
-          style={{ background: "rgba(31, 31, 31, 0.7)", border: "1px solid #262626" }}
-        >
+        {copy.stats.map((s, i) => (
           <div
-            className="text-xl sm:text-2xl font-bold mb-0.5"
-            style={{ color: "#FCD34D", letterSpacing: "-0.02em" }}
+            key={i}
+            className="rounded-lg p-3 text-center flex flex-col items-center justify-center"
+            style={{ background: "rgba(31, 31, 31, 0.7)", border: "1px solid #262626" }}
           >
-            +600
+            <div className="text-xl sm:text-2xl font-bold mb-0.5" style={{ color: "#FCD34D", letterSpacing: "-0.02em" }}>
+              {s.value}
+            </div>
+            <div className="text-[10px] uppercase tracking-wider" style={{ color: "#A3A3A3" }}>
+              {s.label}
+            </div>
           </div>
-          <div className="text-[10px] uppercase tracking-wider" style={{ color: "#A3A3A3" }}>
-            atletas recuperados
-          </div>
-        </div>
-        <div
-          className="rounded-lg p-3 text-center"
-          style={{ background: "rgba(31, 31, 31, 0.7)", border: "1px solid #262626" }}
-        >
-          <div
-            className="text-xl sm:text-2xl font-bold mb-0.5"
-            style={{ color: "#FCD34D", letterSpacing: "-0.02em" }}
-          >
-            +10
-          </div>
-          <div className="text-[10px] uppercase tracking-wider" style={{ color: "#A3A3A3" }}>
-            años en boxes
-          </div>
-        </div>
-        <div
-          className="rounded-lg p-3 text-center flex flex-col items-center justify-center"
-          style={{ background: "rgba(31, 31, 31, 0.7)", border: "1px solid #262626" }}
-        >
-          <div
-            className="text-base sm:text-lg font-bold mb-0.5"
-            style={{ color: "#FCD34D", letterSpacing: "-0.02em" }}
-          >
-            ✓
-          </div>
-          <div className="text-[10px] uppercase tracking-wider" style={{ color: "#A3A3A3" }}>
-            Fisios colegiados
-          </div>
-        </div>
+        ))}
       </div>
     </section>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { ContractLandingCopy } from "@/lib/landing-content";
 
 type SaleInfo = {
   status: string;
@@ -14,31 +15,6 @@ type SaleInfo = {
   currency: string;
 };
 
-const PROGRAM_HEADLINES: Record<string, { title: string; subtitle: string; bullets: string[] }> = {
-  RECUPERA: {
-    title: "Programa RECUPERA",
-    subtitle: "Recupera tu rendimiento sin dolor",
-    bullets: [
-      "Plan de recuperación 100% personalizado a tu lesión",
-      "Tu propio fisio asignado, en seguimiento semanal",
-      "Acceso a la app FisioFit y a tu biblioteca de ejercicios",
-      "Chat directo con tu fisio para resolver dudas",
-      "Adaptación a tu deporte (CrossFit, Hyrox, running...)",
-    ],
-  },
-  CONSOLIDA: {
-    title: "Programa CONSOLIDA",
-    subtitle: "Vuelve más fuerte y evita recaer",
-    bullets: [
-      "Plan de mantenimiento y prevención específico para ti",
-      "Tu propio fisio asignado, en seguimiento mensual",
-      "Biblioteca completa: ejercicios de recuperación + consolidación",
-      "Chat directo con tu fisio",
-      "Sesiones de revisión periódicas para evitar recaer",
-    ],
-  },
-};
-
 function formatEuros(cents: number): string {
   const euros = cents / 100;
   return new Intl.NumberFormat("es-ES", {
@@ -48,7 +24,7 @@ function formatEuros(cents: number): string {
   }).format(euros);
 }
 
-export function ContractLandingClient({ token }: { token: string }) {
+export function ContractLandingClient({ token, copy }: { token: string; copy: ContractLandingCopy }) {
   const [sale, setSale] = useState<SaleInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -96,7 +72,7 @@ export function ContractLandingClient({ token }: { token: string }) {
     }
   }
 
-  const headline = sale ? PROGRAM_HEADLINES[sale.programType] : null;
+  const headline = sale ? (copy.programs[sale.programType] ?? copy.programs.RECUPERA) : null;
 
   return (
     <div
@@ -158,10 +134,10 @@ export function ContractLandingClient({ token }: { token: string }) {
                   className="text-3xl sm:text-4xl font-bold mb-2 tracking-tight"
                   style={{ color: "#FAFAFA" }}
                 >
-                  Aquí tienes tu programa
+                  {copy.headline}
                 </h1>
                 <p className="text-sm" style={{ color: "#A3A3A3" }}>
-                  El precio y la duración son los que acordamos en la videollamada.
+                  {copy.subheadline}
                 </p>
               </div>
 
@@ -274,7 +250,7 @@ export function ContractLandingClient({ token }: { token: string }) {
               {/* Footer pequeño */}
               <div className="text-center">
                 <p className="text-[11px]" style={{ color: "#525252" }}>
-                  ¿Algo no encaja con lo que hablamos? Escríbenos al WhatsApp antes de pagar.
+                  {copy.footer}
                 </p>
               </div>
             </>

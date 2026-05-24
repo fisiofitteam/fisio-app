@@ -1,4 +1,5 @@
 import { ContractLandingClient } from "@/components/ContractLandingClient";
+import { getContractLandingCopy } from "@/lib/landing-config";
 
 export const metadata = {
   title: "Contratar programa · FisioFit Team",
@@ -7,6 +8,7 @@ export const metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default function ContratarPage({ params }: { params: { token: string } }) {
-  return <ContractLandingClient token={params.token} />;
+export default async function ContratarPage({ params }: { params: { token: string } }) {
+  const copy = await getContractLandingCopy();
+  return <ContractLandingClient token={params.token} copy={copy} />;
 }
