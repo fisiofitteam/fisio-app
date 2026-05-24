@@ -387,12 +387,12 @@ function PieceCard({ piece, weekId }: { piece: Piece; weekId: string }) {
       href={`/fisio/contenido/pieza/${piece.id}`}
       className="card hover:border-neutral-400 hover:shadow-sm transition-all block group"
     >
-      <div className="flex justify-between items-start mb-2">
-        <div>
+      <div className="flex justify-between items-start gap-2 mb-2">
+        <div className="flex-1 min-w-0">
           <div className="text-[10px] uppercase text-neutral-500 font-medium tracking-wide">
             {dayLabel}
           </div>
-          <div className="font-semibold text-sm mt-0.5">
+          <div className="font-semibold text-sm mt-0.5 break-words">
             <span className="mr-1.5">{fmtIcon}</span>
             <span>{piece.title || fmtLabel || piece.format}</span>
           </div>
@@ -407,7 +407,7 @@ function PieceCard({ piece, weekId }: { piece: Piece; weekId: string }) {
           )}
         </div>
         {statusMeta && (
-          <span className={`text-[10px] uppercase font-medium px-2 py-0.5 rounded-full border ${STATUS_COLORS[statusMeta.color]} whitespace-nowrap`}>
+          <span className={`text-[10px] uppercase font-medium px-2 py-0.5 rounded-full border ${STATUS_COLORS[statusMeta.color]} whitespace-nowrap flex-shrink-0`}>
             {statusMeta.label}
           </span>
         )}
