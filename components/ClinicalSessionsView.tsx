@@ -134,16 +134,12 @@ export function ClinicalSessionsView({
                 <div className="flex justify-between items-start gap-3">
                   <div className="flex items-start gap-3 min-w-0 flex-1">
                     {/* Círculos a la izquierda */}
-                    {(c.hasSubscription || c.adhTotal > 0) && (
-                      <div className="flex flex-col gap-1.5 flex-shrink-0">
-                        {c.hasSubscription && (
-                          <ProgressRing value={c.subConsumed} max={c.subTotal} size={40} stroke={4} label="suscripción" mode="subscription" />
-                        )}
-                        {c.adhTotal > 0 && (
-                          <ProgressRing value={c.adhCompleted} max={c.adhTotal} size={40} stroke={4} label="cumplimiento" mode="adherence" />
-                        )}
-                      </div>
-                    )}
+                    <div className="flex flex-col gap-1.5 flex-shrink-0">
+                      {c.hasSubscription && (
+                        <ProgressRing value={c.subConsumed} max={c.subTotal} size={40} stroke={4} label="suscripción" mode="subscription" />
+                      )}
+                      <ProgressRing value={c.adhCompleted} max={c.adhTotal} size={40} stroke={4} label="cumplimiento" mode="adherence" />
+                    </div>
                     {/* Info del paciente */}
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -151,12 +147,14 @@ export function ClinicalSessionsView({
                         <PatientPill value={c.programType} kind="program" />
                         {c.bodyZone && <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600">{c.bodyZone}</span>}
                       </div>
-                      <div className="text-xs text-neutral-500 mt-0.5">
-                        {c.assignedToId && proMap[c.assignedToId] ? proMap[c.assignedToId] : "Sin fisio asignado"}
+                      <div className="flex items-center gap-2 flex-wrap text-xs mt-0.5">
+                        <span className="text-neutral-500">
+                          {c.assignedToId && proMap[c.assignedToId] ? proMap[c.assignedToId] : "Sin fisio asignado"}
+                        </span>
+                        {c.appliedLevelName && (
+                          <span className="text-emerald-700">✓ Control de cargas · {c.appliedLevelName}</span>
+                        )}
                       </div>
-                      {c.appliedLevelName && (
-                        <div className="text-xs text-emerald-700 mt-0.5">✓ Control de cargas · {c.appliedLevelName}</div>
-                      )}
                     </div>
                   </div>
                   {/* Estado a la derecha */}
