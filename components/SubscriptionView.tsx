@@ -148,7 +148,7 @@ export function SubscriptionView({
       {/* Bloque 3: Periodos de suscripción (renovaciones, etc) */}
       <section className="card space-y-3">
         <h2 className="font-medium">🔁 Periodos de suscripción</h2>
-        <SubscriptionPeriodsBlock patientId={patient.id} isManager={isManager} />
+        <SubscriptionPeriodsBlock patientId={patient.id} isManager={isManager} isCeo={isCeo} />
       </section>
 
       {/* Bloque 4: Pausas y vacaciones */}

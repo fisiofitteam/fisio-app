@@ -10,8 +10,9 @@ const PROGRAMS = ["RECUPERA", "CONSOLIDA", "ADVANCE"];
 // Crea un enlace de pago de renovación para el paciente. Solo CEO/head_success.
 // body: { programType, durationMonths, amountEuros }
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+  // Cualquier profesional del equipo puede generar el enlace de renovación.
   const user = await getActiveProfessional();
-  if (!user || !(user.role === "ceo" || user.role === "head_success")) {
+  if (!user) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
