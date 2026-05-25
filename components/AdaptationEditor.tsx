@@ -88,6 +88,31 @@ export function AdaptationEditor({
     return { total, ok, cond, blocked };
   }, [movements, adaptations]);
 
+  // Estado resumido de cada categoría a partir de sus movimientos
+  function catFlags(movs: Movement[]) {
+    let hasBlocked = false;
+    let hasCond = false;
+    for (const m of movs) {
+      const s = adaptations[m.id]?.state ?? "OK";
+      if (s === "BLOCKED") hasBlocked = true;
+      else if (s === "CONDITIONAL") hasCond = true;
+    }
+    return { hasBlocked, hasCond };
+  }
+
+  // Categorías visibles, ordenadas: primero las que tienen bloqueados, luego
+  // condicionales, luego las que están todo OK. (orden estable = alfabético dentro)
+  const sortedCategories = useMemo(() => {
+    return categories
+      .filter((cat) => grouped[cat.id]?.length > 0)
+      .map((cat) => {
+        const { hasBlocked, hasCond } = catFlags(grouped[cat.id]);
+        return { cat, hasBlocked, hasCond, severity: hasBlocked ? 2 : hasCond ? 1 : 0 };
+      })
+      .sort((a, b) => b.severity - a.severity);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categories, grouped, adaptations]);
+
   function toggleCat(catId: string) {
     setCollapsedCats((prev) => {
       const next = new Set(prev);
@@ -257,19 +282,23 @@ export function AdaptationEditor({
 
       {/* Tabla por categorías */}
       <div className="space-y-3">
-        {categories
-          .filter((cat) => grouped[cat.id]?.length > 0)
-          .map((cat) => {
+        {sortedCategories.map(({ cat, hasBlocked, hasCond }) => {
             const isCollapsed = collapsedCats.has(cat.id);
             const movs = grouped[cat.id];
             return (
               <section key={cat.id} className="card !p-0 overflow-hidden">
                 <button
                   onClick={() => toggleCat(cat.id)}
-                  className="w-full flex justify-between items-center px-4 py-3 hover:bg-neutral-50"
+                  className="w-full flex justify-between items-center px-4 py-3 hover:bg-neutral-50 gap-2"
                 >
-                  <h3 className="font-medium text-sm">{cat.name}</h3>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <h3 className="font-medium text-sm">{cat.name}</h3>
+                    {/* Etiquetas del bloque, visibles sin desplegar */}
+                    {hasBlocked && <span className="pill-block">Bloq.</span>}
+                    {hasCond && <span className="pill-warn">Cond.</span>}
+                    {!hasBlocked && !hasCond && <span className="pill-ok">OK</span>}
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
                     <span className="text-xs text-neutral-400">{movs.length}</span>
                     <span className="text-neutral-400">{isCollapsed ? "▸" : "▾"}</span>
                   </div>
