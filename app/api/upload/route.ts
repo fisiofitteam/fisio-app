@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 // POST /api/upload — sube una imagen a Vercel Blob y devuelve su URL. Solo CEO.
 export async function POST(req: NextRequest) {
   const user = await getActiveProfessional();
-  if (!user || user.role !== "ceo") {
+  if (!user) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   if (!process.env.BLOB_READ_WRITE_TOKEN) {

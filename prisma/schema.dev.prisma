@@ -137,6 +137,14 @@ model Professional {
   // Si está marcado como inactivo, no puede iniciar sesión (pero conservamos su historial)
   active               Boolean  @default(true)
 
+  // Perfil / datos fiscales (autogestionados desde Ajustes → Perfil; usados en las facturas)
+  fiscalName     String?   // nombre o razón social fiscal
+  taxId          String?   // NIF / DNI / CIF
+  fiscalAddress  String?   // dirección fiscal
+  iban           String?
+  photoUrl       String?
+  vatExempt      Boolean   @default(true)  // exento de IVA (art. 20 Ley 37/1992)
+
   patients          Patient[]            @relation("PatientAssignedTo")
   patientsAssignedBy Patient[]           @relation("PatientAssignedBy")
   assignedTasks     FisioTask[]  @relation("AssignedToFisio")
