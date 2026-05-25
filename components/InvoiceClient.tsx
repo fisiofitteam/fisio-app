@@ -29,19 +29,9 @@ export function InvoiceClient({
 
   const monthLabel = new Date(Date.UTC(year, month, 1)).toLocaleDateString("es-ES", { month: "long", year: "numeric", timeZone: "UTC" });
   const today = new Date().toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" });
-  const c = salary.config;
-  const b = salary.breakdown;
-
-  const lines: { concept: string; detail: string; amount: number }[] = [];
-  if (c.baseSalary > 0) lines.push({ concept: "Sueldo fijo", detail: "Mensual", amount: b.fixed });
-  if (c.perActivePatient > 0) lines.push({ concept: "Pacientes activos", detail: `${salary.activePatients} × ${eur(c.perActivePatient)}`, amount: b.patients });
-  if (c.renewalOwnPct > 0 || c.renewalOthersPct > 0) {
-    const parts: string[] = [];
-    if (c.renewalOwnPct > 0) parts.push(`${c.renewalOwnPct}% de ${eur(salary.renewalOwnRevenue)} (propias)`);
-    if (c.renewalOthersPct > 0) parts.push(`${c.renewalOthersPct}% de ${eur(salary.renewalOthersRevenue)} (equipo)`);
-    lines.push({ concept: "Comisión por renovaciones", detail: parts.join(" + "), amount: b.renewals });
-  }
-  if (c.newSaleCommissionPct > 0) lines.push({ concept: "Comisión por ventas nuevas", detail: `${c.newSaleCommissionPct}% de ${eur(salary.newSaleRevenue)}`, amount: b.newSales });
+  // Concepto único y genérico en TODAS las facturas (no se desglosa la compensación
+  // real, para no comprometer la naturaleza del servicio ni la exención).
+  const conceptText = `Servicios de fisioterapia y rehabilitación prestados en ${monthLabel}`;
 
   const base = salary.total;
   const VAT_RATE = 21;
@@ -97,23 +87,15 @@ export function InvoiceClient({
         <table className="w-full text-sm mb-6">
           <thead>
             <tr className="border-b-2 border-neutral-900 text-left">
-              <th className="py-2 font-medium">Concepto</th>
-              <th className="py-2 font-medium">Detalle</th>
+              <th className="py-2 font-medium" colSpan={2}>Concepto</th>
               <th className="py-2 font-medium text-right">Importe</th>
             </tr>
           </thead>
           <tbody>
-            {lines.length === 0 ? (
-              <tr><td colSpan={3} className="py-4 text-neutral-400 italic">Sin conceptos este mes.</td></tr>
-            ) : (
-              lines.map((l, i) => (
-                <tr key={i} className="border-b border-neutral-100">
-                  <td className="py-2.5 font-medium">{l.concept}</td>
-                  <td className="py-2.5 text-neutral-500">{l.detail}</td>
-                  <td className="py-2.5 text-right tabular-nums">{eur(l.amount)}</td>
-                </tr>
-              ))
-            )}
+            <tr className="border-b border-neutral-100">
+              <td className="py-2.5 font-medium" colSpan={2}>{conceptText}</td>
+              <td className="py-2.5 text-right tabular-nums">{eur(base)}</td>
+            </tr>
           </tbody>
           <tfoot>
             <tr className="border-t border-neutral-200">
@@ -142,7 +124,6 @@ export function InvoiceClient({
             Factura exenta de IVA por el artículo 20 de la Ley 37/1992.
           </p>
         )}
-        {c.notes && <p className="text-xs text-neutral-500 mt-3">{c.notes}</p>}
         <p className="text-[11px] text-neutral-400 mt-6">
           Importe calculado automáticamente según las condiciones laborales registradas. Revisa antes de emitir.
         </p>
