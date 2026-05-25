@@ -132,8 +132,8 @@ function CompensationModal({ member, onClose }: { member: TeamMember; onClose: (
   const [loaded, setLoaded] = useState(false);
   const [baseSalary, setBaseSalary] = useState("0");
   const [perActivePatient, setPerActivePatient] = useState("0");
-  const [renewalCommissionPct, setRenewalCommissionPct] = useState("0");
-  const [renewalScope, setRenewalScope] = useState<"own" | "all">("own");
+  const [renewalOwnPct, setRenewalOwnPct] = useState("0");
+  const [renewalOthersPct, setRenewalOthersPct] = useState("0");
   const [newSaleCommissionPct, setNewSaleCommissionPct] = useState("0");
   const [newSaleScope, setNewSaleScope] = useState<"own" | "all">("own");
   const [notes, setNotes] = useState("");
@@ -147,8 +147,8 @@ function CompensationModal({ member, onClose }: { member: TeamMember; onClose: (
         if (c && !c.error) {
           setBaseSalary(String(c.baseSalary ?? 0));
           setPerActivePatient(String(c.perActivePatient ?? 0));
-          setRenewalCommissionPct(String(c.renewalCommissionPct ?? 0));
-          setRenewalScope(c.renewalScope === "all" ? "all" : "own");
+          setRenewalOwnPct(String(c.renewalOwnPct ?? 0));
+          setRenewalOthersPct(String(c.renewalOthersPct ?? 0));
           setNewSaleCommissionPct(String(c.newSaleCommissionPct ?? 0));
           setNewSaleScope(c.newSaleScope === "all" ? "all" : "own");
           setNotes(c.notes ?? "");
@@ -165,7 +165,7 @@ function CompensationModal({ member, onClose }: { member: TeamMember; onClose: (
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         professionalId: member.id,
-        baseSalary, perActivePatient, renewalCommissionPct, renewalScope,
+        baseSalary, perActivePatient, renewalOwnPct, renewalOthersPct,
         newSaleCommissionPct, newSaleScope, notes,
       }),
     });
@@ -206,16 +206,22 @@ function CompensationModal({ member, onClose }: { member: TeamMember; onClose: (
             <div className="border-t border-neutral-100 pt-3">
               <label className="text-xs text-neutral-500 block mb-1">Comisión por renovaciones</label>
               <div className="grid grid-cols-2 gap-3">
-                <div className="flex items-center gap-1">
-                  <input type="number" min="0" step="any" className="input text-sm" value={renewalCommissionPct} onChange={(e) => setRenewalCommissionPct(e.target.value)} />
-                  <span className="text-sm text-neutral-500">%</span>
+                <div>
+                  <div className="flex items-center gap-1">
+                    <input type="number" min="0" step="any" className="input text-sm" value={renewalOwnPct} onChange={(e) => setRenewalOwnPct(e.target.value)} />
+                    <span className="text-sm text-neutral-500">%</span>
+                  </div>
+                  <p className="text-[11px] text-neutral-400 mt-1">de SUS pacientes</p>
                 </div>
-                <select className="input text-sm" value={renewalScope} onChange={(e) => setRenewalScope(e.target.value as "own" | "all")}>
-                  <option value="own">De sus pacientes</option>
-                  <option value="all">Totales (todas)</option>
-                </select>
+                <div>
+                  <div className="flex items-center gap-1">
+                    <input type="number" min="0" step="any" className="input text-sm" value={renewalOthersPct} onChange={(e) => setRenewalOthersPct(e.target.value)} />
+                    <span className="text-sm text-neutral-500">%</span>
+                  </div>
+                  <p className="text-[11px] text-neutral-400 mt-1">del resto del equipo</p>
+                </div>
               </div>
-              <p className="text-[11px] text-neutral-400 mt-1">% sobre el importe € renovado en el mes.</p>
+              <p className="text-[11px] text-neutral-400 mt-1">% sobre el importe € renovado en el mes. Deja 0 el que no aplique.</p>
             </div>
 
             <div className="border-t border-neutral-100 pt-3">

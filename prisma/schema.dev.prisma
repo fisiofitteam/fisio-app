@@ -159,8 +159,8 @@ model Compensation {
   professional         Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
   baseSalary           Float    @default(0)   // sueldo fijo €/mes
   perActivePatient     Float    @default(0)   // € por paciente activo
-  renewalCommissionPct Float    @default(0)   // % sobre importe renovado en el mes
-  renewalScope         String   @default("own") // "own" (sus pacientes) | "all" (totales)
+  renewalOwnPct        Float    @default(0)   // % sobre renovaciones de SUS pacientes
+  renewalOthersPct     Float    @default(0)   // % sobre renovaciones del resto del equipo
   newSaleCommissionPct Float    @default(0)   // % sobre importe de ventas nuevas
   newSaleScope         String   @default("own") // "own" (cerradas por él) | "all"
   notes                String?

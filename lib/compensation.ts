@@ -5,8 +5,8 @@ import { prisma } from "@/lib/prisma";
 export type CompensationConfig = {
   baseSalary: number;
   perActivePatient: number;
-  renewalCommissionPct: number;
-  renewalScope: "own" | "all";
+  renewalOwnPct: number; // % sobre renovaciones de SUS pacientes
+  renewalOthersPct: number; // % sobre renovaciones del resto del equipo
   newSaleCommissionPct: number;
   newSaleScope: "own" | "all";
   notes: string | null;
@@ -15,8 +15,8 @@ export type CompensationConfig = {
 export const DEFAULT_COMPENSATION: CompensationConfig = {
   baseSalary: 0,
   perActivePatient: 0,
-  renewalCommissionPct: 0,
-  renewalScope: "own",
+  renewalOwnPct: 0,
+  renewalOthersPct: 0,
   newSaleCommissionPct: 0,
   newSaleScope: "own",
   notes: null,
@@ -28,8 +28,8 @@ export async function getCompensation(professionalId: string): Promise<Compensat
   return {
     baseSalary: row.baseSalary,
     perActivePatient: row.perActivePatient,
-    renewalCommissionPct: row.renewalCommissionPct,
-    renewalScope: row.renewalScope === "all" ? "all" : "own",
+    renewalOwnPct: row.renewalOwnPct,
+    renewalOthersPct: row.renewalOthersPct,
     newSaleCommissionPct: row.newSaleCommissionPct,
     newSaleScope: row.newSaleScope === "all" ? "all" : "own",
     notes: row.notes,
@@ -44,8 +44,9 @@ export function monthRangeUTC(year: number, month: number) {
 export type SalaryResult = {
   config: CompensationConfig;
   activePatients: number;
-  renewalCount: number;
-  renewalRevenue: number;
+  renewalOwnCount: number;
+  renewalOwnRevenue: number;
+  renewalOthersRevenue: number;
   newSaleCount: number;
   newSaleRevenue: number;
   breakdown: { fixed: number; patients: number; renewals: number; newSales: number };
@@ -65,16 +66,23 @@ export async function computeMonthlySalary(
     where: { assignedProfessionalId: professionalId, onboardingStatus: "active" },
   });
 
-  // Renovaciones del mes (por importe)
-  const renewals = await prisma.subscriptionRenewal.findMany({
-    where: {
-      decidedAt: { gte: start, lt: end },
-      ...(config.renewalScope === "own" ? { patient: { assignedProfessionalId: professionalId } } : {}),
-    },
-    select: { amountPaid: true },
+  // Renovaciones del mes: propias vs resto del equipo
+  const monthRenewals = await prisma.subscriptionRenewal.findMany({
+    where: { decidedAt: { gte: start, lt: end } },
+    select: { amountPaid: true, patient: { select: { assignedProfessionalId: true } } },
   });
-  const renewalCount = renewals.length;
-  const renewalRevenue = renewals.reduce((s, r) => s + (r.amountPaid || 0), 0);
+  let renewalOwnCount = 0;
+  let renewalOwnRevenue = 0;
+  let renewalOthersRevenue = 0;
+  for (const r of monthRenewals) {
+    const amt = r.amountPaid || 0;
+    if (r.patient?.assignedProfessionalId === professionalId) {
+      renewalOwnCount++;
+      renewalOwnRevenue += amt;
+    } else {
+      renewalOthersRevenue += amt;
+    }
+  }
 
   // Ventas nuevas pagadas del mes
   const sales = await prisma.sale.findMany({
@@ -91,10 +99,20 @@ export async function computeMonthlySalary(
   const breakdown = {
     fixed: config.baseSalary,
     patients: config.perActivePatient * activePatients,
-    renewals: (config.renewalCommissionPct / 100) * renewalRevenue,
+    renewals: (config.renewalOwnPct / 100) * renewalOwnRevenue + (config.renewalOthersPct / 100) * renewalOthersRevenue,
     newSales: (config.newSaleCommissionPct / 100) * newSaleRevenue,
   };
   const total = breakdown.fixed + breakdown.patients + breakdown.renewals + breakdown.newSales;
 
-  return { config, activePatients, renewalCount, renewalRevenue, newSaleCount, newSaleRevenue, breakdown, total };
+  return {
+    config,
+    activePatients,
+    renewalOwnCount,
+    renewalOwnRevenue,
+    renewalOthersRevenue,
+    newSaleCount,
+    newSaleRevenue,
+    breakdown,
+    total,
+  };
 }

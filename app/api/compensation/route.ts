@@ -34,8 +34,8 @@ export async function PUT(req: NextRequest) {
   const data = {
     baseSalary: num(b.baseSalary),
     perActivePatient: num(b.perActivePatient),
-    renewalCommissionPct: num(b.renewalCommissionPct),
-    renewalScope: scope(b.renewalScope),
+    renewalOwnPct: num(b.renewalOwnPct),
+    renewalOthersPct: num(b.renewalOthersPct),
     newSaleCommissionPct: num(b.newSaleCommissionPct),
     newSaleScope: scope(b.newSaleScope),
     notes: typeof b.notes === "string" && b.notes.trim() ? b.notes.trim() : null,

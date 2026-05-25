@@ -154,7 +154,8 @@ export default async function FisioPanelPage({
   const hasComp =
     mySalary.config.baseSalary > 0 ||
     mySalary.config.perActivePatient > 0 ||
-    mySalary.config.renewalCommissionPct > 0 ||
+    mySalary.config.renewalOwnPct > 0 ||
+    mySalary.config.renewalOthersPct > 0 ||
     mySalary.config.newSaleCommissionPct > 0;
 
   // Métricas para managers en el período seleccionado
@@ -303,7 +304,8 @@ export default async function FisioPanelPage({
 
       {isManager && teamBlock}
 
-      {/* Mis métricas y sueldo del mes */}
+      {/* Mis métricas y sueldo del mes (la setter no cobra → sin esta vista) */}
+      {user.role !== "setter" && (
       <section className="card mb-5 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-1 h-full" style={{ background: "linear-gradient(180deg, #FCD34D 0%, #F59E0B 100%)" }} />
         <div className="flex justify-between items-center mb-3 pl-2 flex-wrap gap-2">
@@ -326,8 +328,8 @@ export default async function FisioPanelPage({
           </div>
           <div>
             <div className="text-xs text-neutral-500 mb-1">Renovaciones (mes)</div>
-            <div className="text-2xl font-semibold text-emerald-700">{mySalary.renewalCount}</div>
-            <div className="text-xs text-neutral-400 mt-0.5">{eur(mySalary.renewalRevenue)}</div>
+            <div className="text-2xl font-semibold text-emerald-700">{mySalary.renewalOwnCount}</div>
+            <div className="text-xs text-neutral-400 mt-0.5">{eur(mySalary.renewalOwnRevenue)}</div>
           </div>
           {mySalary.config.newSaleCommissionPct > 0 ? (
             <div>
@@ -352,8 +354,13 @@ export default async function FisioPanelPage({
               {mySalary.config.perActivePatient > 0 && (
                 <div className="flex justify-between"><span className="text-neutral-600">Pacientes activos ({mySalary.activePatients} × {eur(mySalary.config.perActivePatient)})</span><span className="tabular-nums">{eur(mySalary.breakdown.patients)}</span></div>
               )}
-              {mySalary.config.renewalCommissionPct > 0 && (
-                <div className="flex justify-between"><span className="text-neutral-600">Comisión renovaciones ({mySalary.config.renewalCommissionPct}%)</span><span className="tabular-nums">{eur(mySalary.breakdown.renewals)}</span></div>
+              {(mySalary.config.renewalOwnPct > 0 || mySalary.config.renewalOthersPct > 0) && (
+                <div className="flex justify-between">
+                  <span className="text-neutral-600">
+                    Comisión renovaciones ({mySalary.config.renewalOwnPct}% propias{mySalary.config.renewalOthersPct > 0 ? ` + ${mySalary.config.renewalOthersPct}% equipo` : ""})
+                  </span>
+                  <span className="tabular-nums">{eur(mySalary.breakdown.renewals)}</span>
+                </div>
               )}
               {mySalary.config.newSaleCommissionPct > 0 && (
                 <div className="flex justify-between"><span className="text-neutral-600">Comisión ventas ({mySalary.config.newSaleCommissionPct}%)</span><span className="tabular-nums">{eur(mySalary.breakdown.newSales)}</span></div>
@@ -367,6 +374,7 @@ export default async function FisioPanelPage({
           </p>
         )}
       </section>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <section className="card">

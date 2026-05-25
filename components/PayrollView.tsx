@@ -56,7 +56,7 @@ export function PayrollView({ year, month, rows }: { year: number; month: number
       <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
         <div>
           <h1 className="text-xl font-semibold">Facturas del equipo</h1>
-          <p className="text-xs text-neutral-500 mt-0.5 capitalize">{monthLabel}</p>
+          <span className="inline-block mt-1 text-xs font-medium bg-neutral-900 text-white px-2.5 py-1 rounded-full capitalize">📅 {monthLabel}</span>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => goMonth(-1)} className="text-sm px-2 py-1 border border-neutral-200 rounded hover:bg-neutral-50">← Mes anterior</button>
@@ -90,7 +90,11 @@ export function PayrollView({ year, month, rows }: { year: number; month: number
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id} className="border-b border-neutral-100">
-                  <td className="py-2.5 px-2 font-medium">{r.fullName}</td>
+                  <td className="py-2.5 px-2 font-medium">
+                    <Link href={`/fisio/finanzas/facturas/${r.id}`} className="hover:underline" title="Ver histórico de facturas">
+                      {r.fullName}
+                    </Link>
+                  </td>
                   <td className="py-2.5 px-2 text-neutral-500">{ROLE_LABELS[r.role] ?? r.role}</td>
                   <td className="py-2.5 px-2 text-right tabular-nums font-medium">{eur(r.total)}</td>
                   <td className="py-2.5 px-2 text-center">

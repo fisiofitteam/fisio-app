@@ -26,7 +26,12 @@ export function InvoiceClient({
   const lines: { concept: string; detail: string; amount: number }[] = [];
   if (c.baseSalary > 0) lines.push({ concept: "Sueldo fijo", detail: "Mensual", amount: b.fixed });
   if (c.perActivePatient > 0) lines.push({ concept: "Pacientes activos", detail: `${salary.activePatients} × ${eur(c.perActivePatient)}`, amount: b.patients });
-  if (c.renewalCommissionPct > 0) lines.push({ concept: "Comisión por renovaciones", detail: `${c.renewalCommissionPct}% de ${eur(salary.renewalRevenue)} (${salary.renewalCount} renov.${c.renewalScope === "all" ? ", totales" : ""})`, amount: b.renewals });
+  if (c.renewalOwnPct > 0 || c.renewalOthersPct > 0) {
+    const parts: string[] = [];
+    if (c.renewalOwnPct > 0) parts.push(`${c.renewalOwnPct}% de ${eur(salary.renewalOwnRevenue)} (propias)`);
+    if (c.renewalOthersPct > 0) parts.push(`${c.renewalOthersPct}% de ${eur(salary.renewalOthersRevenue)} (equipo)`);
+    lines.push({ concept: "Comisión por renovaciones", detail: parts.join(" + "), amount: b.renewals });
+  }
   if (c.newSaleCommissionPct > 0) lines.push({ concept: "Comisión por ventas nuevas", detail: `${c.newSaleCommissionPct}% de ${eur(salary.newSaleRevenue)} (${salary.newSaleCount} venta${salary.newSaleCount === 1 ? "" : "s"})`, amount: b.newSales });
 
   return (
