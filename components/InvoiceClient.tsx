@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { SalaryResult } from "@/lib/compensation";
 
 function eur(n: number): string {
@@ -24,6 +25,8 @@ export function InvoiceClient({
   month: number;
   salary: SalaryResult;
 }) {
+  const [irpf, setIrpf] = useState(7); // % retención IRPF, editable al generar la factura
+
   const monthLabel = new Date(Date.UTC(year, month, 1)).toLocaleDateString("es-ES", { month: "long", year: "numeric", timeZone: "UTC" });
   const today = new Date().toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" });
   const c = salary.config;
@@ -43,15 +46,26 @@ export function InvoiceClient({
   const base = salary.total;
   const VAT_RATE = 21;
   const ivaAmount = vatExempt ? 0 : base * (VAT_RATE / 100);
-  const totalConIva = base + ivaAmount;
+  const irpfAmount = base * (irpf / 100);
+  const totalFactura = base + ivaAmount - irpfAmount;
 
   return (
     <div className="bg-white text-neutral-900 min-h-screen">
       <style>{`@media print { .no-print { display: none !important; } body { background: white; } }`}</style>
 
-      <div className="no-print sticky top-0 bg-neutral-50 border-b border-neutral-200 px-4 py-3 flex justify-between items-center">
+      <div className="no-print sticky top-0 bg-neutral-50 border-b border-neutral-200 px-4 py-3 flex justify-between items-center gap-3 flex-wrap">
         <a href="/fisio" className="text-sm text-neutral-500 hover:underline">← Volver</a>
-        <button onClick={() => window.print()} className="btn btn-primary text-sm">🖨️ Imprimir / Guardar PDF</button>
+        <div className="flex items-center gap-3">
+          <label className="text-sm text-neutral-600 flex items-center gap-1.5">
+            Retención IRPF:
+            <select className="input text-sm py-1 w-auto" value={irpf} onChange={(e) => setIrpf(Number(e.target.value))}>
+              {Array.from({ length: 16 }, (_, n) => (
+                <option key={n} value={n}>{n}%</option>
+              ))}
+            </select>
+          </label>
+          <button onClick={() => window.print()} className="btn btn-primary text-sm">🖨️ Imprimir / Guardar PDF</button>
+        </div>
       </div>
 
       <div className="max-w-2xl mx-auto px-8 py-10">
@@ -110,9 +124,15 @@ export function InvoiceClient({
               <td className="py-1 text-neutral-500" colSpan={2}>{vatExempt ? "IVA (exento)" : `IVA (${VAT_RATE}%)`}</td>
               <td className="py-1 text-right tabular-nums">{vatExempt ? "—" : eur(ivaAmount)}</td>
             </tr>
+            {irpf > 0 && (
+              <tr>
+                <td className="py-1 text-neutral-500" colSpan={2}>Retención IRPF (-{irpf}%)</td>
+                <td className="py-1 text-right tabular-nums text-red-700">-{eur(irpfAmount)}</td>
+              </tr>
+            )}
             <tr className="border-t-2 border-neutral-900">
               <td className="py-3 font-bold" colSpan={2}>TOTAL</td>
-              <td className="py-3 text-right font-bold text-lg tabular-nums">{eur(totalConIva)}</td>
+              <td className="py-3 text-right font-bold text-lg tabular-nums">{eur(totalFactura)}</td>
             </tr>
           </tfoot>
         </table>
