@@ -120,7 +120,7 @@ export function EquipoTabs({
       </div>
 
       {activeTab === "miembros" && isManager && (
-        <InviteView team={team} />
+        <InviteView team={team} canEditCompensation={currentUserRole === "ceo"} />
       )}
 
       {activeTab === "llamadas" && canSeeClosingShifts && (

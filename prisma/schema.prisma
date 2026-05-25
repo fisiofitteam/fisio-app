@@ -149,6 +149,23 @@ model Professional {
   closingShifts     ClosingShift[]       @relation("ClosingShifts")
   defaultShifts     DefaultClosingShift[]
   salesAsCloser     Sale[]               @relation("SaleByCloser")
+  compensation      Compensation?
+}
+
+// Condiciones laborales / compensación de un profesional (1:1). Solo CEO edita.
+model Compensation {
+  id                   String   @id @default(cuid())
+  professionalId       String   @unique
+  professional         Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  baseSalary           Float    @default(0)   // sueldo fijo €/mes
+  perActivePatient     Float    @default(0)   // € por paciente activo
+  renewalCommissionPct Float    @default(0)   // % sobre importe renovado en el mes
+  renewalScope         String   @default("own") // "own" (sus pacientes) | "all" (totales)
+  newSaleCommissionPct Float    @default(0)   // % sobre importe de ventas nuevas
+  newSaleScope         String   @default("own") // "own" (cerradas por él) | "all"
+  notes                String?
+  updatedAt            DateTime @updatedAt
+  updatedById          String?
 }
 
 // ============================================================================

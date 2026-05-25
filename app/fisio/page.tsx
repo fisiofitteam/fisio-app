@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { getActiveProfessional } from "@/lib/session";
 import { calculateAdherence } from "@/lib/adherence";
+import { computeMonthlySalary } from "@/lib/compensation";
 import { getPeriodRange, calculateFinanceSummary, type Period } from "@/lib/finance";
 import { TeamMetricsBlock } from "@/components/TeamMetricsBlock";
 import { CEOPanelTabs } from "@/components/CEOPanelTabs";
@@ -144,6 +145,16 @@ export default async function FisioPanelPage({
   const lost90 = last90Renewals.filter((r) => r.outcome === "lost").length;
   const total90 = renewed90 + lost90;
   const renewalRate90 = total90 > 0 ? Math.round((renewed90 / total90) * 100) : null;
+
+  // Mis métricas + sueldo del mes en curso (según condiciones laborales)
+  const mySalary = await computeMonthlySalary(user.id, now.getUTCFullYear(), now.getUTCMonth());
+  const monthName = now.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
+  const eur = (n: number) => n.toLocaleString("es-ES", { style: "currency", currency: "EUR", minimumFractionDigits: 0 });
+  const hasComp =
+    mySalary.config.baseSalary > 0 ||
+    mySalary.config.perActivePatient > 0 ||
+    mySalary.config.renewalCommissionPct > 0 ||
+    mySalary.config.newSaleCommissionPct > 0;
 
   // Métricas para managers en el período seleccionado
   let teamRenewals = { renewed: 0, lost: 0, total: 0, rate: null as number | null };
@@ -289,40 +300,72 @@ export default async function FisioPanelPage({
       {headerContent}
       {kpis}
 
-      {isManager ? (
-        teamBlock
-      ) : (
-        <section className="card mb-5 relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-1 h-full" style={{ background: "linear-gradient(180deg, #FCD34D 0%, #F59E0B 100%)" }} />
-          <div className="flex justify-between items-center mb-3 pl-2">
-            <div>
-              <h2 className="font-medium text-sm">Tus métricas de renovación</h2>
-              <p className="text-xs text-neutral-500">Últimos 90 días</p>
-            </div>
+      {isManager && teamBlock}
+
+      {/* Mis métricas y sueldo del mes */}
+      <section className="card mb-5 relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-1 h-full" style={{ background: "linear-gradient(180deg, #FCD34D 0%, #F59E0B 100%)" }} />
+        <div className="flex justify-between items-center mb-3 pl-2 flex-wrap gap-2">
+          <div>
+            <h2 className="font-medium text-sm">Mis métricas y sueldo</h2>
+            <p className="text-xs text-neutral-500 capitalize">{monthName}</p>
           </div>
-          <div className="grid grid-cols-3 gap-3 pl-2">
+          <Link href={`/fisio/factura/${user.id}`} className="btn text-xs">🧾 Generar factura del mes</Link>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pl-2">
+          <div>
+            <div className="text-xs text-neutral-500 mb-1">Pacientes activos</div>
+            <div className="text-2xl font-semibold">{mySalary.activePatients}</div>
+          </div>
+          <div>
+            <div className="text-xs text-neutral-500 mb-1">% renovación (90d)</div>
+            <div className="text-2xl font-semibold">{renewalRate90 !== null ? `${renewalRate90}%` : <span className="text-neutral-300">—</span>}</div>
+            {total90 > 0 && <div className="text-xs text-neutral-400 mt-0.5">sobre {total90}</div>}
+          </div>
+          <div>
+            <div className="text-xs text-neutral-500 mb-1">Renovaciones (mes)</div>
+            <div className="text-2xl font-semibold text-emerald-700">{mySalary.renewalCount}</div>
+            <div className="text-xs text-neutral-400 mt-0.5">{eur(mySalary.renewalRevenue)}</div>
+          </div>
+          {mySalary.config.newSaleCommissionPct > 0 ? (
             <div>
-              <div className="text-xs text-neutral-500 mb-1">Renovaciones</div>
-              <div className="text-2xl font-semibold text-emerald-700">{renewed90}</div>
+              <div className="text-xs text-neutral-500 mb-1">Ventas nuevas (mes)</div>
+              <div className="text-2xl font-semibold">{mySalary.newSaleCount}</div>
+              <div className="text-xs text-neutral-400 mt-0.5">{eur(mySalary.newSaleRevenue)}</div>
             </div>
+          ) : (
             <div>
-              <div className="text-xs text-neutral-500 mb-1">No renovaciones</div>
-              <div className="text-2xl font-semibold text-neutral-700">{lost90}</div>
+              <div className="text-xs text-neutral-500 mb-1">Sueldo estimado</div>
+              <div className="text-2xl font-semibold">{hasComp ? eur(mySalary.total) : <span className="text-neutral-300">—</span>}</div>
             </div>
-            <div>
-              <div className="text-xs text-neutral-500 mb-1">Tasa</div>
-              <div className="text-2xl font-semibold">
-                {renewalRate90 !== null ? `${renewalRate90}%` : <span className="text-neutral-300">—</span>}
-              </div>
-              {total90 > 0 && (
-                <div className="text-xs text-neutral-400 mt-0.5">
-                  sobre {total90} {total90 === 1 ? "decisión" : "decisiones"}
-                </div>
+          )}
+        </div>
+
+        {hasComp ? (
+          <div className="pl-2 border-t border-neutral-100 pt-3 mt-3">
+            <div className="space-y-1 text-sm max-w-sm">
+              {mySalary.config.baseSalary > 0 && (
+                <div className="flex justify-between"><span className="text-neutral-600">Sueldo fijo</span><span className="tabular-nums">{eur(mySalary.breakdown.fixed)}</span></div>
               )}
+              {mySalary.config.perActivePatient > 0 && (
+                <div className="flex justify-between"><span className="text-neutral-600">Pacientes activos ({mySalary.activePatients} × {eur(mySalary.config.perActivePatient)})</span><span className="tabular-nums">{eur(mySalary.breakdown.patients)}</span></div>
+              )}
+              {mySalary.config.renewalCommissionPct > 0 && (
+                <div className="flex justify-between"><span className="text-neutral-600">Comisión renovaciones ({mySalary.config.renewalCommissionPct}%)</span><span className="tabular-nums">{eur(mySalary.breakdown.renewals)}</span></div>
+              )}
+              {mySalary.config.newSaleCommissionPct > 0 && (
+                <div className="flex justify-between"><span className="text-neutral-600">Comisión ventas ({mySalary.config.newSaleCommissionPct}%)</span><span className="tabular-nums">{eur(mySalary.breakdown.newSales)}</span></div>
+              )}
+              <div className="flex justify-between border-t border-neutral-200 pt-1.5 font-semibold"><span>Total estimado del mes</span><span className="tabular-nums">{eur(mySalary.total)}</span></div>
             </div>
           </div>
-        </section>
-      )}
+        ) : (
+          <p className="pl-2 text-xs text-neutral-400 border-t border-neutral-100 pt-3 mt-3">
+            Aún no tienes condiciones laborales configuradas.
+          </p>
+        )}
+      </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <section className="card">
