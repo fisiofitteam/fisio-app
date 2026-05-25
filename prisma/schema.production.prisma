@@ -168,6 +168,22 @@ model Compensation {
   updatedById          String?
 }
 
+// Nómina pagada de un profesional en un mes concreto. Al marcarla pagada se crea
+// también una Transaction de tipo gasto (sueldos). Único por (profesional, año, mes).
+model PayrollPayment {
+  id             String   @id @default(cuid())
+  professionalId String
+  year           Int
+  month          Int                              // 0-11
+  amount         Float
+  transactionId  String?                          // gasto asociado (para poder deshacer)
+  paidById       String?
+  paidAt         DateTime @default(now())
+
+  @@unique([professionalId, year, month])
+  @@index([year, month])
+}
+
 // ============================================================================
 // FINANZAS (transacciones manuales + renovaciones cuentan automáticamente)
 // ============================================================================
