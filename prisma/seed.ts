@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { CATEGORIES, MOVEMENTS, type MovDef } from "./movements-catalog";
 
 const prisma = new PrismaClient();
 
@@ -13,72 +14,6 @@ function getNextWeekday(target: number): Date {
   return result;
 }
 
-const CATEGORIES = [
-  { name: "Empuje vertical cargado", slug: "vertical_push_loaded" },
-  { name: "Olímpico overhead", slug: "olympic_overhead" },
-  { name: "Gimnástico kipping", slug: "gymnastic_kipping" },
-  { name: "Gimnástico estricto", slug: "gymnastic_strict" },
-  { name: "Dominante de rodilla", slug: "knee_dominant" },
-  { name: "Dominante de cadera", slug: "hip_dominant" },
-  { name: "Tracción horizontal", slug: "horizontal_pull" },
-  { name: "Pliométrico / impacto", slug: "plyometric_impact" },
-  { name: "Monoestructural", slug: "monostructural" },
-  { name: "Core / locomoción", slug: "core_locomotion" },
-];
-
-type MovDef = { canonical: string; display: string; aliases: string; category: string; overhead?: boolean; impact?: boolean; kipping?: boolean };
-
-const MOVEMENTS: MovDef[] = [
-  { canonical: "thruster", display: "Thruster", aliases: "thr,thrusters,th", category: "vertical_push_loaded", overhead: true },
-  { canonical: "push_press", display: "Push press", aliases: "pp,push press", category: "vertical_push_loaded", overhead: true },
-  { canonical: "push_jerk", display: "Push jerk", aliases: "pj", category: "vertical_push_loaded", overhead: true },
-  { canonical: "split_jerk", display: "Split jerk", aliases: "sj", category: "vertical_push_loaded", overhead: true },
-  { canonical: "strict_press", display: "Strict press", aliases: "sp,press", category: "vertical_push_loaded", overhead: true },
-  { canonical: "snatch", display: "Snatch", aliases: "sn,arrancada", category: "olympic_overhead", overhead: true },
-  { canonical: "power_snatch", display: "Power snatch", aliases: "psn", category: "olympic_overhead", overhead: true },
-  { canonical: "squat_snatch", display: "Squat snatch", aliases: "ssn", category: "olympic_overhead", overhead: true },
-  { canonical: "hang_snatch", display: "Hang snatch", aliases: "hsn", category: "olympic_overhead", overhead: true },
-  { canonical: "overhead_squat", display: "Overhead squat", aliases: "ohs", category: "olympic_overhead", overhead: true },
-  { canonical: "clean", display: "Clean", aliases: "cl,cargada", category: "knee_dominant" },
-  { canonical: "power_clean", display: "Power clean", aliases: "pcl", category: "knee_dominant" },
-  { canonical: "squat_clean", display: "Squat clean", aliases: "scl", category: "knee_dominant" },
-  { canonical: "hang_clean", display: "Hang clean", aliases: "hcl", category: "knee_dominant" },
-  { canonical: "clean_and_jerk", display: "Clean and jerk", aliases: "c&j", category: "vertical_push_loaded", overhead: true },
-  { canonical: "pull_up", display: "Pull-up", aliases: "pu,dominada", category: "gymnastic_kipping", kipping: true },
-  { canonical: "chest_to_bar", display: "Chest to bar", aliases: "c2b,ctb", category: "gymnastic_kipping", kipping: true },
-  { canonical: "toes_to_bar", display: "Toes to bar", aliases: "t2b,ttb", category: "gymnastic_kipping", kipping: true },
-  { canonical: "knees_to_elbows", display: "Knees to elbows", aliases: "k2e", category: "gymnastic_kipping", kipping: true },
-  { canonical: "muscle_up", display: "Muscle-up", aliases: "mu", category: "gymnastic_kipping", kipping: true },
-  { canonical: "bar_muscle_up", display: "Bar muscle-up", aliases: "bmu", category: "gymnastic_kipping", kipping: true },
-  { canonical: "ring_muscle_up", display: "Ring muscle-up", aliases: "rmu", category: "gymnastic_kipping", kipping: true },
-  { canonical: "hspu", display: "Handstand push-up", aliases: "hspu", category: "gymnastic_kipping", overhead: true, kipping: true },
-  { canonical: "handstand_walk", display: "Handstand walk", aliases: "hsw", category: "gymnastic_kipping", overhead: true },
-  { canonical: "strict_pull_up", display: "Strict pull-up", aliases: "strict pu", category: "gymnastic_strict" },
-  { canonical: "ring_dip", display: "Ring dip", aliases: "rd", category: "gymnastic_strict" },
-  { canonical: "push_up", display: "Push-up", aliases: "flexion", category: "gymnastic_strict" },
-  { canonical: "ring_row", display: "Ring row", aliases: "rr", category: "horizontal_pull" },
-  { canonical: "back_squat", display: "Back squat", aliases: "bs", category: "knee_dominant" },
-  { canonical: "front_squat", display: "Front squat", aliases: "fs", category: "knee_dominant" },
-  { canonical: "air_squat", display: "Air squat", aliases: "as", category: "knee_dominant" },
-  { canonical: "lunge", display: "Lunge", aliases: "zancada", category: "knee_dominant" },
-  { canonical: "wall_ball", display: "Wall ball", aliases: "wb", category: "vertical_push_loaded", overhead: true },
-  { canonical: "goblet_squat", display: "Goblet squat", aliases: "goblet", category: "knee_dominant" },
-  { canonical: "deadlift", display: "Deadlift", aliases: "dl,peso muerto", category: "hip_dominant" },
-  { canonical: "kb_swing", display: "KB swing", aliases: "kbs", category: "hip_dominant" },
-  { canonical: "rdl", display: "Romanian deadlift", aliases: "rdl", category: "hip_dominant" },
-  { canonical: "hip_thrust", display: "Hip thrust", aliases: "ht", category: "hip_dominant" },
-  { canonical: "barbell_row", display: "Barbell row", aliases: "br", category: "horizontal_pull" },
-  { canonical: "kb_row", display: "KB row", aliases: "kbr", category: "horizontal_pull" },
-  { canonical: "box_jump", display: "Box jump", aliases: "bj", category: "plyometric_impact", impact: true },
-  { canonical: "burpee", display: "Burpee", aliases: "bp", category: "plyometric_impact", impact: true },
-  { canonical: "double_under", display: "Double under", aliases: "du,dobles", category: "plyometric_impact", impact: true },
-  { canonical: "run", display: "Run", aliases: "correr", category: "monostructural", impact: true },
-  { canonical: "row_erg", display: "Row erg", aliases: "row", category: "monostructural" },
-  { canonical: "bike_erg", display: "Bike erg", aliases: "bike", category: "monostructural" },
-  { canonical: "sit_up", display: "Sit-up", aliases: "abdo", category: "core_locomotion" },
-  { canonical: "plank", display: "Plank", aliases: "plancha", category: "core_locomotion" },
-  { canonical: "farmer_carry", display: "Farmer carry", aliases: "fc", category: "core_locomotion" },
-];
 
 type RuleSeed = { mov: string; state: "OK" | "CONDITIONAL" | "BLOCKED"; sub?: string; load?: string; warn?: string };
 

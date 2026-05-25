@@ -61,12 +61,21 @@ const MENSAJES_SECTION = {
   icon: "💬",
   desc: "Bienvenida de la app del paciente (CEO)",
 };
+// Editor del catálogo de control de cargas (CEO + Head Success).
+const CATALOGO_SECTION = {
+  id: "catalogo",
+  label: "Catálogo cargas",
+  icon: "🏋️",
+  desc: "Bloques y ejercicios del control de cargas",
+};
 
-export function LibrarySidebar({ showOnboarding = false }: { showOnboarding?: boolean }) {
+export function LibrarySidebar({ showOnboarding = false, showCatalog = false }: { showOnboarding?: boolean; showCatalog?: boolean }) {
   const pathname = usePathname() ?? "";
-  const sections = showOnboarding
-    ? [...SECTIONS, ONBOARDING_SECTION, LANDINGS_SECTION, MENSAJES_SECTION]
-    : SECTIONS;
+  const sections = [
+    ...SECTIONS,
+    ...(showCatalog ? [CATALOGO_SECTION] : []),
+    ...(showOnboarding ? [ONBOARDING_SECTION, LANDINGS_SECTION, MENSAJES_SECTION] : []),
+  ];
 
   function isActive(id: string) {
     return pathname.startsWith(`/fisio/biblioteca/${id}`);
