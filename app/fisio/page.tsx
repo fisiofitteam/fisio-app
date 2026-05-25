@@ -147,6 +147,7 @@ export default async function FisioPanelPage({
   const renewalRate90 = total90 > 0 ? Math.round((renewed90 / total90) * 100) : null;
 
   // Mis métricas + sueldo del mes en curso (según condiciones laborales)
+  const now = new Date();
   const mySalary = await computeMonthlySalary(user.id, now.getUTCFullYear(), now.getUTCMonth());
   const monthName = now.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
   const eur = (n: number) => n.toLocaleString("es-ES", { style: "currency", currency: "EUR", minimumFractionDigits: 0 });
