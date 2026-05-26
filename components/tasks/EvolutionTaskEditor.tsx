@@ -31,7 +31,7 @@ export function EvolutionTaskEditor({ task, onClose, onSave }: { task: any; onCl
   return (
     <div className="space-y-3">
       <div className="bg-sky-50 border border-sky-200 rounded-lg p-2 text-xs text-sky-900">
-        📊 Registrar evolución · el paciente reportará RPE, dolor, rigidez y notas
+        📊 Registrar evolución · el paciente reportará RPE, dolor y rigidez
       </div>
 
       <div>
@@ -56,7 +56,6 @@ export function EvolutionTaskEditor({ task, onClose, onSave }: { task: any; onCl
           <li>• RPE percibido (0-10)</li>
           <li>• Nivel de dolor (0-10)</li>
           <li>• Rigidez (0-10)</li>
-          <li>• Notas libres</li>
         </ul>
       </div>
 
