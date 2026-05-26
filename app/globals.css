@@ -229,11 +229,12 @@ h1, h2, h3, h4, h5 {
 .patient-scope.patient-light .text-neutral-500 { color: var(--p-text-dim) !important; }
 .patient-scope.patient-light .text-neutral-600 { color: var(--p-text-faint) !important; }
 
-/* En claro, la 2ª línea del saludo (degradado dorado) lleva un contorno negro
-   muy fino para recortarse del fondo (en vez de sombra). */
+/* En claro, los textos con degradado dorado pasan a oscuro sólido (legibilidad
+   máxima). El dorado se mantiene solo en rellenos. En oscuro siguen en degradado. */
 .patient-scope.patient-light .brand-gradient-text {
-  -webkit-text-stroke: 0.5px rgba(0,0,0,0.85);
-  paint-order: stroke fill;
+  background: none;
+  -webkit-text-fill-color: var(--p-text);
+  color: var(--p-text);
 }
 
 /* Estilos para impresión / exportar PDF en métricas */
