@@ -141,29 +141,51 @@ h1, h2, h3, h4, h5 {
   --p-halo: radial-gradient(circle at 85% -10%, rgba(252,211,77,0.18) 0, transparent 45%), radial-gradient(circle at 5% 105%, rgba(245,158,11,0.10) 0, transparent 40%);
   --p-grain: 0.035;
   --p-grain-rgb: 255,255,255;
+  /* Cuadros de aviso (pausa, regalo, caducidad...) */
+  --p-amber-bg: rgba(251,191,36,0.10);
+  --p-amber-border: rgba(251,191,36,0.30);
+  --p-amber-text: #FBBF24;
+  --p-green-bg: rgba(34,197,94,0.10);
+  --p-green-border: rgba(34,197,94,0.30);
+  --p-green-text: #86EFAC;
+  --p-green-chip-bg: rgba(34,197,94,0.20);
+  --p-red-bg: rgba(239,68,68,0.10);
+  --p-red-border: rgba(239,68,68,0.30);
+  --p-red-text: #FCA5A5;
   color: var(--p-text);
 }
-/* ── MODO CLARO PACIENTE · V3: blanco roto con tinte de marca sutil (sin foto) ── */
+/* ── MODO CLARO PACIENTE · V2: foto con velo blanco fuerte + tarjetas sólidas ── */
 .patient-scope.patient-light {
-  --p-text: #20222A;
-  --p-text-soft: #3A3A40;
-  --p-text-dim: #6B6660;
-  --p-text-faint: #948D80;
+  --p-text: #1B2533;
+  --p-text-soft: #2E3A48;
+  --p-text-dim: #5B6675;
+  --p-text-faint: #7C879A;
   --p-surface: #FFFFFF;
-  --p-surface-2: #FBF8F1;
-  --p-surface-3: #F4EFE3;
-  --p-border: rgba(60,48,20,0.12);
-  --p-border-strong: rgba(60,48,20,0.20);
+  --p-surface-2: #F4F6F9;
+  --p-surface-3: #ECEFF3;
+  --p-border: rgba(22,32,48,0.12);
+  --p-border-strong: rgba(22,32,48,0.20);
   --p-accent: #FACC15;
   --p-accent-ink: #1A1400;
-  --p-nav-bg: rgba(252,251,247,0.94);
-  --p-nav-border: rgba(60,48,20,0.10);
+  --p-nav-bg: rgba(255,255,255,0.92);
+  --p-nav-border: rgba(22,32,48,0.10);
   --p-card-bg: #FFFFFF;
   --p-card-ink: #0A0A0A;
-  --p-overlay: linear-gradient(180deg, #FCFBF7 0%, #F6F1E6 100%);
-  --p-halo: radial-gradient(circle at 85% -10%, rgba(250,204,21,0.10) 0, transparent 45%);
-  --p-grain: 0.025;
+  --p-overlay: linear-gradient(180deg, rgba(248,249,251,0.90) 0%, rgba(241,243,247,0.94) 100%);
+  --p-halo: none;
+  --p-grain: 0.03;
   --p-grain-rgb: 30,40,55;
+  /* Avisos en claro: texto oscuro y fondo más opaco para que se lean bien */
+  --p-amber-bg: rgba(251,191,36,0.32);
+  --p-amber-border: rgba(202,138,4,0.55);
+  --p-amber-text: #1B2533;
+  --p-green-bg: rgba(34,197,94,0.22);
+  --p-green-border: rgba(21,128,61,0.50);
+  --p-green-text: #1B2533;
+  --p-green-chip-bg: rgba(34,197,94,0.32);
+  --p-red-bg: rgba(239,68,68,0.18);
+  --p-red-border: rgba(185,28,28,0.50);
+  --p-red-text: #1B2533;
 }
 
 /* Cards dentro del scope paciente (páginas que usan .card) */
@@ -206,6 +228,11 @@ h1, h2, h3, h4, h5 {
 .patient-scope.patient-light .text-neutral-400,
 .patient-scope.patient-light .text-neutral-500 { color: var(--p-text-dim) !important; }
 .patient-scope.patient-light .text-neutral-600 { color: var(--p-text-faint) !important; }
+
+/* En claro, la 2ª línea del saludo (degradado dorado) flota con sombra marcada */
+.patient-scope.patient-light .brand-gradient-text {
+  filter: drop-shadow(0 2px 5px rgba(0,0,0,0.50));
+}
 
 /* Estilos para impresión / exportar PDF en métricas */
 @media print {

@@ -90,9 +90,9 @@ export function PatientHomeDark({
             key={n.id}
             className="mb-3 rounded-xl px-4 py-3 text-sm"
             style={{
-              background: "rgba(34, 197, 94, 0.10)",
-              border: "1px solid rgba(34, 197, 94, 0.30)",
-              color: "#86EFAC",
+              background: "var(--p-green-bg)",
+              border: "1px solid var(--p-green-border)",
+              color: "var(--p-green-text)",
             }}
           >
             <div className="flex items-start justify-between gap-3">
@@ -105,7 +105,7 @@ export function PatientHomeDark({
               <button
                 onClick={() => dismissNotification(n.id)}
                 className="text-xs px-2 py-1 rounded shrink-0"
-                style={{ background: "rgba(34, 197, 94, 0.2)", color: "#86EFAC" }}
+                style={{ background: "var(--p-green-chip-bg)", color: "var(--p-green-text)" }}
               >
                 OK
               </button>
@@ -117,9 +117,9 @@ export function PatientHomeDark({
           <div
             className="mb-5 rounded-xl px-4 py-3 text-sm"
             style={{
-              background: "rgba(251, 191, 36, 0.10)",
-              border: "1px solid rgba(251, 191, 36, 0.30)",
-              color: "#FBBF24",
+              background: "var(--p-amber-bg)",
+              border: "1px solid var(--p-amber-border)",
+              color: "var(--p-amber-text)",
             }}
           >
             <div className="font-medium mb-0.5">📅 Pausa programada</div>

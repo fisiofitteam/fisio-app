@@ -134,9 +134,9 @@ export function PatientHomeRolling({
             <div
               className="rounded-xl px-4 py-3 mb-3 text-sm"
               style={{
-                background: daysToExpire <= 7 ? "rgba(239, 68, 68, 0.10)" : "rgba(251, 191, 36, 0.10)",
-                border: `1px solid ${daysToExpire <= 7 ? "rgba(239, 68, 68, 0.30)" : "rgba(251, 191, 36, 0.30)"}`,
-                color: daysToExpire <= 7 ? "#FCA5A5" : "#FBBF24",
+                background: daysToExpire <= 7 ? "var(--p-red-bg)" : "var(--p-amber-bg)",
+                border: `1px solid ${daysToExpire <= 7 ? "var(--p-red-border)" : "var(--p-amber-border)"}`,
+                color: daysToExpire <= 7 ? "var(--p-red-text)" : "var(--p-amber-text)",
               }}
             >
               <div className="font-medium">⏰ Tu programa caduca en {daysToExpire} {daysToExpire === 1 ? "día" : "días"}</div>
