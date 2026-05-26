@@ -39,6 +39,7 @@ export default async function PatientSessionPage({
         tasks={tasks}
         completed={!!session.completedAt}
         existingResponses={session.responses}
+        whatsappUrl={session.assignment.patient.whatsappGroupUrl}
       />
 
       <PatientNav patientId={params.id} active="home" />

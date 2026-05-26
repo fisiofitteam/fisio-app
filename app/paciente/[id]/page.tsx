@@ -259,6 +259,7 @@ export default async function PatientHome({ params }: { params: { id: string } }
         appliedLevelName: patient.appliedLevel
           ? `${patient.appliedLevel.profile.name} · ${patient.appliedLevel.name}`
           : null,
+        whatsappGroupUrl: patient.whatsappGroupUrl,
       }}
       todaySessions={todaySessions.map((s) => ({
         id: s.id,

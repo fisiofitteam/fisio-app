@@ -23,12 +23,14 @@ export function SessionRunner({
   tasks,
   completed,
   existingResponses,
+  whatsappUrl = null,
 }: {
   sessionId: string;
   patientId: string;
   tasks: Task[];
   completed: boolean;
   existingResponses: string | null;
+  whatsappUrl?: string | null;
 }) {
   const router = useRouter();
   const initialResponses = existingResponses ? JSON.parse(existingResponses) : {};
@@ -47,6 +49,11 @@ export function SessionRunner({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sessionId, responses }),
     });
+    // Tras completar, llevar al grupo de seguimiento para dar feedback.
+    if (whatsappUrl) {
+      window.location.href = whatsappUrl;
+      return;
+    }
     router.push(`/paciente/${patientId}`);
     router.refresh();
   }
@@ -151,9 +158,26 @@ export function SessionRunner({
       ))}
 
       {!completed && (
-        <button onClick={complete} disabled={saving} className="btn btn-primary w-full">
-          {saving ? "Guardando..." : "✓ Completar sesión"}
+        <button
+          onClick={complete}
+          disabled={saving}
+          className="w-full font-semibold rounded-lg py-3 text-sm disabled:opacity-60"
+          style={{ background: "var(--p-accent)", color: "var(--p-accent-ink)" }}
+        >
+          {saving ? "Guardando…" : whatsappUrl ? "✓ Marcar como completada y dar feedback" : "✓ Marcar como completada"}
         </button>
+      )}
+
+      {completed && whatsappUrl && (
+        <a
+          href={whatsappUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-full font-semibold rounded-lg py-3 text-sm flex items-center justify-center gap-2"
+          style={{ background: "#25D366", color: "#FFFFFF" }}
+        >
+          Ir a mi grupo de seguimiento
+        </a>
       )}
     </div>
   );
