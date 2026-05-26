@@ -149,6 +149,7 @@ h1, h2, h3, h4, h5 {
   --p-green-border: rgba(34,197,94,0.30);
   --p-green-text: #86EFAC;
   --p-green-chip-bg: rgba(34,197,94,0.20);
+  --p-green-icon: #86EFAC;
   --p-red-bg: rgba(239,68,68,0.10);
   --p-red-border: rgba(239,68,68,0.30);
   --p-red-text: #FCA5A5;
@@ -156,10 +157,10 @@ h1, h2, h3, h4, h5 {
 }
 /* ── MODO CLARO PACIENTE · V2: foto con velo blanco fuerte + tarjetas sólidas ── */
 .patient-scope.patient-light {
-  --p-text: #1B2533;
-  --p-text-soft: #2E3A48;
-  --p-text-dim: #5B6675;
-  --p-text-faint: #7C879A;
+  --p-text: #0A0A0A;
+  --p-text-soft: #1A1A1A;
+  --p-text-dim: #262626;
+  --p-text-faint: #3D3D3D;
   --p-surface: #FFFFFF;
   --p-surface-2: #F4F6F9;
   --p-surface-3: #ECEFF3;
@@ -175,17 +176,18 @@ h1, h2, h3, h4, h5 {
   --p-halo: none;
   --p-grain: 0.03;
   --p-grain-rgb: 30,40,55;
-  /* Avisos en claro: texto oscuro y fondo más opaco para que se lean bien */
-  --p-amber-bg: rgba(251,191,36,0.32);
-  --p-amber-border: rgba(202,138,4,0.55);
-  --p-amber-text: #1B2533;
-  --p-green-bg: rgba(34,197,94,0.22);
-  --p-green-border: rgba(21,128,61,0.50);
-  --p-green-text: #1B2533;
-  --p-green-chip-bg: rgba(34,197,94,0.32);
-  --p-red-bg: rgba(239,68,68,0.18);
-  --p-red-border: rgba(185,28,28,0.50);
-  --p-red-text: #1B2533;
+  /* Avisos en claro: texto negro y fondo bien opaco para que se aprecien */
+  --p-amber-bg: rgba(251,191,36,0.45);
+  --p-amber-border: rgba(202,138,4,0.65);
+  --p-amber-text: #0A0A0A;
+  --p-green-bg: rgba(34,197,94,0.32);
+  --p-green-border: rgba(21,128,61,0.60);
+  --p-green-text: #0A0A0A;
+  --p-green-chip-bg: rgba(34,197,94,0.42);
+  --p-green-icon: #15803D;
+  --p-red-bg: rgba(239,68,68,0.28);
+  --p-red-border: rgba(185,28,28,0.60);
+  --p-red-text: #0A0A0A;
 }
 
 /* Cards dentro del scope paciente (páginas que usan .card) */

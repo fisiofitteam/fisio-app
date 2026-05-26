@@ -73,7 +73,7 @@ export function PatientCourse({ patientId, course }: { patientId: string; course
                 onClick={() => toggleDone(selected.id)}
                 className="text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 flex-shrink-0"
                 style={doneIds.has(selected.id)
-                  ? { background: "rgba(34,197,94,0.15)", color: "#86EFAC", border: "1px solid rgba(34,197,94,0.3)" }
+                  ? { background: "var(--p-green-bg)", color: "var(--p-green-text)", border: "1px solid var(--p-green-border)" }
                   : { background: "var(--p-accent)", color: "var(--p-accent-ink)" }}
               >
                 <Check size={14} /> {doneIds.has(selected.id) ? "Completada" : "Marcar completada"}
@@ -131,9 +131,9 @@ function SectionAccordion({
                 style={isSel ? { background: "rgba(252,211,77,0.12)" } : undefined}
               >
                 {isDone
-                  ? <CheckCircle2 size={16} style={{ color: "#86EFAC" }} className="flex-shrink-0" />
+                  ? <CheckCircle2 size={16} style={{ color: "var(--p-green-icon)" }} className="flex-shrink-0" />
                   : <Circle size={16} style={{ color: "var(--p-text-faint)" }} className="flex-shrink-0" />}
-                <span className="text-sm truncate" style={{ color: isSel ? "var(--p-accent)" : "var(--p-text-soft)", fontWeight: isSel ? 600 : 400 }}>{l.title}</span>
+                <span className="text-sm truncate" style={{ color: isSel ? "var(--p-text)" : "var(--p-text-soft)", fontWeight: isSel ? 600 : 400 }}>{l.title}</span>
               </button>
             );
           })}
