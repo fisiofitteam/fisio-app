@@ -1,19 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { Home, Calendar, Zap, ClipboardList } from "lucide-react";
+import { Home, Calendar, Zap, ClipboardList, Users } from "lucide-react";
 
 export function PatientNav({
   patientId,
   active,
 }: {
   patientId: string;
-  active: "home" | "semana" | "wod" | "adapt";
+  active: "home" | "semana" | "wod" | "adapt" | "comunidad";
 }) {
   const items = [
     { id: "home", label: "Hoy", href: `/paciente/${patientId}`, Icon: Home },
     { id: "semana", label: "Semana", href: `/paciente/${patientId}/semana`, Icon: Calendar },
     { id: "wod", label: "WOD", href: `/paciente/${patientId}/wod`, Icon: Zap },
+    { id: "comunidad", label: "Comunidad", href: `/paciente/${patientId}/comunidad`, Icon: Users },
     { id: "adapt", label: "Adaptaciones", href: `/paciente/${patientId}/adaptaciones`, Icon: ClipboardList },
   ];
 

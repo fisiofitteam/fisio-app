@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
+import { getCommunityActor } from "@/lib/community-actor";
 import { FEED_CATEGORY_VALUES } from "@/lib/community-feed";
 
 function canManage(role: string): boolean {
@@ -25,10 +26,11 @@ export async function GET() {
   return NextResponse.json(posts);
 }
 
-// POST /api/community/feed — crea un post. body: { title?, body, category?, imageUrl?, pinned? }
+// POST /api/community/feed — crea un post. Profesionales y pacientes.
+// body: { title?, body, category?, imageUrl?, pinned? }  (pinned solo profesionales)
 export async function POST(req: NextRequest) {
-  const user = await getActiveProfessional();
-  if (!user || !canManage(user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const actor = await getCommunityActor();
+  if (!actor) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const b = await req.json().catch(() => ({}));
   const body = typeof b?.body === "string" ? b.body.trim() : "";
@@ -37,12 +39,13 @@ export async function POST(req: NextRequest) {
 
   const created = await prisma.communityFeedPost.create({
     data: {
-      authorId: user.id,
+      authorId: actor.kind === "professional" ? actor.professionalId : null,
+      patientAuthorId: actor.kind === "patient" ? actor.patientId : null,
       category,
       title: b?.title?.trim() || null,
       body,
       imageUrl: b?.imageUrl?.trim() || null,
-      pinned: b?.pinned === true,
+      pinned: actor.kind === "professional" && b?.pinned === true,
     },
     include: FEED_INCLUDE,
   });
