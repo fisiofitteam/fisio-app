@@ -149,6 +149,9 @@ model Professional {
   photoUrl       String?
   vatExempt      Boolean   @default(true)  // exento de IVA (art. 20 Ley 37/1992)
 
+  // Preferencias de notificación: JSON { [tipo]: boolean }. Tipo ausente = activado.
+  notificationPrefs Json?
+
   patients          Patient[]            @relation("PatientAssignedTo")
   patientsAssignedBy Patient[]           @relation("PatientAssignedBy")
   assignedTasks     FisioTask[]  @relation("AssignedToFisio")

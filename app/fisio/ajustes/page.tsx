@@ -43,6 +43,20 @@ export default async function AjustesPage() {
           </div>
         </Link>
 
+        <Link
+          href="/fisio/ajustes/notificaciones"
+          className="block rounded-lg p-3 hover:bg-neutral-50 bg-white border border-neutral-200"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-xl">🔔</span>
+            <div className="flex-1">
+              <div className="font-medium text-sm">Notificaciones</div>
+              <div className="text-xs text-neutral-500">Elige qué avisos quieres recibir</div>
+            </div>
+            <span className="text-neutral-400">→</span>
+          </div>
+        </Link>
+
         {isManager && (
           <Link
             href="/fisio/ajustes/integraciones"

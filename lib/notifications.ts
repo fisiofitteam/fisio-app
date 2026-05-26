@@ -14,34 +14,46 @@
  *   - CEO con franjas de closer asignadas: ve las suyas como closer
  */
 import { prisma } from "@/lib/prisma";
+import { disabledTypesFromPrefs } from "@/lib/notification-types";
 
 export type NotifierUser = {
   id: string;
   role: string;
 };
 
+// Tipos de notificación que el usuario ha DESACTIVADO en sus preferencias.
+async function disabledTypesForUser(professionalId: string): Promise<string[]> {
+  const p = await prisma.professional.findUnique({
+    where: { id: professionalId },
+    select: { notificationPrefs: true },
+  });
+  return disabledTypesFromPrefs(p?.notificationPrefs);
+}
+
 /**
  * Devuelve las notificaciones sin leer del usuario, ordenadas por más
- * recientes primero.
+ * recientes primero. Respeta las preferencias (oculta tipos desactivados).
  */
 export async function getUnreadNotificationsForUser(user: NotifierUser, limit = 20) {
   const where = visibilityWhereFor(user);
   if (!where) return [];
+  const disabled = await disabledTypesForUser(user.id);
   return prisma.teamNotification.findMany({
-    where: { ...where, readAt: null },
+    where: { ...where, readAt: null, ...(disabled.length ? { type: { notIn: disabled } } : {}) },
     orderBy: { createdAt: "desc" },
     take: limit,
   });
 }
 
 /**
- * Cuenta cuántas notificaciones no leídas tiene el usuario.
+ * Cuenta cuántas notificaciones no leídas tiene el usuario (respeta prefs).
  */
 export async function countUnreadForUser(user: NotifierUser): Promise<number> {
   const where = visibilityWhereFor(user);
   if (!where) return 0;
+  const disabled = await disabledTypesForUser(user.id);
   return prisma.teamNotification.count({
-    where: { ...where, readAt: null },
+    where: { ...where, readAt: null, ...(disabled.length ? { type: { notIn: disabled } } : {}) },
   });
 }
 
