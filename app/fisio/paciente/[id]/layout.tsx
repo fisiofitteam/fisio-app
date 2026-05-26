@@ -5,6 +5,7 @@ import { PatientSidebar } from "@/components/PatientSidebar";
 import { ProgressRing } from "@/components/ProgressRing";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { PatientPill } from "@/components/PatientPills";
+import { GoToPatient } from "@/components/GoToPatient";
 import { calculateAdherence } from "@/lib/adherence";
 import { getActiveProfessional } from "@/lib/session";
 
@@ -75,6 +76,7 @@ export default async function PatientLayout({
             )}
           </div>
           <div className="flex items-center gap-2">
+            <GoToPatient />
             <WhatsAppButton url={patient.whatsappGroupUrl} size="md" />
             {patient.subscriptionStartDate && (
               <div className="bg-neutral-50 rounded-xl px-3 py-2">
