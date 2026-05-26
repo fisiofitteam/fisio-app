@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { ProgramsByZone } from "@/components/ProgramsByZone";
+import { ProgramsSubnav } from "@/components/ProgramsSubnav";
 
 export default async function ProgramsListPage() {
   const programs = await prisma.program.findMany({
@@ -26,6 +27,7 @@ export default async function ProgramsListPage() {
 
   return (
     <div>
+      <ProgramsSubnav />
       <div className="flex justify-between items-center mb-4">
         <p className="text-sm text-neutral-500">Plantillas de programa</p>
         <Link href="/fisio/biblioteca/programas/nuevo" className="btn btn-primary text-xs">

@@ -8,13 +8,7 @@ const SECTIONS = [
     id: "programas",
     label: "Programas",
     icon: "📋",
-    desc: "Plantillas multi-semana",
-  },
-  {
-    id: "rolling",
-    label: "Rolling",
-    icon: "⚡",
-    desc: "Programas \"a tiempo corrido\"",
+    desc: "Plantillas multi-semana y Rolling",
   },
   {
     id: "perfiles",
@@ -61,6 +55,12 @@ const MENSAJES_SECTION = {
   icon: "💬",
   desc: "Bienvenida de la app del paciente (CEO)",
 };
+const METRICAS_SECTION = {
+  id: "metricas",
+  label: "Métricas",
+  icon: "📈",
+  desc: "Métricas generales de todos los pacientes (CEO)",
+};
 // Editor del catálogo de control de cargas (CEO + Head Success).
 const CATALOGO_SECTION = {
   id: "catalogo",
@@ -74,10 +74,14 @@ export function LibrarySidebar({ showOnboarding = false, showCatalog = false }: 
   const sections = [
     ...SECTIONS,
     ...(showCatalog ? [CATALOGO_SECTION] : []),
-    ...(showOnboarding ? [ONBOARDING_SECTION, LANDINGS_SECTION, MENSAJES_SECTION] : []),
+    ...(showOnboarding ? [METRICAS_SECTION, ONBOARDING_SECTION, LANDINGS_SECTION, MENSAJES_SECTION] : []),
   ];
 
   function isActive(id: string) {
+    // "Programas" engloba también Rolling (subapartado).
+    if (id === "programas") {
+      return pathname.startsWith("/fisio/biblioteca/programas") || pathname.startsWith("/fisio/biblioteca/rolling");
+    }
     return pathname.startsWith(`/fisio/biblioteca/${id}`);
   }
 

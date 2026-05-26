@@ -1,7 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { EvolutionDashboard } from "@/components/EvolutionDashboard";
+import { materializePatientMetrics } from "@/lib/metric-definitions";
 
 export default async function PatientEvolucionTab({ params }: { params: { id: string } }) {
+  // Asegura que las métricas generales del CEO están asignadas a este paciente.
+  await materializePatientMetrics(params.id);
+
   const metrics = await prisma.patientMetric.findMany({
     where: { patientId: params.id, isVisible: true },
     include: {

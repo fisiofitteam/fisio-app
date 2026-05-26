@@ -570,6 +570,23 @@ model MetricEntry {
   @@index([metricId, recordedAt])
 }
 
+// Métricas GENERALES definidas por el CEO (Biblioteca → Métricas). Se aplican
+// a todos los pacientes: al ver su evolución se materializan como PatientMetric
+// (así aparecen asignadas aunque no haya datos). key estable.
+model MetricDefinition {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  name      String
+  unit      String?
+  auto      Boolean  @default(false)   // true: se rellena desde las sesiones (pain/rpe/stiffness)
+  order     Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, order])
+}
+
 // ============================================================================
 // ASIGNACIONES Y SESIONES
 // ============================================================================
