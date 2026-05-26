@@ -4,10 +4,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { ImageUpload } from "@/components/ImageUpload";
 import { CourseCover } from "@/components/CourseCover";
-import { parseVideo } from "@/lib/video";
 import { FEED_CATEGORIES, feedCategoryMeta } from "@/lib/community-feed";
 import {
-  GraduationCap, Film, MessageSquare, Plus, Trash2, Pencil, Pin,
+  GraduationCap, MessageSquare, Plus, Trash2, Pencil, Pin,
   Eye, EyeOff, Heart, MessageCircle,
 } from "lucide-react";
 
@@ -15,7 +14,6 @@ type Course = {
   id: string; title: string; description: string | null; coverUrl: string | null;
   published: boolean; lessonCount: number; sectionCount: number;
 };
-type Short = { id: string; title: string; description: string | null; videoUrl: string; published: boolean };
 type Post = {
   id: string; title: string | null; body: string; imageUrl: string | null;
   pinned: boolean; published: boolean; category: string;
@@ -23,7 +21,7 @@ type Post = {
   comments: number; reactions: number;
 };
 
-type Tab = "classroom" | "community" | "videos";
+type Tab = "classroom" | "community";
 
 async function api(url: string, method: string, body?: unknown) {
   const res = await fetch(url, {
@@ -38,24 +36,14 @@ async function api(url: string, method: string, body?: unknown) {
   return res.status === 200 ? res.json() : null;
 }
 
-function VideoThumb({ url, className = "" }: { url: string; className?: string }) {
-  const info = parseVideo(url);
-  if (info.thumbnail) return <img src={info.thumbnail} alt="" className={`object-cover bg-neutral-100 ${className}`} />;
-  return (
-    <div className={`flex items-center justify-center bg-neutral-100 text-neutral-400 ${className}`}><Film size={20} /></div>
-  );
-}
-
 export function CommunityManager({
-  initialCourses, initialShorts, initialPosts,
+  initialCourses, initialPosts,
 }: {
   initialCourses: Course[];
-  initialShorts: Short[];
   initialPosts: Post[];
 }) {
   const [tab, setTab] = useState<Tab>("classroom");
   const [courses, setCourses] = useState<Course[]>(initialCourses);
-  const [shorts, setShorts] = useState<Short[]>(initialShorts);
   const [posts, setPosts] = useState<Post[]>(initialPosts);
   const [err, setErr] = useState<string | null>(null);
 
@@ -64,10 +52,9 @@ export function CommunityManager({
     setTimeout(() => setErr(null), 4000);
   }
 
-  const TABS: { key: Tab; label: string; Icon: typeof Film; count: number }[] = [
+  const TABS: { key: Tab; label: string; Icon: typeof GraduationCap; count: number }[] = [
     { key: "classroom", label: "Classroom", Icon: GraduationCap, count: courses.length },
     { key: "community", label: "Community", Icon: MessageSquare, count: posts.length },
-    { key: "videos", label: "Vídeos cortos", Icon: Film, count: shorts.length },
   ];
 
   return (
@@ -99,7 +86,6 @@ export function CommunityManager({
 
       {tab === "classroom" && <ClassroomSection courses={courses} setCourses={setCourses} fail={fail} />}
       {tab === "community" && <CommunitySection posts={posts} setPosts={setPosts} fail={fail} />}
-      {tab === "videos" && <VideosSection shorts={shorts} setShorts={setShorts} fail={fail} />}
     </div>
   );
 }
@@ -410,124 +396,6 @@ function PostCard({
       <div className="flex items-center gap-4 text-xs text-neutral-500 pt-1">
         <span className="flex items-center gap-1"><Heart size={13} /> {post.reactions}</span>
         <span className="flex items-center gap-1"><MessageCircle size={13} /> {post.comments}</span>
-      </div>
-    </div>
-  );
-}
-
-/* ─────────────────────────── VÍDEOS CORTOS ─────────────────────────── */
-
-function VideosSection({
-  shorts, setShorts, fail,
-}: {
-  shorts: Short[];
-  setShorts: React.Dispatch<React.SetStateAction<Short[]>>;
-  fail: (e: unknown) => void;
-}) {
-  const [adding, setAdding] = useState(false);
-
-  return (
-    <div className="space-y-3">
-      {adding ? (
-        <ShortForm
-          onCancel={() => setAdding(false)}
-          onSave={async (data) => {
-            try { const created = await api("/api/community/shorts", "POST", data); setShorts((a) => [created, ...a]); setAdding(false); }
-            catch (e) { fail(e); }
-          }}
-        />
-      ) : (
-        <button onClick={() => setAdding(true)} className="btn btn-primary text-sm flex items-center gap-1.5">
-          <Plus size={15} /> Nuevo vídeo corto
-        </button>
-      )}
-
-      {shorts.length === 0 && !adding && <p className="text-sm text-neutral-400 italic py-6 text-center">Aún no hay vídeos cortos.</p>}
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {shorts.map((s) => (
-          <ShortCard
-            key={s.id}
-            short={s}
-            onChange={(u) => setShorts((a) => a.map((x) => (x.id === s.id ? u : x)))}
-            onDelete={() => setShorts((a) => a.filter((x) => x.id !== s.id))}
-            fail={fail}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function ShortForm({
-  initial, onSave, onCancel,
-}: {
-  initial?: Short;
-  onSave: (data: { title: string; videoUrl: string; description: string | null }) => void;
-  onCancel: () => void;
-}) {
-  const [title, setTitle] = useState(initial?.title ?? "");
-  const [videoUrl, setVideoUrl] = useState(initial?.videoUrl ?? "");
-  const [description, setDescription] = useState(initial?.description ?? "");
-
-  return (
-    <div className="card space-y-2">
-      <input className="input text-sm" placeholder="Título del vídeo" value={title} onChange={(e) => setTitle(e.target.value)} />
-      <input className="input text-sm" placeholder="Enlace YouTube o Vimeo" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} />
-      <textarea className="input text-sm" rows={2} placeholder="Descripción (opcional)" value={description} onChange={(e) => setDescription(e.target.value)} />
-      <div className="flex justify-end gap-2">
-        <button onClick={onCancel} className="btn text-sm">Cancelar</button>
-        <button
-          onClick={() => title.trim() && videoUrl.trim() && onSave({ title: title.trim(), videoUrl: videoUrl.trim(), description: description.trim() || null })}
-          className="btn btn-primary text-sm"
-        >
-          Guardar
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function ShortCard({
-  short, onChange, onDelete, fail,
-}: {
-  short: Short;
-  onChange: (s: Short) => void;
-  onDelete: () => void;
-  fail: (e: unknown) => void;
-}) {
-  const [editing, setEditing] = useState(false);
-
-  async function patch(data: any) {
-    try { await api(`/api/community/shorts/${short.id}`, "PATCH", data); onChange({ ...short, ...data }); }
-    catch (e) { fail(e); }
-  }
-  async function remove() {
-    if (!confirm(`¿Borrar el vídeo "${short.title}"?`)) return;
-    try { await api(`/api/community/shorts/${short.id}`, "DELETE"); onDelete(); }
-    catch (e) { fail(e); }
-  }
-
-  if (editing) {
-    return <ShortForm initial={short} onCancel={() => setEditing(false)} onSave={async (d) => { await patch(d); setEditing(false); }} />;
-  }
-
-  return (
-    <div className="card p-0 overflow-hidden">
-      <VideoThumb url={short.videoUrl} className="w-full aspect-video" />
-      <div className="p-3">
-        <div className="flex items-center gap-1.5">
-          <h3 className="font-medium text-sm flex-1 truncate">{short.title}</h3>
-          {!short.published && <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-500">Oculto</span>}
-        </div>
-        {short.description && <p className="text-xs text-neutral-500 mt-0.5 line-clamp-2">{short.description}</p>}
-        <div className="flex items-center gap-1 mt-2">
-          <IconBtn title={short.published ? "Ocultar" : "Publicar"} onClick={() => patch({ published: !short.published })}>
-            {short.published ? <Eye size={15} /> : <EyeOff size={15} />}
-          </IconBtn>
-          <IconBtn title="Editar" onClick={() => setEditing(true)}><Pencil size={15} /></IconBtn>
-          <IconBtn title="Borrar" onClick={remove} danger><Trash2 size={15} /></IconBtn>
-        </div>
       </div>
     </div>
   );

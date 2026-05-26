@@ -1619,21 +1619,6 @@ model CommunityLesson {
   @@index([sectionId, order])
 }
 
-// Vídeo corto suelto (feed tipo reels).
-model CommunityShort {
-  id          String   @id @default(cuid())
-  title       String
-  description String?
-  videoUrl    String                              // enlace YouTube/Vimeo
-  order       Int      @default(0)
-  published   Boolean  @default(true)
-  createdById String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([createdAt])
-}
-
 // Post del muro de la comunidad. Autor = profesional o paciente (uno de los dos).
 model CommunityFeedPost {
   id              String   @id @default(cuid())
