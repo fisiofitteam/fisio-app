@@ -8,7 +8,7 @@ export function PatientNav({
   active,
 }: {
   patientId: string;
-  active: "home" | "semana" | "wod" | "adapt" | "comunidad";
+  active: "home" | "semana" | "wod" | "adapt" | "comunidad" | "ajustes";
 }) {
   const items = [
     { id: "home", label: "Hoy", href: `/paciente/${patientId}`, Icon: Home },
@@ -22,10 +22,10 @@ export function PatientNav({
     <nav
       className="fixed bottom-0 left-0 right-0 max-w-md mx-auto"
       style={{
-        background: "rgba(10, 10, 10, 0.85)",
+        background: "var(--p-nav-bg)",
         backdropFilter: "blur(12px)",
         WebkitBackdropFilter: "blur(12px)",
-        borderTop: "1px solid rgba(255,255,255,0.08)",
+        borderTop: "1px solid var(--p-nav-border)",
       }}
     >
       <div className="flex">
@@ -38,7 +38,7 @@ export function PatientNav({
               href={it.href}
               className="flex-1 flex flex-col items-center justify-center py-3 transition-colors"
               style={{
-                color: isActive ? "#FCD34D" : "#737373",
+                color: isActive ? "var(--p-accent)" : "var(--p-text-faint)",
               }}
             >
               <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />

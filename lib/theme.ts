@@ -10,3 +10,10 @@ export function getThemeFromCookie(): Theme {
   const v = cookies().get(THEME_COOKIE)?.value;
   return v === "dark" ? "dark" : "light";
 }
+
+// Tema de la app del paciente (cookie distinta; por defecto: oscuro).
+export const PATIENT_THEME_COOKIE = "pp_theme";
+export function getPatientThemeFromCookie(): Theme {
+  const v = cookies().get(PATIENT_THEME_COOKIE)?.value;
+  return v === "light" ? "light" : "dark";
+}

@@ -23,13 +23,13 @@ export function PatientHomePaused({
   const initial = firstName[0]?.toUpperCase() ?? "?";
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-5" style={{ color: "#FAFAFA" }}>
+    <main className="min-h-screen flex items-center justify-center px-5" style={{ color: "var(--p-text)" }}>
       <div className="relative max-w-md mx-auto py-10 w-full">
         {/* Botón cambiar usuario */}
         <Link
           href="/"
           className="inline-flex items-center gap-1 text-xs mb-8"
-          style={{ color: "#737373" }}
+          style={{ color: "var(--p-text-faint)" }}
         >
           <ArrowLeft size={12} /> Cambiar usuario
         </Link>
@@ -44,8 +44,8 @@ export function PatientHomePaused({
             width: 64,
             height: 64,
             borderRadius: 16,
-            background: "linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)",
-            color: "#0A0A0A",
+            background: "linear-gradient(135deg, var(--p-accent) 0%, #F59E0B 100%)",
+            color: "var(--p-accent-ink)",
             fontSize: 28,
             letterSpacing: "-0.03em",
             border: "none",
@@ -60,7 +60,7 @@ export function PatientHomePaused({
           <span className="brand-gradient-text">en pausa</span>
         </h1>
 
-        <p className="text-center text-sm mb-8" style={{ color: "#A3A3A3" }}>
+        <p className="text-center text-sm mb-8" style={{ color: "var(--p-text-dim)" }}>
           Disfruta {firstName}, te esperamos pronto.
         </p>
 
@@ -76,7 +76,7 @@ export function PatientHomePaused({
             className="text-5xl font-bold"
             style={{
               letterSpacing: "-0.04em",
-              background: "linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)",
+              background: "linear-gradient(135deg, var(--p-accent) 0%, #F59E0B 100%)",
               WebkitBackgroundClip: "text",
               WebkitTextFillColor: "transparent",
               backgroundClip: "text",
@@ -84,7 +84,7 @@ export function PatientHomePaused({
           >
             {daysRemaining}
           </div>
-          <div className="text-sm mt-1" style={{ color: "#FAFAFA" }}>
+          <div className="text-sm mt-1" style={{ color: "var(--p-text)" }}>
             {daysRemaining === 1 ? "día" : "días"} para volver
           </div>
         </div>
@@ -92,21 +92,21 @@ export function PatientHomePaused({
         <div
           className="rounded-xl p-4 text-sm text-center"
           style={{
-            background: "#171717",
-            border: "1px solid #262626",
-            color: "#A3A3A3",
+            background: "var(--p-surface-2)",
+            border: "1px solid var(--p-border)",
+            color: "var(--p-text-dim)",
           }}
         >
-          <div className="text-xs mb-1" style={{ color: "#737373" }}>VUELVES EL</div>
-          <div className="font-medium capitalize" style={{ color: "#FAFAFA" }}>{endFormatted}</div>
+          <div className="text-xs mb-1" style={{ color: "var(--p-text-faint)" }}>VUELVES EL</div>
+          <div className="font-medium capitalize" style={{ color: "var(--p-text)" }}>{endFormatted}</div>
           {reason && (
-            <div className="text-xs mt-2 italic" style={{ color: "#737373" }}>
+            <div className="text-xs mt-2 italic" style={{ color: "var(--p-text-faint)" }}>
               {reason}
             </div>
           )}
         </div>
 
-        <p className="text-[11px] text-center mt-6 italic" style={{ color: "#525252" }}>
+        <p className="text-[11px] text-center mt-6 italic" style={{ color: "var(--p-text-faint)" }}>
           Tu suscripción se ha extendido automáticamente los días de la pausa.
         </p>
       </div>

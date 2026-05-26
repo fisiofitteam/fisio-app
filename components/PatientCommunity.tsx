@@ -19,7 +19,7 @@ type Course = {
 type Comment = { id: string; body: string; createdAt: string; authorName: string; isPatient: boolean };
 
 const CARD = "rounded-2xl p-4";
-const CARD_STYLE = { background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" } as const;
+const CARD_STYLE = { background: "var(--p-surface)", border: "1px solid var(--p-border)" } as const;
 
 async function api(url: string, method: string, body?: unknown) {
   const res = await fetch(url, {
@@ -43,21 +43,21 @@ export function PatientCommunity({
   const [posts, setPosts] = useState<Post[]>(initialPosts);
 
   return (
-    <main className="min-h-screen text-white" style={{ color: "#FAFAFA" }}>
+    <main className="min-h-screen text-white" style={{ color: "var(--p-text)" }}>
       <div className="relative max-w-md mx-auto px-5 py-7 pb-28">
         <header className="mb-5">
-          <Link href={`/paciente/${patientId}`} className="text-xs" style={{ color: "#737373" }}>← Inicio</Link>
+          <Link href={`/paciente/${patientId}`} className="text-xs" style={{ color: "var(--p-text-faint)" }}>← Inicio</Link>
           <h1 className="text-2xl font-bold mt-1" style={{ letterSpacing: "-0.025em" }}>Comunidad</h1>
         </header>
 
         {/* tabs */}
-        <div className="flex gap-1 p-1 rounded-xl mb-5" style={{ background: "rgba(255,255,255,0.05)" }}>
+        <div className="flex gap-1 p-1 rounded-xl mb-5" style={{ background: "var(--p-surface)" }}>
           {(["community", "classroom"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors"
-              style={tab === t ? { background: "#FCD34D", color: "#0A0A0A" } : { color: "#A3A3A3" }}
+              style={tab === t ? { background: "var(--p-accent)", color: "var(--p-accent-ink)" } : { color: "var(--p-text-dim)" }}
             >
               {t === "community" ? "Community" : "Classroom"}
             </button>
@@ -103,10 +103,10 @@ function CommunityFeed({
           className={`${CARD} w-full text-left text-sm flex items-center gap-3`}
           style={CARD_STYLE}
         >
-          <span className="w-8 h-8 rounded-full flex items-center justify-center font-bold flex-shrink-0" style={{ background: "linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)", color: "#0A0A0A", fontSize: 12 }}>
+          <span className="w-8 h-8 rounded-full flex items-center justify-center font-bold flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--p-accent) 0%, #F59E0B 100%)", color: "var(--p-accent-ink)", fontSize: 12 }}>
             {myName.charAt(0).toUpperCase()}
           </span>
-          <span style={{ color: "#737373" }}>Escribe algo para la comunidad…</span>
+          <span style={{ color: "var(--p-text-faint)" }}>Escribe algo para la comunidad…</span>
         </button>
       )}
 
@@ -119,7 +119,7 @@ function CommunityFeed({
       </div>
 
       {shown.length === 0 ? (
-        <p className="text-sm text-center py-8" style={{ color: "#737373" }}>No hay publicaciones todavía.</p>
+        <p className="text-sm text-center py-8" style={{ color: "var(--p-text-faint)" }}>No hay publicaciones todavía.</p>
       ) : (
         shown.map((p) => (
           <PostItem key={p.id} post={p} onChange={(u) => setPosts((a) => a.map((x) => (x.id === p.id ? u : x)))} />
@@ -134,7 +134,7 @@ function FilterPill({ active, onClick, label }: { active: boolean; onClick: () =
     <button
       onClick={onClick}
       className="px-3 py-1 rounded-full text-xs whitespace-nowrap transition-colors"
-      style={active ? { background: "#FCD34D", color: "#0A0A0A", fontWeight: 600 } : { background: "rgba(255,255,255,0.06)", color: "#A3A3A3" }}
+      style={active ? { background: "var(--p-accent)", color: "var(--p-accent-ink)", fontWeight: 600 } : { background: "var(--p-surface-2)", color: "var(--p-text-dim)" }}
     >
       {label}
     </button>
@@ -173,7 +173,7 @@ function Composer({ onCancel, onPublished }: { onCancel: () => void; onPublished
         placeholder="Título (opcional)"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        style={{ color: "#FAFAFA" }}
+        style={{ color: "var(--p-text)" }}
       />
       <textarea
         className="w-full bg-transparent text-sm outline-none resize-none"
@@ -181,7 +181,7 @@ function Composer({ onCancel, onPublished }: { onCancel: () => void; onPublished
         placeholder="¿Qué quieres compartir?"
         value={body}
         onChange={(e) => setBody(e.target.value)}
-        style={{ color: "#FAFAFA" }}
+        style={{ color: "var(--p-text)" }}
         autoFocus
       />
       {err && <p className="text-xs mt-1" style={{ color: "#FCA5A5" }}>{err}</p>}
@@ -190,17 +190,17 @@ function Composer({ onCancel, onPublished }: { onCancel: () => void; onPublished
           className="text-xs rounded-lg px-2 py-1.5 outline-none"
           value={category}
           onChange={(e) => setCategory(e.target.value)}
-          style={{ background: "rgba(255,255,255,0.08)", color: "#FAFAFA", border: "1px solid rgba(255,255,255,0.1)" }}
+          style={{ background: "var(--p-border)", color: "var(--p-text)", border: "1px solid var(--p-border-strong)" }}
         >
           {FEED_CATEGORIES.map((c) => <option key={c.value} value={c.value} style={{ background: "#1a1a1a" }}>{c.emoji} {c.label}</option>)}
         </select>
         <div className="flex-1" />
-        <button onClick={onCancel} className="text-xs px-3 py-1.5" style={{ color: "#A3A3A3" }}>Cancelar</button>
+        <button onClick={onCancel} className="text-xs px-3 py-1.5" style={{ color: "var(--p-text-dim)" }}>Cancelar</button>
         <button
           onClick={publish}
           disabled={saving || !body.trim()}
           className="text-xs font-semibold px-4 py-1.5 rounded-lg disabled:opacity-50"
-          style={{ background: "#FCD34D", color: "#0A0A0A" }}
+          style={{ background: "var(--p-accent)", color: "var(--p-accent-ink)" }}
         >
           {saving ? "Publicando…" : "Publicar"}
         </button>
@@ -253,39 +253,39 @@ function PostItem({ post, onChange }: { post: Post; onChange: (p: Post) => void 
   return (
     <div className={CARD} style={CARD_STYLE}>
       <div className="flex items-center gap-2.5 mb-2">
-        <span className="w-8 h-8 rounded-full flex items-center justify-center font-bold flex-shrink-0" style={{ background: post.isPatient ? "rgba(255,255,255,0.1)" : "linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)", color: post.isPatient ? "#FAFAFA" : "#0A0A0A", fontSize: 12 }}>
+        <span className="w-8 h-8 rounded-full flex items-center justify-center font-bold flex-shrink-0" style={{ background: post.isPatient ? "var(--p-border-strong)" : "linear-gradient(135deg, var(--p-accent) 0%, #F59E0B 100%)", color: post.isPatient ? "var(--p-text)" : "var(--p-accent-ink)", fontSize: 12 }}>
           {post.authorName.charAt(0).toUpperCase()}
         </span>
         <div className="flex-1 min-w-0">
           <div className="text-sm font-medium truncate">{post.authorName}</div>
-          <div className="text-[11px]" style={{ color: "#737373" }}>{cat.emoji} {cat.label} · {date}</div>
+          <div className="text-[11px]" style={{ color: "var(--p-text-faint)" }}>{cat.emoji} {cat.label} · {date}</div>
         </div>
       </div>
 
       {post.title && <h3 className="font-semibold text-base mb-1" style={{ letterSpacing: "-0.015em" }}>{post.title}</h3>}
-      <p className="text-sm whitespace-pre-line" style={{ color: "#D4D4D4" }}>{post.body}</p>
+      <p className="text-sm whitespace-pre-line" style={{ color: "var(--p-text-soft)" }}>{post.body}</p>
       {post.imageUrl && <img src={post.imageUrl} alt="" className="rounded-xl mt-3 w-full object-cover max-h-72" />}
 
-      <div className="flex items-center gap-4 mt-3 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-        <button onClick={toggleLike} className="flex items-center gap-1.5 text-sm" style={{ color: post.likedByMe ? "#FCD34D" : "#A3A3A3" }}>
-          <Heart size={16} fill={post.likedByMe ? "#FCD34D" : "none"} /> {post.reactions}
+      <div className="flex items-center gap-4 mt-3 pt-3" style={{ borderTop: "1px solid var(--p-surface-2)" }}>
+        <button onClick={toggleLike} className="flex items-center gap-1.5 text-sm" style={{ color: post.likedByMe ? "var(--p-accent)" : "var(--p-text-dim)" }}>
+          <Heart size={16} fill={post.likedByMe ? "var(--p-accent)" : "none"} /> {post.reactions}
         </button>
-        <button onClick={openComments} className="flex items-center gap-1.5 text-sm" style={{ color: "#A3A3A3" }}>
+        <button onClick={openComments} className="flex items-center gap-1.5 text-sm" style={{ color: "var(--p-text-dim)" }}>
           <MessageCircle size={16} /> {post.comments}
         </button>
       </div>
 
       {showComments && (
         <div className="mt-3 space-y-3">
-          {loadingComments && <p className="text-xs" style={{ color: "#737373" }}>Cargando…</p>}
+          {loadingComments && <p className="text-xs" style={{ color: "var(--p-text-faint)" }}>Cargando…</p>}
           {comments?.map((c) => (
             <div key={c.id} className="flex gap-2.5">
-              <span className="w-6 h-6 rounded-full flex items-center justify-center font-bold flex-shrink-0 mt-0.5" style={{ background: c.isPatient ? "rgba(255,255,255,0.1)" : "linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)", color: c.isPatient ? "#FAFAFA" : "#0A0A0A", fontSize: 10 }}>
+              <span className="w-6 h-6 rounded-full flex items-center justify-center font-bold flex-shrink-0 mt-0.5" style={{ background: c.isPatient ? "var(--p-border-strong)" : "linear-gradient(135deg, var(--p-accent) 0%, #F59E0B 100%)", color: c.isPatient ? "var(--p-text)" : "var(--p-accent-ink)", fontSize: 10 }}>
                 {c.authorName.charAt(0).toUpperCase()}
               </span>
               <div className="flex-1">
                 <span className="text-xs font-medium">{c.authorName}</span>
-                <p className="text-sm" style={{ color: "#D4D4D4" }}>{c.body}</p>
+                <p className="text-sm" style={{ color: "var(--p-text-soft)" }}>{c.body}</p>
               </div>
             </div>
           ))}
@@ -296,9 +296,9 @@ function PostItem({ post, onChange }: { post: Post; onChange: (p: Post) => void 
               value={newComment}
               onChange={(e) => setNewComment(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") addComment(); }}
-              style={{ background: "rgba(255,255,255,0.06)", color: "#FAFAFA" }}
+              style={{ background: "var(--p-surface-2)", color: "var(--p-text)" }}
             />
-            <button onClick={addComment} disabled={!newComment.trim()} className="p-2 rounded-lg disabled:opacity-40" style={{ background: "#FCD34D", color: "#0A0A0A" }}>
+            <button onClick={addComment} disabled={!newComment.trim()} className="p-2 rounded-lg disabled:opacity-40" style={{ background: "var(--p-accent)", color: "var(--p-accent-ink)" }}>
               <Send size={15} />
             </button>
           </div>
@@ -312,7 +312,7 @@ function PostItem({ post, onChange }: { post: Post; onChange: (p: Post) => void 
 
 function Classroom({ courses, patientId }: { courses: Course[]; patientId: string }) {
   if (courses.length === 0) {
-    return <p className="text-sm text-center py-8" style={{ color: "#737373" }}>Aún no hay cursos disponibles.</p>;
+    return <p className="text-sm text-center py-8" style={{ color: "var(--p-text-faint)" }}>Aún no hay cursos disponibles.</p>;
   }
   return (
     <div className="space-y-4">
@@ -329,14 +329,14 @@ function Classroom({ courses, patientId }: { courses: Course[]; patientId: strin
             <div className="p-4">
               <div className="flex items-center gap-2">
                 <h3 className="font-semibold text-base flex-1" style={{ letterSpacing: "-0.015em" }}>{c.title}</h3>
-                <ChevronRight size={18} style={{ color: "#737373" }} />
+                <ChevronRight size={18} style={{ color: "var(--p-text-faint)" }} />
               </div>
-              {c.description && <p className="text-sm mt-1" style={{ color: "#A3A3A3" }}>{c.description}</p>}
+              {c.description && <p className="text-sm mt-1" style={{ color: "var(--p-text-dim)" }}>{c.description}</p>}
               <div className="mt-3">
-                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.1)" }}>
-                  <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "linear-gradient(90deg, #FCD34D, #F59E0B)" }} />
+                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--p-border-strong)" }}>
+                  <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "linear-gradient(90deg, var(--p-accent), #F59E0B)" }} />
                 </div>
-                <div className="text-[11px] mt-1" style={{ color: "#737373" }}>{pct}% · {c.doneCount}/{c.lessonCount} lecciones</div>
+                <div className="text-[11px] mt-1" style={{ color: "var(--p-text-faint)" }}>{pct}% · {c.doneCount}/{c.lessonCount} lecciones</div>
               </div>
             </div>
           </Link>

@@ -116,55 +116,95 @@ h1, h2, h3, h4, h5 {
   color: transparent;
 }
 
-/* App de paciente: fondo oscuro + cards blancas con borde amarillo */
+/* ============================================================================
+   APP DEL PACIENTE — TEMA (oscuro por defecto, claro opcional)
+   Los componentes usan estas variables (var(--p-*)); cambiar de tema solo
+   reescribe los valores. El modo claro usa la misma foto de fondo aclarada.
+   ============================================================================ */
 .patient-scope {
-  color: #FAFAFA;
+  --p-text: #FAFAFA;
+  --p-text-soft: #D4D4D4;
+  --p-text-dim: #A3A3A3;
+  --p-text-faint: #737373;
+  --p-surface: rgba(255,255,255,0.04);
+  --p-surface-2: rgba(255,255,255,0.06);
+  --p-surface-3: rgba(255,255,255,0.08);
+  --p-border: rgba(255,255,255,0.08);
+  --p-border-strong: rgba(255,255,255,0.12);
+  --p-accent: #FCD34D;
+  --p-accent-ink: #0A0A0A;
+  --p-nav-bg: rgba(10,10,10,0.85);
+  --p-nav-border: rgba(255,255,255,0.08);
+  --p-card-bg: #FFFFFF;
+  --p-card-ink: #0A0A0A;
+  --p-overlay: linear-gradient(180deg, rgba(10,10,10,0.90) 0%, rgba(10,10,10,0.96) 100%);
+  --p-halo: radial-gradient(circle at 85% -10%, rgba(252,211,77,0.18) 0, transparent 45%), radial-gradient(circle at 5% 105%, rgba(245,158,11,0.10) 0, transparent 40%);
+  --p-grain: 0.035;
+  --p-grain-rgb: 255,255,255;
+  color: var(--p-text);
 }
-/* Las cards dentro del scope paciente: blancas con borde amarillo y texto oscuro de nuevo */
+.patient-scope.patient-light {
+  --p-text: #1B2533;
+  --p-text-soft: #2E3A48;
+  --p-text-dim: #5B6675;
+  --p-text-faint: #8089A0;
+  --p-surface: rgba(255,255,255,0.72);
+  --p-surface-2: rgba(255,255,255,0.85);
+  --p-surface-3: rgba(255,255,255,0.95);
+  --p-border: rgba(20,30,45,0.10);
+  --p-border-strong: rgba(20,30,45,0.16);
+  --p-accent: #D97706;
+  --p-accent-ink: #0A0A0A;
+  --p-nav-bg: rgba(255,255,255,0.88);
+  --p-nav-border: rgba(20,30,45,0.10);
+  --p-card-bg: #FFFFFF;
+  --p-card-ink: #0A0A0A;
+  --p-overlay: linear-gradient(180deg, rgba(255,255,255,0.84) 0%, rgba(255,255,255,0.92) 100%);
+  --p-halo: radial-gradient(circle at 85% -10%, rgba(245,158,11,0.20) 0, transparent 45%), radial-gradient(circle at 5% 105%, rgba(245,158,11,0.12) 0, transparent 40%);
+  --p-grain: 0.05;
+  --p-grain-rgb: 30,40,55;
+}
+
+/* Cards dentro del scope paciente (páginas que usan .card) */
 .patient-scope .card {
-  background: #FFFFFF;
-  color: #0A0A0A;
+  background: var(--p-card-bg);
+  color: var(--p-card-ink);
   border: 1.5px solid rgba(252, 211, 77, 0.6);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
 }
-/* Inputs dentro de cards mantienen su look claro original */
+.patient-scope.patient-light .card { box-shadow: 0 2px 12px rgba(20,30,45,0.08); }
 .patient-scope .card input,
 .patient-scope .card textarea,
-.patient-scope .card select {
-  color: #0A0A0A;
-}
-/* Botones primary mantienen */
-.patient-scope .btn-primary {
-  background: #0A0A0A;
-  color: #FAFAFA;
-  border-color: #0A0A0A;
-}
-/* Links genéricos (los "← Volver" etc.) en amarillo suave para verlos sobre el fondo oscuro */
-.patient-scope > main > header a {
-  color: rgba(252, 211, 77, 0.85) !important;
-}
-.patient-scope > main > header a:hover {
-  color: #FCD34D !important;
-}
+.patient-scope .card select { color: var(--p-card-ink); }
+.patient-scope .btn-primary { background: #0A0A0A; color: #FAFAFA; border-color: #0A0A0A; }
 
-/* Headers/textos fuera de cards: legibles sobre fondo oscuro */
-.patient-scope > main > header .text-neutral-500,
-.patient-scope > main > header .text-neutral-400,
-.patient-scope > main > header .text-neutral-600,
-.patient-scope > main > .text-neutral-500,
-.patient-scope > main > .text-neutral-400 {
-  color: #A3A3A3 !important;
-}
-.patient-scope > main > header h1,
-.patient-scope > main > header h2,
-.patient-scope > main > h1,
-.patient-scope > main > h2 {
-  color: #FAFAFA;
-}
-/* h2 sueltos (los que sirven de label de sección fuera de card) */
-.patient-scope > main > h2.font-medium {
-  color: #FAFAFA;
-}
+/* Links de cabecera ("← Volver" etc.) */
+.patient-scope main > header a { color: var(--p-accent) !important; }
+.patient-scope main > header a:hover { filter: brightness(1.15); }
+
+/* Headers/textos fuera de cards */
+.patient-scope main > header .text-neutral-500,
+.patient-scope main > header .text-neutral-400,
+.patient-scope main > header .text-neutral-600,
+.patient-scope main > .text-neutral-500,
+.patient-scope main > .text-neutral-400 { color: var(--p-text-dim) !important; }
+.patient-scope main > header h1,
+.patient-scope main > header h2,
+.patient-scope main > h1,
+.patient-scope main > h2,
+.patient-scope main > h2.font-medium { color: var(--p-text); }
+
+/* En MODO CLARO, las utilidades de texto pensadas para fondo oscuro
+   (text-white / text-neutral claros) se remapean a tonos oscuros legibles.
+   En oscuro no se tocan (ya funcionan). Cubre las subpáginas que usan clases
+   Tailwind directas (sesión, semana, WOD...) sin editarlas una a una. */
+.patient-scope.patient-light .text-white { color: var(--p-text) !important; }
+.patient-scope.patient-light .text-neutral-100,
+.patient-scope.patient-light .text-neutral-200,
+.patient-scope.patient-light .text-neutral-300 { color: var(--p-text-soft) !important; }
+.patient-scope.patient-light .text-neutral-400,
+.patient-scope.patient-light .text-neutral-500 { color: var(--p-text-dim) !important; }
+.patient-scope.patient-light .text-neutral-600 { color: var(--p-text-faint) !important; }
 
 /* Estilos para impresión / exportar PDF en métricas */
 @media print {

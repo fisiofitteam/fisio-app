@@ -13,7 +13,7 @@ function VideoEmbed({ url }: { url: string }) {
   const info = parseVideo(url);
   if (!info.embedUrl) {
     return (
-      <div className="aspect-video w-full rounded-xl flex items-center justify-center gap-2 text-sm" style={{ background: "rgba(255,255,255,0.06)", color: "#737373" }}>
+      <div className="aspect-video w-full rounded-xl flex items-center justify-center gap-2 text-sm" style={{ background: "var(--p-surface-2)", color: "var(--p-text-faint)" }}>
         <Film size={18} /> Vídeo no disponible
       </div>
     );
@@ -49,17 +49,17 @@ export function PatientCourse({ patientId, course }: { patientId: string; course
   }
 
   return (
-    <main className="min-h-screen text-white" style={{ color: "#FAFAFA" }}>
+    <main className="min-h-screen text-white" style={{ color: "var(--p-text)" }}>
       <div className="relative max-w-md mx-auto px-5 py-7 pb-28">
         <header className="mb-4">
-          <Link href={`/paciente/${patientId}/comunidad`} className="text-xs" style={{ color: "#737373" }}>← Comunidad</Link>
+          <Link href={`/paciente/${patientId}/comunidad`} className="text-xs" style={{ color: "var(--p-text-faint)" }}>← Comunidad</Link>
           <h1 className="text-xl font-bold mt-1" style={{ letterSpacing: "-0.025em" }}>{course.title}</h1>
-          {course.description && <p className="text-sm mt-1" style={{ color: "#A3A3A3" }}>{course.description}</p>}
+          {course.description && <p className="text-sm mt-1" style={{ color: "var(--p-text-dim)" }}>{course.description}</p>}
           <div className="mt-3">
-            <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.1)" }}>
-              <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "linear-gradient(90deg, #FCD34D, #F59E0B)" }} />
+            <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--p-border-strong)" }}>
+              <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "linear-gradient(90deg, var(--p-accent), #F59E0B)" }} />
             </div>
-            <div className="text-[11px] mt-1" style={{ color: "#737373" }}>{pct}% completado · {done}/{total} lecciones</div>
+            <div className="text-[11px] mt-1" style={{ color: "var(--p-text-faint)" }}>{pct}% completado · {done}/{total} lecciones</div>
           </div>
         </header>
 
@@ -74,12 +74,12 @@ export function PatientCourse({ patientId, course }: { patientId: string; course
                 className="text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 flex-shrink-0"
                 style={doneIds.has(selected.id)
                   ? { background: "rgba(34,197,94,0.15)", color: "#86EFAC", border: "1px solid rgba(34,197,94,0.3)" }
-                  : { background: "#FCD34D", color: "#0A0A0A" }}
+                  : { background: "var(--p-accent)", color: "var(--p-accent-ink)" }}
               >
                 <Check size={14} /> {doneIds.has(selected.id) ? "Completada" : "Marcar completada"}
               </button>
             </div>
-            {selected.description && <p className="text-sm mt-2 whitespace-pre-line" style={{ color: "#D4D4D4" }}>{selected.description}</p>}
+            {selected.description && <p className="text-sm mt-2 whitespace-pre-line" style={{ color: "var(--p-text-soft)" }}>{selected.description}</p>}
           </div>
         )}
 
@@ -112,11 +112,11 @@ function SectionAccordion({
   const doneCount = section.lessons.filter((l) => doneIds.has(l.id)).length;
 
   return (
-    <div className="rounded-xl overflow-hidden" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+    <div className="rounded-xl overflow-hidden" style={{ background: "var(--p-surface)", border: "1px solid var(--p-border)" }}>
       <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center gap-2 px-3 py-3 text-left">
-        {open ? <ChevronDown size={16} style={{ color: "#737373" }} /> : <ChevronRight size={16} style={{ color: "#737373" }} />}
+        {open ? <ChevronDown size={16} style={{ color: "var(--p-text-faint)" }} /> : <ChevronRight size={16} style={{ color: "var(--p-text-faint)" }} />}
         <span className="font-medium text-sm flex-1">{section.title}</span>
-        <span className="text-[11px]" style={{ color: "#737373" }}>{doneCount}/{section.lessons.length}</span>
+        <span className="text-[11px]" style={{ color: "var(--p-text-faint)" }}>{doneCount}/{section.lessons.length}</span>
       </button>
       {open && (
         <div className="pb-1">
@@ -132,8 +132,8 @@ function SectionAccordion({
               >
                 {isDone
                   ? <CheckCircle2 size={16} style={{ color: "#86EFAC" }} className="flex-shrink-0" />
-                  : <Circle size={16} style={{ color: "#525252" }} className="flex-shrink-0" />}
-                <span className="text-sm truncate" style={{ color: isSel ? "#FCD34D" : "#D4D4D4", fontWeight: isSel ? 600 : 400 }}>{l.title}</span>
+                  : <Circle size={16} style={{ color: "var(--p-text-faint)" }} className="flex-shrink-0" />}
+                <span className="text-sm truncate" style={{ color: isSel ? "var(--p-accent)" : "var(--p-text-soft)", fontWeight: isSel ? 600 : 400 }}>{l.title}</span>
               </button>
             );
           })}

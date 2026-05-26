@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PatientShell } from "@/components/PatientShell";
 import { needsOnboarding } from "@/lib/onboarding-content";
+import { getPatientThemeFromCookie } from "@/lib/theme";
 
 export default async function PatientLayout({
   children,
@@ -24,5 +25,5 @@ export default async function PatientLayout({
     redirect("/paciente/onboarding");
   }
 
-  return <PatientShell>{children}</PatientShell>;
+  return <PatientShell theme={getPatientThemeFromCookie()}>{children}</PatientShell>;
 }
