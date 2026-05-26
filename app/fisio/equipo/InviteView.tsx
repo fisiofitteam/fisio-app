@@ -34,6 +34,21 @@ export function InviteView({ team, canEditCompensation = false }: { team: TeamMe
   const [showNew, setShowNew] = useState(false);
   const [compFor, setCompFor] = useState<TeamMember | null>(null);
 
+  async function impersonate(m: TeamMember) {
+    if (!confirm(`Vas a entrar en el panel de ${m.fullName} como si fueras esa persona. Podrás volver a tu cuenta en cualquier momento. ¿Continuar?`)) return;
+    const res = await fetch("/api/admin/impersonate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ professionalId: m.id }),
+    });
+    if (res.ok) {
+      window.location.href = "/fisio";
+    } else {
+      const d = await res.json().catch(() => ({}));
+      alert(d.error || "No se pudo entrar.");
+    }
+  }
+
   async function resendInvite(id: string) {
     if (!confirm("¿Reenviar invitación por email?")) return;
     const res = await fetch("/api/admin/invite", {
@@ -97,6 +112,11 @@ export function InviteView({ team, canEditCompensation = false }: { team: TeamMe
                   {(!m.hasPassword || m.pendingInvite) && m.active && (
                     <button onClick={() => resendInvite(m.id)} className="text-[11px] text-blue-600 hover:underline mr-3">
                       Reenviar
+                    </button>
+                  )}
+                  {canEditCompensation && m.active && m.role !== "ceo" && (
+                    <button onClick={() => impersonate(m)} className="text-[11px] text-blue-600 hover:underline mr-3">
+                      ↪ Entrar como
                     </button>
                   )}
                   {canEditCompensation && (

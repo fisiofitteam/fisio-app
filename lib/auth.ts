@@ -12,6 +12,8 @@ export type ActiveProfessional = {
   isManager: boolean;
   canSeeLeads: boolean;
   canEditLeads: boolean;
+  // true cuando el CEO está viendo el panel como este miembro (superadmin)
+  impersonating?: boolean;
 };
 
 export type ActivePatient = {
@@ -22,6 +24,9 @@ export type ActivePatient = {
 
 export const SESSION_COOKIE = "fisio-session";
 export const SESSION_DAYS = 90;
+// Cookie de suplantación (superadmin): el CEO ve el panel como otro miembro.
+// Solo se honra si la sesión REAL es de un CEO.
+export const IMPERSONATE_COOKIE = "fisio-impersonate";
 
 // ============================================================================
 // PASSWORDS — hash con scrypt (sin dependencias externas, robusto)
@@ -125,8 +130,25 @@ export function clearSessionCookie() {
   cookies().delete(SESSION_COOKIE);
 }
 
-// Devuelve el usuario logueado en la cookie de sesión, o null
+// Devuelve el usuario logueado, aplicando suplantación (superadmin) si procede:
+// si la sesión REAL es de un CEO y hay cookie de impersonación válida, devuelve
+// el miembro suplantado (marcado con impersonating: true).
 export async function getSessionUser(): Promise<SessionUser | null> {
+  const real = await getRealSessionUser();
+  if (real?.kind === "professional" && real.pro.role === "ceo") {
+    const targetId = cookies().get(IMPERSONATE_COOKIE)?.value;
+    if (targetId && targetId !== real.pro.id) {
+      const target = await prisma.professional.findUnique({ where: { id: targetId } });
+      if (target && target.active) {
+        return { kind: "professional", pro: { ...toActivePro(target), impersonating: true } };
+      }
+    }
+  }
+  return real;
+}
+
+// Resuelve el usuario REAL de la cookie de sesión (sin aplicar suplantación).
+export async function getRealSessionUser(): Promise<SessionUser | null> {
   // En desarrollo: si está activado FISIO_DEV_BYPASS y hay una cookie legacy
   // de switch user, permitimos ese flow para no romper el trasteo local.
   if (process.env.FISIO_DEV_BYPASS === "true") {
@@ -217,6 +239,13 @@ export async function getActiveProfessional(): Promise<ActiveProfessional | null
 export async function getActivePatient(): Promise<ActivePatient | null> {
   const user = await getSessionUser();
   if (user?.kind === "patient") return user.patient;
+  return null;
+}
+
+// Profesional REAL de la sesión (ignora la suplantación). Para verificar CEO.
+export async function getRealProfessional(): Promise<ActiveProfessional | null> {
+  const user = await getRealSessionUser();
+  if (user?.kind === "professional") return user.pro;
   return null;
 }
 
