@@ -43,6 +43,67 @@ h1, h2, h3, h4, h5 {
   }
 }
 
+/* ============================================================================
+   MODO OSCURO DEL PANEL DE PROFESIONALES
+   Scopeado a .fisio-shell.dark para no afectar a la app del paciente.
+   Como los estilos base (.card/.input/.btn) están centralizados y las páginas
+   usan un set acotado de utilidades de color, remapeamos aquí ese set y el
+   grueso del panel cambia de tema sin tocar componente por componente.
+   ============================================================================ */
+.fisio-shell { background: #FFFFFF; color: #0A0A0A; transition: background-color .2s ease, color .2s ease; }
+.fisio-shell.dark { background: #0A0A0A; color: #E5E5E5; color-scheme: dark; }
+
+/* Superficies */
+.fisio-shell.dark .bg-white { background-color: #161616 !important; }
+.fisio-shell.dark .bg-neutral-50 { background-color: #121212 !important; }
+.fisio-shell.dark .bg-neutral-100 { background-color: #1F1F1F !important; }
+.fisio-shell.dark .bg-neutral-200 { background-color: #2A2A2A !important; }
+.fisio-shell.dark .hover\:bg-neutral-50:hover { background-color: #1A1A1A !important; }
+.fisio-shell.dark .hover\:bg-neutral-100:hover { background-color: #242424 !important; }
+
+/* Texto */
+.fisio-shell.dark .text-neutral-900 { color: #F5F5F5; }
+.fisio-shell.dark .text-neutral-800 { color: #EDEDED; }
+.fisio-shell.dark .text-neutral-700 { color: #D4D4D4; }
+.fisio-shell.dark .text-neutral-600 { color: #B5B5B5; }
+.fisio-shell.dark .text-neutral-500 { color: #9A9A9A; }
+.fisio-shell.dark .text-neutral-400 { color: #6F6F6F; }
+.fisio-shell.dark .text-neutral-300 { color: #555555; }
+
+/* Bordes y divisores */
+.fisio-shell.dark .border-neutral-100 { border-color: #1F1F1F; }
+.fisio-shell.dark .border-neutral-200 { border-color: #2A2A2A; }
+.fisio-shell.dark .border-neutral-300 { border-color: #3A3A3A; }
+.fisio-shell.dark .divide-neutral-100 > :not([hidden]) ~ :not([hidden]) { border-color: #1F1F1F; }
+.fisio-shell.dark .divide-neutral-200 > :not([hidden]) ~ :not([hidden]) { border-color: #2A2A2A; }
+
+/* Clases compartidas */
+.fisio-shell.dark .card { background: #161616; border-color: #2A2A2A; }
+.fisio-shell.dark .input { background: #161616; border-color: #2A2A2A; color: #F5F5F5; }
+.fisio-shell.dark .input::placeholder { color: #6F6F6F; }
+.fisio-shell.dark .input:focus { border-color: #E5E5E5; box-shadow: 0 0 0 1px #E5E5E5; }
+.fisio-shell.dark .btn-primary { background: #F5F5F5; color: #0A0A0A; border-color: #F5F5F5; }
+.fisio-shell.dark .btn-primary:hover { background: #E0E0E0; }
+.fisio-shell.dark .btn-ghost { border-color: #2A2A2A; background: transparent; }
+.fisio-shell.dark .btn-ghost:hover { background: #1F1F1F; }
+
+/* Tintes de acento (alertas, badges, chips de categoría) */
+.fisio-shell.dark .bg-emerald-50, .fisio-shell.dark .bg-emerald-100 { background-color: rgba(16,185,129,.14) !important; }
+.fisio-shell.dark .bg-amber-50, .fisio-shell.dark .bg-amber-100 { background-color: rgba(245,158,11,.16) !important; }
+.fisio-shell.dark .bg-red-50, .fisio-shell.dark .bg-red-100 { background-color: rgba(239,68,68,.15) !important; }
+.fisio-shell.dark .bg-blue-50, .fisio-shell.dark .bg-blue-100 { background-color: rgba(59,130,246,.16) !important; }
+.fisio-shell.dark .bg-purple-50, .fisio-shell.dark .bg-purple-100 { background-color: rgba(168,85,247,.16) !important; }
+.fisio-shell.dark .bg-pink-50, .fisio-shell.dark .bg-pink-100 { background-color: rgba(236,72,153,.16) !important; }
+.fisio-shell.dark .text-emerald-800, .fisio-shell.dark .text-emerald-700 { color: #6EE7B7; }
+.fisio-shell.dark .text-amber-800, .fisio-shell.dark .text-amber-700 { color: #FCD34D; }
+.fisio-shell.dark .text-red-800, .fisio-shell.dark .text-red-700, .fisio-shell.dark .text-red-600 { color: #FCA5A5; }
+.fisio-shell.dark .text-blue-800, .fisio-shell.dark .text-blue-700 { color: #93C5FD; }
+.fisio-shell.dark .text-purple-800, .fisio-shell.dark .text-purple-700 { color: #D8B4FE; }
+.fisio-shell.dark .text-pink-800, .fisio-shell.dark .text-pink-700 { color: #F9A8D4; }
+.fisio-shell.dark .pill-ok { background: rgba(16,185,129,.14); color: #6EE7B7; }
+.fisio-shell.dark .pill-warn { background: rgba(245,158,11,.16); color: #FCD34D; }
+.fisio-shell.dark .pill-block { background: rgba(239,68,68,.15); color: #FCA5A5; }
+
 /* Gradiente amarillo de marca reutilizable */
 .brand-gradient {
   background: linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%);

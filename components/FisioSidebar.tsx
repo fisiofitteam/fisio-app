@@ -142,7 +142,7 @@ export function FisioSidebar({
               key={it.id}
               href={it.href}
               className={`px-3 py-2 text-xs rounded-lg whitespace-nowrap flex items-center gap-1.5 relative ${
-                active ? "bg-neutral-900 text-white" : "bg-white border border-neutral-200"
+                active ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900" : "bg-white border border-neutral-200"
               }`}
             >
               <Icon size={14} strokeWidth={2} />
@@ -205,7 +205,7 @@ export function FisioSidebar({
                 key={it.id}
                 href={it.href}
                 className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
-                  active ? "bg-neutral-900 text-white font-medium" : "text-neutral-600 hover:bg-neutral-100"
+                  active ? "bg-neutral-900 text-white font-medium dark:bg-white dark:text-neutral-900" : "text-neutral-600 hover:bg-neutral-100"
                 }`}
               >
                 <Icon size={17} strokeWidth={active ? 2.25 : 2} />
