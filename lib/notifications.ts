@@ -53,6 +53,14 @@ function visibilityWhereFor(user: NotifierUser): any {
   if (user.role === "setter") {
     return { targetRole: "setter" };
   }
+  if (user.role === "fisio") {
+    return { targetProfessionalId: user.id };
+  }
+  if (user.role === "head_success") {
+    // El head_success también es fisio: ve las suyas (targetProfessionalId)
+    // y las dirigidas a su rol.
+    return { OR: [{ targetProfessionalId: user.id }, { targetRole: "head_success" }] };
+  }
   if (user.role === "closer" || user.role === "ceo") {
     return { targetProfessionalId: user.id };
   }

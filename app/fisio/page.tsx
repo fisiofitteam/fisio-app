@@ -4,10 +4,12 @@ import { prisma } from "@/lib/prisma";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { getActiveProfessional } from "@/lib/session";
 import { calculateAdherence } from "@/lib/adherence";
-import { computeMonthlySalary } from "@/lib/compensation";
 import { getPeriodRange, calculateFinanceSummary, type Period } from "@/lib/finance";
+import { getProgramEndingsForProfessional } from "@/lib/program-endings";
 import { TeamMetricsBlock } from "@/components/TeamMetricsBlock";
 import { CEOPanelTabs } from "@/components/CEOPanelTabs";
+import { FisioPanelTabs } from "@/components/FisioPanelTabs";
+import { ProgramEndingsBox } from "@/components/ProgramEndingsBox";
 
 const TYPE_LABELS: Record<string, string> = {
   optimizacion: "Optimización",
@@ -129,34 +131,8 @@ export default async function FisioPanelPage({
     .slice(0, 5);
   const renewalsIn30 = withRenewal.filter((x) => x.days !== null && x.days <= 30).length;
 
-  // Renovaciones 90d para fisios normales
-  const ninetyDaysAgo = new Date();
-  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-  const last90Renewals = !isManager
-    ? await prisma.subscriptionRenewal.findMany({
-        where: {
-          decidedAt: { gte: ninetyDaysAgo },
-          patient: { assignedProfessionalId: user.id },
-        },
-        include: { patient: true },
-      })
-    : [];
-  const renewed90 = last90Renewals.filter((r) => r.outcome === "renewed").length;
-  const lost90 = last90Renewals.filter((r) => r.outcome === "lost").length;
-  const total90 = renewed90 + lost90;
-  const renewalRate90 = total90 > 0 ? Math.round((renewed90 / total90) * 100) : null;
-
-  // Mis métricas + sueldo del mes en curso (según condiciones laborales)
-  const now = new Date();
-  const mySalary = await computeMonthlySalary(user.id, now.getUTCFullYear(), now.getUTCMonth());
-  const monthName = now.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
-  const eur = (n: number) => n.toLocaleString("es-ES", { style: "currency", currency: "EUR", minimumFractionDigits: 0 });
-  const hasComp =
-    mySalary.config.baseSalary > 0 ||
-    mySalary.config.perActivePatient > 0 ||
-    mySalary.config.renewalOwnPct > 0 ||
-    mySalary.config.renewalOthersPct > 0 ||
-    mySalary.config.newSaleCommissionPct > 0;
+  // Programas asignados a punto de terminar (≤7 días) → recuadro + campanita
+  const programEndings = await getProgramEndingsForProfessional(user.id);
 
   // Métricas para managers en el período seleccionado
   let teamRenewals = { renewed: 0, lost: 0, total: 0, rate: null as number | null };
@@ -297,84 +273,11 @@ export default async function FisioPanelPage({
   }
 
   // === Resto (Head + fisios) ===
-  return (
-    <main>
-      {headerContent}
-      {kpis}
-
+  const panelContent = (
+    <>
       {isManager && teamBlock}
 
-      {/* Mis métricas y sueldo del mes (la setter no cobra → sin esta vista) */}
-      {user.role !== "setter" && (
-      <section className="card mb-5 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-1 h-full" style={{ background: "linear-gradient(180deg, #FCD34D 0%, #F59E0B 100%)" }} />
-        <div className="flex justify-between items-center mb-3 pl-2 flex-wrap gap-2">
-          <div>
-            <h2 className="font-medium text-sm">Mis métricas y sueldo</h2>
-            <p className="text-xs text-neutral-500 capitalize">{monthName}</p>
-          </div>
-          <Link href={`/fisio/factura/${user.id}`} className="btn text-xs">🧾 Generar factura del mes</Link>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pl-2">
-          <div>
-            <div className="text-xs text-neutral-500 mb-1">Pacientes activos</div>
-            <div className="text-2xl font-semibold">{mySalary.activePatients}</div>
-          </div>
-          <div>
-            <div className="text-xs text-neutral-500 mb-1">% renovación (90d)</div>
-            <div className="text-2xl font-semibold">{renewalRate90 !== null ? `${renewalRate90}%` : <span className="text-neutral-300">—</span>}</div>
-            {total90 > 0 && <div className="text-xs text-neutral-400 mt-0.5">sobre {total90}</div>}
-          </div>
-          <div>
-            <div className="text-xs text-neutral-500 mb-1">Renovaciones (mes)</div>
-            <div className="text-2xl font-semibold text-emerald-700">{mySalary.renewalOwnCount}</div>
-            <div className="text-xs text-neutral-400 mt-0.5">{eur(mySalary.renewalOwnRevenue)}</div>
-          </div>
-          {mySalary.config.newSaleCommissionPct > 0 ? (
-            <div>
-              <div className="text-xs text-neutral-500 mb-1">Ventas nuevas (mes)</div>
-              <div className="text-2xl font-semibold">{mySalary.newSaleCount}</div>
-              <div className="text-xs text-neutral-400 mt-0.5">{eur(mySalary.newSaleRevenue)}</div>
-            </div>
-          ) : (
-            <div>
-              <div className="text-xs text-neutral-500 mb-1">Sueldo estimado</div>
-              <div className="text-2xl font-semibold">{hasComp ? eur(mySalary.total) : <span className="text-neutral-300">—</span>}</div>
-            </div>
-          )}
-        </div>
-
-        {hasComp ? (
-          <div className="pl-2 border-t border-neutral-100 pt-3 mt-3">
-            <div className="space-y-1 text-sm max-w-sm">
-              {mySalary.config.baseSalary > 0 && (
-                <div className="flex justify-between"><span className="text-neutral-600">Sueldo fijo</span><span className="tabular-nums">{eur(mySalary.breakdown.fixed)}</span></div>
-              )}
-              {mySalary.config.perActivePatient > 0 && (
-                <div className="flex justify-between"><span className="text-neutral-600">Pacientes activos ({mySalary.activePatients} × {eur(mySalary.config.perActivePatient)})</span><span className="tabular-nums">{eur(mySalary.breakdown.patients)}</span></div>
-              )}
-              {(mySalary.config.renewalOwnPct > 0 || mySalary.config.renewalOthersPct > 0) && (
-                <div className="flex justify-between">
-                  <span className="text-neutral-600">
-                    Comisión renovaciones ({mySalary.config.renewalOwnPct}% propias{mySalary.config.renewalOthersPct > 0 ? ` + ${mySalary.config.renewalOthersPct}% equipo` : ""})
-                  </span>
-                  <span className="tabular-nums">{eur(mySalary.breakdown.renewals)}</span>
-                </div>
-              )}
-              {mySalary.config.newSaleCommissionPct > 0 && (
-                <div className="flex justify-between"><span className="text-neutral-600">Comisión ventas ({mySalary.config.newSaleCommissionPct}%)</span><span className="tabular-nums">{eur(mySalary.breakdown.newSales)}</span></div>
-              )}
-              <div className="flex justify-between border-t border-neutral-200 pt-1.5 font-semibold"><span>Total estimado del mes</span><span className="tabular-nums">{eur(mySalary.total)}</span></div>
-            </div>
-          </div>
-        ) : (
-          <p className="pl-2 text-xs text-neutral-400 border-t border-neutral-100 pt-3 mt-3">
-            Aún no tienes condiciones laborales configuradas.
-          </p>
-        )}
-      </section>
-      )}
+      <ProgramEndingsBox initialItems={programEndings} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <section className="card">
@@ -494,6 +397,14 @@ export default async function FisioPanelPage({
           )}
         </section>
       </div>
+    </>
+  );
+
+  return (
+    <main>
+      {headerContent}
+      {kpis}
+      <FisioPanelTabs panel={panelContent} professionalId={user.id} />
     </main>
   );
 }

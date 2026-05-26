@@ -1305,12 +1305,17 @@ model TeamNotification {
   // Acción CTA opcional (URL relativa a la que el botón redirige)
   actionUrl       String?
 
+  // Clave estable para deduplicar notificaciones generadas por estado
+  // (p. ej. "program_ending:<assignmentId>"). null en las basadas en evento.
+  refKey          String?
+
   readAt          DateTime?
   createdAt       DateTime @default(now())
 
   @@index([targetRole, readAt])
   @@index([targetProfessionalId, readAt])
   @@index([leadId])
+  @@index([refKey])
 }
 
 // ============================================================================
