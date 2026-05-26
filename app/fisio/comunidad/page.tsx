@@ -12,16 +12,17 @@ export default async function ComunidadPage() {
   const canManage = user.role === "ceo" || user.role === "head_success" || user.role === "fisio";
   if (!canManage) redirect("/fisio");
 
-  const [modules, shorts, posts] = await Promise.all([
+  const [courses, shorts, posts] = await Promise.all([
     prisma.communityModule.findMany({
       orderBy: { order: "asc" },
-      include: { lessons: { orderBy: { order: "asc" } } },
+      include: { sections: { orderBy: { order: "asc" }, include: { _count: { select: { lessons: true } } } } },
     }),
     prisma.communityShort.findMany({ orderBy: { createdAt: "desc" } }),
     prisma.communityFeedPost.findMany({
       orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
       include: {
         author: { select: { fullName: true } },
+        patientAuthor: { select: { fullName: true } },
         _count: { select: { comments: true, reactions: true } },
       },
     }),
@@ -31,18 +32,14 @@ export default async function ComunidadPage() {
     <main>
       <CommunityNav active="comunidad" />
       <CommunityManager
-        initialModules={modules.map((m) => ({
-          id: m.id,
-          title: m.title,
-          description: m.description,
-          coverUrl: m.coverUrl,
-          published: m.published,
-          lessons: m.lessons.map((l) => ({
-            id: l.id,
-            title: l.title,
-            description: l.description,
-            videoUrl: l.videoUrl,
-          })),
+        initialCourses={courses.map((c) => ({
+          id: c.id,
+          title: c.title,
+          description: c.description,
+          coverUrl: c.coverUrl,
+          published: c.published,
+          lessonCount: c.sections.reduce((n, s) => n + s._count.lessons, 0),
+          sectionCount: c.sections.length,
         }))}
         initialShorts={shorts.map((s) => ({
           id: s.id,
@@ -58,7 +55,9 @@ export default async function ComunidadPage() {
           imageUrl: p.imageUrl,
           pinned: p.pinned,
           published: p.published,
-          authorName: p.author?.fullName ?? null,
+          category: p.category,
+          authorName: p.author?.fullName ?? p.patientAuthor?.fullName ?? null,
+          isPatient: !!p.patientAuthorId,
           createdAt: p.createdAt.toISOString(),
           comments: p._count.comments,
           reactions: p._count.reactions,

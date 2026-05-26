@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
+import { FEED_CATEGORY_VALUES } from "@/lib/community-feed";
 
 function canManage(role: string): boolean {
   return role === "ceo" || role === "head_success" || role === "fisio";
@@ -18,12 +19,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if ("imageUrl" in b) data.imageUrl = b.imageUrl?.trim() || null;
   if (typeof b?.pinned === "boolean") data.pinned = b.pinned;
   if (typeof b?.published === "boolean") data.published = b.published;
+  if (FEED_CATEGORY_VALUES.includes(b?.category)) data.category = b.category;
 
   const updated = await prisma.communityFeedPost.update({
     where: { id: params.id },
     data,
     include: {
       author: { select: { fullName: true } },
+      patientAuthor: { select: { fullName: true } },
       _count: { select: { comments: true, reactions: true } },
     },
   });

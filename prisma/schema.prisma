@@ -116,6 +116,8 @@ model Patient {
   sales           Sale[]
   communityComments  CommunityComment[]
   communityReactions CommunityReaction[]
+  communityFeedPosts CommunityFeedPost[] @relation("FeedPostPatientAuthor")
+  communityLessonProgress CommunityLessonProgress[]
 }
 
 // ============================================================================
@@ -1568,6 +1570,7 @@ model CommunityIdea {
 // ============================================================================
 
 // Módulo de clases del programa (agrupa lecciones).
+// Curso del Classroom (la "tarjeta" con portada). Agrupa secciones.
 model CommunityModule {
   id          String   @id @default(cuid())
   title       String
@@ -1579,16 +1582,31 @@ model CommunityModule {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  lessons     CommunityLesson[]
+  sections    CommunitySection[]
 
   @@index([order])
 }
 
-// Lección dentro de un módulo (vídeo YouTube/Vimeo + descripción).
+// Sección dentro de un curso (grupo colapsable de lecciones).
+model CommunitySection {
+  id        String   @id @default(cuid())
+  moduleId  String
+  module    CommunityModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  title     String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lessons   CommunityLesson[]
+
+  @@index([moduleId, order])
+}
+
+// Lección dentro de una sección (vídeo YouTube/Vimeo + descripción).
 model CommunityLesson {
   id          String   @id @default(cuid())
-  moduleId    String
-  module      CommunityModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  sectionId   String
+  section     CommunitySection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   title       String
   description String?
   videoUrl    String                              // enlace YouTube/Vimeo
@@ -1596,7 +1614,9 @@ model CommunityLesson {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@index([moduleId, order])
+  progress    CommunityLessonProgress[]
+
+  @@index([sectionId, order])
 }
 
 // Vídeo corto suelto (feed tipo reels).
@@ -1614,23 +1634,27 @@ model CommunityShort {
   @@index([createdAt])
 }
 
-// Post del muro de la comunidad (lo escribe el equipo; pacientes interactúan).
+// Post del muro de la comunidad. Autor = profesional o paciente (uno de los dos).
 model CommunityFeedPost {
-  id          String   @id @default(cuid())
-  authorId    String?
-  author      Professional? @relation("FeedPostAuthor", fields: [authorId], references: [id])
-  title       String?
-  body        String
-  imageUrl    String?
-  pinned      Boolean  @default(false)
-  published   Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String   @id @default(cuid())
+  authorId        String?
+  author          Professional? @relation("FeedPostAuthor", fields: [authorId], references: [id])
+  patientAuthorId String?
+  patientAuthor   Patient? @relation("FeedPostPatientAuthor", fields: [patientAuthorId], references: [id], onDelete: Cascade)
+  category        String   @default("general")     // ver lib/community-feed.ts
+  title           String?
+  body            String
+  imageUrl        String?
+  pinned          Boolean  @default(false)
+  published       Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   comments    CommunityComment[]
   reactions   CommunityReaction[]
 
   @@index([pinned, createdAt])
+  @@index([category])
 }
 
 // Comentario en un post. Autor = paciente o profesional (uno de los dos).
@@ -1662,4 +1686,17 @@ model CommunityReaction {
 
   @@unique([postId, patientId])
   @@unique([postId, professionalId])
+}
+
+// Progreso de un paciente en una lección (marcada como completada).
+model CommunityLessonProgress {
+  id          String   @id @default(cuid())
+  lessonId    String
+  lesson      CommunityLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  patientId   String
+  patient     Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  completedAt DateTime @default(now())
+
+  @@unique([lessonId, patientId])
+  @@index([patientId])
 }

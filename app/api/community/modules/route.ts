@@ -13,7 +13,7 @@ export async function GET() {
 
   const modules = await prisma.communityModule.findMany({
     orderBy: { order: "asc" },
-    include: { lessons: { orderBy: { order: "asc" } } },
+    include: { sections: { orderBy: { order: "asc" }, include: { lessons: { orderBy: { order: "asc" } } } } },
   });
   return NextResponse.json(modules);
 }
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
       order: (last?.order ?? -1) + 1,
       createdById: user.id,
     },
-    include: { lessons: true },
+    include: { sections: { include: { lessons: true } } },
   });
   return NextResponse.json(created);
 }
