@@ -114,6 +114,8 @@ model Patient {
   programPauses   ProgramPause[]
   notifications   PatientNotification[]
   sales           Sale[]
+  communityComments  CommunityComment[]
+  communityReactions CommunityReaction[]
 }
 
 // ============================================================================
@@ -158,6 +160,9 @@ model Professional {
   defaultShifts     DefaultClosingShift[]
   salesAsCloser     Sale[]               @relation("SaleByCloser")
   compensation      Compensation?
+  communityFeedPosts     CommunityFeedPost[] @relation("FeedPostAuthor")
+  communityFeedComments  CommunityComment[]  @relation("FeedCommentAuthor")
+  communityFeedReactions CommunityReaction[] @relation("FeedReactionAuthor")
 }
 
 // Condiciones laborales / compensación de un profesional (1:1). Solo CEO edita.
@@ -1554,4 +1559,107 @@ model CommunityIdea {
   updatedAt   DateTime @updatedAt
 
   @@index([used])
+}
+
+// ============================================================================
+// COMUNIDAD CARA AL PACIENTE (tipo Skool): clases en módulos, vídeos cortos y
+// muro de posts con comentarios/reacciones. Distinto del calendario interno
+// de arriba (CommunityPost / CommunityIdea = "Plan de contenido interno").
+// ============================================================================
+
+// Módulo de clases del programa (agrupa lecciones).
+model CommunityModule {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  coverUrl    String?
+  order       Int      @default(0)
+  published   Boolean  @default(true)              // visible para pacientes
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  lessons     CommunityLesson[]
+
+  @@index([order])
+}
+
+// Lección dentro de un módulo (vídeo YouTube/Vimeo + descripción).
+model CommunityLesson {
+  id          String   @id @default(cuid())
+  moduleId    String
+  module      CommunityModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  videoUrl    String                              // enlace YouTube/Vimeo
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([moduleId, order])
+}
+
+// Vídeo corto suelto (feed tipo reels).
+model CommunityShort {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  videoUrl    String                              // enlace YouTube/Vimeo
+  order       Int      @default(0)
+  published   Boolean  @default(true)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([createdAt])
+}
+
+// Post del muro de la comunidad (lo escribe el equipo; pacientes interactúan).
+model CommunityFeedPost {
+  id          String   @id @default(cuid())
+  authorId    String?
+  author      Professional? @relation("FeedPostAuthor", fields: [authorId], references: [id])
+  title       String?
+  body        String
+  imageUrl    String?
+  pinned      Boolean  @default(false)
+  published   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  comments    CommunityComment[]
+  reactions   CommunityReaction[]
+
+  @@index([pinned, createdAt])
+}
+
+// Comentario en un post. Autor = paciente o profesional (uno de los dos).
+model CommunityComment {
+  id             String   @id @default(cuid())
+  postId         String
+  post           CommunityFeedPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  patientId      String?
+  patient        Patient? @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  professionalId String?
+  professional   Professional? @relation("FeedCommentAuthor", fields: [professionalId], references: [id])
+  body           String
+  createdAt      DateTime @default(now())
+
+  @@index([postId, createdAt])
+}
+
+// Reacción ("me gusta") a un post. Única por usuario y post.
+model CommunityReaction {
+  id             String   @id @default(cuid())
+  postId         String
+  post           CommunityFeedPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  patientId      String?
+  patient        Patient? @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  professionalId String?
+  professional   Professional? @relation("FeedReactionAuthor", fields: [professionalId], references: [id])
+  type           String   @default("like")
+  createdAt      DateTime @default(now())
+
+  @@unique([postId, patientId])
+  @@unique([postId, professionalId])
 }

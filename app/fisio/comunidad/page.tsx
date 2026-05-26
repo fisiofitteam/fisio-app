@@ -1,48 +1,69 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
-import { parseCategories } from "@/lib/community";
-import { CommunityView } from "@/components/CommunityView";
+import { CommunityNav } from "@/components/CommunityNav";
+import { CommunityManager } from "@/components/CommunityManager";
 
 export const dynamic = "force-dynamic";
 
 export default async function ComunidadPage() {
   const user = await getActiveProfessional();
   if (!user) redirect("/login");
-  const canCommunity = user.role === "ceo" || user.role === "head_success" || user.role === "fisio";
-  if (!canCommunity) redirect("/fisio");
+  const canManage = user.role === "ceo" || user.role === "head_success" || user.role === "fisio";
+  if (!canManage) redirect("/fisio");
 
-  // Mes actual (UTC) para la carga inicial
-  const now = new Date();
-  const year = now.getUTCFullYear();
-  const month = now.getUTCMonth(); // 0-11
-  const monthStart = new Date(Date.UTC(year, month, 1));
-  const nextMonth = new Date(Date.UTC(year, month + 1, 1));
-
-  const [posts, ideas, team] = await Promise.all([
-    prisma.communityPost.findMany({ where: { date: { gte: monthStart, lt: nextMonth } }, orderBy: { date: "asc" } }),
-    prisma.communityIdea.findMany({ where: { used: false }, orderBy: { createdAt: "desc" } }),
-    prisma.professional.findMany({
-      where: { active: true, role: { in: ["ceo", "head_success", "fisio"] } },
-      select: { id: true, fullName: true },
-      orderBy: { fullName: "asc" },
+  const [modules, shorts, posts] = await Promise.all([
+    prisma.communityModule.findMany({
+      orderBy: { order: "asc" },
+      include: { lessons: { orderBy: { order: "asc" } } },
+    }),
+    prisma.communityShort.findMany({ orderBy: { createdAt: "desc" } }),
+    prisma.communityFeedPost.findMany({
+      orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
+      include: {
+        author: { select: { fullName: true } },
+        _count: { select: { comments: true, reactions: true } },
+      },
     }),
   ]);
 
   return (
-    <CommunityView
-      initialYear={year}
-      initialMonth={month}
-      team={team}
-      initialPosts={posts.map((p) => ({
-        id: p.id,
-        date: p.date.toISOString(),
-        category: p.category,
-        assignedToId: p.assignedToId,
-        text: p.text,
-        done: p.done,
-      }))}
-      initialIdeas={ideas.map((i) => ({ id: i.id, categories: parseCategories(i.categories), text: i.text }))}
-    />
+    <main>
+      <CommunityNav active="comunidad" />
+      <CommunityManager
+        initialModules={modules.map((m) => ({
+          id: m.id,
+          title: m.title,
+          description: m.description,
+          coverUrl: m.coverUrl,
+          published: m.published,
+          lessons: m.lessons.map((l) => ({
+            id: l.id,
+            title: l.title,
+            description: l.description,
+            videoUrl: l.videoUrl,
+          })),
+        }))}
+        initialShorts={shorts.map((s) => ({
+          id: s.id,
+          title: s.title,
+          description: s.description,
+          videoUrl: s.videoUrl,
+          published: s.published,
+        }))}
+        initialPosts={posts.map((p) => ({
+          id: p.id,
+          title: p.title,
+          body: p.body,
+          imageUrl: p.imageUrl,
+          pinned: p.pinned,
+          published: p.published,
+          authorName: p.author?.fullName ?? null,
+          createdAt: p.createdAt.toISOString(),
+          comments: p._count.comments,
+          reactions: p._count.reactions,
+        }))}
+      />
+    </main>
   );
 }
