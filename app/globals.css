@@ -143,25 +143,26 @@ h1, h2, h3, h4, h5 {
   --p-grain-rgb: 255,255,255;
   color: var(--p-text);
 }
+/* ── MODO CLARO PACIENTE · V1: limpio sin foto, dorado de marca solo en rellenos ── */
 .patient-scope.patient-light {
   --p-text: #1B2533;
   --p-text-soft: #2E3A48;
   --p-text-dim: #5B6675;
-  --p-text-faint: #8089A0;
-  --p-surface: rgba(255,255,255,0.72);
-  --p-surface-2: rgba(255,255,255,0.85);
-  --p-surface-3: rgba(255,255,255,0.95);
-  --p-border: rgba(20,30,45,0.10);
-  --p-border-strong: rgba(20,30,45,0.16);
-  --p-accent: #D97706;
-  --p-accent-ink: #0A0A0A;
-  --p-nav-bg: rgba(255,255,255,0.88);
-  --p-nav-border: rgba(20,30,45,0.10);
+  --p-text-faint: #7C879A;
+  --p-surface: #FFFFFF;
+  --p-surface-2: #F4F6F9;
+  --p-surface-3: #ECEFF3;
+  --p-border: rgba(22,32,48,0.12);
+  --p-border-strong: rgba(22,32,48,0.20);
+  --p-accent: #FACC15;
+  --p-accent-ink: #1A1400;
+  --p-nav-bg: rgba(255,255,255,0.95);
+  --p-nav-border: rgba(22,32,48,0.10);
   --p-card-bg: #FFFFFF;
   --p-card-ink: #0A0A0A;
-  --p-overlay: linear-gradient(180deg, rgba(255,255,255,0.84) 0%, rgba(255,255,255,0.92) 100%);
-  --p-halo: radial-gradient(circle at 85% -10%, rgba(245,158,11,0.20) 0, transparent 45%), radial-gradient(circle at 5% 105%, rgba(245,158,11,0.12) 0, transparent 40%);
-  --p-grain: 0.05;
+  --p-overlay: linear-gradient(180deg, #F7F8FA 0%, #EDF0F4 100%);
+  --p-halo: none;
+  --p-grain: 0.02;
   --p-grain-rgb: 30,40,55;
 }
 
