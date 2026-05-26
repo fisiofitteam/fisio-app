@@ -229,9 +229,11 @@ h1, h2, h3, h4, h5 {
 .patient-scope.patient-light .text-neutral-500 { color: var(--p-text-dim) !important; }
 .patient-scope.patient-light .text-neutral-600 { color: var(--p-text-faint) !important; }
 
-/* En claro, la 2ª línea del saludo (degradado dorado) flota con sombra marcada */
+/* En claro, la 2ª línea del saludo (degradado dorado) lleva un contorno negro
+   muy fino para recortarse del fondo (en vez de sombra). */
 .patient-scope.patient-light .brand-gradient-text {
-  filter: drop-shadow(0 2px 5px rgba(0,0,0,0.50));
+  -webkit-text-stroke: 0.5px rgba(0,0,0,0.85);
+  paint-order: stroke fill;
 }
 
 /* Estilos para impresión / exportar PDF en métricas */
