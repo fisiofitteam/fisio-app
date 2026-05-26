@@ -33,6 +33,10 @@ const TYPE_BADGE: Record<string, { label: string; bg: string; color: string }> =
   lead_new: { label: "NUEVO", bg: "#FEE2E2", color: "#991B1B" },
   lead_assigned: { label: "ASIGNADO", bg: "#DBEAFE", color: "#1E40AF" },
   call_reminder: { label: "RECORDATORIO", bg: "#FEF3C7", color: "#78350F" },
+  program_ending: { label: "PROGRAMA", bg: "#FEF3C7", color: "#78350F" },
+  patient_new_unassigned: { label: "PACIENTE", bg: "#DCFCE7", color: "#166534" },
+  sale_payment_failed: { label: "PAGO", bg: "#FEE2E2", color: "#991B1B" },
+  sale_refunded: { label: "REEMBOLSO", bg: "#FEE2E2", color: "#991B1B" },
 };
 
 export function NotificationsBell() {
@@ -99,7 +103,7 @@ export function NotificationsBell() {
 
       {open && (
         <div
-          className="absolute right-0 top-full mt-2 w-80 sm:w-96 rounded-xl shadow-lg z-50"
+          className="absolute left-0 top-full mt-2 w-80 sm:w-96 max-w-[calc(100vw-1.5rem)] rounded-xl shadow-lg z-50"
           style={{ background: "#FFFFFF", border: "1px solid #E5E5E5" }}
         >
           <div className="p-3 flex items-center justify-between" style={{ borderBottom: "1px solid #F5F5F5" }}>
@@ -147,7 +151,7 @@ export function NotificationsBell() {
                           className="text-xs font-medium px-2.5 py-1.5 rounded-md"
                           style={{ background: "#0A0A0A", color: "#FAFAFA" }}
                         >
-                          Ver lead →
+                          Ver →
                         </Link>
                       )}
                       <button
