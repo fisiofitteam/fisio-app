@@ -177,6 +177,17 @@ export function CalendarMonth({
                   <div className="text-xs text-neutral-500">
                     {a.programType} · N{a.programLevel} · {a.weeksCount} sem · {a.sessionCount} sesiones
                   </div>
+                  {(() => {
+                    const end = new Date(a.startDate);
+                    end.setDate(end.getDate() + a.weeksCount * 7);
+                    const dl = Math.ceil((end.getTime() - Date.now()) / 86400000);
+                    if (dl < 0 || dl > 7) return null;
+                    return (
+                      <div className="text-xs font-medium mt-0.5" style={{ color: "#B45309" }}>
+                        🔔 menos de una semana para terminar
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div className="text-xs text-neutral-500">
                   desde {new Date(a.startDate).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}

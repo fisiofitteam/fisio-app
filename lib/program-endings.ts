@@ -1,22 +1,19 @@
-// Detección de programas asignados (ProgramAssignment) próximos a terminar.
-// El fin es startDate + weeksCount semanas. Cuando faltan ≤7 días, se notifica
-// al fisio asignado (y se muestra en su panel). Las notificaciones se
-// deduplican por refKey = "program_ending:<assignmentId>".
+// Detección de PROGRAMAS ENTEROS asignados (ProgramAssignment con programa
+// no-standalone) próximos a terminar. El fin es startDate + weeksCount semanas.
+// Cuando faltan ≤7 días, se notifica al fisio asignado (UNA notificación por
+// paciente, aunque tenga varios programas) y se muestra en su panel.
+// Dedup por refKey = "program_ending:<patientId>".
 import { prisma } from "@/lib/prisma";
 
 const DAY = 86400000;
 const NOTIFY_TYPE = "program_ending";
 
 export type ProgramEnding = {
-  assignmentId: string;
   patientId: string;
   patientName: string;
-  programName: string;
-  weeksCount: number;
-  endDate: string;       // ISO
+  programName: string;   // el programa que antes termina
   daysLeft: number;      // 0..7
-  reviewed: boolean;
-  notificationId: string | null;
+  notificationId: string;
 };
 
 function endOf(startDate: Date, weeksCount: number): Date {
@@ -25,71 +22,68 @@ function endOf(startDate: Date, weeksCount: number): Date {
   return end;
 }
 
-// Devuelve los programas del fisio que terminan en ≤7 días, asegurando que
-// exista la notificación de campanita para cada uno. Incluye el estado de
-// "revisado" (la notificación marcada como leída).
+// Días que faltan para que termine un programa (negativo si ya terminó).
+export function daysLeftForProgram(startDate: Date, weeksCount: number): number {
+  return Math.ceil((endOf(startDate, weeksCount).getTime() - Date.now()) / DAY);
+}
+
+// Programas enteros del fisio que terminan en ≤7 días, agrupados por paciente
+// (una entrada por paciente). Asegura una notificación por paciente y devuelve
+// solo los que NO se han marcado como revisados.
 export async function getProgramEndingsForProfessional(professionalId: string): Promise<ProgramEnding[]> {
   const now = new Date();
 
   const assignments = await prisma.programAssignment.findMany({
-    where: { isActive: true, patient: { assignedProfessionalId: professionalId } },
+    where: {
+      isActive: true,
+      patient: { assignedProfessionalId: professionalId },
+      program: { isStandalone: false }, // ← solo programas enteros, no sesiones sueltas
+    },
     include: {
       patient: { select: { id: true, fullName: true } },
       program: { select: { name: true } },
     },
   });
 
-  const ending = assignments
-    .map((a) => {
-      const end = endOf(a.startDate, a.weeksCount);
-      const daysLeft = Math.ceil((end.getTime() - now.getTime()) / DAY);
-      return { a, end, daysLeft };
-    })
-    .filter((x) => x.daysLeft >= 0 && x.daysLeft <= 7);
+  // Agrupar por paciente quedándonos con el programa que antes termina.
+  const byPatient = new Map<string, { patientId: string; patientName: string; programName: string; daysLeft: number }>();
+  for (const a of assignments) {
+    const daysLeft = Math.ceil((endOf(a.startDate, a.weeksCount).getTime() - now.getTime()) / DAY);
+    if (daysLeft < 0 || daysLeft > 7) continue;
+    const cur = byPatient.get(a.patientId);
+    if (!cur || daysLeft < cur.daysLeft) {
+      byPatient.set(a.patientId, {
+        patientId: a.patient.id,
+        patientName: a.patient.fullName,
+        programName: a.program.name,
+        daysLeft,
+      });
+    }
+  }
 
-  // Asegurar notificación por cada programa próximo a terminar (idempotente).
-  for (const { a, end, daysLeft } of ending) {
-    const refKey = `${NOTIFY_TYPE}:${a.id}`;
-    const exists = await prisma.teamNotification.findFirst({ where: { refKey }, select: { id: true } });
-    if (!exists) {
-      await prisma.teamNotification.create({
+  const result: ProgramEnding[] = [];
+  for (const p of byPatient.values()) {
+    const refKey = `${NOTIFY_TYPE}:${p.patientId}`;
+    let notif = await prisma.teamNotification.findFirst({ where: { refKey } });
+    if (!notif) {
+      notif = await prisma.teamNotification.create({
         data: {
           targetProfessionalId: professionalId,
           type: NOTIFY_TYPE,
           refKey,
           title: "Programa a punto de terminar",
-          body: `El programa "${a.program.name}" de ${a.patient.fullName} termina ${
-            daysLeft === 0 ? "hoy" : `en ${daysLeft} día${daysLeft === 1 ? "" : "s"}`
+          body: `${p.patientName}: un programa termina ${
+            p.daysLeft === 0 ? "hoy" : `en ${p.daysLeft} día${p.daysLeft === 1 ? "" : "s"}`
           }. Prepara el siguiente bloque.`,
-          actionUrl: `/fisio/paciente/${a.patient.id}/calendario`,
+          actionUrl: `/fisio/paciente/${p.patientId}/calendario`,
         },
       });
     }
+    if (notif.readAt) continue; // revisado → no mostrar
+    result.push({ ...p, notificationId: notif.id });
   }
 
-  // Leer el estado de las notificaciones para devolver "revisado".
-  const refKeys = ending.map(({ a }) => `${NOTIFY_TYPE}:${a.id}`);
-  const notifs = refKeys.length
-    ? await prisma.teamNotification.findMany({ where: { refKey: { in: refKeys } }, select: { id: true, refKey: true, readAt: true } })
-    : [];
-  const byKey = new Map(notifs.map((n) => [n.refKey, n]));
-
-  return ending
-    .map(({ a, end, daysLeft }) => {
-      const n = byKey.get(`${NOTIFY_TYPE}:${a.id}`);
-      return {
-        assignmentId: a.id,
-        patientId: a.patient.id,
-        patientName: a.patient.fullName,
-        programName: a.program.name,
-        weeksCount: a.weeksCount,
-        endDate: end.toISOString(),
-        daysLeft,
-        reviewed: !!n?.readAt,
-        notificationId: n?.id ?? null,
-      };
-    })
-    .sort((x, y) => x.daysLeft - y.daysLeft);
+  return result.sort((a, b) => a.daysLeft - b.daysLeft);
 }
 
 // Solo asegura las notificaciones (para la campanita), sin construir la lista.
