@@ -47,6 +47,7 @@ export async function PATCH(req: NextRequest) {
   if (typeof b?.name === "string") data.name = b.name.trim();
   if ("unit" in b) data.unit = b.unit?.trim() || null;
   if (typeof b?.active === "boolean") data.active = b.active;
+  if (typeof b?.auto === "boolean") data.auto = b.auto;
   if (typeof b?.order === "number") data.order = b.order;
 
   const updated = await prisma.metricDefinition.update({ where: { id: b.id }, data });
@@ -62,7 +63,6 @@ export async function DELETE(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "id requerido" }, { status: 400 });
   const def = await prisma.metricDefinition.findUnique({ where: { id } });
   if (!def) return NextResponse.json({ error: "No existe." }, { status: 404 });
-  if (def.auto) return NextResponse.json({ error: "Las métricas automáticas no se pueden borrar; desactívalas si no las quieres." }, { status: 400 });
 
   // Ocultar las copias ya materializadas en pacientes (conserva el histórico).
   await prisma.patientMetric.updateMany({ where: { key: def.key }, data: { isVisible: false } });
