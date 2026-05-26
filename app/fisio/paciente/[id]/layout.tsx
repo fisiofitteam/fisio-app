@@ -44,6 +44,13 @@ export default async function PatientLayout({
     select: { id: true },
   });
 
+  // Progreso de Classroom (Comunidad) — dato secundario, se muestra discreto.
+  const [classroomLessons, classroomDone] = await Promise.all([
+    prisma.communityLesson.count({ where: { section: { module: { published: true } } } }),
+    prisma.communityLessonProgress.count({ where: { patientId: patient.id, lesson: { section: { module: { published: true } } } } }),
+  ]);
+  const classroomPct = classroomLessons > 0 ? Math.round((classroomDone / classroomLessons) * 100) : null;
+
   return (
     <div>
       <header className="mb-4">
@@ -59,6 +66,11 @@ export default async function PatientLayout({
             {patient.appliedLevel && (
               <p className="text-xs text-emerald-700 mt-1">
                 ✓ Perfil aplicado: <span className="font-medium">{patient.appliedLevel.profile.name}</span> · {patient.appliedLevel.name}
+              </p>
+            )}
+            {classroomPct !== null && (
+              <p className="text-xs text-neutral-400 mt-1" title="Progreso del paciente en los cursos de la Comunidad">
+                🎓 Classroom: {classroomDone}/{classroomLessons} lecciones ({classroomPct}%)
               </p>
             )}
           </div>
