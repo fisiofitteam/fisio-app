@@ -110,7 +110,7 @@ export default async function PatientsListPage({
   return (
     <PatientsList
       patients={mapped}
-      currentUser={{ id: user.id, fullName: user.fullName, isManager: user.isManager }}
+      currentUser={{ id: user.id, fullName: user.fullName, isManager: user.isManager, role: user.role }}
       tab={tab}
       counts={counts}
       professionals={professionals.map((p) => ({ id: p.id, fullName: p.fullName, role: p.role }))}

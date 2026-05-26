@@ -288,17 +288,6 @@ function EvolutionResponder({ task, completed, response, onChange }: any) {
         completed={completed}
         onChange={(v) => onChange({ ...response, stiffness: v })}
       />
-      <div>
-        <label className="text-sm font-medium block mb-1">Notas</label>
-        <textarea
-          className="input text-sm"
-          rows={2}
-          disabled={completed}
-          value={response.notes ?? ""}
-          onChange={(e) => onChange({ ...response, notes: e.target.value })}
-          placeholder="¿Cómo te has notado?"
-        />
-      </div>
     </div>
   );
 }

@@ -31,6 +31,7 @@ type CurrentUser = {
   id: string;
   fullName: string;
   isManager: boolean;
+  role: string;
 };
 
 type ProInfo = { id: string; fullName: string; role: string };
@@ -59,6 +60,8 @@ export function PatientsList({
   const router = useRouter();
   const [reassigning, setReassigning] = useState<Patient | null>(null);
   const [creating, setCreating] = useState(false);
+  // Managers y fisios pueden crear pacientes (de momento).
+  const canCreate = currentUser.isManager || currentUser.role === "fisio";
 
   function switchTab(newTab: string) {
     const url = new URL(window.location.href);
@@ -72,7 +75,7 @@ export function PatientsList({
     <main>
       <header className="mb-4 flex items-start justify-between gap-3">
         <h1 className="text-xl font-semibold">Pacientes</h1>
-        {currentUser.isManager && (
+        {canCreate && (
           <button
             onClick={() => setCreating(true)}
             className="text-sm font-medium px-3 py-2 rounded-lg whitespace-nowrap"
@@ -161,7 +164,7 @@ export function PatientsList({
         />
       )}
 
-      {creating && currentUser.isManager && (
+      {creating && canCreate && (
         <CreatePatientModal
           professionals={professionals}
           rollingPrograms={rollingPrograms}

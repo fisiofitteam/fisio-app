@@ -10,7 +10,8 @@ import { getActiveProfessional } from "@/lib/session";
 export async function POST(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  if (!(user.role === "ceo" || user.role === "head_success")) {
+  // CEO, Head of Success y fisios pueden crear pacientes (de momento).
+  if (!(user.role === "ceo" || user.role === "head_success" || user.role === "fisio")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

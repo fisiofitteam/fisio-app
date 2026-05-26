@@ -30,7 +30,6 @@ export function WodAdapter({ patientId }: { patientId: string }) {
   const [showLog, setShowLog] = useState(false);
   const [rpe, setRpe] = useState<number | null>(null);
   const [pain, setPain] = useState<number>(0);
-  const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
 
   async function adapt() {
@@ -59,7 +58,7 @@ export function WodAdapter({ patientId }: { patientId: string }) {
     await fetch("/api/wod/log", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ patientId, rawText, adaptedText, rpe, painScore: pain, notes }),
+      body: JSON.stringify({ patientId, rawText, adaptedText, rpe, painScore: pain, notes: "" }),
     });
     setSaving(false);
     setShowLog(false);
@@ -67,7 +66,6 @@ export function WodAdapter({ patientId }: { patientId: string }) {
     setAdapted(null);
     setRpe(null);
     setPain(0);
-    setNotes("");
     router.refresh();
     alert("Sesión registrada ✅");
   }
@@ -203,16 +201,6 @@ export function WodAdapter({ patientId }: { patientId: string }) {
                   value={pain}
                   onChange={(e) => setPain(Number(e.target.value))}
                   className="w-full"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-neutral-500 block mb-1">Notas (opcional)</label>
-                <textarea
-                  className="input text-sm"
-                  rows={2}
-                  placeholder="¿Cómo lo notaste?"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
                 />
               </div>
               <button onClick={logSession} disabled={saving} className="btn btn-primary w-full">
