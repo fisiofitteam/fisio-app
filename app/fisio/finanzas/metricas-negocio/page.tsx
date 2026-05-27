@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 import { getPeriodRange, type Period } from "@/lib/finance";
 import { computeBusinessMetrics, computeMonthlyBusinessMetrics } from "@/lib/business-metrics";
@@ -16,10 +17,17 @@ export default async function MetricasNegocioPage({ searchParams }: { searchPara
   const { start, end, label } = getPeriodRange(period);
   const year = Number(searchParams.year) || new Date().getFullYear();
 
-  const [m, monthly] = await Promise.all([
+  const [m, monthly, goalRows] = await Promise.all([
     computeBusinessMetrics(start, end),
     computeMonthlyBusinessMetrics(year),
+    prisma.businessQuarterlyGoal.findMany({ where: { year }, select: { quarter: true, metricKey: true, value: true } }),
   ]);
+
+  // Mapa metricKey → { [quarter]: value }
+  const goals: Record<string, Record<number, number>> = {};
+  for (const g of goalRows) {
+    (goals[g.metricKey] ??= {})[g.quarter] = g.value;
+  }
 
   return (
     <BusinessMetricsView
@@ -27,6 +35,7 @@ export default async function MetricasNegocioPage({ searchParams }: { searchPara
       periodLabel={label}
       m={JSON.parse(JSON.stringify(m))}
       monthly={JSON.parse(JSON.stringify(monthly))}
+      goals={goals}
     />
   );
 }

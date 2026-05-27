@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import type { BusinessMetrics, MonthlyMetrics, MonthlyRow } from "@/lib/business-metrics";
 
@@ -10,12 +10,13 @@ const eur = (n: number) => `${n.toLocaleString("es-ES", { maximumFractionDigits:
 const MONTH_ABBR = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
 export function BusinessMetricsView({
-  period, periodLabel, m, monthly,
+  period, periodLabel, m, monthly, goals,
 }: {
   period: Period;
   periodLabel: string;
   m: BusinessMetrics;
   monthly: MonthlyMetrics;
+  goals: Record<string, Record<number, number>>;
 }) {
   const router = useRouter();
   const [view, setView] = useState<"resumen" | "meses">("resumen");
@@ -47,7 +48,7 @@ export function BusinessMetricsView({
       {view === "resumen" ? (
         <ResumenView period={period} periodLabel={periodLabel} m={m} onPeriod={(p) => setQuery("period", p)} />
       ) : (
-        <MesesView monthly={monthly} onYear={(y) => setQuery("year", String(y))} />
+        <MesesView monthly={monthly} goals={goals} onYear={(y) => setQuery("year", String(y))} />
       )}
     </main>
   );
@@ -117,7 +118,7 @@ function prettyProgram(p: string): string {
   return p.charAt(0) + p.slice(1).toLowerCase();
 }
 
-function MesesView({ monthly, onYear }: { monthly: MonthlyMetrics; onYear: (y: number) => void }) {
+function MesesView({ monthly, goals, onYear }: { monthly: MonthlyMetrics; goals: Record<string, Record<number, number>>; onYear: (y: number) => void }) {
   const { months, annual, programTypes, year } = monthly;
 
   const ventasRows: RowDef[] = [
@@ -166,7 +167,107 @@ function MesesView({ monthly, onYear }: { monthly: MonthlyMetrics; onYear: (y: n
       <p className="text-[11px] text-neutral-400 mt-2">
         Las filas de Publicidad son editables (escribe y sal de la celda para guardar). La inversión ADS alimenta el CAC del resumen.
       </p>
+
+      <GoalsSection year={year} months={months} goals={goals} />
     </>
+  );
+}
+
+// ─── Objetivos trimestrales (REAL vs GOAL) ───
+type GoalMetric = { key: string; label: string; fmt: "money" | "int" | "pct"; higherBetter: boolean; real: (q: MonthlyRow[]) => number | null };
+
+const sumBy = (q: MonthlyRow[], f: (r: MonthlyRow) => number) => q.reduce((a, r) => a + f(r), 0);
+
+const GOAL_METRICS: GoalMetric[] = [
+  { key: "altasCount", label: "Altas nuevas", fmt: "int", higherBetter: true, real: (q) => sumBy(q, (r) => r.altasCount) },
+  { key: "income", label: "Facturación total", fmt: "money", higherBetter: true, real: (q) => sumBy(q, (r) => r.income) },
+  { key: "incomeNew", label: "Facturación · altas", fmt: "money", higherBetter: true, real: (q) => sumBy(q, (r) => r.incomeNew) },
+  { key: "incomeRenewal", label: "Facturación · renovaciones", fmt: "money", higherBetter: true, real: (q) => sumBy(q, (r) => r.incomeRenewal) },
+  { key: "expense", label: "Gastos", fmt: "money", higherBetter: false, real: (q) => sumBy(q, (r) => r.expense) },
+  { key: "profit", label: "Beneficio", fmt: "money", higherBetter: true, real: (q) => sumBy(q, (r) => r.profit) },
+  { key: "profitPct", label: "% beneficio", fmt: "pct", higherBetter: true, real: (q) => { const i = sumBy(q, (r) => r.income); return i > 0 ? Math.round((sumBy(q, (r) => r.profit) / i) * 100) : null; } },
+  { key: "renewalRate", label: "% renovación", fmt: "pct", higherBetter: true, real: (q) => { const d = sumBy(q, (r) => r.renewedCount + r.lostCount); return d > 0 ? Math.round((sumBy(q, (r) => r.renewedCount) / d) * 100) : null; } },
+  { key: "lostCount", label: "Bajas", fmt: "int", higherBetter: false, real: (q) => sumBy(q, (r) => r.lostCount) },
+  { key: "newFollowers", label: "Nuevos seguidores", fmt: "int", higherBetter: true, real: (q) => sumBy(q, (r) => r.newFollowers ?? 0) },
+];
+
+const QUARTERS = [1, 2, 3, 4];
+const QMONTHS: Record<number, number[]> = { 1: [0, 1, 2], 2: [3, 4, 5], 3: [6, 7, 8], 4: [9, 10, 11] };
+
+function GoalsSection({ year, months, goals }: { year: number; months: MonthlyRow[]; goals: Record<string, Record<number, number>> }) {
+  const [g, setG] = useState(goals);
+
+  async function saveGoal(metricKey: string, quarter: number, raw: string) {
+    setG((prev) => {
+      const next = { ...prev, [metricKey]: { ...(prev[metricKey] ?? {}) } };
+      if (raw === "") delete next[metricKey][quarter];
+      else next[metricKey][quarter] = Number(raw);
+      return next;
+    });
+    await fetch("/api/business-metrics/goals", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ year, quarter, metricKey, value: raw === "" ? null : Number(raw) }),
+    }).catch(() => {});
+  }
+
+  return (
+    <section className="mt-6">
+      <h2 className="text-xs uppercase tracking-wide text-neutral-500 font-medium mb-2">Objetivos por trimestre (REAL vs GOAL)</h2>
+      <div className="card p-0 overflow-x-auto">
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr className="border-b border-neutral-200 bg-neutral-50">
+              <th className="text-left py-2 px-3 font-medium text-xs text-neutral-500 sticky left-0 bg-neutral-50 z-10 min-w-[170px]">Métrica</th>
+              {QUARTERS.map((q) => (
+                <th key={q} className="text-center py-2 px-3 font-medium text-xs text-neutral-500" colSpan={2}>T{q}</th>
+              ))}
+            </tr>
+            <tr className="border-b border-neutral-200 bg-neutral-50 text-[10px] text-neutral-400 uppercase">
+              <th className="sticky left-0 bg-neutral-50 z-10"></th>
+              {QUARTERS.map((q) => (
+                <Fragment key={q}>
+                  <th className="text-right py-1 px-2 font-medium">Real</th>
+                  <th className="text-right py-1 px-2 font-medium border-r border-neutral-200">Goal</th>
+                </Fragment>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {GOAL_METRICS.map((gm) => (
+              <tr key={gm.key} className="border-b border-neutral-100">
+                <td className="py-2 px-3 text-neutral-700 sticky left-0 bg-white z-10 whitespace-nowrap">{gm.label}</td>
+                {QUARTERS.map((q) => {
+                  const qMonths = QMONTHS[q].map((i) => months[i]);
+                  const real = gm.real(qMonths);
+                  const goal = g[gm.key]?.[q] ?? null;
+                  const meets = real != null && goal != null ? (gm.higherBetter ? real >= goal : real <= goal) : null;
+                  const realColor = meets === null ? "text-neutral-700" : meets ? "text-emerald-700" : "text-red-700";
+                  return (
+                    <Fragment key={q}>
+                      <td className={`py-2 px-2 text-right tabular-nums font-medium ${realColor} whitespace-nowrap`}>
+                        {fmtVal(real, gm.fmt)}
+                      </td>
+                      <td className="py-1 px-1 text-right border-r border-neutral-200">
+                        <input
+                          type="number"
+                          defaultValue={goal ?? ""}
+                          onBlur={(e) => { if (e.target.value !== String(goal ?? "")) saveGoal(gm.key, q, e.target.value); }}
+                          className="w-16 text-right tabular-nums bg-transparent border border-transparent hover:border-neutral-200 focus:border-neutral-400 rounded px-1 py-0.5 outline-none text-xs text-neutral-500"
+                        />
+                      </td>
+                    </Fragment>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[11px] text-neutral-400 mt-2">
+        Escribe el objetivo de cada trimestre y se compara con el REAL (verde = cumplido, rojo = no). En Gastos y Bajas, cumplir es quedar por debajo.
+      </p>
+    </section>
   );
 }
 
