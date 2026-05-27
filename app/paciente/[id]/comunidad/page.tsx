@@ -39,6 +39,7 @@ export default async function PatientCommunityPage({ params }: { params: { id: s
         title: p.title,
         body: p.body,
         imageUrl: p.imageUrl,
+        videoUrl: p.videoUrl,
         category: p.category,
         pinned: p.pinned,
         authorName: p.author?.fullName ?? p.patientAuthor?.fullName ?? "Equipo",

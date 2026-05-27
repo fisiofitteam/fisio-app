@@ -45,6 +45,7 @@ export async function POST(req: NextRequest) {
       title: b?.title?.trim() || null,
       body,
       imageUrl: b?.imageUrl?.trim() || null,
+      videoUrl: b?.videoUrl?.trim() || null,
       pinned: actor.kind === "professional" && b?.pinned === true,
     },
     include: FEED_INCLUDE,

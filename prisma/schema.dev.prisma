@@ -1658,6 +1658,7 @@ model CommunityFeedPost {
   title           String?
   body            String
   imageUrl        String?
+  videoUrl        String?
   pinned          Boolean  @default(false)
   published       Boolean  @default(true)
   createdAt       DateTime @default(now())

@@ -4,10 +4,11 @@ import { useState } from "react";
 import Link from "next/link";
 import { PatientNav } from "@/components/PatientNav";
 import { CourseCover } from "@/components/CourseCover";
-import { Heart, MessageCircle, Send, ChevronRight, BadgeCheck } from "lucide-react";
+import { Heart, MessageCircle, Send, ChevronRight, BadgeCheck, ImagePlus, X } from "lucide-react";
+import { upload } from "@vercel/blob/client";
 
 type Post = {
-  id: string; title: string | null; body: string; imageUrl: string | null;
+  id: string; title: string | null; body: string; imageUrl: string | null; videoUrl: string | null;
   category: string; pinned: boolean; authorName: string; isPatient: boolean;
   createdAt: string; comments: number; reactions: number; likedByMe: boolean;
 };
@@ -58,7 +59,7 @@ export function PatientCommunity({
               className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors"
               style={tab === t ? { background: "var(--p-accent)", color: "var(--p-accent-ink)" } : { color: "var(--p-text-dim)" }}
             >
-              {t === "community" ? "Community" : "Classroom"}
+              {t === "community" ? "Comunidad" : "Clases"}
             </button>
           ))}
         </div>
@@ -133,17 +134,43 @@ function AuthorName({ name, isPatient, size = "sm" }: { name: string; isPatient:
 function Composer({ onCancel, onPublished }: { onCancel: () => void; onPublished: (p: Post) => void }) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [media, setMedia] = useState<{ url: string; kind: "image" | "video" } | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  async function handleFile(file: File) {
+    setErr(null);
+    const kind: "image" | "video" = file.type.startsWith("video/") ? "video" : "image";
+    if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
+      setErr("Solo se permiten fotos o vídeos."); return;
+    }
+    if (file.size > 80 * 1024 * 1024) { setErr("El archivo supera el máximo de 80 MB."); return; }
+    setUploading(true);
+    try {
+      const blob = await upload(file.name, file, { access: "public", handleUploadUrl: "/api/community/upload" });
+      setMedia({ url: blob.url, kind });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "No se pudo subir el archivo");
+    }
+    setUploading(false);
+  }
 
   async function publish() {
     if (!body.trim()) return;
     setSaving(true);
     setErr(null);
     try {
-      const created = await api("/api/community/feed", "POST", { title: title.trim() || null, body: body.trim(), category: "general" });
+      const created = await api("/api/community/feed", "POST", {
+        title: title.trim() || null,
+        body: body.trim(),
+        category: "general",
+        imageUrl: media?.kind === "image" ? media.url : null,
+        videoUrl: media?.kind === "video" ? media.url : null,
+      });
       onPublished({
-        id: created.id, title: created.title, body: created.body, imageUrl: created.imageUrl,
+        id: created.id, title: created.title, body: created.body,
+        imageUrl: created.imageUrl, videoUrl: created.videoUrl,
         category: created.category, pinned: created.pinned,
         authorName: created.patientAuthor?.fullName ?? "Yo", isPatient: true,
         createdAt: created.createdAt, comments: 0, reactions: 0, likedByMe: false,
@@ -172,13 +199,44 @@ function Composer({ onCancel, onPublished }: { onCancel: () => void; onPublished
         style={{ color: "var(--p-text)" }}
         autoFocus
       />
+
+      {/* previsualización del adjunto */}
+      {media && (
+        <div className="relative mt-2 inline-block">
+          {media.kind === "image" ? (
+            <img src={media.url} alt="" className="rounded-lg max-h-40 object-cover" style={{ border: "1px solid var(--p-border)" }} />
+          ) : (
+            <video src={media.url} className="rounded-lg max-h-40" style={{ border: "1px solid var(--p-border)" }} controls />
+          )}
+          <button
+            onClick={() => setMedia(null)}
+            className="absolute -top-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center"
+            style={{ background: "var(--p-surface-2)", color: "var(--p-text)", border: "1px solid var(--p-border)" }}
+          >
+            <X size={13} />
+          </button>
+        </div>
+      )}
+
       {err && <p className="text-xs mt-1" style={{ color: "#FCA5A5" }}>{err}</p>}
+
       <div className="flex items-center gap-2 mt-3">
+        <label className="flex items-center gap-1.5 text-xs cursor-pointer px-2 py-1.5 rounded-lg" style={{ color: "var(--p-text-dim)", background: "var(--p-surface-2)" }}>
+          <ImagePlus size={15} />
+          {uploading ? "Subiendo…" : "Foto / vídeo"}
+          <input
+            type="file"
+            accept="image/*,video/*"
+            className="hidden"
+            disabled={uploading}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ""; }}
+          />
+        </label>
         <div className="flex-1" />
         <button onClick={onCancel} className="text-xs px-3 py-1.5" style={{ color: "var(--p-text-dim)" }}>Cancelar</button>
         <button
           onClick={publish}
-          disabled={saving || !body.trim()}
+          disabled={saving || uploading || !body.trim()}
           className="text-xs font-semibold px-4 py-1.5 rounded-lg disabled:opacity-50"
           style={{ background: "var(--p-accent)", color: "var(--p-accent-ink)" }}
         >
@@ -252,6 +310,10 @@ function PostItem({ post, onChange }: { post: Post; onChange: (p: Post) => void 
           </a>
         )}
       </div>
+
+      {post.videoUrl && (
+        <video src={post.videoUrl} controls className="rounded-xl mt-3 w-full" style={{ maxHeight: 360, border: "1px solid var(--p-border)" }} />
+      )}
 
       <div className="flex items-center gap-4 mt-3 pt-3" style={{ borderTop: "1px solid var(--p-surface-2)" }}>
         <button onClick={toggleLike} className="flex items-center gap-1.5 text-sm" style={{ color: post.likedByMe ? "var(--p-accent)" : "var(--p-text-dim)" }}>
