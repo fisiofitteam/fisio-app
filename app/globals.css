@@ -134,6 +134,16 @@ h1, h2, h3, h4, h5 {
    forzamos a claro para que se vea. */
 .fisio-shell.dark .app-logo-text { color: #FAFAFA !important; }
 
+/* ── Tabla de métricas del cuadro de mandos ──────────────────────────────────
+   Zebra marrón clarito en filas pares (clase .zebra) y separadores SOLO
+   verticales entre columnas. El color zebra es sólido para que también cubra las
+   columnas sticky (que necesitan fondo opaco). */
+.metrics-grid { --zebra: #FCF7EF; --grid-line: #ECE7DD; }
+.fisio-shell.dark .metrics-grid { --zebra: #262A30; --grid-line: #2E3B4E; }
+.metrics-grid td, .metrics-grid th { border-right: 1px solid var(--grid-line); }
+.metrics-grid tr > :last-child { border-right: 0; }
+.metrics-grid tbody tr.zebra td { background-color: var(--zebra) !important; }
+
 /* Gradiente amarillo de marca reutilizable */
 .brand-gradient {
   background: linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%);

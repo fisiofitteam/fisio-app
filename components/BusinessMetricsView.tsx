@@ -150,7 +150,7 @@ function MesesView({ monthly, goals, onYear }: { monthly: MonthlyMetrics; goals:
       </div>
 
       <section className="card p-0 overflow-x-auto">
-        <table className="w-full text-sm border-collapse">
+        <table className="metrics-grid w-full text-sm border-collapse">
           <thead>
             <tr className="border-b border-neutral-200 bg-neutral-50">
               <th className="text-left py-2 px-3 font-medium text-xs text-neutral-500 sticky left-0 bg-neutral-50 z-10 min-w-[170px]">Métrica</th>
@@ -315,8 +315,8 @@ function BlockRows({ title, rows, months, annual }: { title: string; rows: RowDe
   return (
     <>
       <BlockHeader title={title} />
-      {rows.map((row) => (
-        <tr key={row.label} className="border-b border-neutral-100">
+      {rows.map((row, i) => (
+        <tr key={row.label} className={i % 2 === 1 ? "zebra" : undefined}>
           <td className="py-2 px-3 text-neutral-700 sticky left-0 bg-white z-10 whitespace-nowrap">{row.label}</td>
           {months.map((mo) => (
             <td key={mo.month} className="py-2 px-2 text-right tabular-nums text-neutral-700 whitespace-nowrap">
@@ -367,8 +367,8 @@ function PublicidadRows({ year, months }: { year: number; months: MonthlyRow[] }
   return (
     <>
       <BlockHeader title="Publicidad (Atraer)" />
-      {FIELDS.map((f) => (
-        <tr key={f.key} className="border-b border-neutral-100">
+      {FIELDS.map((f, i) => (
+        <tr key={f.key} className={i % 2 === 1 ? "zebra" : undefined}>
           <td className="py-1.5 px-3 text-neutral-700 sticky left-0 bg-white z-10 whitespace-nowrap">{f.label}</td>
           {months.map((mo) => (
             <td key={mo.month} className="py-1 px-1 text-right">
@@ -387,7 +387,7 @@ function PublicidadRows({ year, months }: { year: number; months: MonthlyRow[] }
         </tr>
       ))}
       {/* Coste por seguidor (auto) */}
-      <tr className="border-b border-neutral-100">
+      <tr>
         <td className="py-2 px-3 text-neutral-500 sticky left-0 bg-white z-10 whitespace-nowrap italic">Coste por seguidor</td>
         {months.map((mo) => {
           const v = vals[mo.month];
@@ -423,7 +423,7 @@ function EditableSingleRow({ year, months, field, label, money = false }: { year
   const total = vals.reduce((a, v) => a + (v ?? 0), 0);
 
   return (
-    <tr className="border-b border-neutral-100">
+    <tr>
       <td className="py-1.5 px-3 text-neutral-700 sticky left-0 bg-white z-10 whitespace-nowrap">{label}</td>
       {months.map((mo) => (
         <td key={mo.month} className="py-1 px-1 text-right">
