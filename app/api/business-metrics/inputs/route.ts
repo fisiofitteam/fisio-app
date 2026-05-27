@@ -19,6 +19,7 @@ export async function PUT(req: NextRequest) {
   if ("newFollowers" in b) data.newFollowers = num(b.newFollowers);
   if ("adsSpend" in b) data.adsSpend = num(b.adsSpend);
   if ("totalFollowers" in b) data.totalFollowers = num(b.totalFollowers);
+  if ("refunds" in b) data.refunds = num(b.refunds);
 
   const saved = await prisma.businessMonthlyInput.upsert({
     where: { year_month: { year, month } },

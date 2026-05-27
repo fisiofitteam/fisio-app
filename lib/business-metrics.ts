@@ -36,8 +36,10 @@ export type MonthlyRow = {
   month: number;            // 0-11
   altasCount: number;
   altasByProgram: Record<string, number>;
+  altasRevenueByProgram: Record<string, number>;
   renewedCount: number;
   lostCount: number;
+  refunds: number | null;
   income: number;
   incomeNew: number;
   incomeRenewal: number;
@@ -74,13 +76,13 @@ export async function computeMonthlyBusinessMetrics(year: number): Promise<Month
     }),
     prisma.transaction.findMany({
       where: { type: "income_new", occurredAt: { gte: yearStart, lte: yearEnd } },
-      select: { occurredAt: true, patient: { select: { programType: true } } },
+      select: { occurredAt: true, amount: true, patient: { select: { programType: true } } },
     }),
     prisma.businessMonthlyInput.findMany({ where: { year } }),
   ]);
 
   const months: MonthlyRow[] = Array.from({ length: 12 }, (_, m) => ({
-    month: m, altasCount: 0, altasByProgram: {}, renewedCount: 0, lostCount: 0,
+    month: m, altasCount: 0, altasByProgram: {}, altasRevenueByProgram: {}, renewedCount: 0, lostCount: 0, refunds: null,
     income: 0, incomeNew: 0, incomeRenewal: 0, expense: 0, profit: 0, profitPct: null, renewalRate: null,
     newFollowers: null, adsSpend: null, totalFollowers: null, costPerFollower: null,
   }));
@@ -100,6 +102,7 @@ export async function computeMonthlyBusinessMetrics(year: number): Promise<Month
     programSet.add(prog);
     const m = months[new Date(t.occurredAt).getUTCMonth()];
     m.altasByProgram[prog] = (m.altasByProgram[prog] ?? 0) + 1;
+    m.altasRevenueByProgram[prog] = (m.altasRevenueByProgram[prog] ?? 0) + t.amount;
   }
   const programTypes = [...programSet].sort();
 
@@ -120,6 +123,7 @@ export async function computeMonthlyBusinessMetrics(year: number): Promise<Month
     m.newFollowers = i.newFollowers;
     m.adsSpend = i.adsSpend;
     m.totalFollowers = i.totalFollowers;
+    m.refunds = i.refunds;
     m.costPerFollower = i.adsSpend != null && i.newFollowers ? Math.round((i.adsSpend / i.newFollowers) * 100) / 100 : null;
   }
 
@@ -132,7 +136,7 @@ export async function computeMonthlyBusinessMetrics(year: number): Promise<Month
 
   // Anual
   const annual: Omit<MonthlyRow, "month"> = {
-    altasCount: 0, altasByProgram: {}, renewedCount: 0, lostCount: 0,
+    altasCount: 0, altasByProgram: {}, altasRevenueByProgram: {}, renewedCount: 0, lostCount: 0, refunds: 0,
     income: 0, incomeNew: 0, incomeRenewal: 0, expense: 0, profit: 0, profitPct: null, renewalRate: null,
     newFollowers: 0, adsSpend: 0, totalFollowers: null, costPerFollower: null,
   };
@@ -149,6 +153,10 @@ export async function computeMonthlyBusinessMetrics(year: number): Promise<Month
     if (m.newFollowers != null) annual.newFollowers = (annual.newFollowers ?? 0) + m.newFollowers;
     if (m.adsSpend != null) annual.adsSpend = (annual.adsSpend ?? 0) + m.adsSpend;
     if (m.totalFollowers != null) lastTotalFollowers = m.totalFollowers;
+    if (m.refunds != null) annual.refunds = (annual.refunds ?? 0) + m.refunds;
+    for (const [prog, rev] of Object.entries(m.altasRevenueByProgram)) {
+      annual.altasRevenueByProgram[prog] = (annual.altasRevenueByProgram[prog] ?? 0) + rev;
+    }
     for (const [prog, n] of Object.entries(m.altasByProgram)) {
       annual.altasByProgram[prog] = (annual.altasByProgram[prog] ?? 0) + n;
     }

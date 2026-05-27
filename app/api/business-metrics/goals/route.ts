@@ -12,7 +12,7 @@ export async function PUT(req: NextRequest) {
   const year = Number(b?.year);
   const quarter = Number(b?.quarter);
   const metricKey = typeof b?.metricKey === "string" ? b.metricKey : "";
-  if (!Number.isInteger(year) || ![1, 2, 3, 4].includes(quarter) || !metricKey) {
+  if (!Number.isInteger(year) || ![0, 1, 2, 3, 4].includes(quarter) || !metricKey) {
     return NextResponse.json({ error: "Datos no válidos" }, { status: 400 });
   }
 
