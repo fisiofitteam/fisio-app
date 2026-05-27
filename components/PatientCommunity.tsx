@@ -4,8 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { PatientNav } from "@/components/PatientNav";
 import { CourseCover } from "@/components/CourseCover";
-import { FEED_CATEGORIES, feedCategoryMeta } from "@/lib/community-feed";
-import { Heart, MessageCircle, Send, ChevronRight } from "lucide-react";
+import { Heart, MessageCircle, Send, ChevronRight, BadgeCheck } from "lucide-react";
 
 type Post = {
   id: string; title: string | null; body: string; imageUrl: string | null;
@@ -85,9 +84,7 @@ function CommunityFeed({
   setPosts: React.Dispatch<React.SetStateAction<Post[]>>;
   myName: string;
 }) {
-  const [filter, setFilter] = useState("all");
   const [composing, setComposing] = useState(false);
-  const shown = filter === "all" ? posts : posts.filter((p) => p.category === filter);
 
   return (
     <div className="space-y-3">
@@ -110,18 +107,10 @@ function CommunityFeed({
         </button>
       )}
 
-      {/* filtros */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
-        <FilterPill active={filter === "all"} onClick={() => setFilter("all")} label="Todo" />
-        {FEED_CATEGORIES.map((c) => (
-          <FilterPill key={c.value} active={filter === c.value} onClick={() => setFilter(c.value)} label={`${c.emoji} ${c.label}`} />
-        ))}
-      </div>
-
-      {shown.length === 0 ? (
+      {posts.length === 0 ? (
         <p className="text-sm text-center py-8" style={{ color: "var(--p-text-faint)" }}>No hay publicaciones todavía.</p>
       ) : (
-        shown.map((p) => (
+        posts.map((p) => (
           <PostItem key={p.id} post={p} onChange={(u) => setPosts((a) => a.map((x) => (x.id === p.id ? u : x)))} />
         ))
       )}
@@ -129,22 +118,21 @@ function CommunityFeed({
   );
 }
 
-function FilterPill({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+// Nombre del autor con insignia de verificación si es un profesional del equipo.
+function AuthorName({ name, isPatient, size = "sm" }: { name: string; isPatient: boolean; size?: "sm" | "xs" }) {
   return (
-    <button
-      onClick={onClick}
-      className="px-3 py-1 rounded-full text-xs whitespace-nowrap transition-colors"
-      style={active ? { background: "var(--p-accent)", color: "var(--p-accent-ink)", fontWeight: 600 } : { background: "var(--p-surface-2)", color: "var(--p-text-dim)" }}
-    >
-      {label}
-    </button>
+    <span className={`inline-flex items-center gap-1 min-w-0 font-medium ${size === "sm" ? "text-sm" : "text-xs"}`}>
+      <span className="truncate">{name}</span>
+      {!isPatient && (
+        <BadgeCheck size={size === "sm" ? 15 : 13} className="flex-shrink-0" style={{ color: "var(--p-accent)" }} fill="var(--p-accent)" stroke="var(--p-accent-ink)" />
+      )}
+    </span>
   );
 }
 
 function Composer({ onCancel, onPublished }: { onCancel: () => void; onPublished: (p: Post) => void }) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
-  const [category, setCategory] = useState("general");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -153,7 +141,7 @@ function Composer({ onCancel, onPublished }: { onCancel: () => void; onPublished
     setSaving(true);
     setErr(null);
     try {
-      const created = await api("/api/community/feed", "POST", { title: title.trim() || null, body: body.trim(), category });
+      const created = await api("/api/community/feed", "POST", { title: title.trim() || null, body: body.trim(), category: "general" });
       onPublished({
         id: created.id, title: created.title, body: created.body, imageUrl: created.imageUrl,
         category: created.category, pinned: created.pinned,
@@ -186,14 +174,6 @@ function Composer({ onCancel, onPublished }: { onCancel: () => void; onPublished
       />
       {err && <p className="text-xs mt-1" style={{ color: "#FCA5A5" }}>{err}</p>}
       <div className="flex items-center gap-2 mt-3">
-        <select
-          className="text-xs rounded-lg px-2 py-1.5 outline-none"
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          style={{ background: "var(--p-border)", color: "var(--p-text)", border: "1px solid var(--p-border-strong)" }}
-        >
-          {FEED_CATEGORIES.map((c) => <option key={c.value} value={c.value} style={{ background: "#1a1a1a" }}>{c.emoji} {c.label}</option>)}
-        </select>
         <div className="flex-1" />
         <button onClick={onCancel} className="text-xs px-3 py-1.5" style={{ color: "var(--p-text-dim)" }}>Cancelar</button>
         <button
@@ -214,7 +194,6 @@ function PostItem({ post, onChange }: { post: Post; onChange: (p: Post) => void 
   const [comments, setComments] = useState<Comment[] | null>(null);
   const [loadingComments, setLoadingComments] = useState(false);
   const [newComment, setNewComment] = useState("");
-  const cat = feedCategoryMeta(post.category);
   const date = new Date(post.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "short" });
 
   async function toggleLike() {
@@ -257,14 +236,22 @@ function PostItem({ post, onChange }: { post: Post; onChange: (p: Post) => void 
           {post.authorName.charAt(0).toUpperCase()}
         </span>
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium truncate">{post.authorName}</div>
-          <div className="text-[11px]" style={{ color: "var(--p-text-faint)" }}>{cat.emoji} {cat.label} · {date}</div>
+          <AuthorName name={post.authorName} isPatient={post.isPatient} />
+          <div className="text-[11px]" style={{ color: "var(--p-text-faint)" }}>{date}</div>
         </div>
       </div>
 
-      {post.title && <h3 className="font-semibold text-base mb-1" style={{ letterSpacing: "-0.015em" }}>{post.title}</h3>}
-      <p className="text-sm whitespace-pre-line" style={{ color: "var(--p-text-soft)" }}>{post.body}</p>
-      {post.imageUrl && <img src={post.imageUrl} alt="" className="rounded-xl mt-3 w-full object-cover max-h-72" />}
+      <div className="flex gap-3">
+        <div className="flex-1 min-w-0">
+          {post.title && <h3 className="font-semibold text-base mb-1" style={{ letterSpacing: "-0.015em" }}>{post.title}</h3>}
+          <p className="text-sm whitespace-pre-line break-words" style={{ color: "var(--p-text-soft)" }}>{post.body}</p>
+        </div>
+        {post.imageUrl && (
+          <a href={post.imageUrl} target="_blank" rel="noreferrer" className="flex-shrink-0">
+            <img src={post.imageUrl} alt="" className="rounded-lg object-cover" style={{ width: 76, height: 76, border: "1px solid var(--p-border)" }} />
+          </a>
+        )}
+      </div>
 
       <div className="flex items-center gap-4 mt-3 pt-3" style={{ borderTop: "1px solid var(--p-surface-2)" }}>
         <button onClick={toggleLike} className="flex items-center gap-1.5 text-sm" style={{ color: post.likedByMe ? "var(--p-accent)" : "var(--p-text-dim)" }}>
@@ -283,8 +270,8 @@ function PostItem({ post, onChange }: { post: Post; onChange: (p: Post) => void 
               <span className="w-6 h-6 rounded-full flex items-center justify-center font-bold flex-shrink-0 mt-0.5" style={{ background: c.isPatient ? "var(--p-border-strong)" : "linear-gradient(135deg, var(--p-accent) 0%, #F59E0B 100%)", color: c.isPatient ? "var(--p-text)" : "var(--p-accent-ink)", fontSize: 10 }}>
                 {c.authorName.charAt(0).toUpperCase()}
               </span>
-              <div className="flex-1">
-                <span className="text-xs font-medium">{c.authorName}</span>
+              <div className="flex-1 min-w-0">
+                <AuthorName name={c.authorName} isPatient={c.isPatient} size="xs" />
                 <p className="text-sm" style={{ color: "var(--p-text-soft)" }}>{c.body}</p>
               </div>
             </div>
