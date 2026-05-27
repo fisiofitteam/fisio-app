@@ -102,33 +102,8 @@ function ResumenView({ period, periodLabel, m, onPeriod }: { period: Period; per
 
 /* ─────────────────────────── POR MESES ─────────────────────────── */
 
-type RowDef = { label: string; get: (r: MonthlyRow | Omit<MonthlyRow, "month">) => number | null; fmt: "money" | "int" | "pct" };
-
-const BLOCKS: { title: string; rows: RowDef[] }[] = [
-  {
-    title: "Ventas (Convertir)",
-    rows: [
-      { label: "Altas nuevas", get: (r) => r.altasCount, fmt: "int" },
-      { label: "Renovaciones", get: (r) => r.renewedCount, fmt: "int" },
-      { label: "Bajas", get: (r) => r.lostCount, fmt: "int" },
-    ],
-  },
-  {
-    title: "Finanzas (Recoger)",
-    rows: [
-      { label: "Facturación total", get: (r) => r.income, fmt: "money" },
-      { label: "— de altas nuevas", get: (r) => r.incomeNew, fmt: "money" },
-      { label: "— de renovaciones", get: (r) => r.incomeRenewal, fmt: "money" },
-      { label: "Gastos totales", get: (r) => r.expense, fmt: "money" },
-      { label: "Beneficio", get: (r) => r.profit, fmt: "money" },
-      { label: "% beneficio", get: (r) => r.profitPct, fmt: "pct" },
-    ],
-  },
-  {
-    title: "Servicio (Entregar)",
-    rows: [{ label: "% renovación", get: (r) => r.renewalRate, fmt: "pct" }],
-  },
-];
+type Row = MonthlyRow | Omit<MonthlyRow, "month">;
+type RowDef = { label: string; get: (r: Row) => number | null; fmt: "money" | "int" | "pct" };
 
 function fmtVal(v: number | null, fmt: "money" | "int" | "pct"): string {
   if (v === null) return "—";
@@ -137,20 +112,43 @@ function fmtVal(v: number | null, fmt: "money" | "int" | "pct"): string {
   return String(v);
 }
 
+function prettyProgram(p: string): string {
+  if (p === "Sin programa") return p;
+  return p.charAt(0) + p.slice(1).toLowerCase();
+}
+
 function MesesView({ monthly, onYear }: { monthly: MonthlyMetrics; onYear: (y: number) => void }) {
+  const { months, annual, programTypes, year } = monthly;
+
+  const ventasRows: RowDef[] = [
+    ...programTypes.map((prog) => ({ label: `Altas · ${prettyProgram(prog)}`, get: (r: Row) => r.altasByProgram[prog] ?? 0, fmt: "int" as const })),
+    { label: "Altas (total)", get: (r: Row) => r.altasCount, fmt: "int" },
+    { label: "Renovaciones", get: (r: Row) => r.renewedCount, fmt: "int" },
+    { label: "Bajas", get: (r: Row) => r.lostCount, fmt: "int" },
+  ];
+  const finanzasRows: RowDef[] = [
+    { label: "Facturación total", get: (r) => r.income, fmt: "money" },
+    { label: "— de altas nuevas", get: (r) => r.incomeNew, fmt: "money" },
+    { label: "— de renovaciones", get: (r) => r.incomeRenewal, fmt: "money" },
+    { label: "Gastos totales", get: (r) => r.expense, fmt: "money" },
+    { label: "Beneficio", get: (r) => r.profit, fmt: "money" },
+    { label: "% beneficio", get: (r) => r.profitPct, fmt: "pct" },
+  ];
+  const servicioRows: RowDef[] = [{ label: "% renovación", get: (r) => r.renewalRate, fmt: "pct" }];
+
   return (
     <>
       <div className="flex items-center gap-3 mb-4">
-        <button onClick={() => onYear(monthly.year - 1)} className="text-sm px-2.5 py-1 border border-neutral-200 rounded hover:bg-neutral-50">←</button>
-        <span className="text-sm font-medium">{monthly.year}</span>
-        <button onClick={() => onYear(monthly.year + 1)} className="text-sm px-2.5 py-1 border border-neutral-200 rounded hover:bg-neutral-50">→</button>
+        <button onClick={() => onYear(year - 1)} className="text-sm px-2.5 py-1 border border-neutral-200 rounded hover:bg-neutral-50">←</button>
+        <span className="text-sm font-medium">{year}</span>
+        <button onClick={() => onYear(year + 1)} className="text-sm px-2.5 py-1 border border-neutral-200 rounded hover:bg-neutral-50">→</button>
       </div>
 
       <section className="card p-0 overflow-x-auto">
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="border-b border-neutral-200 bg-neutral-50">
-              <th className="text-left py-2 px-3 font-medium text-xs text-neutral-500 sticky left-0 bg-neutral-50 z-10 min-w-[150px]">Métrica</th>
+              <th className="text-left py-2 px-3 font-medium text-xs text-neutral-500 sticky left-0 bg-neutral-50 z-10 min-w-[170px]">Métrica</th>
               {MONTH_ABBR.map((mo) => (
                 <th key={mo} className="text-right py-2 px-2 font-medium text-xs text-neutral-500 whitespace-nowrap">{mo}</th>
               ))}
@@ -158,25 +156,35 @@ function MesesView({ monthly, onYear }: { monthly: MonthlyMetrics; onYear: (y: n
             </tr>
           </thead>
           <tbody>
-            {BLOCKS.map((block) => (
-              <BlockRows key={block.title} block={block} months={monthly.months} annual={monthly.annual} />
-            ))}
+            <PublicidadRows year={year} months={months} />
+            <BlockRows title="Ventas (Convertir)" rows={ventasRows} months={months} annual={annual} />
+            <BlockRows title="Finanzas (Recoger)" rows={finanzasRows} months={months} annual={annual} />
+            <BlockRows title="Servicio (Entregar)" rows={servicioRows} months={months} annual={annual} />
           </tbody>
         </table>
       </section>
+      <p className="text-[11px] text-neutral-400 mt-2">
+        Las filas de Publicidad son editables (escribe y sal de la celda para guardar). La inversión ADS alimenta el CAC del resumen.
+      </p>
     </>
   );
 }
 
-function BlockRows({ block, months, annual }: { block: { title: string; rows: RowDef[] }; months: MonthlyRow[]; annual: Omit<MonthlyRow, "month"> }) {
+function BlockHeader({ title }: { title: string }) {
+  return (
+    <tr>
+      <td colSpan={14} className="bg-amber-50 text-amber-900 font-semibold text-xs uppercase tracking-wide py-1.5 px-3 sticky left-0">
+        {title}
+      </td>
+    </tr>
+  );
+}
+
+function BlockRows({ title, rows, months, annual }: { title: string; rows: RowDef[]; months: MonthlyRow[]; annual: Omit<MonthlyRow, "month"> }) {
   return (
     <>
-      <tr>
-        <td colSpan={14} className="bg-amber-50 text-amber-900 font-semibold text-xs uppercase tracking-wide py-1.5 px-3 sticky left-0">
-          {block.title}
-        </td>
-      </tr>
-      {block.rows.map((row) => (
+      <BlockHeader title={title} />
+      {rows.map((row) => (
         <tr key={row.label} className="border-b border-neutral-100">
           <td className="py-2 px-3 text-neutral-700 sticky left-0 bg-white z-10 whitespace-nowrap">{row.label}</td>
           {months.map((mo) => (
@@ -189,6 +197,78 @@ function BlockRows({ block, months, annual }: { block: { title: string; rows: Ro
           </td>
         </tr>
       ))}
+    </>
+  );
+}
+
+// Bloque Publicidad con celdas editables (datos manuales).
+type ManualField = "newFollowers" | "adsSpend" | "totalFollowers";
+function PublicidadRows({ year, months }: { year: number; months: MonthlyRow[] }) {
+  const [vals, setVals] = useState(() =>
+    months.map((m) => ({ newFollowers: m.newFollowers, adsSpend: m.adsSpend, totalFollowers: m.totalFollowers }))
+  );
+
+  function setCell(month: number, field: ManualField, raw: string) {
+    setVals((arr) => arr.map((v, i) => (i === month ? { ...v, [field]: raw === "" ? null : Number(raw) } : v)));
+  }
+  async function save(month: number, field: ManualField, raw: string) {
+    await fetch("/api/business-metrics/inputs", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ year, month, [field]: raw === "" ? null : Number(raw) }),
+    }).catch(() => {});
+  }
+
+  const sum = (f: ManualField) => vals.reduce((a, v) => a + (v[f] ?? 0), 0);
+  const lastTotal = [...vals].reverse().find((v) => v.totalFollowers != null)?.totalFollowers ?? null;
+  const totalAds = sum("adsSpend");
+  const totalNew = sum("newFollowers");
+  const annualCost = totalAds && totalNew ? Math.round((totalAds / totalNew) * 100) / 100 : null;
+
+  const FIELDS: { key: ManualField; label: string }[] = [
+    { key: "newFollowers", label: "Nuevos seguidores" },
+    { key: "adsSpend", label: "Inversión ADS (€)" },
+    { key: "totalFollowers", label: "Seguidores totales" },
+  ];
+
+  return (
+    <>
+      <BlockHeader title="Publicidad (Atraer)" />
+      {FIELDS.map((f) => (
+        <tr key={f.key} className="border-b border-neutral-100">
+          <td className="py-1.5 px-3 text-neutral-700 sticky left-0 bg-white z-10 whitespace-nowrap">{f.label}</td>
+          {months.map((mo) => (
+            <td key={mo.month} className="py-1 px-1 text-right">
+              <input
+                type="number"
+                value={vals[mo.month][f.key] ?? ""}
+                onChange={(e) => setCell(mo.month, f.key, e.target.value)}
+                onBlur={(e) => save(mo.month, f.key, e.target.value)}
+                className="w-16 text-right tabular-nums bg-transparent border border-transparent hover:border-neutral-200 focus:border-neutral-400 rounded px-1 py-0.5 outline-none text-xs"
+              />
+            </td>
+          ))}
+          <td className="py-1.5 px-3 text-right tabular-nums font-semibold border-l-2 border-neutral-300 bg-neutral-50 whitespace-nowrap">
+            {f.key === "totalFollowers" ? (lastTotal ?? "—") : f.key === "adsSpend" ? eur(sum("adsSpend")) : sum("newFollowers")}
+          </td>
+        </tr>
+      ))}
+      {/* Coste por seguidor (auto) */}
+      <tr className="border-b border-neutral-100">
+        <td className="py-2 px-3 text-neutral-500 sticky left-0 bg-white z-10 whitespace-nowrap italic">Coste por seguidor</td>
+        {months.map((mo) => {
+          const v = vals[mo.month];
+          const cps = v.adsSpend != null && v.newFollowers ? Math.round((v.adsSpend / v.newFollowers) * 100) / 100 : null;
+          return (
+            <td key={mo.month} className="py-2 px-2 text-right tabular-nums text-neutral-500 text-xs whitespace-nowrap">
+              {cps != null ? `${cps.toLocaleString("es-ES")} €` : "—"}
+            </td>
+          );
+        })}
+        <td className="py-2 px-3 text-right tabular-nums font-semibold text-neutral-500 border-l-2 border-neutral-300 bg-neutral-50 whitespace-nowrap">
+          {annualCost != null ? `${annualCost.toLocaleString("es-ES")} €` : "—"}
+        </td>
+      </tr>
     </>
   );
 }

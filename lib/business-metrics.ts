@@ -35,6 +35,7 @@ export type BusinessMetrics = {
 export type MonthlyRow = {
   month: number;            // 0-11
   altasCount: number;
+  altasByProgram: Record<string, number>;
   renewedCount: number;
   lostCount: number;
   income: number;
@@ -44,10 +45,16 @@ export type MonthlyRow = {
   profit: number;
   profitPct: number | null;
   renewalRate: number | null;
+  // Datos manuales (publicidad)
+  newFollowers: number | null;
+  adsSpend: number | null;
+  totalFollowers: number | null;
+  costPerFollower: number | null;
 };
 
 export type MonthlyMetrics = {
   year: number;
+  programTypes: string[];   // tipos de programa presentes (para las filas de altas)
   months: MonthlyRow[];     // 12
   annual: Omit<MonthlyRow, "month">;
 };
@@ -56,7 +63,7 @@ export async function computeMonthlyBusinessMetrics(year: number): Promise<Month
   const yearStart = new Date(Date.UTC(year, 0, 1));
   const yearEnd = new Date(Date.UTC(year, 11, 31, 23, 59, 59));
 
-  const [txs, renewals] = await Promise.all([
+  const [txs, renewals, newAltaTxs, inputs] = await Promise.all([
     prisma.transaction.findMany({
       where: { occurredAt: { gte: yearStart, lte: yearEnd } },
       select: { type: true, amount: true, occurredAt: true },
@@ -65,21 +72,37 @@ export async function computeMonthlyBusinessMetrics(year: number): Promise<Month
       where: { decidedAt: { gte: yearStart, lte: yearEnd } },
       select: { outcome: true, amountPaid: true, decidedAt: true },
     }),
+    prisma.transaction.findMany({
+      where: { type: "income_new", occurredAt: { gte: yearStart, lte: yearEnd } },
+      select: { occurredAt: true, patient: { select: { programType: true } } },
+    }),
+    prisma.businessMonthlyInput.findMany({ where: { year } }),
   ]);
 
   const months: MonthlyRow[] = Array.from({ length: 12 }, (_, m) => ({
-    month: m, altasCount: 0, renewedCount: 0, lostCount: 0,
+    month: m, altasCount: 0, altasByProgram: {}, renewedCount: 0, lostCount: 0,
     income: 0, incomeNew: 0, incomeRenewal: 0, expense: 0, profit: 0, profitPct: null, renewalRate: null,
+    newFollowers: null, adsSpend: null, totalFollowers: null, costPerFollower: null,
   }));
 
   for (const t of txs) {
     const m = months[new Date(t.occurredAt).getUTCMonth()];
     if (t.type === "income_new") { m.incomeNew += t.amount; m.altasCount++; }
     else if (t.type === "income_renewal") { m.incomeRenewal += t.amount; }
-    else if (t.type === "income_other") { /* va a income total */ m.income += 0; }
     else if (t.type === "expense") { m.expense += t.amount; }
     if (t.type.startsWith("income")) m.income += t.amount;
   }
+
+  // Altas por programa
+  const programSet = new Set<string>();
+  for (const t of newAltaTxs) {
+    const prog = t.patient?.programType || "Sin programa";
+    programSet.add(prog);
+    const m = months[new Date(t.occurredAt).getUTCMonth()];
+    m.altasByProgram[prog] = (m.altasByProgram[prog] ?? 0) + 1;
+  }
+  const programTypes = [...programSet].sort();
+
   for (const r of renewals) {
     const m = months[new Date(r.decidedAt!).getUTCMonth()];
     if (r.outcome === "renewed") {
@@ -89,6 +112,17 @@ export async function computeMonthlyBusinessMetrics(year: number): Promise<Month
       m.lostCount++;
     }
   }
+
+  // Datos manuales
+  for (const i of inputs) {
+    const m = months[i.month];
+    if (!m) continue;
+    m.newFollowers = i.newFollowers;
+    m.adsSpend = i.adsSpend;
+    m.totalFollowers = i.totalFollowers;
+    m.costPerFollower = i.adsSpend != null && i.newFollowers ? Math.round((i.adsSpend / i.newFollowers) * 100) / 100 : null;
+  }
+
   for (const m of months) {
     m.profit = m.income - m.expense;
     m.profitPct = m.income > 0 ? Math.round((m.profit / m.income) * 100) : null;
@@ -96,39 +130,50 @@ export async function computeMonthlyBusinessMetrics(year: number): Promise<Month
     m.renewalRate = decided > 0 ? Math.round((m.renewedCount / decided) * 100) : null;
   }
 
-  const annual = months.reduce(
-    (a, m) => ({
-      altasCount: a.altasCount + m.altasCount,
-      renewedCount: a.renewedCount + m.renewedCount,
-      lostCount: a.lostCount + m.lostCount,
-      income: a.income + m.income,
-      incomeNew: a.incomeNew + m.incomeNew,
-      incomeRenewal: a.incomeRenewal + m.incomeRenewal,
-      expense: a.expense + m.expense,
-      profit: a.profit + m.profit,
-      profitPct: null as number | null,
-      renewalRate: null as number | null,
-    }),
-    { altasCount: 0, renewedCount: 0, lostCount: 0, income: 0, incomeNew: 0, incomeRenewal: 0, expense: 0, profit: 0, profitPct: null as number | null, renewalRate: null as number | null }
-  );
+  // Anual
+  const annual: Omit<MonthlyRow, "month"> = {
+    altasCount: 0, altasByProgram: {}, renewedCount: 0, lostCount: 0,
+    income: 0, incomeNew: 0, incomeRenewal: 0, expense: 0, profit: 0, profitPct: null, renewalRate: null,
+    newFollowers: 0, adsSpend: 0, totalFollowers: null, costPerFollower: null,
+  };
+  let lastTotalFollowers: number | null = null;
+  for (const m of months) {
+    annual.altasCount += m.altasCount;
+    annual.renewedCount += m.renewedCount;
+    annual.lostCount += m.lostCount;
+    annual.income += m.income;
+    annual.incomeNew += m.incomeNew;
+    annual.incomeRenewal += m.incomeRenewal;
+    annual.expense += m.expense;
+    annual.profit += m.profit;
+    if (m.newFollowers != null) annual.newFollowers = (annual.newFollowers ?? 0) + m.newFollowers;
+    if (m.adsSpend != null) annual.adsSpend = (annual.adsSpend ?? 0) + m.adsSpend;
+    if (m.totalFollowers != null) lastTotalFollowers = m.totalFollowers;
+    for (const [prog, n] of Object.entries(m.altasByProgram)) {
+      annual.altasByProgram[prog] = (annual.altasByProgram[prog] ?? 0) + n;
+    }
+  }
+  annual.totalFollowers = lastTotalFollowers; // último valor del año, no la suma
   annual.profitPct = annual.income > 0 ? Math.round((annual.profit / annual.income) * 100) : null;
   const decidedY = annual.renewedCount + annual.lostCount;
   annual.renewalRate = decidedY > 0 ? Math.round((annual.renewedCount / decidedY) * 100) : null;
+  annual.costPerFollower = annual.adsSpend && annual.newFollowers ? Math.round((annual.adsSpend / annual.newFollowers) * 100) / 100 : null;
 
-  return { year, months, annual };
+  return { year, programTypes, months, annual };
 }
 
 export async function computeBusinessMetrics(start: Date, end: Date): Promise<BusinessMetrics> {
   const summary = await calculateFinanceSummary(start, end);
 
-  // Gasto en marketing del período
-  const marketingAgg = await prisma.transaction.aggregate({
-    _sum: { amount: true },
-    where: { type: "expense", category: "marketing", occurredAt: { gte: start, lte: end } },
-  });
-  const marketingSpend = marketingAgg._sum.amount ?? 0;
+  // Inversión en ADS del período (dato manual mensual del cuadro de mandos).
+  const adsInputs = await prisma.businessMonthlyInput.findMany({ select: { year: true, month: true, adsSpend: true } });
+  let marketingSpend = 0;
+  for (const i of adsInputs) {
+    const d = new Date(Date.UTC(i.year, i.month, 1));
+    if (i.adsSpend && d >= start && d <= end) marketingSpend += i.adsSpend;
+  }
 
-  // CAC = (marketing + comisión closer sobre ventas nuevas) / altas nuevas
+  // CAC = (inversión ADS + comisión closer sobre ventas nuevas) / altas nuevas
   const closerCommission = Math.round(summary.incomeNew * CLOSER_COMMISSION_RATE);
   const cac = summary.countNew > 0 ? Math.round((marketingSpend + closerCommission) / summary.countNew) : null;
   const ticketAvg = summary.countNew > 0 ? Math.round(summary.incomeNew / summary.countNew) : null;

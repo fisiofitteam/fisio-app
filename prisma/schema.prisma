@@ -1711,3 +1711,28 @@ model CommunityLessonProgress {
   @@unique([lessonId, patientId])
   @@index([patientId])
 }
+
+// Datos manuales mensuales del cuadro de mandos (seguidores, inversión ADS).
+model BusinessMonthlyInput {
+  id             String   @id @default(cuid())
+  year           Int
+  month          Int                                   // 0-11
+  newFollowers   Int?
+  adsSpend       Float?
+  totalFollowers Int?
+  updatedAt      DateTime @updatedAt
+
+  @@unique([year, month])
+}
+
+// Objetivos trimestrales por métrica del cuadro de mandos.
+model BusinessQuarterlyGoal {
+  id        String   @id @default(cuid())
+  year      Int
+  quarter   Int                                        // 1-4
+  metricKey String
+  value     Float
+  updatedAt DateTime @updatedAt
+
+  @@unique([year, quarter, metricKey])
+}
