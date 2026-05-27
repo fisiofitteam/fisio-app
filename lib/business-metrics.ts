@@ -22,6 +22,7 @@ export type BusinessMetrics = {
 
   marketingSpend: number;
   closerCommission: number;
+  closerSalary: number;
   cac: number | null;
 
   activePatients: number;
@@ -184,9 +185,19 @@ export async function computeBusinessMetrics(start: Date, end: Date): Promise<Bu
     if (d >= start && d <= end) marketingSpend += (i.adsSpend ?? 0) + (i.adsConversion ?? 0);
   }
 
-  // CAC = (inversión ADS + comisión closer sobre ventas nuevas) / altas nuevas
+  // Sueldo fijo de los closers durante el período (nº de meses del período).
+  const monthsInPeriod =
+    (end.getUTCFullYear() * 12 + end.getUTCMonth()) - (start.getUTCFullYear() * 12 + start.getUTCMonth()) + 1;
+  const closers = await prisma.professional.findMany({
+    where: { active: true, role: "closer" },
+    select: { compensation: { select: { baseSalary: true } } },
+  });
+  const closerMonthlyBase = closers.reduce((a, c) => a + (c.compensation?.baseSalary ?? 0), 0);
+  const closerSalary = Math.round(closerMonthlyBase * Math.max(1, monthsInPeriod));
+
+  // CAC = (inversión ADS + comisión closer + sueldo closer) / altas nuevas
   const closerCommission = Math.round(summary.incomeNew * CLOSER_COMMISSION_RATE);
-  const cac = summary.countNew > 0 ? Math.round((marketingSpend + closerCommission) / summary.countNew) : null;
+  const cac = summary.countNew > 0 ? Math.round((marketingSpend + closerCommission + closerSalary) / summary.countNew) : null;
   const ticketAvg = summary.countNew > 0 ? Math.round(summary.incomeNew / summary.countNew) : null;
 
   // Renovaciones decididas en el período
@@ -246,6 +257,7 @@ export async function computeBusinessMetrics(start: Date, end: Date): Promise<Bu
     newAltas: summary.countNew,
     newSaleRevenue: summary.incomeNew,
     ticketAvg,
+    closerSalary,
     renewedCount,
     lostCount,
     renewalRate,

@@ -83,7 +83,7 @@ function ResumenView({ period, periodLabel, m, onPeriod }: { period: Period; per
       <Section title="Adquisición (período)">
         <Kpi label="Altas nuevas" value={String(m.newAltas)} sub={m.newSaleRevenue > 0 ? eur(m.newSaleRevenue) : undefined} />
         <Kpi label="Ticket medio" value={m.ticketAvg !== null ? eur(m.ticketAvg) : "—"} sub="por alta nueva" />
-        <Kpi label="CAC" value={m.cac !== null ? eur(m.cac) : "—"} sub={`Marketing ${eur(m.marketingSpend)} + comisión ${eur(m.closerCommission)}`} />
+        <Kpi label="CAC" value={m.cac !== null ? eur(m.cac) : "—"} sub={`ADS ${eur(m.marketingSpend)} + comisión ${eur(m.closerCommission)} + sueldo ${eur(m.closerSalary)}`} />
       </Section>
 
       <Section title="Cliente y retención">

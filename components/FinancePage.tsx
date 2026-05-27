@@ -237,14 +237,14 @@ export function FinancePage({
                 <h3 className="font-semibold text-sm text-emerald-700">Ingresos</h3>
                 <span className="text-xs text-neutral-500">{incomeTx.length} · <span className="font-medium text-emerald-700">{eur(summary.income)}</span></span>
               </div>
-              <TxTable rows={incomeTx} onEdit={setEditing} emptyText="Sin ingresos en este período." />
+              <TxTable rows={incomeTx} kind="income" onEdit={setEditing} emptyText="Sin ingresos en este período." />
             </div>
             <div>
               <div className="flex items-baseline justify-between mb-2 pb-1.5 border-b-2 border-red-200">
                 <h3 className="font-semibold text-sm text-red-700">Gastos</h3>
                 <span className="text-xs text-neutral-500">{expenseTx.length} · <span className="font-medium text-red-700">{eur(summary.expense)}</span></span>
               </div>
-              <TxTable rows={expenseTx} onEdit={setEditing} emptyText="Sin gastos en este período." />
+              <TxTable rows={expenseTx} kind="expense" onEdit={setEditing} emptyText="Sin gastos en este período." />
             </div>
           </div>
         </section>
@@ -617,12 +617,27 @@ function TransactionModal({
 }
 
 // Tabla de transacciones (reutilizada para Ingresos y Gastos por separado).
-function TxTable({ rows, onEdit, emptyText }: { rows: Tx[]; onEdit: (t: Tx) => void; emptyText: string }) {
+function TxTable({ rows, kind, onEdit, emptyText }: { rows: Tx[]; kind: "income" | "expense"; onEdit: (t: Tx) => void; emptyText: string }) {
+  const [filter, setFilter] = useState<string>("all");
   if (rows.length === 0) {
     return <p className="text-sm text-neutral-400 text-center py-6 italic">{emptyText}</p>;
   }
+  const tagOf = (t: Tx) => (kind === "income" ? t.type : t.category ?? "otros");
+  const labelOf = (tag: string) => (kind === "income" ? TYPE_LABELS[tag] ?? tag : EXPENSE_CAT_LABELS[tag] ?? tag);
+  const tags = [...new Set(rows.map(tagOf))];
+  const shown = filter === "all" ? rows : rows.filter((t) => tagOf(t) === filter);
+  const shownTotal = shown.reduce((a, t) => a + t.amount, 0);
+
   return (
     <div className="overflow-x-auto">
+      {tags.length > 1 && (
+        <div className="flex gap-1.5 flex-wrap mb-2">
+          <FilterChip active={filter === "all"} onClick={() => setFilter("all")} label="Todo" />
+          {tags.map((tag) => (
+            <FilterChip key={tag} active={filter === tag} onClick={() => setFilter(tag)} label={labelOf(tag)} />
+          ))}
+        </div>
+      )}
       <table className="w-full text-sm">
         <thead>
           <tr className="text-xs text-neutral-500 uppercase border-b border-neutral-200">
@@ -632,7 +647,7 @@ function TxTable({ rows, onEdit, emptyText }: { rows: Tx[]; onEdit: (t: Tx) => v
           </tr>
         </thead>
         <tbody>
-          {rows.map((t) => {
+          {shown.map((t) => {
             const isExpense = t.type === "expense";
             const isEditable = t.source === "manual";
             const who = [t.patient?.fullName, t.professional?.fullName.split(" ")[0]].filter(Boolean).join(" · ");
@@ -667,6 +682,16 @@ function TxTable({ rows, onEdit, emptyText }: { rows: Tx[]; onEdit: (t: Tx) => v
             );
           })}
         </tbody>
+        {filter !== "all" && (
+          <tfoot>
+            <tr className="border-t border-neutral-200">
+              <td className="py-2 px-2 text-xs text-neutral-500" colSpan={2}>{labelOf(filter)} · {shown.length}</td>
+              <td className={`py-2 px-2 text-right tabular-nums font-semibold ${kind === "expense" ? "text-red-700" : "text-emerald-700"}`}>
+                {kind === "expense" ? "−" : "+"}{eur(shownTotal)}
+              </td>
+            </tr>
+          </tfoot>
+        )}
       </table>
     </div>
   );
