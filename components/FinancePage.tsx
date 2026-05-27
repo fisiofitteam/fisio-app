@@ -108,6 +108,8 @@ export function FinancePage({
     () => [...transactions, ...autoRenewals].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)),
     [transactions, autoRenewals]
   );
+  const incomeTx = useMemo(() => allTx.filter((t) => t.type !== "expense"), [allTx]);
+  const expenseTx = useMemo(() => allTx.filter((t) => t.type === "expense"), [allTx]);
 
   const pieData = [
     { name: "Nuevas altas", value: summary.incomeNew, color: "#10B981", count: summary.countNew },
@@ -118,10 +120,7 @@ export function FinancePage({
   return (
     <main>
       <header className="mb-4 flex justify-between items-end flex-wrap gap-2">
-        <div>
-          <h1 className="text-xl font-semibold">Finanzas</h1>
-          <p className="text-xs text-neutral-500 mt-0.5 capitalize">{periodLabel}</p>
-        </div>
+        <p className="text-xs text-neutral-500 capitalize">{periodLabel}</p>
         <div className="flex items-center gap-2">
           <div className="flex bg-neutral-100 rounded-lg p-0.5">
             {(["month", "quarter", "year"] as Period[]).map((p) => (
@@ -232,66 +231,22 @@ export function FinancePage({
             </div>
           </div>
 
-          {allTx.length === 0 ? (
-            <p className="text-sm text-neutral-400 text-center py-8 italic">
-              Sin movimientos en este período.
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-xs text-neutral-500 uppercase border-b border-neutral-200">
-                    <th className="text-left py-2 px-2 font-medium">Fecha</th>
-                    <th className="text-left py-2 px-2 font-medium">Tipo</th>
-                    <th className="text-left py-2 px-2 font-medium">Concepto</th>
-                    <th className="text-left py-2 px-2 font-medium">Paciente</th>
-                    <th className="text-left py-2 px-2 font-medium">Fisio</th>
-                    <th className="text-right py-2 px-2 font-medium">Importe</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {allTx.map((t) => {
-                    const isExpense = t.type === "expense";
-                    const isEditable = t.source === "manual";
-                    return (
-                      <tr
-                        key={t.id}
-                        onClick={() => isEditable && setEditing(t)}
-                        className={`border-b border-neutral-100 ${isEditable ? "hover:bg-neutral-50 cursor-pointer" : "opacity-90"}`}
-                        title={isEditable ? "Click para editar" : "Renovación automática (se edita desde la ficha del paciente)"}
-                      >
-                        <td className="py-2 px-2 text-xs text-neutral-500 whitespace-nowrap">
-                          {new Date(t.occurredAt).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
-                        </td>
-                        <td className="py-2 px-2">
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${TYPE_COLORS[t.type] ?? "bg-neutral-100"}`}>
-                            {TYPE_LABELS[t.type] ?? t.type}
-                          </span>
-                          {t.source === "auto" && (
-                            <span className="text-[10px] text-neutral-400 ml-1 italic">auto</span>
-                          )}
-                        </td>
-                        <td className="py-2 px-2 text-xs">
-                          {t.category && <span className="text-neutral-500">{EXPENSE_CAT_LABELS[t.category] ?? t.category}</span>}
-                          {t.category && t.description && <span className="text-neutral-300"> · </span>}
-                          {t.description}
-                        </td>
-                        <td className="py-2 px-2 text-xs">
-                          {t.patient?.fullName ?? <span className="text-neutral-300">—</span>}
-                        </td>
-                        <td className="py-2 px-2 text-xs">
-                          {t.professional?.fullName.split(" ")[0] ?? <span className="text-neutral-300">—</span>}
-                        </td>
-                        <td className={`py-2 px-2 text-right tabular-nums font-medium ${isExpense ? "text-red-700" : "text-emerald-700"}`}>
-                          {isExpense ? "−" : "+"}{eur(t.amount)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div>
+              <div className="flex items-baseline justify-between mb-2 pb-1.5 border-b-2 border-emerald-200">
+                <h3 className="font-semibold text-sm text-emerald-700">Ingresos</h3>
+                <span className="text-xs text-neutral-500">{incomeTx.length} · <span className="font-medium text-emerald-700">{eur(summary.income)}</span></span>
+              </div>
+              <TxTable rows={incomeTx} onEdit={setEditing} emptyText="Sin ingresos en este período." />
             </div>
-          )}
+            <div>
+              <div className="flex items-baseline justify-between mb-2 pb-1.5 border-b-2 border-red-200">
+                <h3 className="font-semibold text-sm text-red-700">Gastos</h3>
+                <span className="text-xs text-neutral-500">{expenseTx.length} · <span className="font-medium text-red-700">{eur(summary.expense)}</span></span>
+              </div>
+              <TxTable rows={expenseTx} onEdit={setEditing} emptyText="Sin gastos en este período." />
+            </div>
+          </div>
         </section>
       )}
 
@@ -657,6 +612,62 @@ function TransactionModal({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Tabla de transacciones (reutilizada para Ingresos y Gastos por separado).
+function TxTable({ rows, onEdit, emptyText }: { rows: Tx[]; onEdit: (t: Tx) => void; emptyText: string }) {
+  if (rows.length === 0) {
+    return <p className="text-sm text-neutral-400 text-center py-6 italic">{emptyText}</p>;
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-xs text-neutral-500 uppercase border-b border-neutral-200">
+            <th className="text-left py-2 px-2 font-medium">Fecha</th>
+            <th className="text-left py-2 px-2 font-medium">Concepto</th>
+            <th className="text-right py-2 px-2 font-medium">Importe</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((t) => {
+            const isExpense = t.type === "expense";
+            const isEditable = t.source === "manual";
+            const who = [t.patient?.fullName, t.professional?.fullName.split(" ")[0]].filter(Boolean).join(" · ");
+            return (
+              <tr
+                key={t.id}
+                onClick={() => isEditable && onEdit(t)}
+                className={`border-b border-neutral-100 ${isEditable ? "hover:bg-neutral-50 cursor-pointer" : "opacity-90"}`}
+                title={isEditable ? "Click para editar" : "Automático (se edita desde la ficha del paciente)"}
+              >
+                <td className="py-2 px-2 text-xs text-neutral-500 whitespace-nowrap align-top">
+                  {new Date(t.occurredAt).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
+                </td>
+                <td className="py-2 px-2 text-xs">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${TYPE_COLORS[t.type] ?? "bg-neutral-100"}`}>
+                      {TYPE_LABELS[t.type] ?? t.type}
+                    </span>
+                    {t.source === "auto" && <span className="text-[10px] text-neutral-400 italic">auto</span>}
+                  </div>
+                  <div className="mt-0.5">
+                    {t.category && <span className="text-neutral-500">{EXPENSE_CAT_LABELS[t.category] ?? t.category}</span>}
+                    {t.category && t.description && <span className="text-neutral-300"> · </span>}
+                    {t.description}
+                  </div>
+                  {who && <div className="text-[11px] text-neutral-400 mt-0.5">{who}</div>}
+                </td>
+                <td className={`py-2 px-2 text-right tabular-nums font-medium align-top ${isExpense ? "text-red-700" : "text-emerald-700"}`}>
+                  {isExpense ? "−" : "+"}{eur(t.amount)}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
