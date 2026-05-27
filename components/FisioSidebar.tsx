@@ -54,7 +54,7 @@ const AJUSTES: Item = { id: "ajustes", label: "Ajustes", Icon: Settings, href: "
 
 function itemsForRole(role: string): Item[] {
   if (role === "ceo") {
-    return [PANEL, PACIENTES, LLAMADAS_VENTA, FOLLOWUP, CONTENIDO, BIBLIOTECA, REUNIONES, COMUNIDAD, TAREAS, RECURSOS, FINANZAS, EQUIPO, AJUSTES];
+    return [PANEL, PACIENTES, LLAMADAS_VENTA, CONTENIDO, BIBLIOTECA, REUNIONES, COMUNIDAD, TAREAS, RECURSOS, FINANZAS, EQUIPO, AJUSTES];
   }
   if (role === "head_success") {
     return [PANEL, PACIENTES, BIBLIOTECA, REUNIONES, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, AJUSTES];

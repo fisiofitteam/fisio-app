@@ -147,6 +147,14 @@ export function CallsListView({
         </button>
       </header>
 
+      {/* Toggle Llamadas / Follow-up (solo CEO) */}
+      {currentUser.role === "ceo" && (
+        <div className="flex gap-1 mb-3 border-b border-neutral-200">
+          <span className="px-4 py-2 text-sm font-medium border-b-2 border-neutral-900 text-neutral-900">📞 Llamadas</span>
+          <a href={`/fisio/llamadas-venta?view=followup&closer=${activeCloserId}`} className="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-neutral-500 hover:text-neutral-900">🔁 Follow-up</a>
+        </div>
+      )}
+
       {/* Tabs de closer (solo para CEO) */}
       {currentUser.role === "ceo" && closers.length > 1 && (
         <div className="flex gap-1 mb-3 border-b border-neutral-200">
@@ -555,6 +563,7 @@ function CallEditModal({
   const [status, setStatus] = useState(lead.status);
   const [lostReason, setLostReason] = useState(lead.lostReason ?? "precio");
   const [inFollowUp, setInFollowUp] = useState(lead.inFollowUp);
+  const [followUpNote, setFollowUpNote] = useState(lead.followUpNote ?? "");
 
   const [saving, setSaving] = useState(false);
 
@@ -574,6 +583,7 @@ function CallEditModal({
         status,
         ...(status === "lost" && { lostReason }),
         inFollowUp,
+        followUpNote,
       }),
     });
     onSaved();
@@ -685,18 +695,32 @@ function CallEditModal({
                 <button
                   key={tab.key}
                   type="button"
-                  onClick={() => setStatus(tab.key)}
+                  onClick={() => { setStatus(tab.key); setInFollowUp(false); }}
                   className={`px-3 py-2 text-xs rounded border font-medium text-left ${
-                    status === tab.key ? "bg-neutral-900 text-white border-neutral-900" : "bg-white border-neutral-200 hover:bg-neutral-50"
+                    !inFollowUp && status === tab.key ? "bg-neutral-900 text-white border-neutral-900" : "bg-white border-neutral-200 hover:bg-neutral-50"
                   }`}
                 >
                   {tab.label}
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={() => { setInFollowUp(true); setStatus("scheduled"); }}
+                className={`px-3 py-2 text-xs rounded border font-medium text-left ${
+                  inFollowUp ? "bg-blue-600 text-white border-blue-600" : "bg-white border-neutral-200 hover:bg-neutral-50"
+                }`}
+              >
+                🔁 En follow-up
+              </button>
             </div>
+            {inFollowUp && !lead.inFollowUp && (
+              <p className="text-[11px] text-neutral-500 mt-1.5 italic">
+                Se generarán automáticamente fechas de seguimiento a 24h, 48-72h, 30d y 90d (editables en la vista de follow-up).
+              </p>
+            )}
           </div>
 
-          {status === "lost" && (
+          {status === "lost" && !inFollowUp && (
             <div>
               <label className="text-xs text-neutral-500 block mb-1">Razón</label>
               <select className="input text-sm" value={lostReason} onChange={(e) => setLostReason(e.target.value)}>
@@ -707,17 +731,18 @@ function CallEditModal({
             </div>
           )}
 
-          <div>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={inFollowUp} onChange={(e) => setInFollowUp(e.target.checked)} />
-              <span>Marcar para follow-up</span>
-            </label>
-            {inFollowUp && !lead.inFollowUp && (
-              <p className="text-[11px] text-neutral-500 mt-1 italic">
-                Se generarán automáticamente fechas de seguimiento a 24h, 48-72h, 30d y 90d desde ahora.
-              </p>
-            )}
-          </div>
+          {inFollowUp && (
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">Situación / objeciones</label>
+              <textarea
+                className="input text-sm"
+                rows={3}
+                value={followUpNote}
+                onChange={(e) => setFollowUpNote(e.target.value)}
+                placeholder="¿Qué objeciones tiene? ¿Qué necesita para cerrar?"
+              />
+            </div>
+          )}
 
           <div className="flex justify-between items-center gap-2 pt-2">
             <button

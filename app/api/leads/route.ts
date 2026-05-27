@@ -95,6 +95,11 @@ export async function PATCH(req: NextRequest) {
 
   if (rest.followUpNote !== undefined) updateData.followUpNote = rest.followUpNote || null;
 
+  // Fechas de follow-up personalizables (sobrescriben las automáticas)
+  for (const f of ["followUp24hDate", "followUp48hDate", "followUp30dDate", "followUp90dDate"] as const) {
+    if (rest[f] !== undefined) updateData[f] = rest[f] ? new Date(rest[f]) : null;
+  }
+
   const lead = await prisma.lead.update({ where: { id }, data: updateData });
   return NextResponse.json(lead);
 }

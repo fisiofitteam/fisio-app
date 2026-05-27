@@ -2,11 +2,12 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 import { CallsListView } from "@/components/CallsListView";
+import { FollowUpView } from "@/components/FollowUpView";
 
 export default async function LlamadasVentaPage({
   searchParams,
 }: {
-  searchParams: { status?: string; closer?: string };
+  searchParams: { status?: string; closer?: string; view?: string };
 }) {
   const user = (await getActiveProfessional())!;
   if (user.role !== "ceo" && user.role !== "closer") redirect("/fisio");
@@ -31,9 +32,48 @@ export default async function LlamadasVentaPage({
 
   const baseWhere = { closerId: activeCloserId };
 
+  // Vista Follow-up embebida en la página de llamadas (solo CEO; el closer la
+  // tiene como pestaña propia en el sidebar).
+  const view = user.role === "ceo" && searchParams.view === "followup" ? "followup" : "calls";
+  if (view === "followup") {
+    const fuLeads = await prisma.lead.findMany({
+      where: { closerId: activeCloserId, inFollowUp: true },
+      include: { closer: { select: { id: true, fullName: true, role: true } } },
+      orderBy: [{ followUpStartedAt: "desc" }, { decidedAt: "desc" }],
+    });
+    return (
+      <FollowUpView
+        embedded
+        activeCloserId={activeCloserId}
+        currentUser={{ id: user.id, role: user.role }}
+        closers={closers.map((c) => ({ id: c.id, fullName: c.fullName, role: c.role }))}
+        leads={fuLeads.map((l) => ({
+          id: l.id,
+          fullName: l.fullName,
+          contactType: l.contactType,
+          contactValue: l.contactValue,
+          aiSummary: l.aiSummary,
+          followUpNote: l.followUpNote,
+          callScheduledAt: l.callScheduledAt.toISOString(),
+          status: l.status,
+          lostReason: l.lostReason,
+          followUp24hDate: l.followUp24hDate?.toISOString() ?? null,
+          followUp24hDone: l.followUp24hDone,
+          followUp48hDate: l.followUp48hDate?.toISOString() ?? null,
+          followUp48hDone: l.followUp48hDone,
+          followUp30dDate: l.followUp30dDate?.toISOString() ?? null,
+          followUp30dDone: l.followUp30dDone,
+          followUp90dDate: l.followUp90dDate?.toISOString() ?? null,
+          followUp90dDone: l.followUp90dDone,
+          closer: l.closer,
+        }))}
+      />
+    );
+  }
+
   // Contadores por status (filtrados por closer activo)
   const counts = await Promise.all([
-    prisma.lead.count({ where: { ...baseWhere, status: "scheduled" } }),
+    prisma.lead.count({ where: { ...baseWhere, status: "scheduled", inFollowUp: false } }),
     prisma.lead.count({ where: { ...baseWhere, status: "won" } }),
     prisma.lead.count({ where: { ...baseWhere, status: "lost" } }),
     prisma.lead.count({ where: { ...baseWhere, status: "cancelled" } }),
@@ -41,7 +81,7 @@ export default async function LlamadasVentaPage({
   ]);
 
   const leads = await prisma.lead.findMany({
-    where: { ...baseWhere, status },
+    where: { ...baseWhere, status, ...(status === "scheduled" ? { inFollowUp: false } : {}) },
     include: {
       setter: { select: { id: true, fullName: true, role: true } },
       closer: { select: { id: true, fullName: true, role: true } },
