@@ -9,6 +9,7 @@ import { usePathname } from "next/navigation";
 const SECTIONS = [
   { href: "/fisio/finanzas/metricas-negocio", label: "📈 Métricas globales del negocio", key: "metricas" },
   { href: "/fisio/finanzas", label: "💶 Finanzas", key: "finanzas" },
+  { href: "/fisio/finanzas/anuncios", label: "📣 Anuncios", key: "anuncios" },
 ];
 
 const FINANZAS_SUBTABS = [
@@ -18,8 +19,11 @@ const FINANZAS_SUBTABS = [
 
 export function FinanzasNav() {
   const pathname = usePathname() ?? "";
-  const inMetricas = pathname.startsWith("/fisio/finanzas/metricas-negocio");
-  const section = inMetricas ? "metricas" : "finanzas";
+  const section = pathname.startsWith("/fisio/finanzas/metricas-negocio")
+    ? "metricas"
+    : pathname.startsWith("/fisio/finanzas/anuncios")
+    ? "anuncios"
+    : "finanzas";
 
   return (
     <div className="mb-4">

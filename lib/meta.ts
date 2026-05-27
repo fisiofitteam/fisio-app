@@ -132,6 +132,81 @@ export async function getCampaignInsights(since: string, until: string): Promise
   }));
 }
 
+// Tipos de "acción" que contamos como resultado (leads / mensajes).
+const RESULT_ACTION_TYPES = new Set([
+  "lead",
+  "onsite_conversion.lead_grouped",
+  "leadgen.other",
+  "onsite_conversion.messaging_conversation_started_7d",
+  "onsite_conversion.messaging_first_reply",
+]);
+
+export type AdRow = {
+  id: string;
+  name: string;
+  spend: number;
+  reach: number;
+  impressions: number;
+  frequency: number;
+  clicks: number;
+  linkClicks: number;
+  ctr: number;        // %
+  cpc: number;        // €
+  cpm: number;        // €
+  results: number;
+  costPerResult: number | null;
+};
+
+// Insights de anuncios a nivel campaña / conjunto / anuncio, opcionalmente
+// filtrados por su padre (para el desglose).
+export async function getAdsInsights(opts: {
+  level: "campaign" | "adset" | "ad";
+  since: string;
+  until: string;
+  parentField?: "campaign" | "adset";
+  parentId?: string;
+}): Promise<AdRow[]> {
+  const { adAccountId } = metaConfig();
+  if (!adAccountId) throw new Error("Falta META_AD_ACCOUNT_ID");
+  const acct = adAccountId.startsWith("act_") ? adAccountId : `act_${adAccountId}`;
+
+  const nameField = opts.level === "campaign" ? "campaign_id,campaign_name" : opts.level === "adset" ? "adset_id,adset_name" : "ad_id,ad_name";
+  const params: Record<string, string> = {
+    level: opts.level,
+    fields: `${nameField},spend,reach,impressions,frequency,clicks,inline_link_clicks,ctr,cpc,cpm,actions`,
+    time_range: JSON.stringify({ since: opts.since, until: opts.until }),
+    limit: "200",
+  };
+  if (opts.parentField && opts.parentId) {
+    params.filtering = JSON.stringify([{ field: `${opts.parentField}.id`, operator: "IN", value: [opts.parentId] }]);
+  }
+
+  const d = await graphGet(`${acct}/insights`, params);
+  const items: any[] = d?.data ?? [];
+  return items.map((r) => {
+    let results = 0;
+    for (const a of r.actions ?? []) {
+      if (RESULT_ACTION_TYPES.has(a.action_type)) results += Number(a.value) || 0;
+    }
+    const spend = r.spend ? Number(r.spend) : 0;
+    return {
+      id: r.campaign_id || r.adset_id || r.ad_id || "",
+      name: r.campaign_name || r.adset_name || r.ad_name || "(sin nombre)",
+      spend: Math.round(spend),
+      reach: Number(r.reach) || 0,
+      impressions: Number(r.impressions) || 0,
+      frequency: r.frequency ? Math.round(Number(r.frequency) * 10) / 10 : 0,
+      clicks: Number(r.clicks) || 0,
+      linkClicks: Number(r.inline_link_clicks) || 0,
+      ctr: r.ctr ? Math.round(Number(r.ctr) * 100) / 100 : 0,
+      cpc: r.cpc ? Math.round(Number(r.cpc) * 100) / 100 : 0,
+      cpm: r.cpm ? Math.round(Number(r.cpm) * 100) / 100 : 0,
+      results,
+      costPerResult: results > 0 ? Math.round((spend / results) * 100) / 100 : null,
+    };
+  });
+}
+
 // Gasto total en anuncios en un rango de fechas (YYYY-MM-DD).
 export async function getAdSpend(since: string, until: string): Promise<number> {
   const { adAccountId } = metaConfig();
