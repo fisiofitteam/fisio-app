@@ -112,6 +112,26 @@ export async function getMediaInsights(mediaId: string): Promise<{ reach: number
 
 // ── Anuncios (Marketing API) ───────────────────────────────────────────────────
 
+// Gasto por campaña en un rango de fechas (YYYY-MM-DD).
+export type AdCampaign = { campaignId: string; name: string; spend: number };
+export async function getCampaignInsights(since: string, until: string): Promise<AdCampaign[]> {
+  const { adAccountId } = metaConfig();
+  if (!adAccountId) throw new Error("Falta META_AD_ACCOUNT_ID");
+  const acct = adAccountId.startsWith("act_") ? adAccountId : `act_${adAccountId}`;
+  const d = await graphGet(`${acct}/insights`, {
+    level: "campaign",
+    fields: "campaign_id,campaign_name,spend",
+    time_range: JSON.stringify({ since, until }),
+    limit: "100",
+  });
+  const items: any[] = d?.data ?? [];
+  return items.map((c) => ({
+    campaignId: c.campaign_id,
+    name: c.campaign_name || "(sin nombre)",
+    spend: c.spend ? Math.round(Number(c.spend)) : 0,
+  }));
+}
+
 // Gasto total en anuncios en un rango de fechas (YYYY-MM-DD).
 export async function getAdSpend(since: string, until: string): Promise<number> {
   const { adAccountId } = metaConfig();

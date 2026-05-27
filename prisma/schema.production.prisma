@@ -894,6 +894,7 @@ model ContentPiece {
   metricsSaves           Int?
   metricsShares          Int?
   metricsComments        Int?
+  metricsLikes           Int?
   metricsDmKeyword       Int?                         // DMs recibidos con la palabra clave
   metricsConversions     Int?                         // conversiones a cliente atribuidas
   metricsFilledAt        DateTime?
@@ -1738,4 +1739,12 @@ model BusinessQuarterlyGoal {
   updatedAt DateTime @updatedAt
 
   @@unique([year, quarter, metricKey])
+}
+
+// Clasificación de campañas de Meta Ads en el cuadro de mandos.
+model AdCampaignTag {
+  id         String   @id @default(cuid())
+  campaignId String   @unique
+  bucket     String                                  // "follow" | "conversion"
+  updatedAt  DateTime @updatedAt
 }

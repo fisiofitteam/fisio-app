@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getActiveProfessional } from "@/lib/session";
 import { MetaIntegration } from "@/components/MetaIntegration";
+import { AdsDashboard } from "@/components/AdsDashboard";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,10 @@ export default async function MetaIntegrationPage() {
       </header>
 
       <MetaIntegration />
+
+      <div className="mt-8">
+        <AdsDashboard />
+      </div>
     </main>
   );
 }

@@ -34,9 +34,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         metricsSaves: m.saved,
         metricsShares: m.shares,
         metricsComments: m.comments,
+        metricsLikes: m.likes,
         metricsFilledAt: new Date(),
       },
-      select: { metricsReach: true, metricsSaves: true, metricsShares: true, metricsComments: true },
+      select: { metricsReach: true, metricsSaves: true, metricsShares: true, metricsComments: true, metricsLikes: true },
     });
     return NextResponse.json({ ok: true, metrics: updated });
   } catch (e: any) {

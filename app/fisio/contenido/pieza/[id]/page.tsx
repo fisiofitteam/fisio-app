@@ -35,7 +35,7 @@ export default async function PiecePage({ params }: { params: { id: string } }) 
   // el post por fecha de publicación (week.startDate + dayOfWeek). ──────────────
   let metrics = {
     reach: piece.metricsReach, saves: piece.metricsSaves,
-    shares: piece.metricsShares, comments: piece.metricsComments,
+    shares: piece.metricsShares, comments: piece.metricsComments, likes: piece.metricsLikes,
     filledAt: piece.metricsFilledAt?.toISOString() ?? null,
   };
   let igSuggestion: MetaPost | null = null;
@@ -48,9 +48,9 @@ export default async function PiecePage({ params }: { params: { id: string } }) 
         const now = new Date();
         await prisma.contentPiece.update({
           where: { id: piece.id },
-          data: { metricsReach: m.reach, metricsSaves: m.saved, metricsShares: m.shares, metricsComments: m.comments, metricsFilledAt: now },
+          data: { metricsReach: m.reach, metricsSaves: m.saved, metricsShares: m.shares, metricsComments: m.comments, metricsLikes: m.likes, metricsFilledAt: now },
         });
-        metrics = { reach: m.reach, saves: m.saved, shares: m.shares, comments: m.comments, filledAt: now.toISOString() };
+        metrics = { reach: m.reach, saves: m.saved, shares: m.shares, comments: m.comments, likes: m.likes, filledAt: now.toISOString() };
       } catch {}
     } else {
       try {
@@ -89,6 +89,7 @@ export default async function PiecePage({ params }: { params: { id: string } }) 
         metricsSaves: metrics.saves,
         metricsShares: metrics.shares,
         metricsComments: metrics.comments,
+        metricsLikes: metrics.likes,
         metricsDmKeyword: piece.metricsDmKeyword,
         metricsConversions: piece.metricsConversions,
         metricsFilledAt: metrics.filledAt,

@@ -307,6 +307,9 @@ export function ThisWeekView({
       </section>
 
       {/* 7 piezas */}
+      <div className="flex justify-end mb-2">
+        <AutolinkInstagramButton weekId={week.id} />
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
         {week.pieces.map((p) => (
           <PieceCard key={p.id} piece={p} weekId={week.id} />
@@ -370,6 +373,29 @@ function PiecesProgress({ pieces }: { pieces: Piece[] }) {
         {ideas > 0 && <span className="text-neutral-500">💡 {ideas}</span>}
       </div>
       <div className="text-[10px] text-neutral-400">{published}/{pieces.length} publicadas</div>
+    </div>
+  );
+}
+
+function AutolinkInstagramButton({ weekId }: { weekId: string }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  async function run() {
+    setBusy(true);
+    setMsg(null);
+    const res = await fetch(`/api/content/weeks/${weekId}/instagram-autolink`, { method: "POST" });
+    const d = await res.json().catch(() => ({}));
+    if (res.ok) { setMsg(`Vinculadas ${d.linked} · sin emparejar ${d.skipped}`); router.refresh(); }
+    else setMsg(d.error || "No se pudo");
+    setBusy(false);
+  }
+  return (
+    <div className="flex items-center gap-2">
+      {msg && <span className="text-xs text-neutral-500">{msg}</span>}
+      <button onClick={run} disabled={busy} className="text-xs px-2.5 py-1.5 rounded-lg border border-neutral-200 hover:bg-neutral-50" title="Vincula cada pieza con su post de Instagram según la fecha">
+        {busy ? "Vinculando…" : "📷 Auto-vincular posts de IG"}
+      </button>
     </div>
   );
 }

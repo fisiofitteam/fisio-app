@@ -46,6 +46,7 @@ type Piece = {
   metricsSaves: number | null;
   metricsShares: number | null;
   metricsComments: number | null;
+  metricsLikes: number | null;
   metricsDmKeyword: number | null;
   metricsConversions: number | null;
   metricsFilledAt: string | null;
@@ -651,6 +652,7 @@ function MetricsForm({
     <>
       <div className="grid grid-cols-2 gap-2">
         <MetricInput label="Alcance" field="metricsReach" />
+        <MetricInput label="Likes" field="metricsLikes" />
         <MetricInput label="Guardados" field="metricsSaves" />
         <MetricInput label="Compartidos" field="metricsShares" />
         <MetricInput label="Comentarios" field="metricsComments" />
