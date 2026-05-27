@@ -7,8 +7,8 @@ import { usePathname } from "next/navigation";
 //  - Nivel 1 (secciones): Finanzas | Métricas globales del negocio
 //  - Nivel 2 (subpestañas de Finanzas): Resumen | Facturas equipo
 const SECTIONS = [
-  { href: "/fisio/finanzas", label: "💶 Finanzas", key: "finanzas" },
   { href: "/fisio/finanzas/metricas-negocio", label: "📈 Métricas globales del negocio", key: "metricas" },
+  { href: "/fisio/finanzas", label: "💶 Finanzas", key: "finanzas" },
 ];
 
 const FINANZAS_SUBTABS = [

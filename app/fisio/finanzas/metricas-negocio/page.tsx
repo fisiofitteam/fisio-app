@@ -1,22 +1,20 @@
 import { redirect } from "next/navigation";
 import { getActiveProfessional } from "@/lib/session";
+import { getPeriodRange, type Period } from "@/lib/finance";
+import { computeBusinessMetrics } from "@/lib/business-metrics";
+import { BusinessMetricsView } from "@/components/BusinessMetricsView";
 
 export const dynamic = "force-dynamic";
 
-export default async function MetricasNegocioPage() {
+export default async function MetricasNegocioPage({ searchParams }: { searchParams: { period?: string } }) {
   const user = await getActiveProfessional();
   if (!user || user.role !== "ceo") redirect("/fisio");
 
-  return (
-    <main>
-      <section className="card text-center py-16">
-        <div className="text-4xl mb-3">📈</div>
-        <h2 className="font-semibold text-base mb-1">Métricas globales del negocio</h2>
-        <p className="text-sm text-neutral-500 max-w-md mx-auto">
-          Aquí irán los indicadores globales del negocio. Definiremos juntos qué métricas
-          incluir (LTV, CAC, MRR, churn, ticket medio, etc.).
-        </p>
-      </section>
-    </main>
-  );
+  const period: Period = (["month", "quarter", "year"].includes(searchParams.period ?? "")
+    ? (searchParams.period as Period)
+    : "month");
+  const { start, end, label } = getPeriodRange(period);
+  const m = await computeBusinessMetrics(start, end);
+
+  return <BusinessMetricsView period={period} periodLabel={label} m={JSON.parse(JSON.stringify(m))} />;
 }
