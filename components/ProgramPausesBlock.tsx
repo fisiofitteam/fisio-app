@@ -17,18 +17,20 @@ function formatDate(iso: string) {
   return d.toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-function statusLabel(s: string): { text: string; color: string; bg: string } {
+// Clases Tailwind (remapeadas en modo oscuro) en vez de hex fijos claros, para que
+// los bloques de pausa sean legibles tanto en claro como en oscuro.
+function statusLabel(s: string): { text: string; box: string; label: string } {
   switch (s) {
     case "active":
-      return { text: "⏸️ EN PAUSA", color: "#7C2D12", bg: "#FEF3C7" };
+      return { text: "⏸️ EN PAUSA", box: "bg-amber-50 border-amber-200", label: "text-amber-800" };
     case "scheduled":
-      return { text: "PROGRAMADA", color: "#1E40AF", bg: "#DBEAFE" };
+      return { text: "PROGRAMADA", box: "bg-blue-50 border-blue-200", label: "text-blue-800" };
     case "ended":
-      return { text: "FINALIZADA", color: "#525252", bg: "#F5F5F5" };
+      return { text: "FINALIZADA", box: "bg-neutral-100 border-neutral-200", label: "text-neutral-600" };
     case "cancelled":
-      return { text: "CANCELADA", color: "#A3A3A3", bg: "#FAFAFA" };
+      return { text: "CANCELADA", box: "bg-neutral-50 border-neutral-200", label: "text-neutral-500" };
     default:
-      return { text: s, color: "#525252", bg: "#F5F5F5" };
+      return { text: s, box: "bg-neutral-100 border-neutral-200", label: "text-neutral-600" };
   }
 }
 
@@ -107,9 +109,9 @@ export function ProgramPausesBlock({ patientId, programMode }: { patientId: stri
           {pauses.map((p) => {
             const s = statusLabel(p.status);
             return (
-              <div key={p.id} className="rounded-lg px-3 py-2 text-sm" style={{ background: s.bg, border: `1px solid ${s.color}20` }}>
+              <div key={p.id} className={`rounded-lg px-3 py-2 text-sm border ${s.box}`}>
                 <div className="flex items-center justify-between mb-1 gap-2">
-                  <span className="text-[10px] font-bold tracking-wider" style={{ color: s.color }}>{s.text}</span>
+                  <span className={`text-[10px] font-bold tracking-wider ${s.label}`}>{s.text}</span>
                   {p.status === "scheduled" && (
                     <button onClick={() => cancel(p.id)} className="text-[11px] text-red-600 hover:underline">Cancelar</button>
                   )}

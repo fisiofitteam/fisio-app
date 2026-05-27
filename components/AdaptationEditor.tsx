@@ -313,16 +313,16 @@ export function AdaptationEditor({
                           key={mov.id}
                           className={`border-b border-neutral-100 last:border-0 ${
                             a.state === "BLOCKED"
-                              ? "bg-red-50/50"
+                              ? "bg-red-50"
                               : a.state === "CONDITIONAL"
-                              ? "bg-amber-50/50"
+                              ? "bg-amber-50"
                               : ""
                           }`}
                         >
                           {!isEditing ? (
                             <button
                               onClick={() => setEditingMov(mov.id)}
-                              className="w-full text-left px-4 py-2.5 hover:bg-white/60"
+                              className="w-full text-left px-4 py-2.5 hover:bg-neutral-100"
                             >
                               <div className="flex justify-between items-start gap-2">
                                 <div className="flex-1 min-w-0">
