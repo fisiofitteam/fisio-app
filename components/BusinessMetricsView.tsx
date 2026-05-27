@@ -122,17 +122,15 @@ function MesesView({ monthly, goals, onYear }: { monthly: MonthlyMetrics; goals:
   const { months, annual, programTypes, year } = monthly;
 
   const ventasRows: RowDef[] = [
-    ...programTypes.flatMap((prog) => [
-      { label: `Altas · ${prettyProgram(prog)}`, get: (r: Row) => r.altasByProgram[prog] ?? 0, fmt: "int" as const },
-      { label: `€ · ${prettyProgram(prog)}`, get: (r: Row) => r.altasRevenueByProgram[prog] ?? 0, fmt: "money" as const },
-    ]),
     { label: "Altas (total)", get: (r: Row) => r.altasCount, fmt: "int" },
+    ...programTypes.map((prog) => ({ label: `Altas · ${prettyProgram(prog)}`, get: (r: Row) => r.altasByProgram[prog] ?? 0, fmt: "int" as const })),
     { label: "Renovaciones", get: (r: Row) => r.renewedCount, fmt: "int" },
     { label: "Bajas", get: (r: Row) => r.lostCount, fmt: "int" },
   ];
   const finanzasRows: RowDef[] = [
     { label: "Facturación total", get: (r) => r.income, fmt: "money" },
     { label: "— de altas nuevas", get: (r) => r.incomeNew, fmt: "money" },
+    ...programTypes.map((prog) => ({ label: `— altas · ${prettyProgram(prog)}`, get: (r: Row) => r.altasRevenueByProgram[prog] ?? 0, fmt: "money" as const })),
     { label: "— de renovaciones", get: (r) => r.incomeRenewal, fmt: "money" },
     { label: "Gastos totales", get: (r) => r.expense, fmt: "money" },
     { label: "Beneficio", get: (r) => r.profit, fmt: "money" },
@@ -335,10 +333,10 @@ function BlockRows({ title, rows, months, annual }: { title: string; rows: RowDe
 }
 
 // Bloque Publicidad con celdas editables (datos manuales).
-type ManualField = "newFollowers" | "adsSpend" | "totalFollowers";
+type ManualField = "newFollowers" | "adsSpend" | "adsConversion" | "totalFollowers";
 function PublicidadRows({ year, months }: { year: number; months: MonthlyRow[] }) {
   const [vals, setVals] = useState(() =>
-    months.map((m) => ({ newFollowers: m.newFollowers, adsSpend: m.adsSpend, totalFollowers: m.totalFollowers }))
+    months.map((m) => ({ newFollowers: m.newFollowers, adsSpend: m.adsSpend, adsConversion: m.adsConversion, totalFollowers: m.totalFollowers }))
   );
 
   function setCell(month: number, field: ManualField, raw: string) {
@@ -354,13 +352,15 @@ function PublicidadRows({ year, months }: { year: number; months: MonthlyRow[] }
 
   const sum = (f: ManualField) => vals.reduce((a, v) => a + (v[f] ?? 0), 0);
   const lastTotal = [...vals].reverse().find((v) => v.totalFollowers != null)?.totalFollowers ?? null;
-  const totalAds = sum("adsSpend");
+  // Coste por seguidor = Follow me ADs / nuevos seguidores
+  const totalFollowAds = sum("adsSpend");
   const totalNew = sum("newFollowers");
-  const annualCost = totalAds && totalNew ? Math.round((totalAds / totalNew) * 100) / 100 : null;
+  const annualCost = totalFollowAds && totalNew ? Math.round((totalFollowAds / totalNew) * 100) / 100 : null;
 
-  const FIELDS: { key: ManualField; label: string }[] = [
+  const FIELDS: { key: ManualField; label: string; money?: boolean }[] = [
     { key: "newFollowers", label: "Nuevos seguidores" },
-    { key: "adsSpend", label: "Inversión ADS (€)" },
+    { key: "adsSpend", label: "Follow me ADs (€)", money: true },
+    { key: "adsConversion", label: "Conversión ADs (€)", money: true },
     { key: "totalFollowers", label: "Seguidores totales" },
   ];
 
@@ -382,7 +382,7 @@ function PublicidadRows({ year, months }: { year: number; months: MonthlyRow[] }
             </td>
           ))}
           <td className="py-1.5 px-3 text-right tabular-nums font-semibold border-l-2 border-neutral-300 bg-neutral-50 whitespace-nowrap">
-            {f.key === "totalFollowers" ? (lastTotal ?? "—") : f.key === "adsSpend" ? eur(sum("adsSpend")) : sum("newFollowers")}
+            {f.key === "totalFollowers" ? (lastTotal ?? "—") : f.money ? eur(sum(f.key)) : sum(f.key)}
           </td>
         </tr>
       ))}

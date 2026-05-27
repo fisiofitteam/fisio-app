@@ -18,6 +18,7 @@ export async function PUT(req: NextRequest) {
   const data: any = {};
   if ("newFollowers" in b) data.newFollowers = num(b.newFollowers);
   if ("adsSpend" in b) data.adsSpend = num(b.adsSpend);
+  if ("adsConversion" in b) data.adsConversion = num(b.adsConversion);
   if ("totalFollowers" in b) data.totalFollowers = num(b.totalFollowers);
   if ("refunds" in b) data.refunds = num(b.refunds);
 

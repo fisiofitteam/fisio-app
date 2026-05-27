@@ -49,7 +49,8 @@ export type MonthlyRow = {
   renewalRate: number | null;
   // Datos manuales (publicidad)
   newFollowers: number | null;
-  adsSpend: number | null;
+  adsSpend: number | null;        // Follow me ADs (cuenta para coste/seguidor)
+  adsConversion: number | null;   // Conversión ADs (sin fórmula por ahora)
   totalFollowers: number | null;
   costPerFollower: number | null;
 };
@@ -84,7 +85,7 @@ export async function computeMonthlyBusinessMetrics(year: number): Promise<Month
   const months: MonthlyRow[] = Array.from({ length: 12 }, (_, m) => ({
     month: m, altasCount: 0, altasByProgram: {}, altasRevenueByProgram: {}, renewedCount: 0, lostCount: 0, refunds: null,
     income: 0, incomeNew: 0, incomeRenewal: 0, expense: 0, profit: 0, profitPct: null, renewalRate: null,
-    newFollowers: null, adsSpend: null, totalFollowers: null, costPerFollower: null,
+    newFollowers: null, adsSpend: null, adsConversion: null, totalFollowers: null, costPerFollower: null,
   }));
 
   for (const t of txs) {
@@ -122,6 +123,7 @@ export async function computeMonthlyBusinessMetrics(year: number): Promise<Month
     if (!m) continue;
     m.newFollowers = i.newFollowers;
     m.adsSpend = i.adsSpend;
+    m.adsConversion = i.adsConversion;
     m.totalFollowers = i.totalFollowers;
     m.refunds = i.refunds;
     m.costPerFollower = i.adsSpend != null && i.newFollowers ? Math.round((i.adsSpend / i.newFollowers) * 100) / 100 : null;
@@ -138,7 +140,7 @@ export async function computeMonthlyBusinessMetrics(year: number): Promise<Month
   const annual: Omit<MonthlyRow, "month"> = {
     altasCount: 0, altasByProgram: {}, altasRevenueByProgram: {}, renewedCount: 0, lostCount: 0, refunds: 0,
     income: 0, incomeNew: 0, incomeRenewal: 0, expense: 0, profit: 0, profitPct: null, renewalRate: null,
-    newFollowers: 0, adsSpend: 0, totalFollowers: null, costPerFollower: null,
+    newFollowers: 0, adsSpend: 0, adsConversion: 0, totalFollowers: null, costPerFollower: null,
   };
   let lastTotalFollowers: number | null = null;
   for (const m of months) {
@@ -152,6 +154,7 @@ export async function computeMonthlyBusinessMetrics(year: number): Promise<Month
     annual.profit += m.profit;
     if (m.newFollowers != null) annual.newFollowers = (annual.newFollowers ?? 0) + m.newFollowers;
     if (m.adsSpend != null) annual.adsSpend = (annual.adsSpend ?? 0) + m.adsSpend;
+    if (m.adsConversion != null) annual.adsConversion = (annual.adsConversion ?? 0) + m.adsConversion;
     if (m.totalFollowers != null) lastTotalFollowers = m.totalFollowers;
     if (m.refunds != null) annual.refunds = (annual.refunds ?? 0) + m.refunds;
     for (const [prog, rev] of Object.entries(m.altasRevenueByProgram)) {
@@ -173,12 +176,12 @@ export async function computeMonthlyBusinessMetrics(year: number): Promise<Month
 export async function computeBusinessMetrics(start: Date, end: Date): Promise<BusinessMetrics> {
   const summary = await calculateFinanceSummary(start, end);
 
-  // Inversión en ADS del período (dato manual mensual del cuadro de mandos).
-  const adsInputs = await prisma.businessMonthlyInput.findMany({ select: { year: true, month: true, adsSpend: true } });
+  // Inversión total en ADS del período (Follow me + Conversión), dato manual.
+  const adsInputs = await prisma.businessMonthlyInput.findMany({ select: { year: true, month: true, adsSpend: true, adsConversion: true } });
   let marketingSpend = 0;
   for (const i of adsInputs) {
     const d = new Date(Date.UTC(i.year, i.month, 1));
-    if (i.adsSpend && d >= start && d <= end) marketingSpend += i.adsSpend;
+    if (d >= start && d <= end) marketingSpend += (i.adsSpend ?? 0) + (i.adsConversion ?? 0);
   }
 
   // CAC = (inversión ADS + comisión closer sobre ventas nuevas) / altas nuevas

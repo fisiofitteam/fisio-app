@@ -1719,6 +1719,7 @@ model BusinessMonthlyInput {
   month          Int                                   // 0-11
   newFollowers   Int?
   adsSpend       Float?
+  adsConversion  Float?
   totalFollowers Int?
   refunds        Int?
   updatedAt      DateTime @updatedAt
