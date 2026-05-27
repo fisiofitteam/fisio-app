@@ -1,9 +1,20 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { getOnboardingConfig } from "@/lib/onboarding-config";
 
 export default async function PatientFormsTab({ params }: { params: { id: string } }) {
   const patient = await prisma.patient.findUnique({ where: { id: params.id } });
   if (!patient) notFound();
+
+  // ── Valoración inicial (anamnesis del onboarding) ──────────────────────────
+  let anamnesis: Record<string, any> = {};
+  try {
+    anamnesis = patient.anamnesisData ? JSON.parse(patient.anamnesisData) : {};
+  } catch {
+    anamnesis = {};
+  }
+  const hasAnamnesis = Object.values(anamnesis).some((v) => v !== undefined && v !== null && String(v).trim() !== "");
+  const { anamnesisSteps } = await getOnboardingConfig();
 
   const sessions = await prisma.programSession.findMany({
     where: {
@@ -34,55 +45,135 @@ export default async function PatientFormsTab({ params }: { params: { id: string
     .filter(Boolean) as any[];
 
   return (
-    <div>
-      <header className="mb-4">
-        <h2 className="font-medium">Formularios rellenados</h2>
-        <p className="text-xs text-neutral-500 mt-0.5">
-          {formSessions.length} formulario{formSessions.length !== 1 && "s"} en el historial
-        </p>
-      </header>
+    <div className="space-y-6">
+      {/* ── Valoración inicial ──────────────────────────────────────────── */}
+      <section>
+        <header className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="font-medium">Valoración inicial</h2>
+            <p className="text-xs text-neutral-500 mt-0.5">
+              Cuestionario de onboarding rellenado por el paciente
+            </p>
+          </div>
+          {patient.anamnesisCompletedAt && (
+            <div className="text-xs text-neutral-500 text-right flex-shrink-0">
+              Completada el{" "}
+              {new Date(patient.anamnesisCompletedAt).toLocaleDateString("es-ES", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+              })}
+            </div>
+          )}
+        </header>
 
-      {formSessions.length === 0 ? (
-        <p className="text-sm text-neutral-500 text-center py-12">
-          El paciente todavía no ha rellenado ningún formulario.
-        </p>
-      ) : (
-        <div className="space-y-2">
-          {formSessions.map((f) => (
-            <article key={f.sessionId} className="card">
-              <div className="flex justify-between items-start mb-2">
-                <div>
-                  <div className="font-medium text-sm">{f.formTitle}</div>
-                  <div className="text-xs text-neutral-500">{f.programName}</div>
-                </div>
-                <div className="text-xs text-right flex-shrink-0">
-                  <div className="text-neutral-500">
-                    {new Date(f.completedAt).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })}
+        {!hasAnamnesis ? (
+          <p className="text-sm text-neutral-500 text-center py-8 card">
+            Este paciente todavía no ha rellenado la valoración inicial.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {anamnesisSteps.map((step) => {
+              const answered = step.fields.filter((f) => {
+                const v = anamnesis[f.key];
+                return v !== undefined && v !== null && String(v).trim() !== "";
+              });
+              if (answered.length === 0) return null;
+              return (
+                <article key={step.id} className="card">
+                  <div className="font-medium text-sm mb-2">{step.title}</div>
+                  <div className="grid sm:grid-cols-2 gap-x-6 gap-y-2">
+                    {answered.map((f) => {
+                      const v = anamnesis[f.key];
+                      const display = f.type === "scale" ? `${v} / 10` : String(v);
+                      return (
+                        <div key={f.key} className="text-xs">
+                          <div className="text-neutral-500">{f.label}</div>
+                          <div className="font-medium mt-0.5 whitespace-pre-wrap">{display}</div>
+                        </div>
+                      );
+                    })}
                   </div>
-                  {f.formReviewedAt ? (
-                    <div className="text-emerald-700 mt-0.5">✓ Revisado</div>
-                  ) : (
-                    <div className="text-amber-700 mt-0.5">Pendiente de revisar</div>
-                  )}
-                </div>
-              </div>
+                </article>
+              );
+            })}
 
-              <div className="mt-2 border-t border-neutral-100 pt-2 space-y-1.5">
-                {f.questions.map((q: any) => {
-                  const value = f.responses[q.id];
-                  if (value === undefined || value === null || value === "") return null;
-                  return (
-                    <div key={q.id} className="text-xs">
-                      <div className="text-neutral-500">{q.text}</div>
-                      <div className="font-medium mt-0.5">{String(value)}</div>
+            {/* Respuestas a preguntas que ya no existen en el cuestionario actual */}
+            {(() => {
+              const knownKeys = new Set(anamnesisSteps.flatMap((s) => s.fields.map((f) => f.key)));
+              const orphans = Object.entries(anamnesis).filter(
+                ([k, v]) => !knownKeys.has(k) && v !== undefined && v !== null && String(v).trim() !== ""
+              );
+              if (orphans.length === 0) return null;
+              return (
+                <article className="card">
+                  <div className="font-medium text-sm mb-2">Otras respuestas</div>
+                  <div className="grid sm:grid-cols-2 gap-x-6 gap-y-2">
+                    {orphans.map(([k, v]) => (
+                      <div key={k} className="text-xs">
+                        <div className="text-neutral-500">{k}</div>
+                        <div className="font-medium mt-0.5 whitespace-pre-wrap">{String(v)}</div>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              );
+            })()}
+          </div>
+        )}
+      </section>
+
+      {/* ── Formularios de sesión ───────────────────────────────────────── */}
+      <section>
+        <header className="mb-3">
+          <h2 className="font-medium">Formularios de sesión</h2>
+          <p className="text-xs text-neutral-500 mt-0.5">
+            {formSessions.length} formulario{formSessions.length !== 1 && "s"} en el historial
+          </p>
+        </header>
+
+        {formSessions.length === 0 ? (
+          <p className="text-sm text-neutral-500 text-center py-8 card">
+            El paciente todavía no ha rellenado ningún formulario de sesión.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {formSessions.map((f) => (
+              <article key={f.sessionId} className="card">
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <div className="font-medium text-sm">{f.formTitle}</div>
+                    <div className="text-xs text-neutral-500">{f.programName}</div>
+                  </div>
+                  <div className="text-xs text-right flex-shrink-0">
+                    <div className="text-neutral-500">
+                      {new Date(f.completedAt).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })}
                     </div>
-                  );
-                })}
-              </div>
-            </article>
-          ))}
-        </div>
-      )}
+                    {f.formReviewedAt ? (
+                      <div className="text-emerald-700 mt-0.5">✓ Revisado</div>
+                    ) : (
+                      <div className="text-amber-700 mt-0.5">Pendiente de revisar</div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-2 border-t border-neutral-100 pt-2 space-y-1.5">
+                  {f.questions.map((q: any) => {
+                    const value = f.responses[q.id];
+                    if (value === undefined || value === null || value === "") return null;
+                    return (
+                      <div key={q.id} className="text-xs">
+                        <div className="text-neutral-500">{q.text}</div>
+                        <div className="font-medium mt-0.5">{String(value)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
