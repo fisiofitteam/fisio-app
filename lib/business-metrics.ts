@@ -31,6 +31,93 @@ export type BusinessMetrics = {
   ltvCacRatio: number | null;
 };
 
+// ─── Vista por meses (un año) ────────────────────────────────────────────────
+export type MonthlyRow = {
+  month: number;            // 0-11
+  altasCount: number;
+  renewedCount: number;
+  lostCount: number;
+  income: number;
+  incomeNew: number;
+  incomeRenewal: number;
+  expense: number;
+  profit: number;
+  profitPct: number | null;
+  renewalRate: number | null;
+};
+
+export type MonthlyMetrics = {
+  year: number;
+  months: MonthlyRow[];     // 12
+  annual: Omit<MonthlyRow, "month">;
+};
+
+export async function computeMonthlyBusinessMetrics(year: number): Promise<MonthlyMetrics> {
+  const yearStart = new Date(Date.UTC(year, 0, 1));
+  const yearEnd = new Date(Date.UTC(year, 11, 31, 23, 59, 59));
+
+  const [txs, renewals] = await Promise.all([
+    prisma.transaction.findMany({
+      where: { occurredAt: { gte: yearStart, lte: yearEnd } },
+      select: { type: true, amount: true, occurredAt: true },
+    }),
+    prisma.subscriptionRenewal.findMany({
+      where: { decidedAt: { gte: yearStart, lte: yearEnd } },
+      select: { outcome: true, amountPaid: true, decidedAt: true },
+    }),
+  ]);
+
+  const months: MonthlyRow[] = Array.from({ length: 12 }, (_, m) => ({
+    month: m, altasCount: 0, renewedCount: 0, lostCount: 0,
+    income: 0, incomeNew: 0, incomeRenewal: 0, expense: 0, profit: 0, profitPct: null, renewalRate: null,
+  }));
+
+  for (const t of txs) {
+    const m = months[new Date(t.occurredAt).getUTCMonth()];
+    if (t.type === "income_new") { m.incomeNew += t.amount; m.altasCount++; }
+    else if (t.type === "income_renewal") { m.incomeRenewal += t.amount; }
+    else if (t.type === "income_other") { /* va a income total */ m.income += 0; }
+    else if (t.type === "expense") { m.expense += t.amount; }
+    if (t.type.startsWith("income")) m.income += t.amount;
+  }
+  for (const r of renewals) {
+    const m = months[new Date(r.decidedAt!).getUTCMonth()];
+    if (r.outcome === "renewed") {
+      m.renewedCount++;
+      if (r.amountPaid) { m.incomeRenewal += r.amountPaid; m.income += r.amountPaid; }
+    } else if (r.outcome === "lost") {
+      m.lostCount++;
+    }
+  }
+  for (const m of months) {
+    m.profit = m.income - m.expense;
+    m.profitPct = m.income > 0 ? Math.round((m.profit / m.income) * 100) : null;
+    const decided = m.renewedCount + m.lostCount;
+    m.renewalRate = decided > 0 ? Math.round((m.renewedCount / decided) * 100) : null;
+  }
+
+  const annual = months.reduce(
+    (a, m) => ({
+      altasCount: a.altasCount + m.altasCount,
+      renewedCount: a.renewedCount + m.renewedCount,
+      lostCount: a.lostCount + m.lostCount,
+      income: a.income + m.income,
+      incomeNew: a.incomeNew + m.incomeNew,
+      incomeRenewal: a.incomeRenewal + m.incomeRenewal,
+      expense: a.expense + m.expense,
+      profit: a.profit + m.profit,
+      profitPct: null as number | null,
+      renewalRate: null as number | null,
+    }),
+    { altasCount: 0, renewedCount: 0, lostCount: 0, income: 0, incomeNew: 0, incomeRenewal: 0, expense: 0, profit: 0, profitPct: null as number | null, renewalRate: null as number | null }
+  );
+  annual.profitPct = annual.income > 0 ? Math.round((annual.profit / annual.income) * 100) : null;
+  const decidedY = annual.renewedCount + annual.lostCount;
+  annual.renewalRate = decidedY > 0 ? Math.round((annual.renewedCount / decidedY) * 100) : null;
+
+  return { year, months, annual };
+}
+
 export async function computeBusinessMetrics(start: Date, end: Date): Promise<BusinessMetrics> {
   const summary = await calculateFinanceSummary(start, end);
 
