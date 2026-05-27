@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type {
   AnamnesisField,
   AnamnesisFieldType,
@@ -30,6 +31,7 @@ export function OnboardingConfigEditor({
   initialContractText: string;
   initialContractVersion: string;
 }) {
+  const router = useRouter();
   const [tab, setTab] = useState<"cuestionario" | "contrato">("cuestionario");
   const [steps, setSteps] = useState<AnamnesisStep[]>(initialSteps);
   const [contractText, setContractText] = useState(initialContractText);
@@ -111,6 +113,7 @@ export function OnboardingConfigEditor({
         setContractText(data.contractText ?? contractText);
         setContractVersion(data.contractVersion ?? contractVersion);
         setMsg({ kind: "ok", text: "Guardado. Los nuevos pacientes verán estos cambios." });
+        router.refresh();
       } else {
         setMsg({ kind: "err", text: data.error || "No se pudo guardar." });
       }

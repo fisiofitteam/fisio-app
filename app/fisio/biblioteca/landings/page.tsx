@@ -3,6 +3,8 @@ import { getActiveProfessional } from "@/lib/session";
 import { getRenewalLandingCopy, getContractLandingCopy, getAgendaLandingCopy, getAgendaGraciasCopy } from "@/lib/landing-config";
 import { LandingConfigEditor } from "@/components/LandingConfigEditor";
 
+export const dynamic = "force-dynamic";
+
 export default async function LandingsConfigPage() {
   const user = await getActiveProfessional();
   if (!user) redirect("/login");

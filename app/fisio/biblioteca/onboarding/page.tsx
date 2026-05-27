@@ -3,6 +3,8 @@ import { getActiveProfessional } from "@/lib/session";
 import { getOnboardingConfig } from "@/lib/onboarding-config";
 import { OnboardingConfigEditor } from "@/components/OnboardingConfigEditor";
 
+export const dynamic = "force-dynamic";
+
 export default async function OnboardingConfigPage() {
   const user = await getActiveProfessional();
   if (!user) redirect("/login");

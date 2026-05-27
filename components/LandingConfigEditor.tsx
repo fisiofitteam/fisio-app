@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { ImageUpload } from "@/components/ImageUpload";
 import {
   applyVars,
@@ -15,6 +16,7 @@ const SAMPLE = { nombre: "Marta", programa: "CONSOLIDA", meses: "4", importe: "1
 
 // Hook de guardado por landing
 function useSaver(key: string) {
+  const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   async function save(content: unknown, onOk?: (c: any) => void) {
@@ -30,6 +32,7 @@ function useSaver(key: string) {
       if (res.ok) {
         onOk?.(data.content);
         setMsg({ kind: "ok", text: "Guardado." });
+        router.refresh();
       } else setMsg({ kind: "err", text: data.error || "No se pudo guardar." });
     } catch {
       setMsg({ kind: "err", text: "Error de red al guardar." });
