@@ -94,6 +94,22 @@ export async function getRecentMedia(limit = 12): Promise<MetaPost[]> {
   });
 }
 
+// Métricas de UNA publicación concreta (por su media id).
+export async function getMediaInsights(mediaId: string): Promise<{ reach: number; saved: number; shares: number; likes: number; comments: number }> {
+  const d = await graphGet(mediaId, {
+    fields: "like_count,comments_count,insights.metric(reach,saved,shares)",
+  });
+  const ins: Record<string, number> = {};
+  for (const i of d.insights?.data ?? []) ins[i.name] = i.values?.[0]?.value ?? 0;
+  return {
+    reach: ins.reach ?? 0,
+    saved: ins.saved ?? 0,
+    shares: ins.shares ?? 0,
+    likes: d.like_count ?? 0,
+    comments: d.comments_count ?? 0,
+  };
+}
+
 // ── Anuncios (Marketing API) ───────────────────────────────────────────────────
 
 // Gasto total en anuncios en un rango de fechas (YYYY-MM-DD).

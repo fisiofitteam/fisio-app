@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { PieceInstagramLink } from "@/components/PieceInstagramLink";
 import {
   DAY_LABELS,
   PIECE_STATUS,
@@ -48,7 +49,11 @@ type Piece = {
   metricsDmKeyword: number | null;
   metricsConversions: number | null;
   metricsFilledAt: string | null;
+  igMediaId: string | null;
 };
+
+export type IgPost = { id: string; caption: string; timestamp: string; permalink: string; reach: number; likes: number };
+export type InstagramProps = { metaEnabled: boolean; suggestion: IgPost | null; recent: IgPost[] };
 
 const STATUS_BADGE: Record<string, string> = {
   neutral: "bg-neutral-100 text-neutral-700 border-neutral-200",
@@ -66,11 +71,13 @@ export function PieceEditor({
   week,
   prevId,
   nextId,
+  instagram,
 }: {
   piece: Piece;
   week: { id: string; centralTheme: string; leadMagnetKeyword: string | null };
   prevId: string | null;
   nextId: string | null;
+  instagram?: InstagramProps;
 }) {
   const router = useRouter();
   const [piece, setPiece] = useState(initialPiece);
@@ -377,6 +384,14 @@ export function PieceEditor({
 
           {/* Métricas (desbloqueadas solo si status = published) */}
           <ProductionBlock title="📈 Métricas">
+            {instagram?.metaEnabled && (
+              <PieceInstagramLink
+                pieceId={piece.id}
+                igMediaId={piece.igMediaId}
+                suggestion={instagram.suggestion}
+                recent={instagram.recent}
+              />
+            )}
             <MetricsForm
               piece={piece}
               update={update}

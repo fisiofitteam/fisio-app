@@ -897,6 +897,7 @@ model ContentPiece {
   metricsDmKeyword       Int?                         // DMs recibidos con la palabra clave
   metricsConversions     Int?                         // conversiones a cliente atribuidas
   metricsFilledAt        DateTime?
+  igMediaId              String?                      // post de Instagram vinculado
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
