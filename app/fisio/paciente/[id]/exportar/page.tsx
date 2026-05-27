@@ -215,8 +215,8 @@ export default async function PatientExportPage({
               {wodLogs.length > 0 && (
                 <>
                   <Sub>Registros de WOD recientes</Sub>
-                  <Table head={["Fecha", "RPE", "Dolor", "Notas / WOD"]}
-                    rows={wodLogs.map((w) => [fDate(w.submittedAt), w.rpe != null ? String(w.rpe) : "—", w.painScore != null ? String(w.painScore) : "—", (w.notes || w.rawText || "—").slice(0, 120)])} />
+                  <Table head={["Fecha", "RPE", "Dolor", "WOD escrito por el paciente"]}
+                    rows={wodLogs.map((w) => [fDate(w.submittedAt), w.rpe != null ? String(w.rpe) : "—", w.painScore != null ? String(w.painScore) : "—", (w.rawText || "—").replace(/\s*\n\s*/g, " / ")])} />
                 </>
               )}
             </Section>
