@@ -3,6 +3,8 @@ import { getActiveProfessional } from "@/lib/session";
 import { getWelcomeConfig } from "@/lib/welcome-config";
 import { WelcomeMessageEditor } from "@/components/WelcomeMessageEditor";
 
+export const dynamic = "force-dynamic";
+
 export default async function WelcomeMessagesPage() {
   const user = await getActiveProfessional();
   if (!user) redirect("/login");

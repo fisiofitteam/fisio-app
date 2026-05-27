@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   pickWelcomeMessage,
   type WelcomeConfig,
@@ -16,6 +17,7 @@ const PROGRAM_OPTIONS: { value: WelcomeRule["programType"]; label: string }[] = 
 ];
 
 export function WelcomeMessageEditor({ initial }: { initial: WelcomeConfig }) {
+  const router = useRouter();
   const [config, setConfig] = useState<WelcomeConfig>(initial);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
@@ -59,6 +61,7 @@ export function WelcomeMessageEditor({ initial }: { initial: WelcomeConfig }) {
       if (res.ok) {
         setConfig({ rules: data.rules ?? config.rules, fallbackLine1: data.fallbackLine1, fallbackLine2: data.fallbackLine2 });
         setMsg({ kind: "ok", text: "Guardado. La home del paciente ya usa estos mensajes." });
+        router.refresh(); // invalida la caché del cliente para que al volver a la pestaña no salga la versión vieja
       } else {
         setMsg({ kind: "err", text: data.error || "No se pudo guardar." });
       }
