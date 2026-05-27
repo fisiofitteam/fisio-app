@@ -76,6 +76,9 @@ export default async function PatientLayout({
             )}
           </div>
           <div className="flex items-center gap-2">
+            <Link href={`/fisio/paciente/${patient.id}/exportar`} className="btn btn-ghost text-xs" title="Exportar toda la información del paciente en PDF">
+              🖨️ Exportar PDF
+            </Link>
             <GoToPatient />
             <WhatsAppButton url={patient.whatsappGroupUrl} size="md" />
             {patient.subscriptionStartDate && (

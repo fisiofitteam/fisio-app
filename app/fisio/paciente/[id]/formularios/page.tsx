@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getOnboardingConfig } from "@/lib/onboarding-config";
@@ -46,6 +47,15 @@ export default async function PatientFormsTab({ params }: { params: { id: string
 
   return (
     <div className="space-y-6">
+      <div className="flex justify-end">
+        <Link
+          href={`/fisio/paciente/${patient.id}/exportar?solo=formularios`}
+          className="btn btn-ghost text-xs"
+        >
+          🖨️ Exportar formularios (PDF)
+        </Link>
+      </div>
+
       {/* ── Valoración inicial ──────────────────────────────────────────── */}
       <section>
         <header className="mb-3 flex items-start justify-between gap-3">
