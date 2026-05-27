@@ -111,6 +111,7 @@ export default async function PatientExportPage({
   }
 
   const all = scope === "all";
+  const showMoney = user.role === "ceo"; // info financiera solo para el CEO
   const exportedAt = fDateTime(new Date());
 
   return (
@@ -171,13 +172,18 @@ export default async function PatientExportPage({
                 <Field label="Inicio de suscripción" value={fDate(patient.subscriptionStartDate)} />
                 <Field label="Periodo contratado" value={`${patient.subscriptionPeriodMonths} meses`} />
                 <Field label="Meses totales acumulados" value={`${patient.subscriptionTotalMonths} meses`} />
-                <Field label="Valor de vida (LTV)" value={eur(lifetimeValue)} />
-                {sale && <Field label="Venta inicial" value={`${eur(sale.amountCents / 100)} · ${fDate(sale.paidAt)}${sale.closer ? ` · ${sale.closer.fullName}` : ""}`} />}
+                {showMoney && <Field label="Valor de vida (LTV)" value={eur(lifetimeValue)} />}
+                {showMoney && sale && <Field label="Venta inicial" value={`${eur(sale.amountCents / 100)} · ${fDate(sale.paidAt)}${sale.closer ? ` · ${sale.closer.fullName}` : ""}`} />}
               </Grid>
 
               {renewals.length > 0 && (
-                <Table head={["Periodo", "Meses", "Estado", "Importe", "Fecha"]}
-                  rows={renewals.map((r) => [r.programType ?? "—", String(r.periodMonths), r.status, r.amountPaid != null ? eur(r.amountPaid) : "—", fDate(r.decidedAt)])} />
+                <>
+                  <Sub>Fases / renovaciones</Sub>
+                  <Table head={showMoney ? ["Periodo", "Meses", "Estado", "Importe", "Fecha"] : ["Periodo", "Meses", "Estado", "Fecha"]}
+                    rows={renewals.map((r) => showMoney
+                      ? [r.programType ?? "—", String(r.periodMonths), r.status, r.amountPaid != null ? eur(r.amountPaid) : "—", fDate(r.decidedAt)]
+                      : [r.programType ?? "—", String(r.periodMonths), r.status, fDate(r.decidedAt)])} />
+                </>
               )}
               {pauses.length > 0 && (
                 <>
@@ -186,7 +192,7 @@ export default async function PatientExportPage({
                     rows={pauses.map((p) => [fDate(p.startDate), fDate(p.actualEndDate ?? p.endDate), p.reason ?? "—", String(p.daysExtended), p.status])} />
                 </>
               )}
-              {transactions.length > 0 && (
+              {showMoney && transactions.length > 0 && (
                 <>
                   <Sub>Movimientos económicos</Sub>
                   <Table head={["Fecha", "Tipo", "Concepto", "Importe"]}
@@ -236,28 +242,22 @@ export default async function PatientExportPage({
               )}
             </Section>
 
-            <Section title="Programas y sesiones">
+            <Section title="Programas">
               {assignments.length === 0 ? (
                 <Empty>Sin programas asignados.</Empty>
               ) : (
-                assignments.map((a) => {
-                  const done = a.sessions.filter((s) => s.completedAt).length;
-                  return (
-                    <div key={a.id} className="pe-row mb-4">
-                      <div className="font-medium">
-                        {a.program.name}
-                        <span className="text-xs text-neutral-500 font-normal"> · {a.program.type} · nivel {a.program.level}{a.isActive ? "" : " · finalizado"}</span>
-                      </div>
-                      <div className="text-xs text-neutral-500 mb-1">
-                        Inicio {fDate(a.startDate)} · {a.weeksCount} semanas · {done}/{a.sessions.length} sesiones completadas
-                      </div>
-                      {a.sessions.length > 0 && (
-                        <Table head={["Fecha", "Semana/Día", "Estado"]}
-                          rows={a.sessions.map((s) => [fDate(s.scheduledDate), `S${s.weekNumber} · D${s.dayOfWeek}`, s.completedAt ? "✓ Completada" : "Pendiente"])} />
-                      )}
-                    </div>
-                  );
-                })
+                <Table head={["Programa", "Inicio", "Duración", "Cumplimiento"]}
+                  rows={assignments.map((a) => {
+                    const total = a.sessions.length;
+                    const done = a.sessions.filter((s) => s.completedAt).length;
+                    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+                    return [
+                      a.program.name + (a.isActive ? "" : " (finalizado)"),
+                      fDate(a.startDate),
+                      `${a.weeksCount} semanas`,
+                      total > 0 ? `${done}/${total} (${pct}%)` : "—",
+                    ];
+                  })} />
               )}
             </Section>
           </>
