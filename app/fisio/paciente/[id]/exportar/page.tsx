@@ -112,6 +112,7 @@ export default async function PatientExportPage({
 
   const all = scope === "all";
   const showMoney = user.role === "ceo"; // info financiera solo para el CEO
+  const showDifficulty = user.isManager; // dificultad solo para managers
   const exportedAt = fDateTime(new Date());
 
   return (
@@ -138,7 +139,7 @@ export default async function PatientExportPage({
             <div>
               <h1 className="text-2xl font-bold">{patient.fullName}</h1>
               <p className="text-neutral-600 mt-1">
-                {[patient.programType, patient.difficulty, patient.diagnosis].filter(Boolean).join(" · ") || "—"}
+                {[patient.programType, showDifficulty ? patient.difficulty : null, patient.diagnosis].filter(Boolean).join(" · ") || "—"}
               </p>
             </div>
             <div className="text-xs text-neutral-500 text-right">
@@ -158,7 +159,7 @@ export default async function PatientExportPage({
                 <Field label="Diagnóstico" value={patient.diagnosis} />
                 <Field label="Zona corporal" value={patient.bodyZone} />
                 <Field label="Programa" value={patient.programType} />
-                <Field label="Dificultad" value={patient.difficulty} />
+                {showDifficulty && <Field label="Dificultad" value={patient.difficulty} />}
                 <Field label="Modo de programa" value={patient.programMode === "rolling" ? "Rolling" : "Fijo"} />
                 {patient.appliedLevel && (
                   <Field label="Perfil clínico aplicado" value={`${patient.appliedLevel.profile.name} · ${patient.appliedLevel.name}`} />
@@ -243,11 +244,13 @@ export default async function PatientExportPage({
             </Section>
 
             <Section title="Programas">
-              {assignments.length === 0 ? (
+              {(() => {
+              const programAssignments = assignments.filter((a) => !a.program.isStandalone);
+              return programAssignments.length === 0 ? (
                 <Empty>Sin programas asignados.</Empty>
               ) : (
                 <Table head={["Programa", "Inicio", "Duración", "Cumplimiento"]}
-                  rows={assignments.map((a) => {
+                  rows={programAssignments.map((a) => {
                     const total = a.sessions.length;
                     const done = a.sessions.filter((s) => s.completedAt).length;
                     const pct = total > 0 ? Math.round((done / total) * 100) : 0;
@@ -258,7 +261,8 @@ export default async function PatientExportPage({
                       total > 0 ? `${done}/${total} (${pct}%)` : "—",
                     ];
                   })} />
-              )}
+              );
+              })()}
             </Section>
           </>
         )}
