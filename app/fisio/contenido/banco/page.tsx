@@ -44,10 +44,7 @@ export default async function BankPage({
           text: h.text,
           format: h.format,
           bodyZone: h.bodyZone,
-          reach: h.reach,
-          saves: h.saves,
-          dmKeyword: h.dmKeyword,
-          conversions: h.conversions,
+          url: h.url,
           notes: h.notes,
         }))}
         cases={cases.map((c) => ({

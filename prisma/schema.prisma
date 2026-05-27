@@ -941,16 +941,17 @@ model ClinicalCase {
 
 model WinningHook {
   id              String   @id @default(cuid())
-  text            String                                // el hook en sí
-  format          String?                               // formato donde funcionó: belief_carousel, etc.
+  text            String                                // título del hook / idea
+  format          String?                               // formato sugerido
   bodyZone        String?                               // zona corporal
   weekId          String?                               // de qué semana salió (opcional)
-  // Métricas que justifican que sea "ganador" (se copian al añadirlo al banco)
+  url             String?                               // enlace a reel/vídeo de referencia
+  // (legacy, ya no se usan en la UI de hooks)
   reach           Int?
   saves           Int?
   dmKeyword       Int?
   conversions     Int?
-  notes           String?                               // por qué funcionó / cuándo reutilizarlo
+  notes           String?                               // descripción
   createdAt       DateTime @default(now())
 
   @@index([format])

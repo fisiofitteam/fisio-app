@@ -16,10 +16,7 @@ export async function POST(req: NextRequest) {
       format: d.format || null,
       bodyZone: d.bodyZone || null,
       weekId: d.weekId || null,
-      reach: d.reach != null ? Number(d.reach) : null,
-      saves: d.saves != null ? Number(d.saves) : null,
-      dmKeyword: d.dmKeyword != null ? Number(d.dmKeyword) : null,
-      conversions: d.conversions != null ? Number(d.conversions) : null,
+      url: d.url || null,
       notes: d.notes || null,
     },
   });
@@ -31,11 +28,8 @@ export async function PATCH(req: NextRequest) {
   if (!user || !canAccess(user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id, ...rest } = await req.json();
   const update: any = {};
-  for (const k of ["text", "format", "bodyZone", "notes"]) {
+  for (const k of ["text", "format", "bodyZone", "notes", "url"]) {
     if (rest[k] !== undefined) update[k] = rest[k] || null;
-  }
-  for (const k of ["reach", "saves", "dmKeyword", "conversions"]) {
-    if (rest[k] !== undefined) update[k] = rest[k] === "" || rest[k] == null ? null : Number(rest[k]);
   }
   const h = await prisma.winningHook.update({ where: { id }, data: update });
   return NextResponse.json(h);

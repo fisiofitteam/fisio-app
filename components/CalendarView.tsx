@@ -7,6 +7,7 @@ import {
   BODY_ZONES,
   WEEK_TYPES,
   WEEK_STATUS,
+  isoWeekFromDate,
 } from "@/lib/content-templates";
 import {
   FORMATS,
@@ -230,6 +231,38 @@ function MonthGrid({
 }) {
   const router = useRouter();
   const [eventModal, setEventModal] = useState<{ date: string; event: CalEvent | null } | null>(null);
+  const [creatingWeek, setCreatingWeek] = useState(false);
+
+  // Crea (o abre, si ya existe) la semana de contenido para un lunes dado y
+  // lleva a su vista para editarla.
+  async function createWeekForMonday(monday: Date) {
+    if (creatingWeek) return;
+    setCreatingWeek(true);
+    const local = new Date(monday.getUTCFullYear(), monday.getUTCMonth(), monday.getUTCDate());
+    const { year, weekNumber } = isoWeekFromDate(local);
+    try {
+      const res = await fetch("/api/content/weeks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ year, weekNumber }),
+      });
+      if (res.ok) {
+        const w = await res.json();
+        router.push(`/fisio/contenido?week=${w.id}`);
+        return;
+      }
+      // Si ya existe (409), la abrimos igualmente.
+      if (res.status === 409) {
+        const existing = await res.json().catch(() => null);
+        if (existing?.weekId) { router.push(`/fisio/contenido?week=${existing.weekId}`); return; }
+      }
+      alert("No se pudo crear la semana.");
+    } catch {
+      alert("No se pudo crear la semana.");
+    } finally {
+      setCreatingWeek(false);
+    }
+  }
 
   // Construir cuadrícula del mes
   const firstOfMonth = new Date(Date.UTC(year, month - 1, 1));
@@ -310,9 +343,14 @@ function MonthGrid({
                 <WeekThemeBanner week={rowWeek} />
               )}
               {!rowWeek && (
-                <div className="col-span-7 px-2 py-1 text-[10px] text-neutral-300 italic border-b border-neutral-100">
-                  Sin semana planificada
-                </div>
+                <button
+                  onClick={() => createWeekForMonday(rowMonday)}
+                  disabled={creatingWeek}
+                  className="col-span-7 px-2 py-1 text-[10px] text-neutral-400 italic border-b border-neutral-100 text-left hover:bg-amber-50 hover:text-amber-800 transition-colors disabled:opacity-50"
+                  title="Crear la semana de contenido para estos días"
+                >
+                  + Crear semana
+                </button>
               )}
               {/* Días */}
               {Array.from({ length: 7 }).map((_, colIdx) => {
@@ -456,6 +494,7 @@ function WeekThemeBanner({ week }: { week: Week }) {
   return (
     <Link
       href={`/fisio/contenido?week=${week.id}`}
+      title="Abrir y editar esta semana"
       className="col-span-7 px-2 py-1.5 border-b bg-neutral-100 border-neutral-200 text-neutral-700 hover:bg-neutral-200 transition-colors"
     >
       <div className="flex items-center justify-between gap-2 flex-wrap">

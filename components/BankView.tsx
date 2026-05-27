@@ -20,10 +20,7 @@ type Hook = {
   text: string;
   format: string | null;
   bodyZone: string | null;
-  reach: number | null;
-  saves: number | null;
-  dmKeyword: number | null;
-  conversions: number | null;
+  url: string | null;
   notes: string | null;
 };
 
@@ -431,7 +428,7 @@ function HooksTab({ items }: { items: Hook[] }) {
       {filtered.length === 0 ? (
         <section className="card text-center py-12">
           <p className="text-sm text-neutral-400 italic">
-            {items.length === 0 ? "Aún no hay hooks ganadores. Añade el primero." : "Ningún hook cumple los filtros."}
+            {items.length === 0 ? "Aún no hay hooks. Añade el primero." : "Ningún hook cumple los filtros."}
           </p>
         </section>
       ) : (
@@ -441,18 +438,19 @@ function HooksTab({ items }: { items: Hook[] }) {
             const zone = h.bodyZone ? BODY_ZONES.find((z) => z.value === h.bodyZone)?.label : null;
             return (
               <div key={h.id} className="card group">
-                <p className="text-sm font-medium mb-2">"{h.text}"</p>
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {tpl && <span className="text-[10px] uppercase bg-neutral-100 text-neutral-700 px-2 py-0.5 rounded">{tpl.label}</span>}
-                  {zone && <span className="text-[10px] uppercase bg-blue-100 text-blue-800 px-2 py-0.5 rounded">{zone}</span>}
-                </div>
-                <div className="flex gap-4 text-xs text-neutral-600">
-                  {h.reach != null && <span>👀 {h.reach.toLocaleString("es-ES")}</span>}
-                  {h.saves != null && <span>🔖 {h.saves}</span>}
-                  {h.dmKeyword != null && <span>💬 {h.dmKeyword} DMs</span>}
-                  {h.conversions != null && <span>💰 {h.conversions}</span>}
-                </div>
-                {h.notes && <p className="text-xs text-neutral-500 italic mt-2">{h.notes}</p>}
+                <p className="text-sm font-medium mb-2">{h.text}</p>
+                {(tpl || zone) && (
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {tpl && <span className="text-[10px] uppercase bg-neutral-100 text-neutral-700 px-2 py-0.5 rounded">{tpl.label}</span>}
+                    {zone && <span className="text-[10px] uppercase bg-blue-100 text-blue-800 px-2 py-0.5 rounded">{zone}</span>}
+                  </div>
+                )}
+                {h.notes && <p className="text-xs text-neutral-600 mb-2">{h.notes}</p>}
+                {h.url && (
+                  <a href={h.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline break-all inline-flex items-center gap-1">
+                    🔗 Ver referencia
+                  </a>
+                )}
                 <div className="flex gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button onClick={() => setEditing(h)} className="text-[11px] text-neutral-500 hover:text-neutral-900">Editar</button>
                   <button onClick={() => remove(h.id)} className="text-[11px] text-neutral-300 hover:text-red-600 ml-auto">Eliminar</button>
@@ -474,10 +472,7 @@ function HookModal({ item, onClose, onSave }: { item: Hook | null; onClose: () =
   const [text, setText] = useState(item?.text ?? "");
   const [format, setFormat] = useState(item?.format ?? "");
   const [bodyZone, setBodyZone] = useState(item?.bodyZone ?? "");
-  const [reach, setReach] = useState(item?.reach != null ? String(item.reach) : "");
-  const [saves, setSaves] = useState(item?.saves != null ? String(item.saves) : "");
-  const [dmKeyword, setDmKeyword] = useState(item?.dmKeyword != null ? String(item.dmKeyword) : "");
-  const [conversions, setConversions] = useState(item?.conversions != null ? String(item.conversions) : "");
+  const [url, setUrl] = useState(item?.url ?? "");
   const [notes, setNotes] = useState(item?.notes ?? "");
   const [saving, setSaving] = useState(false);
 
@@ -486,10 +481,7 @@ function HookModal({ item, onClose, onSave }: { item: Hook | null; onClose: () =
     setSaving(true);
     await onSave({
       text, format: format || null, bodyZone: bodyZone || null,
-      reach: reach === "" ? null : Number(reach),
-      saves: saves === "" ? null : Number(saves),
-      dmKeyword: dmKeyword === "" ? null : Number(dmKeyword),
-      conversions: conversions === "" ? null : Number(conversions),
+      url: url.trim() || null,
       notes,
     });
   }
@@ -498,51 +490,37 @@ function HookModal({ item, onClose, onSave }: { item: Hook | null; onClose: () =
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl max-w-lg w-full p-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-4">
-          <h3 className="font-medium">{item ? "Editar hook ganador" : "Nuevo hook ganador"}</h3>
+          <h3 className="font-medium">{item ? "Editar hook" : "Nuevo hook"}</h3>
           <button onClick={onClose} className="text-neutral-400 text-xl">✕</button>
         </div>
         <div className="space-y-3">
           <div>
-            <label className="text-xs text-neutral-500 block mb-1">El hook</label>
-            <textarea className="input text-sm" rows={2} value={text} onChange={(e) => setText(e.target.value)} autoFocus />
+            <label className="text-xs text-neutral-500 block mb-1">Título del hook</label>
+            <textarea className="input text-sm" rows={2} value={text} onChange={(e) => setText(e.target.value)} placeholder="Ej: 'Si te truena la rodilla al sentar, mira esto'" autoFocus />
+          </div>
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Descripción</label>
+            <textarea className="input text-sm" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="De qué va la idea, ángulo, a quién va dirigido…" />
+          </div>
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">URL de referencia (opcional)</label>
+            <input className="input text-sm" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Enlace a un reel o vídeo de referencia" />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-xs text-neutral-500 block mb-1">Formato donde funcionó</label>
+              <label className="text-xs text-neutral-500 block mb-1">Formato (opcional)</label>
               <select className="input text-sm" value={format} onChange={(e) => setFormat(e.target.value)}>
                 <option value="">— Sin definir —</option>
                 {Object.entries(FORMAT_TEMPLATES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-xs text-neutral-500 block mb-1">Zona corporal</label>
+              <label className="text-xs text-neutral-500 block mb-1">Zona corporal (opcional)</label>
               <select className="input text-sm" value={bodyZone} onChange={(e) => setBodyZone(e.target.value)}>
                 <option value="">— Sin definir —</option>
                 {BODY_ZONES.map((z) => <option key={z.value} value={z.value}>{z.label}</option>)}
               </select>
             </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs text-neutral-500 block mb-1">Alcance</label>
-              <input type="number" min="0" className="input text-sm" value={reach} onChange={(e) => setReach(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-xs text-neutral-500 block mb-1">Guardados</label>
-              <input type="number" min="0" className="input text-sm" value={saves} onChange={(e) => setSaves(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-xs text-neutral-500 block mb-1">DMs palabra clave</label>
-              <input type="number" min="0" className="input text-sm" value={dmKeyword} onChange={(e) => setDmKeyword(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-xs text-neutral-500 block mb-1">Conversiones</label>
-              <input type="number" min="0" className="input text-sm" value={conversions} onChange={(e) => setConversions(e.target.value)} />
-            </div>
-          </div>
-          <div>
-            <label className="text-xs text-neutral-500 block mb-1">Notas</label>
-            <textarea className="input text-sm" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <button onClick={onClose} className="text-sm text-neutral-500">Cancelar</button>
