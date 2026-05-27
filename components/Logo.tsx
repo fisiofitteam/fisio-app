@@ -20,7 +20,7 @@ export function LogoFull({ size = 24, variant = "light" }: { size?: number; vari
     <span className="inline-flex items-center gap-2">
       <Logo size={size} />
       <span
-        className="font-semibold tracking-tight"
+        className="app-logo-text font-semibold tracking-tight"
         style={{ color: variant === "dark" ? "#FAFAFA" : "#0A0A0A" }}
       >
         FisioFit App

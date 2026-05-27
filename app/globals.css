@@ -105,6 +105,35 @@ h1, h2, h3, h4, h5 {
 .fisio-shell.dark .pill-warn { background: rgba(245,158,11,.16); color: #FCD34D; }
 .fisio-shell.dark .pill-block { background: rgba(239,68,68,.15); color: #FCA5A5; }
 
+/* Más tonos de acento (shades 500/600/900) para que números y badges de colores
+   sean legibles sobre fondo oscuro. Mapean al mismo tinte claro que 700/800. */
+.fisio-shell.dark .text-emerald-900, .fisio-shell.dark .text-emerald-600, .fisio-shell.dark .text-emerald-500,
+.fisio-shell.dark .text-green-900, .fisio-shell.dark .text-green-800, .fisio-shell.dark .text-green-700, .fisio-shell.dark .text-green-600, .fisio-shell.dark .text-green-500 { color: #6EE7B7; }
+.fisio-shell.dark .text-amber-900, .fisio-shell.dark .text-amber-600, .fisio-shell.dark .text-amber-500,
+.fisio-shell.dark .text-orange-900, .fisio-shell.dark .text-orange-800, .fisio-shell.dark .text-orange-700, .fisio-shell.dark .text-orange-600, .fisio-shell.dark .text-orange-500 { color: #FCD34D; }
+.fisio-shell.dark .text-red-900, .fisio-shell.dark .text-red-500 { color: #FCA5A5; }
+.fisio-shell.dark .text-blue-900, .fisio-shell.dark .text-blue-600, .fisio-shell.dark .text-blue-500 { color: #93C5FD; }
+.fisio-shell.dark .text-purple-900, .fisio-shell.dark .text-purple-600, .fisio-shell.dark .text-purple-500 { color: #D8B4FE; }
+.fisio-shell.dark .text-pink-900, .fisio-shell.dark .text-pink-600, .fisio-shell.dark .text-pink-500 { color: #F9A8D4; }
+
+/* Fondos tintados extra (50/100) y bordes de color suavizados para el modo oscuro. */
+.fisio-shell.dark .bg-green-50, .fisio-shell.dark .bg-green-100 { background-color: rgba(16,185,129,.14) !important; }
+.fisio-shell.dark .bg-orange-50, .fisio-shell.dark .bg-orange-100 { background-color: rgba(245,158,11,.16) !important; }
+.fisio-shell.dark .border-emerald-200, .fisio-shell.dark .border-emerald-300, .fisio-shell.dark .border-green-200, .fisio-shell.dark .border-green-300 { border-color: rgba(16,185,129,.35); }
+.fisio-shell.dark .border-amber-200, .fisio-shell.dark .border-amber-300, .fisio-shell.dark .border-orange-200, .fisio-shell.dark .border-orange-300 { border-color: rgba(245,158,11,.38); }
+.fisio-shell.dark .border-red-200, .fisio-shell.dark .border-red-300 { border-color: rgba(239,68,68,.35); }
+.fisio-shell.dark .border-blue-200, .fisio-shell.dark .border-blue-300 { border-color: rgba(59,130,246,.38); }
+.fisio-shell.dark .border-purple-200, .fisio-shell.dark .border-purple-300 { border-color: rgba(168,85,247,.38); }
+
+/* Superposiciones blancas translúcidas (hover/selección de filas): un blanco al 60%
+   lava el contenido en oscuro. Lo bajamos a un velo sutil. */
+.fisio-shell.dark .bg-white\/60, .fisio-shell.dark .hover\:bg-white\/60:hover { background-color: rgba(255,255,255,.07) !important; }
+.fisio-shell.dark .bg-white\/20 { background-color: rgba(255,255,255,.10) !important; }
+
+/* Logo de la app: el texto "FisioFit App" lleva color inline negro; en oscuro lo
+   forzamos a claro para que se vea. */
+.fisio-shell.dark .app-logo-text { color: #FAFAFA !important; }
+
 /* Gradiente amarillo de marca reutilizable */
 .brand-gradient {
   background: linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%);
