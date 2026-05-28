@@ -258,11 +258,19 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       },
     });
 
-    // Update Lead: marcar como won si no lo está ya
+    // Update Lead: marcar como won si no lo está ya, incluyendo la fecha de
+    // decisión (el panel del closer la usa para listar "ventas realizadas").
     if (sale.lead.status !== "won") {
       await tx.lead.update({
         where: { id: sale.leadId },
-        data: { status: "won" },
+        data: { status: "won", decidedAt: now },
+      });
+    } else if (!sale.lead.decidedAt) {
+      // El lead ya estaba won (marcado a mano) pero sin fecha de decisión —
+      // ahora que tenemos el pago, la fijamos.
+      await tx.lead.update({
+        where: { id: sale.leadId },
+        data: { decidedAt: now },
       });
     }
 
