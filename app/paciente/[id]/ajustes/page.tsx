@@ -5,11 +5,20 @@ import { PatientNav } from "@/components/PatientNav";
 import { PatientThemeToggle } from "@/components/PatientThemeToggle";
 import { PatientLogoutButton } from "@/components/PatientLogoutButton";
 import { PatientPhotoUploader } from "@/components/PatientPhotoUploader";
+import { PatientShippingForm } from "@/components/PatientShippingForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function PatientSettingsPage({ params }: { params: { id: string } }) {
-  const patient = await prisma.patient.findUnique({ where: { id: params.id }, select: { id: true, fullName: true, photoUrl: true } });
+  const patient = await prisma.patient.findUnique({
+    where: { id: params.id },
+    select: {
+      id: true, fullName: true, photoUrl: true,
+      shippingStreet: true, shippingNumber: true, shippingFloor: true,
+      shippingStaircase: true, shippingDoor: true, shippingCity: true,
+      shippingProvince: true, shippingPostalCode: true, shippingPhone: true,
+    },
+  });
   if (!patient) notFound();
 
   return (
@@ -29,6 +38,30 @@ export default async function PatientSettingsPage({ params }: { params: { id: st
             <h2 className="font-semibold text-sm">Foto de perfil</h2>
           </div>
           <PatientPhotoUploader initialUrl={patient.photoUrl} />
+        </section>
+
+        <section id="envio"
+          className="rounded-2xl p-4 mb-3"
+          style={{ background: "var(--p-surface)", border: "1px solid var(--p-border)" }}
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-lg">📦</span>
+            <h2 className="font-semibold text-sm">Dirección de envío</h2>
+          </div>
+          <p className="text-xs mb-3" style={{ color: "var(--p-text-dim)" }}>
+            La necesitamos para enviarte los parches de fisioterapia a casa.
+          </p>
+          <PatientShippingForm initial={{
+            shippingStreet: patient.shippingStreet,
+            shippingNumber: patient.shippingNumber,
+            shippingFloor: patient.shippingFloor,
+            shippingStaircase: patient.shippingStaircase,
+            shippingDoor: patient.shippingDoor,
+            shippingCity: patient.shippingCity,
+            shippingProvince: patient.shippingProvince,
+            shippingPostalCode: patient.shippingPostalCode,
+            shippingPhone: patient.shippingPhone,
+          }} />
         </section>
 
         <section

@@ -261,6 +261,7 @@ export default async function PatientHome({ params }: { params: { id: string } }
           : null,
         whatsappGroupUrl: patient.whatsappGroupUrl,
         photoUrl: patient.photoUrl,
+        shippingComplete: !!(patient.shippingStreet && patient.shippingNumber && patient.shippingCity && patient.shippingPostalCode),
       }}
       todaySessions={todaySessions.map((s) => ({
         id: s.id,

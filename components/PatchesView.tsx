@@ -11,10 +11,37 @@ type Patient = {
   patchSent: boolean;
   patchSentAt: string | null;
   shippingAddress: string | null;
+  shippingStreet: string | null;
+  shippingNumber: string | null;
+  shippingFloor: string | null;
+  shippingStaircase: string | null;
+  shippingDoor: string | null;
   shippingCity: string | null;
+  shippingProvince: string | null;
   shippingPostalCode: string | null;
   shippingPhone: string | null;
 };
+
+// Construye la primera línea de la dirección a partir de los campos estructurados;
+// si solo existe el campo legacy de texto libre, lo devuelve tal cual.
+function buildAddressLine1(p: Patient): string {
+  if (p.shippingStreet) {
+    const parts = [p.shippingStreet];
+    if (p.shippingNumber) parts.push(p.shippingNumber);
+    const detail = [p.shippingFloor, p.shippingStaircase, p.shippingDoor].filter(Boolean).join(" ");
+    if (detail) parts.push(detail);
+    return parts.join(", ");
+  }
+  return p.shippingAddress ?? "";
+}
+function buildAddressLine2(p: Patient): string {
+  const parts: string[] = [];
+  if (p.shippingPostalCode) parts.push(p.shippingPostalCode);
+  if (p.shippingCity) parts.push(p.shippingCity);
+  let line = parts.join(" ");
+  if (p.shippingProvince) line += ` (${p.shippingProvince})`;
+  return line;
+}
 
 export function PatchesView({
   view,
@@ -53,6 +80,10 @@ export function PatchesView({
   }
 
   function hasShipping(p: Patient): boolean {
+    // Estructurada (preferida): calle + número + ciudad + CP
+    const structured = !!(p.shippingStreet && p.shippingNumber && p.shippingCity && p.shippingPostalCode);
+    if (structured) return true;
+    // Legacy: texto libre + ciudad + CP
     return !!(p.shippingAddress && p.shippingCity && p.shippingPostalCode);
   }
 
@@ -122,8 +153,8 @@ export function PatchesView({
                   {/* Datos de envío */}
                   {hasShipping(p) ? (
                     <div className="text-xs text-neutral-600 leading-relaxed mt-1.5 bg-neutral-50 rounded px-2 py-1.5">
-                      <div>📍 {p.shippingAddress}</div>
-                      <div>{p.shippingPostalCode} {p.shippingCity}</div>
+                      <div>📍 {buildAddressLine1(p)}</div>
+                      <div>{buildAddressLine2(p)}</div>
                       {p.shippingPhone && <div>📞 {p.shippingPhone}</div>}
                     </div>
                   ) : (
@@ -189,11 +220,22 @@ function ShippingModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [address, setAddress] = useState(patient.shippingAddress ?? "");
-  const [city, setCity] = useState(patient.shippingCity ?? "");
-  const [postalCode, setPostalCode] = useState(patient.shippingPostalCode ?? "");
-  const [phone, setPhone] = useState(patient.shippingPhone ?? "");
+  const [v, setV] = useState({
+    shippingStreet: patient.shippingStreet ?? "",
+    shippingNumber: patient.shippingNumber ?? "",
+    shippingFloor: patient.shippingFloor ?? "",
+    shippingStaircase: patient.shippingStaircase ?? "",
+    shippingDoor: patient.shippingDoor ?? "",
+    shippingCity: patient.shippingCity ?? "",
+    shippingProvince: patient.shippingProvince ?? "",
+    shippingPostalCode: patient.shippingPostalCode ?? "",
+    shippingPhone: patient.shippingPhone ?? "",
+  });
   const [saving, setSaving] = useState(false);
+
+  function field<K extends keyof typeof v>(k: K, val: string) {
+    setV((s) => ({ ...s, [k]: val }));
+  }
 
   async function save() {
     setSaving(true);
@@ -202,10 +244,7 @@ function ShippingModal({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         id: patient.id,
-        shippingAddress: address || null,
-        shippingCity: city || null,
-        shippingPostalCode: postalCode || null,
-        shippingPhone: phone || null,
+        ...Object.fromEntries(Object.entries(v).map(([k, val]) => [k, val.trim() || null])),
       }),
     });
     onSaved();
@@ -213,36 +252,56 @@ function ShippingModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl max-w-md w-full p-4" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl max-w-md w-full p-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-4">
           <h3 className="font-medium">Datos de envío · {patient.fullName}</h3>
           <button onClick={onClose} className="text-neutral-400 text-xl">✕</button>
         </div>
 
         <div className="space-y-3">
-          <div>
-            <label className="text-xs text-neutral-500 block mb-1">Dirección</label>
-            <input
-              className="input text-sm"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="Calle, número, piso, puerta"
-              autoFocus
-            />
+          <div className="grid grid-cols-3 gap-2">
+            <div className="col-span-2">
+              <label className="text-xs text-neutral-500 block mb-1">Calle</label>
+              <input className="input text-sm" value={v.shippingStreet} onChange={(e) => field("shippingStreet", e.target.value)} placeholder="Calle Mayor" autoFocus />
+            </div>
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">Número</label>
+              <input className="input text-sm" value={v.shippingNumber} onChange={(e) => field("shippingNumber", e.target.value)} placeholder="23" />
+            </div>
           </div>
           <div className="grid grid-cols-3 gap-2">
             <div>
-              <label className="text-xs text-neutral-500 block mb-1">Código postal</label>
-              <input className="input text-sm" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="28001" />
+              <label className="text-xs text-neutral-500 block mb-1">Piso</label>
+              <input className="input text-sm" value={v.shippingFloor} onChange={(e) => field("shippingFloor", e.target.value)} placeholder="3º" />
             </div>
-            <div className="col-span-2">
-              <label className="text-xs text-neutral-500 block mb-1">Ciudad</label>
-              <input className="input text-sm" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Madrid" />
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">Escalera / Patio</label>
+              <input className="input text-sm" value={v.shippingStaircase} onChange={(e) => field("shippingStaircase", e.target.value)} placeholder="B" />
+            </div>
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">Puerta</label>
+              <input className="input text-sm" value={v.shippingDoor} onChange={(e) => field("shippingDoor", e.target.value)} placeholder="A" />
             </div>
           </div>
-          <div>
-            <label className="text-xs text-neutral-500 block mb-1">Teléfono de contacto</label>
-            <input className="input text-sm" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+34 600 123 456" />
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">Población</label>
+              <input className="input text-sm" value={v.shippingCity} onChange={(e) => field("shippingCity", e.target.value)} placeholder="Valencia" />
+            </div>
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">Provincia</label>
+              <input className="input text-sm" value={v.shippingProvince} onChange={(e) => field("shippingProvince", e.target.value)} placeholder="Valencia" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">Código postal</label>
+              <input className="input text-sm" value={v.shippingPostalCode} onChange={(e) => field("shippingPostalCode", e.target.value)} placeholder="46001" />
+            </div>
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">Teléfono</label>
+              <input className="input text-sm" value={v.shippingPhone} onChange={(e) => field("shippingPhone", e.target.value)} placeholder="+34 600 000 000" />
+            </div>
           </div>
 
           <button onClick={save} disabled={saving} className="btn btn-primary w-full text-sm">

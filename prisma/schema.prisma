@@ -26,9 +26,15 @@ model Patient {
   // Parche de bienvenida (regalo del setter al iniciar el programa)
   patchSent                Boolean   @default(false)
   patchSentAt              DateTime?
-  shippingAddress          String?    // dirección de envío para parches
-  shippingCity             String?
-  shippingPostalCode       String?
+  shippingAddress          String?    // legacy / texto libre (se mantiene por compat)
+  shippingStreet           String?    // calle (ej. "Calle Mayor")
+  shippingNumber           String?    // número (ej. "23")
+  shippingFloor            String?    // piso (ej. "3º")
+  shippingStaircase        String?    // escalera / patio
+  shippingDoor             String?    // puerta (ej. "A")
+  shippingCity             String?    // población
+  shippingProvince         String?    // provincia
+  shippingPostalCode       String?    // código postal
   shippingPhone            String?
 
   // Tipo de programa contratado y dificultad percibida (etiquetas visibles)

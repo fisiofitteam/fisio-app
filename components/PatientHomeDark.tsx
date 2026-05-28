@@ -37,6 +37,7 @@ type Patient = {
   appliedLevelName: string | null;
   whatsappGroupUrl: string | null;
   photoUrl: string | null;
+  shippingComplete: boolean;
 };
 
 type Adherence = {
@@ -150,6 +151,26 @@ export function PatientHomeDark({
               </div>
             </div>
             <span className="text-xs font-medium underline flex-shrink-0">Subir</span>
+          </Link>
+        )}
+
+        {!patient.shippingComplete && (
+          <Link
+            href={`/paciente/${patient.id}/ajustes#envio`}
+            className="mb-5 rounded-xl px-4 py-3 text-sm flex items-center justify-between gap-3"
+            style={{
+              background: "var(--p-amber-bg)",
+              border: "1px solid var(--p-amber-border)",
+              color: "var(--p-amber-text)",
+            }}
+          >
+            <div className="flex-1 min-w-0">
+              <div className="font-medium mb-0.5">📦 Completa tu dirección de envío</div>
+              <div className="text-xs" style={{ color: "var(--p-text-dim)" }}>
+                La necesitamos para enviarte tus parches a casa.
+              </div>
+            </div>
+            <span className="text-xs font-medium underline flex-shrink-0">Completar</span>
           </Link>
         )}
         {/* Header */}
