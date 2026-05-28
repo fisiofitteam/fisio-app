@@ -40,6 +40,12 @@ const SECTIONS = [
     icon: "📝",
     desc: "Cuestionarios rellenados",
   },
+  {
+    id: "wods",
+    label: "WODs",
+    icon: "⚡",
+    desc: "Últimos WODs registrados",
+  },
 ];
 
 // Aparece solo si el paciente está en una sesión clínica.
