@@ -258,21 +258,20 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       },
     });
 
-    // Update Lead: marcar como won si no lo está ya, incluyendo la fecha de
-    // decisión (el panel del closer la usa para listar "ventas realizadas").
+    // Update Lead: marcar como won + decidedAt + vincular el paciente creado.
+    // convertedPatientId es CLAVE para que las métricas y la lista del panel del
+    // closer encuentren el paciente y sus transacciones (income_new).
+    const leadUpdate: any = { convertedPatientId: patient.id };
     if (sale.lead.status !== "won") {
-      await tx.lead.update({
-        where: { id: sale.leadId },
-        data: { status: "won", decidedAt: now },
-      });
+      leadUpdate.status = "won";
+      leadUpdate.decidedAt = now;
     } else if (!sale.lead.decidedAt) {
-      // El lead ya estaba won (marcado a mano) pero sin fecha de decisión —
-      // ahora que tenemos el pago, la fijamos.
-      await tx.lead.update({
-        where: { id: sale.leadId },
-        data: { decidedAt: now },
-      });
+      leadUpdate.decidedAt = now;
     }
+    await tx.lead.update({
+      where: { id: sale.leadId },
+      data: leadUpdate,
+    });
 
     return patient;
   });
