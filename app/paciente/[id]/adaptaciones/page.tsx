@@ -34,9 +34,9 @@ export default async function PatientAdaptations({ params }: { params: { id: str
           <div
             className="text-center text-sm font-semibold uppercase mb-3 px-4 py-2 rounded-full inline-block"
             style={{
-              background: "rgba(239, 68, 68, 0.15)",
-              color: "#FCA5A5",
-              border: "1px solid rgba(239, 68, 68, 0.4)",
+              background: "var(--p-red-bg)",
+              color: "var(--p-red-text)",
+              border: "1px solid var(--p-red-border)",
               letterSpacing: "0.1em",
               display: "block",
               maxWidth: "fit-content",
@@ -68,9 +68,9 @@ export default async function PatientAdaptations({ params }: { params: { id: str
           <div
             className="text-center text-sm font-semibold uppercase mb-3 px-4 py-2 rounded-full"
             style={{
-              background: "rgba(245, 158, 11, 0.15)",
-              color: "#FCD34D",
-              border: "1px solid rgba(245, 158, 11, 0.4)",
+              background: "var(--p-amber-bg)",
+              color: "var(--p-amber-text)",
+              border: "1px solid var(--p-amber-border)",
               letterSpacing: "0.1em",
               display: "block",
               maxWidth: "fit-content",
