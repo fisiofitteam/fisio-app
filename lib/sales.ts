@@ -15,8 +15,14 @@ export type SalesMetrics = {
   ticketAvg: number | null; // ticket medio
 };
 
-// `scheduled`: TODAS las llamadas cuyo callScheduledAt cae en el rango.
-// (independientemente del status final)
+// Métricas del período:
+//   - `scheduled`: llamadas cuya FECHA DE CITA (callScheduledAt) cae en el rango.
+//     Refleja la actividad del calendario del closer en ese período.
+//   - `won/lost/cancelled/no_show`: leads DECIDIDOS en el rango (decidedAt).
+//     Esto permite que un lead agendado para un mes y cerrado en otro (p.ej. tras
+//     follow-up) impacte en el período de cierre, no en el de la llamada original.
+//   - `revenue`: suma de transacciones income_new asociadas a los leads decididos
+//     como "won" en el período.
 export async function calculateSalesMetrics(
   start: Date,
   end: Date,
@@ -24,25 +30,28 @@ export async function calculateSalesMetrics(
 ): Promise<SalesMetrics> {
   const baseWhere = closerId ? { closerId } : {};
 
-  const leads = await prisma.lead.findMany({
+  // ── A) Llamadas que TENÍAN cita en el período (cualquier estado) ─────────
+  const scheduled = await prisma.lead.count({
+    where: { ...baseWhere, callScheduledAt: { gte: start, lte: end } },
+  });
+
+  // ── B) Leads decididos (cerrados) en el período ───────────────────────────
+  const decided = await prisma.lead.findMany({
     where: {
       ...baseWhere,
-      callScheduledAt: { gte: start, lte: end },
+      decidedAt: { gte: start, lte: end },
+      status: { in: ["won", "lost", "cancelled", "no_show"] },
     },
     include: {
       convertedPatient: { select: { id: true, programType: true } },
     },
   });
 
-  let scheduled = 0, won = 0, lost = 0, cancelled = 0, no_show = 0;
+  let won = 0, lost = 0, cancelled = 0, no_show = 0;
   const wonByProgram = { RECUPERA: 0, CONSOLIDA: 0, ADVANCE: 0, NONE: 0 };
-
-  // IDs de pacientes convertidos para luego sumar facturación
   const convertedPatientIds: string[] = [];
 
-  for (const l of leads) {
-    // "scheduled" cuenta TODAS las llamadas del período (cambio de petición del CEO)
-    scheduled++;
+  for (const l of decided) {
     if (l.status === "won") {
       won++;
       const prog = l.convertedPatient?.programType ?? "NONE";
@@ -62,8 +71,7 @@ export async function calculateSalesMetrics(
   const closeRate = won + lost > 0 ? Math.round((won / (won + lost)) * 100) : null;
   const showUpRate = totalCalls > 0 ? Math.round(((won + lost) / totalCalls) * 100) : null;
 
-  // Facturación: sumar transacciones income_new de los pacientes convertidos
-  // (registradas al hacer la conversión, así sabemos exactamente cuánto cobró cada closer)
+  // Facturación: sumar income_new de los pacientes convertidos en el período.
   let revenue = 0;
   if (convertedPatientIds.length > 0) {
     const transactions = await prisma.transaction.findMany({
