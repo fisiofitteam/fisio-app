@@ -16,9 +16,22 @@ type Course = {
 type Post = {
   id: string; title: string | null; body: string; imageUrl: string | null;
   pinned: boolean; published: boolean; category: string;
-  authorName: string | null; isPatient: boolean; createdAt: string;
+  authorName: string | null; authorPhotoUrl: string | null; isPatient: boolean; createdAt: string;
   comments: number; reactions: number;
 };
+
+// Avatar del autor en el panel del pro: foto si la tiene, inicial con gradiente si no.
+function Avatar({ url, name, size = 28 }: { url: string | null; name: string; size?: number }) {
+  if (url) {
+    return <img src={url} alt="" className="rounded-full object-cover flex-shrink-0 border border-neutral-200" style={{ width: size, height: size }} />;
+  }
+  return (
+    <span className="rounded-full flex items-center justify-center font-bold flex-shrink-0"
+      style={{ width: size, height: size, background: "linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)", color: "#0A0A0A", fontSize: Math.round(size * 0.42) }}>
+      {(name || "?").charAt(0).toUpperCase()}
+    </span>
+  );
+}
 
 type Tab = "classroom" | "community";
 
@@ -350,8 +363,9 @@ function PostCard({
 
   return (
     <div className="card">
-      {/* Cabecera: autor + fecha + acciones de moderación */}
+      {/* Cabecera: avatar + autor + fecha + acciones de moderación */}
       <div className="flex items-start gap-2 mb-2">
+        <Avatar url={post.authorPhotoUrl} name={post.authorName ?? "Equipo"} size={28} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
             {post.pinned && <Pin size={13} className="text-amber-500 flex-shrink-0" />}
@@ -399,7 +413,7 @@ function PostCard({
 
 /* ─────────────────────────── DETALLE DEL POST (modal con comentarios) ─────────────────────────── */
 
-type Comment = { id: string; body: string; createdAt: string; authorName: string; isPatient: boolean };
+type Comment = { id: string; body: string; createdAt: string; authorName: string; authorPhotoUrl: string | null; isPatient: boolean };
 
 function PostDetailModal({
   post, onClose, onCommentAdded,
@@ -449,7 +463,8 @@ function PostDetailModal({
     <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 p-4 overflow-y-auto" onClick={onClose}>
       <div className="bg-white rounded-2xl max-w-xl w-full p-5 my-8" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-start mb-3">
-          <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap min-w-0">
+            <Avatar url={post.authorPhotoUrl} name={post.authorName ?? "Equipo"} size={32} />
             {post.pinned && <Pin size={14} className="text-amber-500" />}
             <span className="font-medium text-sm">{post.authorName ?? "Equipo"}</span>
             {!post.isPatient && <BadgeCheck size={15} className="text-blue-600" fill="#2563EB" stroke="#FFFFFF" />}
@@ -480,9 +495,7 @@ function PostDetailModal({
             <div className="space-y-3">
               {comments.map((c) => (
                 <div key={c.id} className="flex gap-2.5">
-                  <span className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-[11px] flex-shrink-0 mt-0.5" style={{ background: c.isPatient ? "#E5E5E5" : "linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)", color: c.isPatient ? "#171717" : "#0A0A0A" }}>
-                    {c.authorName.charAt(0).toUpperCase()}
-                  </span>
+                  <span className="mt-0.5"><Avatar url={c.authorPhotoUrl} name={c.authorName} size={28} /></span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1 text-xs">
                       <span className="font-medium">{c.authorName}</span>

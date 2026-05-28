@@ -4,11 +4,12 @@ import { prisma } from "@/lib/prisma";
 import { PatientNav } from "@/components/PatientNav";
 import { PatientThemeToggle } from "@/components/PatientThemeToggle";
 import { PatientLogoutButton } from "@/components/PatientLogoutButton";
+import { PatientPhotoUploader } from "@/components/PatientPhotoUploader";
 
 export const dynamic = "force-dynamic";
 
 export default async function PatientSettingsPage({ params }: { params: { id: string } }) {
-  const patient = await prisma.patient.findUnique({ where: { id: params.id }, select: { id: true, fullName: true } });
+  const patient = await prisma.patient.findUnique({ where: { id: params.id }, select: { id: true, fullName: true, photoUrl: true } });
   if (!patient) notFound();
 
   return (
@@ -18,6 +19,17 @@ export default async function PatientSettingsPage({ params }: { params: { id: st
           <Link href={`/paciente/${patient.id}`} className="text-xs">← Inicio</Link>
           <h1 className="text-2xl font-bold mt-1" style={{ letterSpacing: "-0.025em" }}>Ajustes</h1>
         </header>
+
+        <section id="foto"
+          className="rounded-2xl p-4 mb-3"
+          style={{ background: "var(--p-surface)", border: "1px solid var(--p-border)" }}
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-lg">📸</span>
+            <h2 className="font-semibold text-sm">Foto de perfil</h2>
+          </div>
+          <PatientPhotoUploader initialUrl={patient.photoUrl} />
+        </section>
 
         <section
           className="rounded-2xl p-4 mb-3"

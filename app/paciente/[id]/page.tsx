@@ -260,6 +260,7 @@ export default async function PatientHome({ params }: { params: { id: string } }
           ? `${patient.appliedLevel.profile.name} · ${patient.appliedLevel.name}`
           : null,
         whatsappGroupUrl: patient.whatsappGroupUrl,
+        photoUrl: patient.photoUrl,
       }}
       todaySessions={todaySessions.map((s) => ({
         id: s.id,

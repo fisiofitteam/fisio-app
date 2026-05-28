@@ -20,8 +20,8 @@ export default async function ComunidadPage() {
     prisma.communityFeedPost.findMany({
       orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
       include: {
-        author: { select: { fullName: true } },
-        patientAuthor: { select: { fullName: true } },
+        author: { select: { fullName: true, photoUrl: true } },
+        patientAuthor: { select: { fullName: true, photoUrl: true } },
         _count: { select: { comments: true, reactions: true } },
       },
     }),
@@ -49,6 +49,7 @@ export default async function ComunidadPage() {
           published: p.published,
           category: p.category,
           authorName: p.author?.fullName ?? p.patientAuthor?.fullName ?? null,
+          authorPhotoUrl: p.author?.photoUrl ?? p.patientAuthor?.photoUrl ?? null,
           isPatient: !!p.patientAuthorId,
           createdAt: p.createdAt.toISOString(),
           comments: p._count.comments,

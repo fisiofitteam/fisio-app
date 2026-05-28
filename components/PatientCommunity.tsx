@@ -9,14 +9,31 @@ import { upload } from "@vercel/blob/client";
 
 type Post = {
   id: string; title: string | null; body: string; imageUrl: string | null; videoUrl: string | null;
-  category: string; pinned: boolean; authorName: string; isPatient: boolean;
+  category: string; pinned: boolean; authorName: string; authorPhotoUrl: string | null; isPatient: boolean;
   createdAt: string; comments: number; reactions: number; likedByMe: boolean;
 };
 type Course = {
   id: string; title: string; description: string | null; coverUrl: string | null;
   lessonCount: number; doneCount: number;
 };
-type Comment = { id: string; body: string; createdAt: string; authorName: string; isPatient: boolean };
+type Comment = { id: string; body: string; createdAt: string; authorName: string; authorPhotoUrl: string | null; isPatient: boolean };
+
+// Avatar del autor: usa la foto si la tiene, si no la inicial del nombre con gradiente.
+function Avatar({ url, name, size = 32 }: { url: string | null; name: string; size?: number }) {
+  if (url) {
+    return (
+      <img src={url} alt="" className="rounded-full object-cover flex-shrink-0" style={{ width: size, height: size, border: "1px solid var(--p-border)" }} />
+    );
+  }
+  return (
+    <span
+      className="rounded-full flex items-center justify-center font-bold flex-shrink-0"
+      style={{ width: size, height: size, background: "linear-gradient(135deg, var(--p-accent) 0%, #F59E0B 100%)", color: "var(--p-accent-ink)", fontSize: Math.round(size * 0.42) }}
+    >
+      {name.charAt(0).toUpperCase()}
+    </span>
+  );
+}
 
 const CARD = "rounded-2xl p-4";
 const CARD_STYLE = { background: "var(--p-surface)", border: "1px solid var(--p-border)" } as const;
@@ -32,10 +49,11 @@ async function api(url: string, method: string, body?: unknown) {
 }
 
 export function PatientCommunity({
-  patientId, myName, initialPosts, courses,
+  patientId, myName, myPhotoUrl, initialPosts, courses,
 }: {
   patientId: string;
   myName: string;
+  myPhotoUrl: string | null;
   initialPosts: Post[];
   courses: Course[];
 }) {
@@ -65,7 +83,7 @@ export function PatientCommunity({
         </div>
 
         {tab === "community" ? (
-          <CommunityFeed posts={posts} setPosts={setPosts} myName={myName} />
+          <CommunityFeed posts={posts} setPosts={setPosts} myName={myName} myPhotoUrl={myPhotoUrl} />
         ) : (
           <Classroom courses={courses} patientId={patientId} />
         )}
@@ -79,11 +97,12 @@ export function PatientCommunity({
 /* ─────────────────── COMMUNITY (muro) ─────────────────── */
 
 function CommunityFeed({
-  posts, setPosts, myName,
+  posts, setPosts, myName, myPhotoUrl,
 }: {
   posts: Post[];
   setPosts: React.Dispatch<React.SetStateAction<Post[]>>;
   myName: string;
+  myPhotoUrl: string | null;
 }) {
   const [composing, setComposing] = useState(false);
 
@@ -92,6 +111,8 @@ function CommunityFeed({
       {/* composer */}
       {composing ? (
         <Composer
+          myName={myName}
+          myPhotoUrl={myPhotoUrl}
           onCancel={() => setComposing(false)}
           onPublished={(p) => { setPosts((a) => [p, ...a]); setComposing(false); }}
         />
@@ -101,9 +122,7 @@ function CommunityFeed({
           className={`${CARD} w-full text-left text-sm flex items-center gap-3`}
           style={CARD_STYLE}
         >
-          <span className="w-8 h-8 rounded-full flex items-center justify-center font-bold flex-shrink-0" style={{ background: "linear-gradient(135deg, var(--p-accent) 0%, #F59E0B 100%)", color: "var(--p-accent-ink)", fontSize: 12 }}>
-            {myName.charAt(0).toUpperCase()}
-          </span>
+          <Avatar url={myPhotoUrl} name={myName} size={32} />
           <span style={{ color: "var(--p-text-faint)" }}>Escribe algo para la comunidad…</span>
         </button>
       )}
@@ -131,7 +150,7 @@ function AuthorName({ name, isPatient, size = "sm" }: { name: string; isPatient:
   );
 }
 
-function Composer({ onCancel, onPublished }: { onCancel: () => void; onPublished: (p: Post) => void }) {
+function Composer({ myName, myPhotoUrl, onCancel, onPublished }: { myName: string; myPhotoUrl: string | null; onCancel: () => void; onPublished: (p: Post) => void }) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [media, setMedia] = useState<{ url: string; kind: "image" | "video" } | null>(null);
@@ -172,7 +191,9 @@ function Composer({ onCancel, onPublished }: { onCancel: () => void; onPublished
         id: created.id, title: created.title, body: created.body,
         imageUrl: created.imageUrl, videoUrl: created.videoUrl,
         category: created.category, pinned: created.pinned,
-        authorName: created.patientAuthor?.fullName ?? "Yo", isPatient: true,
+        authorName: created.patientAuthor?.fullName ?? myName,
+        authorPhotoUrl: created.patientAuthor?.photoUrl ?? myPhotoUrl,
+        isPatient: true,
         createdAt: created.createdAt, comments: 0, reactions: 0, likedByMe: false,
       });
     } catch (e) {
@@ -290,9 +311,7 @@ function PostItem({ post, onChange }: { post: Post; onChange: (p: Post) => void 
   return (
     <div className={CARD} style={CARD_STYLE}>
       <div className="flex items-center gap-2.5 mb-2">
-        <span className="w-8 h-8 rounded-full flex items-center justify-center font-bold flex-shrink-0" style={{ background: post.isPatient ? "var(--p-border-strong)" : "linear-gradient(135deg, var(--p-accent) 0%, #F59E0B 100%)", color: post.isPatient ? "var(--p-text)" : "var(--p-accent-ink)", fontSize: 12 }}>
-          {post.authorName.charAt(0).toUpperCase()}
-        </span>
+        <Avatar url={post.authorPhotoUrl} name={post.authorName} size={32} />
         <div className="flex-1 min-w-0">
           <AuthorName name={post.authorName} isPatient={post.isPatient} />
           <div className="text-[11px]" style={{ color: "var(--p-text-faint)" }}>{date}</div>
@@ -329,9 +348,7 @@ function PostItem({ post, onChange }: { post: Post; onChange: (p: Post) => void 
           {loadingComments && <p className="text-xs" style={{ color: "var(--p-text-faint)" }}>Cargando…</p>}
           {comments?.map((c) => (
             <div key={c.id} className="flex gap-2.5">
-              <span className="w-6 h-6 rounded-full flex items-center justify-center font-bold flex-shrink-0 mt-0.5" style={{ background: c.isPatient ? "var(--p-border-strong)" : "linear-gradient(135deg, var(--p-accent) 0%, #F59E0B 100%)", color: c.isPatient ? "var(--p-text)" : "var(--p-accent-ink)", fontSize: 10 }}>
-                {c.authorName.charAt(0).toUpperCase()}
-              </span>
+              <span className="mt-0.5"><Avatar url={c.authorPhotoUrl} name={c.authorName} size={24} /></span>
               <div className="flex-1 min-w-0">
                 <AuthorName name={c.authorName} isPatient={c.isPatient} size="xs" />
                 <p className="text-sm" style={{ color: "var(--p-text-soft)" }}>{c.body}</p>

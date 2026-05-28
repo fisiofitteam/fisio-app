@@ -36,6 +36,7 @@ type Patient = {
   difficulty: string | null;
   appliedLevelName: string | null;
   whatsappGroupUrl: string | null;
+  photoUrl: string | null;
 };
 
 type Adherence = {
@@ -130,6 +131,26 @@ export function PatientHomeDark({
               Tu programa se reanuda automáticamente.
             </div>
           </div>
+        )}
+
+        {!patient.photoUrl && (
+          <Link
+            href={`/paciente/${patient.id}/ajustes#foto`}
+            className="mb-5 rounded-xl px-4 py-3 text-sm flex items-center justify-between gap-3"
+            style={{
+              background: "var(--p-amber-bg)",
+              border: "1px solid var(--p-amber-border)",
+              color: "var(--p-amber-text)",
+            }}
+          >
+            <div className="flex-1 min-w-0">
+              <div className="font-medium mb-0.5">📸 Sube tu foto de perfil</div>
+              <div className="text-xs" style={{ color: "var(--p-text-dim)" }}>
+                Para que el equipo y la comunidad te reconozcan. Tarda 10 segundos.
+              </div>
+            </div>
+            <span className="text-xs font-medium underline flex-shrink-0">Subir</span>
+          </Link>
         )}
         {/* Header */}
         <header className="mb-7">

@@ -9,8 +9,8 @@ function canManage(role: string): boolean {
 }
 
 const FEED_INCLUDE = {
-  author: { select: { fullName: true } },
-  patientAuthor: { select: { fullName: true } },
+  author: { select: { fullName: true, photoUrl: true } },
+  patientAuthor: { select: { fullName: true, photoUrl: true } },
   _count: { select: { comments: true, reactions: true } },
 } as const;
 

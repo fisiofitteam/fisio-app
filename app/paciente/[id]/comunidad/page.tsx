@@ -5,7 +5,7 @@ import { PatientCommunity } from "@/components/PatientCommunity";
 export const dynamic = "force-dynamic";
 
 export default async function PatientCommunityPage({ params }: { params: { id: string } }) {
-  const patient = await prisma.patient.findUnique({ where: { id: params.id }, select: { id: true, fullName: true } });
+  const patient = await prisma.patient.findUnique({ where: { id: params.id }, select: { id: true, fullName: true, photoUrl: true } });
   if (!patient) notFound();
 
   const [posts, courses, myReactions, myProgress] = await Promise.all([
@@ -13,8 +13,8 @@ export default async function PatientCommunityPage({ params }: { params: { id: s
       where: { published: true },
       orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
       include: {
-        author: { select: { fullName: true } },
-        patientAuthor: { select: { fullName: true } },
+        author: { select: { fullName: true, photoUrl: true } },
+        patientAuthor: { select: { fullName: true, photoUrl: true } },
         _count: { select: { comments: true, reactions: true } },
       },
     }),
@@ -34,6 +34,7 @@ export default async function PatientCommunityPage({ params }: { params: { id: s
     <PatientCommunity
       patientId={patient.id}
       myName={patient.fullName}
+      myPhotoUrl={patient.photoUrl}
       initialPosts={posts.map((p) => ({
         id: p.id,
         title: p.title,
@@ -43,6 +44,7 @@ export default async function PatientCommunityPage({ params }: { params: { id: s
         category: p.category,
         pinned: p.pinned,
         authorName: p.author?.fullName ?? p.patientAuthor?.fullName ?? "Equipo",
+        authorPhotoUrl: p.author?.photoUrl ?? p.patientAuthor?.photoUrl ?? null,
         isPatient: !!p.patientAuthorId,
         createdAt: p.createdAt.toISOString(),
         comments: p._count.comments,
