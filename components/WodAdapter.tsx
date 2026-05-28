@@ -95,7 +95,7 @@ export function WodAdapter({ patientId }: { patientId: string }) {
             </button>
           ))}
         </div>
-        <button onClick={adapt} disabled={!rawText.trim() || loading} className="btn btn-primary w-full mt-3">
+        <button onClick={adapt} disabled={!rawText.trim() || loading} className="btn btn-accent w-full mt-3">
           {loading ? "Adaptando..." : "⚡ Adaptar a mi caso"}
         </button>
       </section>

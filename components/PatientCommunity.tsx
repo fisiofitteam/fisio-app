@@ -374,7 +374,7 @@ function Classroom({ courses, patientId }: { courses: Course[]; patientId: strin
             className="block rounded-2xl overflow-hidden"
             style={CARD_STYLE}
           >
-            <CourseCover title={c.title} coverUrl={c.coverUrl} className="aspect-[16/9]" />
+            <CourseCover title={c.title} coverUrl={c.coverUrl} className="aspect-[16/6]" />
             <div className="p-4">
               <div className="flex items-center gap-2">
                 <h3 className="font-semibold text-base flex-1" style={{ letterSpacing: "-0.015em" }}>{c.title}</h3>

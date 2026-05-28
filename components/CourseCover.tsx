@@ -19,8 +19,8 @@ export function CourseCover({ title, coverUrl, className = "" }: { title: string
       )}
       {coverUrl && <div className="absolute inset-0 bg-black/35" />}
       <h3
-        className="relative px-4 font-extrabold uppercase text-white leading-[0.95] tracking-tight"
-        style={{ fontSize: "clamp(1.5rem, 4vw, 2.6rem)", textShadow: "0 2px 12px rgba(0,0,0,0.4)" }}
+        className="relative px-4 font-extrabold uppercase leading-[0.95] tracking-tight"
+        style={{ fontSize: "clamp(1.1rem, 3vw, 1.8rem)", color: "#FAFAFA", textShadow: "0 2px 12px rgba(0,0,0,0.5)" }}
       >
         {title}
       </h3>
