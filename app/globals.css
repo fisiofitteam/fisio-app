@@ -241,6 +241,11 @@ h1, h2, h3, h4, h5 {
 .patient-scope .card textarea,
 .patient-scope .card select { color: var(--p-card-ink); }
 .patient-scope .btn-primary { background: #0A0A0A; color: #FAFAFA; border-color: #0A0A0A; }
+/* En modo claro del paciente, los botones primarios se vuelven amarillo (acento de
+   marca) con texto negro, para que destaquen sobre el fondo claro y no queden negros
+   poco legibles. Cubre cualquier .btn-primary sin tener que tocarlos uno a uno. */
+.patient-scope.patient-light .btn-primary { background: var(--p-accent); color: var(--p-accent-ink); border-color: var(--p-accent); }
+.patient-scope.patient-light .btn-primary:hover { filter: brightness(0.95); }
 
 /* Links de cabecera ("← Volver" etc.) */
 .patient-scope main > header a { color: var(--p-accent) !important; }
