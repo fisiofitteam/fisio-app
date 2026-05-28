@@ -4,7 +4,8 @@ import { getActiveProfessional } from "@/lib/session";
 import { FEED_CATEGORY_VALUES } from "@/lib/community-feed";
 
 function canManage(role: string): boolean {
-  return role === "ceo" || role === "head_success" || role === "fisio";
+  // Todos los profesionales del equipo pueden moderar (incluye setter/closer).
+  return role === "ceo" || role === "head_success" || role === "fisio" || role === "setter" || role === "closer";
 }
 
 // PATCH /api/community/feed/[id]

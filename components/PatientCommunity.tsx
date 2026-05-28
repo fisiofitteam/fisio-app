@@ -6,6 +6,7 @@ import { PatientNav } from "@/components/PatientNav";
 import { CourseCover } from "@/components/CourseCover";
 import { Heart, MessageCircle, Send, ChevronRight, BadgeCheck, ImagePlus, X } from "lucide-react";
 import { upload } from "@vercel/blob/client";
+import { parseVideo } from "@/lib/video";
 
 type Post = {
   id: string; title: string | null; body: string; imageUrl: string | null; videoUrl: string | null;
@@ -330,9 +331,17 @@ function PostItem({ post, onChange }: { post: Post; onChange: (p: Post) => void 
         )}
       </div>
 
-      {post.videoUrl && (
-        <video src={post.videoUrl} controls className="rounded-xl mt-3 w-full" style={{ maxHeight: 360, border: "1px solid var(--p-border)" }} />
-      )}
+      {post.videoUrl && (() => {
+        const v = parseVideo(post.videoUrl);
+        if (v.embedUrl) {
+          return (
+            <div className="rounded-xl mt-3 overflow-hidden" style={{ aspectRatio: "16/9", border: "1px solid var(--p-border)" }}>
+              <iframe src={v.embedUrl} className="w-full h-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+            </div>
+          );
+        }
+        return <video src={post.videoUrl} controls className="rounded-xl mt-3 w-full" style={{ maxHeight: 360, border: "1px solid var(--p-border)" }} />;
+      })()}
 
       <div className="flex items-center gap-4 mt-3 pt-3" style={{ borderTop: "1px solid var(--p-surface-2)" }}>
         <button onClick={toggleLike} className="flex items-center gap-1.5 text-sm" style={{ color: post.likedByMe ? "var(--p-accent)" : "var(--p-text-dim)" }}>

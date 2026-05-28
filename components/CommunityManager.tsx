@@ -4,9 +4,10 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { ImageUpload } from "@/components/ImageUpload";
 import { CourseCover } from "@/components/CourseCover";
+import { parseVideo } from "@/lib/video";
 import {
   GraduationCap, MessageSquare, Plus, Trash2, Pencil, Pin,
-  Eye, EyeOff, Heart, MessageCircle, BadgeCheck, X, Send,
+  Eye, EyeOff, Heart, MessageCircle, BadgeCheck, X, Send, Video,
 } from "lucide-react";
 
 type Course = {
@@ -14,7 +15,7 @@ type Course = {
   published: boolean; lessonCount: number; sectionCount: number;
 };
 type Post = {
-  id: string; title: string | null; body: string; imageUrl: string | null;
+  id: string; title: string | null; body: string; imageUrl: string | null; videoUrl: string | null;
   pinned: boolean; published: boolean; category: string;
   authorName: string | null; authorPhotoUrl: string | null; isPatient: boolean; createdAt: string;
   comments: number; reactions: number;
@@ -49,11 +50,12 @@ async function api(url: string, method: string, body?: unknown) {
 }
 
 export function CommunityManager({
-  initialCourses, initialPosts, canManage = true,
+  initialCourses, initialPosts, canManageClassroom = true, canModerate = true,
 }: {
   initialCourses: Course[];
   initialPosts: Post[];
-  canManage?: boolean;
+  canManageClassroom?: boolean;
+  canModerate?: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("community");
   const [courses, setCourses] = useState<Course[]>(initialCourses);
@@ -65,7 +67,7 @@ export function CommunityManager({
     setTimeout(() => setErr(null), 4000);
   }
 
-  const TABS: { key: Tab; label: string; Icon: typeof GraduationCap; count: number }[] = canManage
+  const TABS: { key: Tab; label: string; Icon: typeof GraduationCap; count: number }[] = canManageClassroom
     ? [
         { key: "community", label: "Comunidad", Icon: MessageSquare, count: posts.length },
         { key: "classroom", label: "Clases", Icon: GraduationCap, count: courses.length },
@@ -79,13 +81,13 @@ export function CommunityManager({
       <header className="mb-4">
         <h1 className="text-xl font-semibold">Comunidad</h1>
         <p className="text-xs text-neutral-500 mt-0.5">
-          {canManage ? "Classroom, muro y vídeos. Esto es lo que verán los pacientes en su app." : "Muro de la comunidad. Publica, comenta y reacciona."}
+          {canManageClassroom ? "Classroom, muro y vídeos. Esto es lo que verán los pacientes en su app." : "Muro de la comunidad. Publica, comenta y reacciona."}
         </p>
       </header>
 
       {err && <div className="mb-3 text-sm rounded-lg px-3 py-2 bg-red-50 text-red-700 border border-red-200">{err}</div>}
 
-      {canManage && (
+      {canManageClassroom && (
         <div className="flex gap-2 mb-4">
           {TABS.map(({ key, label, Icon, count }) => (
             <button
@@ -103,8 +105,8 @@ export function CommunityManager({
         </div>
       )}
 
-      {tab === "classroom" && canManage && <ClassroomSection courses={courses} setCourses={setCourses} fail={fail} />}
-      {tab === "community" && <CommunitySection posts={posts} setPosts={setPosts} fail={fail} canModerate={canManage} />}
+      {tab === "classroom" && canManageClassroom && <ClassroomSection courses={courses} setCourses={setCourses} fail={fail} />}
+      {tab === "community" && <CommunitySection posts={posts} setPosts={setPosts} fail={fail} canModerate={canModerate} />}
     </div>
   );
 }
@@ -310,13 +312,17 @@ function PostForm({
   initial, onSave, onCancel,
 }: {
   initial?: Post;
-  onSave: (data: { title: string | null; body: string; category: string; imageUrl: string | null; pinned: boolean }) => void;
+  onSave: (data: { title: string | null; body: string; category: string; imageUrl: string | null; videoUrl: string | null; pinned: boolean }) => void;
   onCancel: () => void;
 }) {
   const [title, setTitle] = useState(initial?.title ?? "");
   const [body, setBody] = useState(initial?.body ?? "");
   const [imageUrl, setImageUrl] = useState(initial?.imageUrl ?? "");
+  const [videoUrl, setVideoUrl] = useState(initial?.videoUrl ?? "");
   const [pinned, setPinned] = useState(initial?.pinned ?? false);
+
+  const videoInfo = videoUrl ? parseVideo(videoUrl) : null;
+  const videoOk = !videoUrl || videoInfo?.provider != null;
 
   return (
     <div className="card space-y-2">
@@ -326,6 +332,21 @@ function PostForm({
         <label className="text-xs text-neutral-500 block mb-1">Imagen (opcional)</label>
         <ImageUpload value={imageUrl} onChange={setImageUrl} hint="Imagen del post." />
       </div>
+      <div>
+        <label className="text-xs text-neutral-500 block mb-1">Vídeo (URL de YouTube o Vimeo, opcional)</label>
+        <input
+          className="input text-sm"
+          placeholder="https://youtube.com/watch?v=… o https://vimeo.com/…"
+          value={videoUrl}
+          onChange={(e) => setVideoUrl(e.target.value)}
+        />
+        {videoUrl && !videoOk && (
+          <p className="text-[11px] text-red-600 mt-1">No reconozco esa URL. Usa un enlace de YouTube o Vimeo.</p>
+        )}
+        {videoInfo?.provider && (
+          <p className="text-[11px] text-emerald-700 mt-1">✓ Vídeo de {videoInfo.provider === "youtube" ? "YouTube" : "Vimeo"} detectado.</p>
+        )}
+      </div>
       <label className="flex items-center gap-2 text-sm cursor-pointer">
         <input type="checkbox" checked={pinned} onChange={(e) => setPinned(e.target.checked)} className="w-4 h-4 accent-neutral-900" />
         Fijar arriba
@@ -333,8 +354,9 @@ function PostForm({
       <div className="flex justify-end gap-2">
         <button onClick={onCancel} className="btn text-sm">Cancelar</button>
         <button
-          onClick={() => body.trim() && onSave({ title: title.trim() || null, body: body.trim(), category: "general", imageUrl: imageUrl.trim() || null, pinned })}
-          className="btn btn-primary text-sm"
+          onClick={() => body.trim() && videoOk && onSave({ title: title.trim() || null, body: body.trim(), category: "general", imageUrl: imageUrl.trim() || null, videoUrl: videoUrl.trim() || null, pinned })}
+          disabled={!body.trim() || !videoOk}
+          className="btn btn-primary text-sm disabled:opacity-50"
         >
           Publicar
         </button>
@@ -399,16 +421,38 @@ function PostCard({
         )}
       </div>
 
-      {/* Cuerpo clicable (abre detalle): título + texto + thumbnail pequeño a la derecha */}
+      {/* Cuerpo clicable (abre detalle): título + texto + miniatura a la derecha
+           (imagen si la hay; si no, miniatura de YouTube del vídeo; si no, badge "🎥 Vídeo") */}
       <button onClick={onOpen} className="w-full text-left block group">
         <div className="flex gap-3">
           <div className="flex-1 min-w-0">
             {post.title && <h3 className="font-semibold text-base mb-1 group-hover:underline">{post.title}</h3>}
             <p className="text-sm whitespace-pre-line text-neutral-700 line-clamp-3 break-words">{post.body}</p>
           </div>
-          {post.imageUrl && (
-            <img src={post.imageUrl} alt="" className="rounded-lg object-cover flex-shrink-0 border border-neutral-200" style={{ width: 84, height: 84 }} />
-          )}
+          {(() => {
+            const videoInfo = post.videoUrl ? parseVideo(post.videoUrl) : null;
+            const thumb = post.imageUrl || videoInfo?.thumbnail || null;
+            if (thumb) {
+              return (
+                <div className="relative flex-shrink-0">
+                  <img src={thumb} alt="" className="rounded-lg object-cover border border-neutral-200" style={{ width: 84, height: 84 }} />
+                  {!post.imageUrl && videoInfo?.provider && (
+                    <span className="absolute inset-0 flex items-center justify-center rounded-lg" style={{ background: "rgba(0,0,0,0.35)" }}>
+                      <Video size={20} className="text-white" />
+                    </span>
+                  )}
+                </div>
+              );
+            }
+            if (post.videoUrl) {
+              return (
+                <div className="rounded-lg border border-neutral-200 bg-neutral-50 flex items-center justify-center text-neutral-500 flex-shrink-0" style={{ width: 84, height: 84 }}>
+                  <Video size={20} />
+                </div>
+              );
+            }
+            return null;
+          })()}
         </div>
       </button>
 
@@ -492,6 +536,17 @@ function PostDetailModal({
             <img src={post.imageUrl} alt="" className="rounded-xl mt-3 w-full object-cover max-h-96 border border-neutral-200" />
           </a>
         )}
+        {post.videoUrl && (() => {
+          const v = parseVideo(post.videoUrl);
+          if (v.embedUrl) {
+            return (
+              <div className="rounded-xl mt-3 overflow-hidden border border-neutral-200" style={{ aspectRatio: "16/9" }}>
+                <iframe src={v.embedUrl} className="w-full h-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+              </div>
+            );
+          }
+          return <video src={post.videoUrl} controls className="rounded-xl mt-3 w-full max-h-96 border border-neutral-200" />;
+        })()}
 
         <div className="flex items-center gap-4 text-xs text-neutral-500 pt-3 mt-3 border-t border-neutral-100">
           <span className="flex items-center gap-1"><Heart size={13} /> {post.reactions}</span>

@@ -5,7 +5,7 @@ import { getCommunityActor } from "@/lib/community-actor";
 import { FEED_CATEGORY_VALUES } from "@/lib/community-feed";
 
 function canManage(role: string): boolean {
-  return role === "ceo" || role === "head_success" || role === "fisio";
+  return role === "ceo" || role === "head_success" || role === "fisio" || role === "setter" || role === "closer";
 }
 
 const FEED_INCLUDE = {

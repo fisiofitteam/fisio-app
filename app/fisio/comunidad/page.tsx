@@ -11,8 +11,9 @@ export default async function ComunidadPage() {
   if (!user) redirect("/login");
   const ALLOWED = ["ceo", "head_success", "fisio", "setter", "closer"];
   if (!ALLOWED.includes(user.role)) redirect("/fisio");
-  // Solo los gestores (CEO/head-success/fisio) ven la pestaña Clases y pueden moderar.
-  const canManage = user.role === "ceo" || user.role === "head_success" || user.role === "fisio";
+  // Todos los del equipo pueden moderar el muro; sólo los gestores ven la pestaña Clases.
+  const canModerate = true;
+  const canManageClassroom = user.role === "ceo" || user.role === "head_success" || user.role === "fisio";
 
   const [courses, posts] = await Promise.all([
     prisma.communityModule.findMany({
@@ -31,9 +32,10 @@ export default async function ComunidadPage() {
 
   return (
     <main>
-      {canManage && <CommunityNav active="comunidad" />}
+      {canManageClassroom && <CommunityNav active="comunidad" />}
       <CommunityManager
-        canManage={canManage}
+        canManageClassroom={canManageClassroom}
+        canModerate={canModerate}
         initialCourses={courses.map((c) => ({
           id: c.id,
           title: c.title,
@@ -48,6 +50,7 @@ export default async function ComunidadPage() {
           title: p.title,
           body: p.body,
           imageUrl: p.imageUrl,
+          videoUrl: p.videoUrl,
           pinned: p.pinned,
           published: p.published,
           category: p.category,
