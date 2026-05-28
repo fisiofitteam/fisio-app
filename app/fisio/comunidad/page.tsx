@@ -9,8 +9,10 @@ export const dynamic = "force-dynamic";
 export default async function ComunidadPage() {
   const user = await getActiveProfessional();
   if (!user) redirect("/login");
+  const ALLOWED = ["ceo", "head_success", "fisio", "setter", "closer"];
+  if (!ALLOWED.includes(user.role)) redirect("/fisio");
+  // Solo los gestores (CEO/head-success/fisio) ven la pestaña Clases y pueden moderar.
   const canManage = user.role === "ceo" || user.role === "head_success" || user.role === "fisio";
-  if (!canManage) redirect("/fisio");
 
   const [courses, posts] = await Promise.all([
     prisma.communityModule.findMany({
@@ -29,8 +31,9 @@ export default async function ComunidadPage() {
 
   return (
     <main>
-      <CommunityNav active="comunidad" />
+      {canManage && <CommunityNav active="comunidad" />}
       <CommunityManager
+        canManage={canManage}
         initialCourses={courses.map((c) => ({
           id: c.id,
           title: c.title,

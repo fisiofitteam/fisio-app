@@ -49,10 +49,11 @@ async function api(url: string, method: string, body?: unknown) {
 }
 
 export function CommunityManager({
-  initialCourses, initialPosts,
+  initialCourses, initialPosts, canManage = true,
 }: {
   initialCourses: Course[];
   initialPosts: Post[];
+  canManage?: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("community");
   const [courses, setCourses] = useState<Course[]>(initialCourses);
@@ -64,40 +65,46 @@ export function CommunityManager({
     setTimeout(() => setErr(null), 4000);
   }
 
-  const TABS: { key: Tab; label: string; Icon: typeof GraduationCap; count: number }[] = [
-    { key: "community", label: "Comunidad", Icon: MessageSquare, count: posts.length },
-    { key: "classroom", label: "Clases", Icon: GraduationCap, count: courses.length },
-  ];
+  const TABS: { key: Tab; label: string; Icon: typeof GraduationCap; count: number }[] = canManage
+    ? [
+        { key: "community", label: "Comunidad", Icon: MessageSquare, count: posts.length },
+        { key: "classroom", label: "Clases", Icon: GraduationCap, count: courses.length },
+      ]
+    : [
+        { key: "community", label: "Comunidad", Icon: MessageSquare, count: posts.length },
+      ];
 
   return (
     <div>
       <header className="mb-4">
         <h1 className="text-xl font-semibold">Comunidad</h1>
         <p className="text-xs text-neutral-500 mt-0.5">
-          Classroom, muro y vídeos. Esto es lo que verán los pacientes en su app.
+          {canManage ? "Classroom, muro y vídeos. Esto es lo que verán los pacientes en su app." : "Muro de la comunidad. Publica, comenta y reacciona."}
         </p>
       </header>
 
       {err && <div className="mb-3 text-sm rounded-lg px-3 py-2 bg-red-50 text-red-700 border border-red-200">{err}</div>}
 
-      <div className="flex gap-2 mb-4">
-        {TABS.map(({ key, label, Icon, count }) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              tab === key ? "bg-neutral-900 text-white" : "bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-50"
-            }`}
-          >
-            <Icon size={15} />
-            {label}
-            <span className={`text-xs ${tab === key ? "text-neutral-300" : "text-neutral-400"}`}>{count}</span>
-          </button>
-        ))}
-      </div>
+      {canManage && (
+        <div className="flex gap-2 mb-4">
+          {TABS.map(({ key, label, Icon, count }) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                tab === key ? "bg-neutral-900 text-white" : "bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-50"
+              }`}
+            >
+              <Icon size={15} />
+              {label}
+              <span className={`text-xs ${tab === key ? "text-neutral-300" : "text-neutral-400"}`}>{count}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
-      {tab === "classroom" && <ClassroomSection courses={courses} setCourses={setCourses} fail={fail} />}
-      {tab === "community" && <CommunitySection posts={posts} setPosts={setPosts} fail={fail} />}
+      {tab === "classroom" && canManage && <ClassroomSection courses={courses} setCourses={setCourses} fail={fail} />}
+      {tab === "community" && <CommunitySection posts={posts} setPosts={setPosts} fail={fail} canModerate={canManage} />}
     </div>
   );
 }
@@ -242,11 +249,12 @@ function CourseCard({
 /* ─────────────────────────── COMMUNITY (muro) ─────────────────────────── */
 
 function CommunitySection({
-  posts, setPosts, fail,
+  posts, setPosts, fail, canModerate,
 }: {
   posts: Post[];
   setPosts: React.Dispatch<React.SetStateAction<Post[]>>;
   fail: (e: unknown) => void;
+  canModerate: boolean;
 }) {
   const [adding, setAdding] = useState(false);
   const [viewingPost, setViewingPost] = useState<Post | null>(null);
@@ -274,6 +282,7 @@ function CommunitySection({
           <PostCard
             key={p.id}
             post={p}
+            canModerate={canModerate}
             onOpen={() => setViewingPost(p)}
             onChange={(u) => setPosts((a) => a.map((x) => (x.id === p.id ? u : x)))}
             onDelete={() => setPosts((a) => a.filter((x) => x.id !== p.id))}
@@ -335,13 +344,14 @@ function PostForm({
 }
 
 function PostCard({
-  post, onOpen, onChange, onDelete, fail,
+  post, onOpen, onChange, onDelete, fail, canModerate,
 }: {
   post: Post;
   onOpen: () => void;
   onChange: (p: Post) => void;
   onDelete: () => void;
   fail: (e: unknown) => void;
+  canModerate: boolean;
 }) {
   const [editing, setEditing] = useState(false);
 
@@ -375,16 +385,18 @@ function PostCard({
             {!post.published && <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-500">Oculto</span>}
           </div>
         </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
-          <IconBtn title={post.pinned ? "Desfijar" : "Fijar"} onClick={() => patch({ pinned: !post.pinned })}>
-            <Pin size={15} className={post.pinned ? "text-amber-500" : ""} />
-          </IconBtn>
-          <IconBtn title={post.published ? "Ocultar" : "Publicar"} onClick={() => patch({ published: !post.published })}>
-            {post.published ? <Eye size={15} /> : <EyeOff size={15} />}
-          </IconBtn>
-          <IconBtn title="Editar" onClick={() => setEditing(true)}><Pencil size={15} /></IconBtn>
-          <IconBtn title="Borrar" onClick={remove} danger><Trash2 size={15} /></IconBtn>
-        </div>
+        {canModerate && (
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <IconBtn title={post.pinned ? "Desfijar" : "Fijar"} onClick={() => patch({ pinned: !post.pinned })}>
+              <Pin size={15} className={post.pinned ? "text-amber-500" : ""} />
+            </IconBtn>
+            <IconBtn title={post.published ? "Ocultar" : "Publicar"} onClick={() => patch({ published: !post.published })}>
+              {post.published ? <Eye size={15} /> : <EyeOff size={15} />}
+            </IconBtn>
+            <IconBtn title="Editar" onClick={() => setEditing(true)}><Pencil size={15} /></IconBtn>
+            <IconBtn title="Borrar" onClick={remove} danger><Trash2 size={15} /></IconBtn>
+          </div>
+        )}
       </div>
 
       {/* Cuerpo clicable (abre detalle): título + texto + thumbnail pequeño a la derecha */}
