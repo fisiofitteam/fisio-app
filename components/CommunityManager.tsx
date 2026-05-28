@@ -1,13 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { ImageUpload } from "@/components/ImageUpload";
 import { CourseCover } from "@/components/CourseCover";
-import { FEED_CATEGORIES, feedCategoryMeta } from "@/lib/community-feed";
 import {
   GraduationCap, MessageSquare, Plus, Trash2, Pencil, Pin,
-  Eye, EyeOff, Heart, MessageCircle,
+  Eye, EyeOff, Heart, MessageCircle, BadgeCheck, X, Send,
 } from "lucide-react";
 
 type Course = {
@@ -42,7 +41,7 @@ export function CommunityManager({
   initialCourses: Course[];
   initialPosts: Post[];
 }) {
-  const [tab, setTab] = useState<Tab>("classroom");
+  const [tab, setTab] = useState<Tab>("community");
   const [courses, setCourses] = useState<Course[]>(initialCourses);
   const [posts, setPosts] = useState<Post[]>(initialPosts);
   const [err, setErr] = useState<string | null>(null);
@@ -53,8 +52,8 @@ export function CommunityManager({
   }
 
   const TABS: { key: Tab; label: string; Icon: typeof GraduationCap; count: number }[] = [
-    { key: "classroom", label: "Classroom", Icon: GraduationCap, count: courses.length },
-    { key: "community", label: "Community", Icon: MessageSquare, count: posts.length },
+    { key: "community", label: "Comunidad", Icon: MessageSquare, count: posts.length },
+    { key: "classroom", label: "Clases", Icon: GraduationCap, count: courses.length },
   ];
 
   return (
@@ -237,9 +236,7 @@ function CommunitySection({
   fail: (e: unknown) => void;
 }) {
   const [adding, setAdding] = useState(false);
-  const [filter, setFilter] = useState<string>("all");
-
-  const shown = filter === "all" ? posts : posts.filter((p) => p.category === filter);
+  const [viewingPost, setViewingPost] = useState<Post | null>(null);
 
   return (
     <div className="space-y-3">
@@ -257,41 +254,33 @@ function CommunitySection({
         </button>
       )}
 
-      {/* filtros por categoría */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1">
-        <CatPill active={filter === "all"} onClick={() => setFilter("all")} label="Todo" />
-        {FEED_CATEGORIES.map((c) => (
-          <CatPill key={c.value} active={filter === c.value} onClick={() => setFilter(c.value)} label={`${c.emoji} ${c.label}`} />
-        ))}
-      </div>
-
-      {shown.length === 0 ? (
-        <p className="text-sm text-neutral-400 italic py-6 text-center">No hay posts {filter !== "all" ? "en esta categoría" : "todavía"}.</p>
+      {posts.length === 0 ? (
+        <p className="text-sm text-neutral-400 italic py-6 text-center">No hay posts todavía.</p>
       ) : (
-        shown.map((p) => (
+        posts.map((p) => (
           <PostCard
             key={p.id}
             post={p}
+            onOpen={() => setViewingPost(p)}
             onChange={(u) => setPosts((a) => a.map((x) => (x.id === p.id ? u : x)))}
             onDelete={() => setPosts((a) => a.filter((x) => x.id !== p.id))}
             fail={fail}
           />
         ))
       )}
-    </div>
-  );
-}
 
-function CatPill({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`px-3 py-1 rounded-full text-xs whitespace-nowrap border transition-colors ${
-        active ? "bg-neutral-900 text-white border-neutral-900" : "bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50"
-      }`}
-    >
-      {label}
-    </button>
+      {viewingPost && (
+        <PostDetailModal
+          post={viewingPost}
+          onClose={() => setViewingPost(null)}
+          onCommentAdded={() => {
+            // Actualiza el contador del post en la lista
+            setPosts((a) => a.map((x) => x.id === viewingPost.id ? { ...x, comments: x.comments + 1 } : x));
+            setViewingPost((v) => v ? { ...v, comments: v.comments + 1 } : v);
+          }}
+        />
+      )}
+    </div>
   );
 }
 
@@ -304,7 +293,6 @@ function PostForm({
 }) {
   const [title, setTitle] = useState(initial?.title ?? "");
   const [body, setBody] = useState(initial?.body ?? "");
-  const [category, setCategory] = useState(initial?.category ?? "general");
   const [imageUrl, setImageUrl] = useState(initial?.imageUrl ?? "");
   const [pinned, setPinned] = useState(initial?.pinned ?? false);
 
@@ -312,12 +300,6 @@ function PostForm({
     <div className="card space-y-2">
       <input className="input text-sm font-medium" placeholder="Título (opcional)" value={title} onChange={(e) => setTitle(e.target.value)} />
       <textarea className="input text-sm" rows={4} placeholder="Escribe algo para la comunidad..." value={body} onChange={(e) => setBody(e.target.value)} />
-      <div className="flex items-center gap-2">
-        <label className="text-xs text-neutral-500">Categoría</label>
-        <select className="input text-sm w-auto" value={category} onChange={(e) => setCategory(e.target.value)}>
-          {FEED_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.emoji} {c.label}</option>)}
-        </select>
-      </div>
       <div>
         <label className="text-xs text-neutral-500 block mb-1">Imagen (opcional)</label>
         <ImageUpload value={imageUrl} onChange={setImageUrl} hint="Imagen del post." />
@@ -329,7 +311,7 @@ function PostForm({
       <div className="flex justify-end gap-2">
         <button onClick={onCancel} className="btn text-sm">Cancelar</button>
         <button
-          onClick={() => body.trim() && onSave({ title: title.trim() || null, body: body.trim(), category, imageUrl: imageUrl.trim() || null, pinned })}
+          onClick={() => body.trim() && onSave({ title: title.trim() || null, body: body.trim(), category: "general", imageUrl: imageUrl.trim() || null, pinned })}
           className="btn btn-primary text-sm"
         >
           Publicar
@@ -340,15 +322,15 @@ function PostForm({
 }
 
 function PostCard({
-  post, onChange, onDelete, fail,
+  post, onOpen, onChange, onDelete, fail,
 }: {
   post: Post;
+  onOpen: () => void;
   onChange: (p: Post) => void;
   onDelete: () => void;
   fail: (e: unknown) => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const cat = feedCategoryMeta(post.category);
 
   async function patch(data: any) {
     try { const u = await api(`/api/community/feed/${post.id}`, "PATCH", data); onChange({ ...post, ...u }); }
@@ -367,18 +349,17 @@ function PostCard({
   const date = new Date(post.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
 
   return (
-    <div className="card space-y-2">
-      <div className="flex items-start gap-2">
+    <div className="card">
+      {/* Cabecera: autor + fecha + acciones de moderación */}
+      <div className="flex items-start gap-2 mb-2">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 flex-wrap">
             {post.pinned && <Pin size={13} className="text-amber-500 flex-shrink-0" />}
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${cat.chip}`}>{cat.emoji} {cat.label}</span>
-            {post.title && <h3 className="font-medium text-sm">{post.title}</h3>}
+            <span className="font-medium text-sm truncate">{post.authorName ?? "Equipo"}</span>
+            {!post.isPatient && <BadgeCheck size={14} className="text-blue-600 flex-shrink-0" fill="#2563EB" stroke="#FFFFFF" />}
+            <span className="text-[11px] text-neutral-400">· {date}</span>
             {!post.published && <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-500">Oculto</span>}
           </div>
-          <p className="text-[11px] text-neutral-400 mt-0.5">
-            {post.authorName ?? "Equipo"}{post.isPatient ? " · paciente" : ""} · {date}
-          </p>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           <IconBtn title={post.pinned ? "Desfijar" : "Fijar"} onClick={() => patch({ pinned: !post.pinned })}>
@@ -391,11 +372,148 @@ function PostCard({
           <IconBtn title="Borrar" onClick={remove} danger><Trash2 size={15} /></IconBtn>
         </div>
       </div>
-      <p className="text-sm whitespace-pre-line text-neutral-700">{post.body}</p>
-      {post.imageUrl && <img src={post.imageUrl} alt="" className="rounded-lg border border-neutral-200 max-h-72 object-cover" />}
-      <div className="flex items-center gap-4 text-xs text-neutral-500 pt-1">
+
+      {/* Cuerpo clicable (abre detalle): título + texto + thumbnail pequeño a la derecha */}
+      <button onClick={onOpen} className="w-full text-left block group">
+        <div className="flex gap-3">
+          <div className="flex-1 min-w-0">
+            {post.title && <h3 className="font-semibold text-base mb-1 group-hover:underline">{post.title}</h3>}
+            <p className="text-sm whitespace-pre-line text-neutral-700 line-clamp-3 break-words">{post.body}</p>
+          </div>
+          {post.imageUrl && (
+            <img src={post.imageUrl} alt="" className="rounded-lg object-cover flex-shrink-0 border border-neutral-200" style={{ width: 84, height: 84 }} />
+          )}
+        </div>
+      </button>
+
+      {/* Contadores + abrir comentarios */}
+      <div className="flex items-center gap-4 text-xs text-neutral-500 pt-2 mt-2 border-t border-neutral-100">
         <span className="flex items-center gap-1"><Heart size={13} /> {post.reactions}</span>
-        <span className="flex items-center gap-1"><MessageCircle size={13} /> {post.comments}</span>
+        <button onClick={onOpen} className="flex items-center gap-1 hover:text-neutral-900">
+          <MessageCircle size={13} /> {post.comments} {post.comments === 1 ? "comentario" : "comentarios"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────── DETALLE DEL POST (modal con comentarios) ─────────────────────────── */
+
+type Comment = { id: string; body: string; createdAt: string; authorName: string; isPatient: boolean };
+
+function PostDetailModal({
+  post, onClose, onCommentAdded,
+}: {
+  post: Post;
+  onClose: () => void;
+  onCommentAdded: () => void;
+}) {
+  const [comments, setComments] = useState<Comment[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [newComment, setNewComment] = useState("");
+  const [sending, setSending] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  // Carga inicial de comentarios
+  useEffect(() => {
+    (async () => {
+      try {
+        const c = await api(`/api/community/feed/${post.id}/comments`, "GET");
+        setComments(c ?? []);
+      } catch {
+        setComments([]);
+      }
+      setLoading(false);
+    })();
+  }, [post.id]);
+
+  async function send() {
+    const body = newComment.trim();
+    if (!body) return;
+    setSending(true);
+    setErr(null);
+    try {
+      const c = await api(`/api/community/feed/${post.id}/comments`, "POST", { body });
+      setComments((arr) => [...(arr ?? []), c]);
+      setNewComment("");
+      onCommentAdded();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "No se pudo enviar");
+    }
+    setSending(false);
+  }
+
+  const date = new Date(post.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 p-4 overflow-y-auto" onClick={onClose}>
+      <div className="bg-white rounded-2xl max-w-xl w-full p-5 my-8" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-between items-start mb-3">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {post.pinned && <Pin size={14} className="text-amber-500" />}
+            <span className="font-medium text-sm">{post.authorName ?? "Equipo"}</span>
+            {!post.isPatient && <BadgeCheck size={15} className="text-blue-600" fill="#2563EB" stroke="#FFFFFF" />}
+            <span className="text-xs text-neutral-400">· {date}</span>
+          </div>
+          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-900 p-1"><X size={18} /></button>
+        </div>
+
+        {post.title && <h2 className="font-semibold text-lg mb-2" style={{ letterSpacing: "-0.015em" }}>{post.title}</h2>}
+        <p className="text-sm whitespace-pre-line text-neutral-700 break-words">{post.body}</p>
+        {post.imageUrl && (
+          <a href={post.imageUrl} target="_blank" rel="noreferrer">
+            <img src={post.imageUrl} alt="" className="rounded-xl mt-3 w-full object-cover max-h-96 border border-neutral-200" />
+          </a>
+        )}
+
+        <div className="flex items-center gap-4 text-xs text-neutral-500 pt-3 mt-3 border-t border-neutral-100">
+          <span className="flex items-center gap-1"><Heart size={13} /> {post.reactions}</span>
+          <span className="flex items-center gap-1"><MessageCircle size={13} /> {post.comments + (comments?.length && comments.length > post.comments ? (comments.length - post.comments) : 0)} comentarios</span>
+        </div>
+
+        {/* Comentarios */}
+        <section className="mt-4">
+          <h3 className="text-xs uppercase tracking-wide text-neutral-500 font-medium mb-2">Comentarios</h3>
+          {loading ? (
+            <p className="text-xs text-neutral-400 italic">Cargando…</p>
+          ) : comments && comments.length > 0 ? (
+            <div className="space-y-3">
+              {comments.map((c) => (
+                <div key={c.id} className="flex gap-2.5">
+                  <span className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-[11px] flex-shrink-0 mt-0.5" style={{ background: c.isPatient ? "#E5E5E5" : "linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)", color: c.isPatient ? "#171717" : "#0A0A0A" }}>
+                    {c.authorName.charAt(0).toUpperCase()}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1 text-xs">
+                      <span className="font-medium">{c.authorName}</span>
+                      {!c.isPatient && <BadgeCheck size={12} className="text-blue-600" fill="#2563EB" stroke="#FFFFFF" />}
+                      <span className="text-neutral-400 ml-1">· {new Date(c.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}</span>
+                    </div>
+                    <p className="text-sm text-neutral-700 mt-0.5 break-words">{c.body}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-neutral-400 italic">Sin comentarios todavía.</p>
+          )}
+
+          {/* Añadir comentario como pro */}
+          <div className="mt-4 flex items-center gap-2">
+            <input
+              className="input text-sm flex-1"
+              placeholder="Escribe un comentario..."
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") send(); }}
+              disabled={sending}
+            />
+            <button onClick={send} disabled={!newComment.trim() || sending} className="btn btn-primary text-sm flex items-center gap-1.5 disabled:opacity-50">
+              <Send size={14} /> Enviar
+            </button>
+          </div>
+          {err && <p className="text-xs mt-1" style={{ color: "#DC2626" }}>{err}</p>}
+        </section>
       </div>
     </div>
   );
