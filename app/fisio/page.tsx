@@ -473,6 +473,7 @@ async function renderCloserPanel(
 ) {
   const { calculateSalesMetrics } = await import("@/lib/sales");
   const { SalesMetricsBlock } = await import("@/components/SalesMetricsBlock");
+  const { FisioPanelTabs } = await import("@/components/FisioPanelTabs");
 
   const customRange = parseCustomRange(searchParams.salesFrom, searchParams.salesTo);
   const salesPeriod: any = customRange
@@ -529,15 +530,8 @@ async function renderCloserPanel(
   const commission = Math.round(metrics.revenue * 0.10);
   const eur = (n: number) => `${n.toLocaleString("es-ES", { maximumFractionDigits: 0 })} €`;
 
-  return (
-    <main>
-      <header className="mb-5">
-        <h1 className="text-xl font-semibold">Panel de control</h1>
-        <p className="text-xs text-neutral-500 mt-0.5">
-          Hola {user.fullName.split(" ")[0]} · {new Date().toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
-        </p>
-      </header>
-
+  const panelContent = (
+    <>
       <SalesMetricsBlock
         period={salesPeriod}
         periodLabel={pLabel}
@@ -627,6 +621,18 @@ async function renderCloserPanel(
           </div>
         )}
       </section>
+    </>
+  );
+
+  return (
+    <main>
+      <header className="mb-5">
+        <h1 className="text-xl font-semibold">Panel de control</h1>
+        <p className="text-xs text-neutral-500 mt-0.5">
+          Hola {user.fullName.split(" ")[0]} · {new Date().toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
+        </p>
+      </header>
+      <FisioPanelTabs panel={panelContent} professionalId={user.id} />
     </main>
   );
 }
