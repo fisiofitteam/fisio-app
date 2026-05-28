@@ -28,7 +28,10 @@ export default async function LeadsPage({
   // Tab activo: por defecto "all" (todos los closers); o un closer específico
   const activeFilter = searchParams.closer ?? "all";
 
-  const where: any = { status: "scheduled" };
+  // El setter solo ve los leads pendientes de avisar al closer: status "scheduled"
+  // y aún sin marcar como avisados. Al pulsar "✓ Avisado", el lead desaparece de
+  // su panel y queda solo en el de llamadas del closer.
+  const where: any = { status: "scheduled", setterNotifiedAt: null };
   if (activeFilter !== "all") {
     where.closerId = activeFilter;
   }
@@ -41,14 +44,14 @@ export default async function LeadsPage({
     orderBy: { callScheduledAt: "asc" },
   });
 
-  // Counts por closer
-  const allScheduled = await prisma.lead.findMany({
-    where: { status: "scheduled" },
+  // Counts por closer (solo pendientes de avisar)
+  const allPending = await prisma.lead.findMany({
+    where: { status: "scheduled", setterNotifiedAt: null },
     select: { closerId: true },
   });
-  const counts: Record<string, number> = { all: allScheduled.length };
+  const counts: Record<string, number> = { all: allPending.length };
   for (const c of closers) {
-    counts[c.id] = allScheduled.filter((l) => l.closerId === c.id).length;
+    counts[c.id] = allPending.filter((l) => l.closerId === c.id).length;
   }
 
   return (
@@ -61,7 +64,14 @@ export default async function LeadsPage({
         fullName: l.fullName,
         contactType: l.contactType,
         contactValue: l.contactValue,
+        email: l.email,
+        phone: l.phone,
+        motivo: l.motivo,
+        tratamientosPrevios: l.tratamientosPrevios,
+        impactoCrossfit: l.impactoCrossfit,
         aiSummary: l.aiSummary,
+        meetingUrl: l.meetingUrl,
+        source: l.source,
         callScheduledAt: l.callScheduledAt.toISOString(),
         closer: l.closer,
       }))}

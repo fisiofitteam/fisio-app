@@ -10,7 +10,14 @@ type Lead = {
   fullName: string;
   contactType: string;
   contactValue: string;
+  email: string | null;
+  phone: string | null;
+  motivo: string | null;
+  tratamientosPrevios: string | null;
+  impactoCrossfit: string | null;
   aiSummary: string | null;
+  meetingUrl: string | null;
+  source: string | null;
   callScheduledAt: string;
   closer: Pro | null;
 };
@@ -59,13 +66,18 @@ export function SetterLeadsView({
     router.refresh();
   }
 
+  async function markNotified(leadId: string) {
+    await fetch(`/api/leads/${leadId}/mark-setter-notified`, { method: "POST" });
+    router.refresh();
+  }
+
   return (
     <main>
       <header className="mb-5 flex justify-between items-end flex-wrap gap-2">
         <div>
-          <h1 className="text-xl font-semibold">Llamadas agendadas</h1>
+          <h1 className="text-xl font-semibold">Llamadas pendientes</h1>
           <p className="text-xs text-neutral-500 mt-0.5">
-            {leads.length} {leads.length === 1 ? "agendada" : "agendadas"} · pendientes de la llamada
+            {leads.length} {leads.length === 1 ? "lead pendiente" : "leads pendientes"} de avisar al closer
           </p>
         </div>
         <button onClick={() => setShowNew(true)} className="btn btn-primary text-sm">
@@ -92,49 +104,121 @@ export function SetterLeadsView({
         ))}
       </div>
 
-      <section className="card">
-        {leads.length === 0 ? (
+      {leads.length === 0 ? (
+        <section className="card">
           <p className="text-sm text-neutral-400 text-center py-12 italic">
-            No hay llamadas agendadas en este filtro. Pulsa "+ Nueva llamada agendada" para añadir una.
+            No hay leads pendientes de avisar. Pulsa "+ Nueva llamada agendada" para añadir uno.
           </p>
-        ) : (
-          <div className="divide-y divide-neutral-100">
-            {leads.map((lead) => (
-              <button
-                key={lead.id}
-                onClick={() => setEditing(lead)}
-                className="w-full text-left py-3 px-2 -mx-2 hover:bg-neutral-50 rounded transition-colors"
-              >
-                <div className="flex justify-between items-start gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{lead.fullName}</span>
-                      <span className="text-xs text-neutral-500">
-                        {CONTACT_ICON[lead.contactType] ?? "·"} {lead.contactValue}
+        </section>
+      ) : (
+        <div className="space-y-3">
+          {leads.map((lead) => (
+            <article key={lead.id} className="card">
+              <div className="flex justify-between items-start gap-3">
+                <button
+                  onClick={() => setEditing(lead)}
+                  className="flex-1 min-w-0 text-left -m-2 p-2 rounded hover:bg-neutral-50 transition-colors"
+                >
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium">{lead.fullName}</span>
+                    {lead.source === "landing" && (
+                      <span className="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded" style={{ background: "#15803D", color: "#FFFFFF" }}>
+                        LANDING
                       </span>
-                    </div>
-                    {lead.aiSummary && (
-                      <p className="text-xs text-neutral-600 italic mt-1 line-clamp-2">
-                        "{lead.aiSummary}"
-                      </p>
                     )}
                   </div>
-                  <div className="text-right flex-shrink-0">
-                    <div className="text-xs font-medium text-blue-700">
-                      📅 {formatCallDate(lead.callScheduledAt)}
+
+                  {/* Datos de contacto siempre visibles */}
+                  {(lead.email || lead.phone) ? (
+                    <div className="mt-1.5 space-y-0.5">
+                      {lead.phone && (
+                        <div className="text-xs text-neutral-700 flex items-center gap-1.5">
+                          <span>📞</span>
+                          <a
+                            href={`https://wa.me/${lead.phone.replace(/[^0-9+]/g, "")}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="hover:underline tabular-nums"
+                          >
+                            {lead.phone}
+                          </a>
+                        </div>
+                      )}
+                      {lead.email && (
+                        <div className="text-xs text-neutral-700 flex items-center gap-1.5">
+                          <span>✉️</span>
+                          <a
+                            href={`mailto:${lead.email}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="hover:underline truncate"
+                          >
+                            {lead.email}
+                          </a>
+                        </div>
+                      )}
                     </div>
-                    {lead.closer && (
-                      <div className="text-[11px] text-neutral-500 mt-1">
-                        → {lead.closer.fullName.split(" ")[0]}
-                      </div>
-                    )}
+                  ) : (
+                    <div className="text-xs text-neutral-600 mt-1.5">
+                      {CONTACT_ICON[lead.contactType] ?? "·"} {lead.contactValue}
+                    </div>
+                  )}
+
+                  {/* Cuestionario de la landing — visible directamente */}
+                  {(lead.motivo || lead.tratamientosPrevios || lead.impactoCrossfit) && (
+                    <div className="mt-2 rounded-lg p-2.5 space-y-1.5" style={{ background: "#F0FDF4", border: "1px solid #BBF7D0" }}>
+                      {lead.motivo && (
+                        <div className="text-xs">
+                          <div className="text-[10px] uppercase tracking-wide font-semibold" style={{ color: "#15803D" }}>Motivo</div>
+                          <div className="text-neutral-800 mt-0.5">{lead.motivo}</div>
+                        </div>
+                      )}
+                      {lead.tratamientosPrevios && (
+                        <div className="text-xs">
+                          <div className="text-[10px] uppercase tracking-wide font-semibold" style={{ color: "#15803D" }}>Tratamientos previos</div>
+                          <div className="text-neutral-800 mt-0.5">{lead.tratamientosPrevios}</div>
+                        </div>
+                      )}
+                      {lead.impactoCrossfit && (
+                        <div className="text-xs">
+                          <div className="text-[10px] uppercase tracking-wide font-semibold" style={{ color: "#15803D" }}>Impacto CrossFit</div>
+                          <div className="text-neutral-800 mt-0.5">{lead.impactoCrossfit}</div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {lead.aiSummary && (
+                    <p className="text-xs text-neutral-600 italic mt-2">"{lead.aiSummary}"</p>
+                  )}
+                </button>
+                <div className="text-right flex-shrink-0">
+                  <div className="text-xs font-medium text-blue-700 whitespace-nowrap">
+                    📅 {formatCallDate(lead.callScheduledAt)}
                   </div>
+                  {lead.closer && (
+                    <div className="text-[11px] text-neutral-500 mt-1">
+                      → {lead.closer.fullName.split(" ")[0]}
+                    </div>
+                  )}
                 </div>
-              </button>
-            ))}
-          </div>
-        )}
-      </section>
+              </div>
+
+              {/* Botón: marcar como avisado al closer (lo saca del panel del setter) */}
+              <div className="mt-3 pt-3 border-t border-neutral-100 flex items-center justify-between gap-2">
+                <span className="text-[11px] text-neutral-500">Cuando avises al closer, marca aquí y este lead pasará a su panel.</span>
+                <button
+                  onClick={() => markNotified(lead.id)}
+                  className="text-xs font-medium px-3 py-1.5 rounded-md"
+                  style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+                >
+                  ✓ Avisado
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
 
       {(showNew || editing) && (
         <SetterLeadModal
