@@ -28,12 +28,29 @@ Reglas:
 - IGNORA líneas que solo describen estructura: "For time", "AMRAP 20'", "EMOM 12'", "21-15-9", "5 rounds", "Buy-in", "Cash-out", "Rest", tiempos de descanso, números sueltos, etc.
 - Para cada movimiento detectado extrae reps (string, puede ser "21-15-9" o "10") y load (string con unidad, ej. "42.5 kg", "20 lb", "24 kg").
 
+IMPORTANTE — Movimientos compuestos / variantes:
+Para movimientos compuestos como "Hang power snatch", "Hang power clean", "Squat clean thruster" etc., NO basta con asignar UN solo id. Devuelve también la lista \`relatedMovementIds\` con TODAS las variantes del catálogo de las que ese movimiento "hereda": el sistema combinará las restricciones del paciente y se quedará con la más estricta.
+
+Ejemplos de inheritance:
+- "Hang power snatch" → movementId: Power snatch (la más específica del catálogo que coincida) + relatedMovementIds: [Hang snatch, Snatch].
+- "Hang power clean" → movementId: Power clean + relatedMovementIds: [Hang clean, Clean].
+- "Push jerk" → movementId: Push jerk (si existe) + relatedMovementIds: [Jerk, Push press] (los que existan).
+- "DB snatch" → movementId: DB snatch (si existe) si no Snatch + relatedMovementIds: [Snatch].
+
+Sé generoso poniendo hermanos: si dudas, inclúyelo. El sistema solo aplicará restricciones de los que el paciente tenga limitados.
+
 Devuelve EXCLUSIVAMENTE un JSON array (sin texto antes ni después, sin code fences) con este formato:
 [
-  { "movementId": "<id>", "raw": "<fragmento original>", "reps": "<opcional>", "load": "<opcional>" }
+  {
+    "movementId": "<id principal>",
+    "relatedMovementIds": ["<id hermano>", "<otro id>"],
+    "raw": "<fragmento original>",
+    "reps": "<opcional>",
+    "load": "<opcional>"
+  }
 ]
 
-Si no detectas ningún movimiento del catálogo, devuelve [].`;
+\`relatedMovementIds\` puede ser [] si no hay variantes hermanas. Si no detectas ningún movimiento del catálogo, devuelve [].`;
 
 export async function parseWodWithAI(rawText: string): Promise<ParsedLine[]> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -82,7 +99,7 @@ ${JSON.stringify(catalog)}`;
   // Extraer el array JSON (Claude a veces lo envuelve en texto, aunque pedimos lo contrario)
   const jsonMatch = text.match(/\[[\s\S]*\]/);
   if (!jsonMatch) return [];
-  let parsed: Array<{ movementId?: string; raw?: string; reps?: string; load?: string }>;
+  let parsed: Array<{ movementId?: string; relatedMovementIds?: unknown; raw?: string; reps?: string; load?: string }>;
   try {
     parsed = JSON.parse(jsonMatch[0]);
   } catch {
@@ -92,11 +109,18 @@ ${JSON.stringify(catalog)}`;
 
   return parsed
     .filter((p) => p?.movementId && validIds.has(p.movementId))
-    .map((p) => ({
-      raw: typeof p.raw === "string" ? p.raw : "",
-      matchedMovementId: p.movementId!,
-      matchedMovementName: movNameById.get(p.movementId!),
-      reps: typeof p.reps === "string" ? p.reps : undefined,
-      load: typeof p.load === "string" ? p.load : undefined,
-    }));
+    .map((p) => {
+      // Filtramos hermanos: solo ids válidos del catálogo y distintos del principal
+      const related = Array.isArray(p.relatedMovementIds)
+        ? p.relatedMovementIds.filter((x): x is string => typeof x === "string" && validIds.has(x) && x !== p.movementId)
+        : [];
+      return {
+        raw: typeof p.raw === "string" ? p.raw : "",
+        matchedMovementId: p.movementId!,
+        matchedMovementName: movNameById.get(p.movementId!),
+        reps: typeof p.reps === "string" ? p.reps : undefined,
+        load: typeof p.load === "string" ? p.load : undefined,
+        relatedMovementIds: related,
+      };
+    });
 }

@@ -7,6 +7,10 @@ export type ParsedLine = {
   reps?: string;
   load?: string;
   unmatched?: boolean;
+  // Variantes/movimientos hermanos que también aplican al ejercicio detectado.
+  // Ej.: "Hang power snatch" hereda restricciones de "Hang snatch" y "Power snatch".
+  // El adaptWod combina las adaptaciones de TODOS y se queda con la más estricta.
+  relatedMovementIds?: string[];
 };
 
 export type AdaptedLine = ParsedLine & {
@@ -84,7 +88,41 @@ function escapeRegex(s: string) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// Aplica la tabla de adaptaciones del paciente al WOD parseado
+// Aplica la tabla de adaptaciones del paciente al WOD parseado. Cuando un movimiento
+// detectado declara hermanos (relatedMovementIds), se combinan las adaptaciones de
+// todos los hermanos quedándonos con la MÁS ESTRICTA.
+const STATE_RANK = { OK: 0, CONDITIONAL: 1, BLOCKED: 2 } as const;
+type State = keyof typeof STATE_RANK;
+
+// Extrae el primer número de un texto tipo "máx 50 kg" → 50. null si no hay número.
+function loadNum(s: string | null | undefined): number | null {
+  if (!s) return null;
+  const m = s.match(/(\d+(?:[.,]\d+)?)/);
+  return m ? Number(m[1].replace(",", ".")) : null;
+}
+
+// Combina dos adaptaciones quedándonos con la más restrictiva.
+function strictest(a: AdaptedLine, b: AdaptedLine): AdaptedLine {
+  const ra = STATE_RANK[(a.state ?? "OK") as State];
+  const rb = STATE_RANK[(b.state ?? "OK") as State];
+  if (ra !== rb) return ra > rb ? a : b;
+  // Mismo nivel de estado → fusionamos textos y nos quedamos con la carga más baja.
+  const na = loadNum(a.adaptedLoad);
+  const nb = loadNum(b.adaptedLoad);
+  let adaptedLoad = a.adaptedLoad || b.adaptedLoad || null;
+  if (na != null && nb != null) adaptedLoad = na <= nb ? a.adaptedLoad! : b.adaptedLoad!;
+  else if (na != null) adaptedLoad = a.adaptedLoad!;
+  else if (nb != null) adaptedLoad = b.adaptedLoad!;
+  const join = (x?: string | null, y?: string | null) =>
+    x && y && x !== y ? `${x} · ${y}` : (x || y || null);
+  return {
+    ...a,
+    substitutionText: join(a.substitutionText, b.substitutionText),
+    adaptedLoad,
+    physioWarning: join(a.physioWarning, b.physioWarning),
+  };
+}
+
 export async function adaptWod(
   parsed: ParsedLine[],
   patientId: string
@@ -100,16 +138,20 @@ export async function adaptWod(
     if (!line.matchedMovementId) {
       return { ...line };
     }
-    const adapt = adaptationMap.get(line.matchedMovementId);
-    if (!adapt) {
+    // Movimiento principal + hermanos
+    const ids = [line.matchedMovementId, ...(line.relatedMovementIds ?? [])];
+    const adapts = ids.map((id) => adaptationMap.get(id)).filter(Boolean) as typeof adaptations;
+    if (adapts.length === 0) {
       return { ...line, state: "OK" as const };
     }
-    return {
+    // Convertir cada adaptación a AdaptedLine y combinarlas con strictest()
+    const asLines: AdaptedLine[] = adapts.map((a) => ({
       ...line,
-      state: adapt.state as "OK" | "CONDITIONAL" | "BLOCKED",
-      substitutionText: adapt.substitutionText,
-      adaptedLoad: adapt.loadConstraint,
-      physioWarning: adapt.physioWarning,
-    };
+      state: a.state as State,
+      substitutionText: a.substitutionText,
+      adaptedLoad: a.loadConstraint,
+      physioWarning: a.physioWarning,
+    }));
+    return asLines.reduce((acc, cur) => strictest(acc, cur));
   });
 }
