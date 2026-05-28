@@ -156,7 +156,7 @@ export function PatientHomeDark({
 
         {!patient.shippingComplete && (
           <Link
-            href={`/paciente/${patient.id}/ajustes#envio`}
+            href={`/paciente/${patient.id}/ajustes#direccion`}
             className="mb-5 rounded-xl px-4 py-3 text-sm flex items-center justify-between gap-3"
             style={{
               background: "var(--p-amber-bg)",
@@ -165,9 +165,9 @@ export function PatientHomeDark({
             }}
           >
             <div className="flex-1 min-w-0">
-              <div className="font-medium mb-0.5">📦 Completa tu dirección de envío</div>
+              <div className="font-medium mb-0.5">📮 Completa tu dirección postal</div>
               <div className="text-xs" style={{ color: "var(--p-text-dim)" }}>
-                La necesitamos para enviarte tus parches a casa.
+                Faltan datos de contacto básicos en tu ficha.
               </div>
             </div>
             <span className="text-xs font-medium underline flex-shrink-0">Completar</span>

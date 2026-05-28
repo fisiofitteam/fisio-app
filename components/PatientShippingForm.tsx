@@ -120,7 +120,7 @@ export function PatientShippingForm({ initial }: { initial: Shipping }) {
       </div>
 
       <p className="text-[11px]" style={{ color: "var(--p-text-faint)" }}>
-        Los campos con * son obligatorios. La usamos para enviarte los parches a casa.
+        Los campos con * son obligatorios.
       </p>
 
       {msg && (

@@ -40,16 +40,16 @@ export default async function PatientSettingsPage({ params }: { params: { id: st
           <PatientPhotoUploader initialUrl={patient.photoUrl} />
         </section>
 
-        <section id="envio"
+        <section id="direccion"
           className="rounded-2xl p-4 mb-3"
           style={{ background: "var(--p-surface)", border: "1px solid var(--p-border)" }}
         >
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-lg">📦</span>
-            <h2 className="font-semibold text-sm">Dirección de envío</h2>
+            <span className="text-lg">📮</span>
+            <h2 className="font-semibold text-sm">Dirección postal</h2>
           </div>
           <p className="text-xs mb-3" style={{ color: "var(--p-text-dim)" }}>
-            La necesitamos para enviarte los parches de fisioterapia a casa.
+            Datos de contacto postal para que tu ficha esté completa.
           </p>
           <PatientShippingForm initial={{
             shippingStreet: patient.shippingStreet,
