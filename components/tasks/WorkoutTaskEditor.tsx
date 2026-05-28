@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { youtubeThumbnail } from "@/lib/youtube";
 
+type Template = { id: string; title: string; bodyText: string; exerciseIds: string[] };
+
 export function WorkoutTaskEditor({ task, onClose, onSave }: { task: any; onClose: () => void; onSave?: (snapshot: any) => void }) {
   const [title, setTitle] = useState(task.title);
   const [bodyText, setBodyText] = useState(task.workout?.bodyText ?? task.bodyText ?? "");
@@ -13,10 +15,28 @@ export function WorkoutTaskEditor({ task, onClose, onSave }: { task: any; onClos
   const [search, setSearch] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Plantillas de workout de la biblioteca
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+  const [saveAsTemplate, setSaveAsTemplate] = useState(false);
 
   useEffect(() => {
     fetch("/api/library").then((r) => r.json()).then(setLibrary);
+    fetch("/api/library/workouts").then((r) => r.json()).then((arr: Template[]) => setTemplates(arr || []));
   }, []);
+
+  // Cargar valores de una plantilla seleccionada en el form actual.
+  function loadTemplate(id: string) {
+    const t = templates.find((x) => x.id === id);
+    if (!t) return;
+    if (bodyText.trim() && !confirm("Esto sobrescribirá lo que tengas ahora. ¿Continuar?")) return;
+    setTitle(t.title);
+    setBodyText(t.bodyText);
+    // Recuperar ejercicios vinculados desde la library en memoria
+    const exs = library.filter((e: any) => t.exerciseIds.includes(e.id));
+    setLinkedExercises(exs);
+    setSelectedTemplateId("");
+  }
 
   const filteredLibrary = library.filter((ex) => {
     if (linkedExercises.some((le) => le.id === ex.id)) return false;
@@ -36,6 +56,20 @@ export function WorkoutTaskEditor({ task, onClose, onSave }: { task: any; onClos
 
   async function save() {
     setSaving(true);
+    // Si está marcado, guardamos la plantilla en biblioteca antes de seguir.
+    if (saveAsTemplate && title.trim()) {
+      try {
+        await fetch("/api/library/workouts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: title.trim(),
+            bodyText,
+            exerciseIds: linkedExercises.map((e) => e.id),
+          }),
+        });
+      } catch {}
+    }
     // Modo snapshot: devuelve el task actualizado por callback
     if (onSave) {
       onSave({
@@ -70,6 +104,21 @@ export function WorkoutTaskEditor({ task, onClose, onSave }: { task: any; onClos
       <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 text-xs text-amber-900">
         🏋️ Workout · escribe el bloque tal cual se lo entregarías al paciente
       </div>
+
+      {/* Selector para cargar una plantilla de la biblioteca */}
+      {templates.length > 0 && (
+        <div>
+          <label className="text-xs text-neutral-500 block mb-1">Cargar de plantilla (opcional)</label>
+          <select
+            className="input text-sm"
+            value={selectedTemplateId}
+            onChange={(e) => { setSelectedTemplateId(e.target.value); if (e.target.value) loadTemplate(e.target.value); }}
+          >
+            <option value="">— Empezar en blanco —</option>
+            {templates.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
+          </select>
+        </div>
+      )}
 
       <div>
         <label className="text-xs text-neutral-500 block mb-1">Título</label>
@@ -164,6 +213,12 @@ export function WorkoutTaskEditor({ task, onClose, onSave }: { task: any; onClos
           </div>
         )}
       </div>
+
+      {/* Guardar también como plantilla en la biblioteca */}
+      <label className="flex items-center gap-2 text-xs cursor-pointer pt-2">
+        <input type="checkbox" checked={saveAsTemplate} onChange={(e) => setSaveAsTemplate(e.target.checked)} className="w-4 h-4 accent-neutral-900" />
+        💾 Guardar también como plantilla en la biblioteca
+      </label>
 
       <div className="flex justify-end gap-2 pt-3 border-t border-neutral-200">
         <button onClick={onClose} className="btn btn-ghost text-sm">Cancelar</button>

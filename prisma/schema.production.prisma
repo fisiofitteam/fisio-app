@@ -1756,3 +1756,17 @@ model AdCampaignTag {
   bucket     String                                  // "follow" | "conversion"
   updatedAt  DateTime @updatedAt
 }
+
+// Plantillas de workout guardadas en la Biblioteca. Reutilizables al crear un
+// workout dentro del calendario de un paciente.
+model WorkoutTemplate {
+  id          String   @id @default(cuid())
+  title       String
+  bodyText    String   @default("")           // bloque libre del WOD
+  exerciseIds String   @default("[]")         // JSON: ids de ExerciseLibrary vinculados
+  createdById String?                         // profesional que la creó (auditoría)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([createdAt])
+}

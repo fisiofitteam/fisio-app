@@ -23,6 +23,12 @@ const SECTIONS = [
     desc: "Con vídeo demostrativo",
   },
   {
+    id: "workouts",
+    label: "Workouts",
+    icon: "⚡",
+    desc: "Plantillas de WOD reutilizables",
+  },
+  {
     id: "formularios",
     label: "Formularios",
     icon: "📝",
