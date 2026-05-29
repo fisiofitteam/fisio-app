@@ -76,7 +76,8 @@ const TOTAL_HEIGHT = TOTAL_HOURS * HOUR_HEIGHT;
 const START_MIN = START_HOUR * 60;
 const END_MIN = END_HOUR * 60;
 
-const WEEKDAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+const WEEKDAYS = ["Lun", "Mar", "Mié", "Jue", "Vie"];
+const VISIBLE_DAYS = 5; // L-V (sin sábado ni domingo)
 
 // ── Asignación de carriles para eventos solapados en el mismo día ────────────
 function assignLanes(events: { startMin: number; endMin: number; id: string }[]) {
@@ -131,7 +132,7 @@ export function TeamCalendarView({
     const out: { key: string; date: Date; weekdayIdx: number; dayNum: number; isToday: boolean }[] = [];
     const todayKey = madridYMD(new Date().toISOString());
     const ws = new Date(weekStartISO);
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < VISIBLE_DAYS; i++) {
       const d = new Date(ws);
       d.setUTCDate(d.getUTCDate() + i);
       // Para sacar el "día Madrid" tomamos las 12:00 UTC de ese día (cae siempre en el día Madrid esperado)
@@ -203,7 +204,7 @@ export function TeamCalendarView({
 
   // Etiqueta del rango
   const ws = new Date(weekStartISO);
-  const we = new Date(ws); we.setUTCDate(we.getUTCDate() + 6);
+  const we = new Date(ws); we.setUTCDate(we.getUTCDate() + (VISIBLE_DAYS - 1));
   const rangeLabel = `${ws.toLocaleDateString("es-ES", { timeZone: TZ, day: "numeric", month: "short" })} — ${we.toLocaleDateString("es-ES", { timeZone: TZ, day: "numeric", month: "short", year: "numeric" })}`;
 
   const hours = Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => START_HOUR + i);
@@ -231,8 +232,8 @@ export function TeamCalendarView({
       <div className="flex gap-3 items-start">
         {/* Sidebar de filtros (solo managers/setter) */}
         {showFilterSidebar && (
-          <aside className="hidden lg:block w-56 flex-shrink-0">
-            <div className="card sticky top-2">
+          <aside className="hidden lg:block w-40 flex-shrink-0">
+            <div className="card sticky top-2 p-3">
               <div className="text-[10px] uppercase tracking-wide text-neutral-500 font-medium mb-2">Mis calendarios</div>
               <div className="space-y-1.5 mb-3">
                 {pros.map((p) => {
@@ -247,7 +248,6 @@ export function TeamCalendarView({
                         className="w-3.5 h-3.5"
                         style={{ accentColor: c.dot }}
                       />
-                      <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: c.dot }} />
                       <span className="truncate">{p.fullName.split(" ")[0]}{p.id === currentUserId && <span className="text-neutral-400"> (tú)</span>}</span>
                     </label>
                   );
@@ -269,7 +269,7 @@ export function TeamCalendarView({
         <section className="flex-1 min-w-0 overflow-x-auto">
           <div className="rounded-xl border border-neutral-200 bg-white">
             {/* Cabecera de días */}
-            <div className="grid sticky top-0 bg-white z-10 border-b border-neutral-200" style={{ gridTemplateColumns: `56px repeat(7, minmax(110px, 1fr))` }}>
+            <div className="grid sticky top-0 bg-white z-10 border-b border-neutral-200" style={{ gridTemplateColumns: `56px repeat(${VISIBLE_DAYS}, minmax(110px, 1fr))` }}>
               <div className="px-2 py-2 text-[10px] text-neutral-400 uppercase">GMT+1/2</div>
               {days.map((d) => (
                 <div key={d.key} className={`px-2 py-2 text-center ${d.isToday ? "bg-neutral-50" : ""}`}>
@@ -281,7 +281,7 @@ export function TeamCalendarView({
 
             {/* Fila "todo el día" para vacaciones */}
             {[...allDayByDay.entries()].some(([, list]) => list.length > 0) && (
-              <div className="grid border-b border-neutral-200" style={{ gridTemplateColumns: `56px repeat(7, minmax(110px, 1fr))` }}>
+              <div className="grid border-b border-neutral-200" style={{ gridTemplateColumns: `56px repeat(${VISIBLE_DAYS}, minmax(110px, 1fr))` }}>
                 <div className="px-2 py-1.5 text-[10px] text-neutral-400">Todo el día</div>
                 {days.map((d) => {
                   const list = allDayByDay.get(d.key) ?? [];
@@ -302,7 +302,7 @@ export function TeamCalendarView({
             )}
 
             {/* Grid de horas */}
-            <div className="grid relative" style={{ gridTemplateColumns: `56px repeat(7, minmax(110px, 1fr))` }}>
+            <div className="grid relative" style={{ gridTemplateColumns: `56px repeat(${VISIBLE_DAYS}, minmax(110px, 1fr))` }}>
               {/* Columna de horas */}
               <div className="relative" style={{ height: TOTAL_HEIGHT }}>
                 {hours.map((h) => (
@@ -378,7 +378,6 @@ function CategoryChk({ label, color, checked, onToggle }: { label: string; color
   return (
     <label className="flex items-center gap-2 cursor-pointer text-xs">
       <input type="checkbox" checked={checked} onChange={onToggle} className="w-3.5 h-3.5" style={{ accentColor: color }} />
-      <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: color }} />
       <span>{label}</span>
     </label>
   );
