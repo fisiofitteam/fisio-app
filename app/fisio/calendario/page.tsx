@@ -59,7 +59,7 @@ export default async function CalendarioPage({
 
   // ── Profesionales (para colores y filtro) ───────────────────────────────
   const allPros = await prisma.professional.findMany({
-    where: { isActive: true },
+    where: { active: true },
     select: { id: true, fullName: true, role: true },
     orderBy: { fullName: "asc" },
   });
