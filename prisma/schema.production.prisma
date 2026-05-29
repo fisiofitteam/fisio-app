@@ -119,6 +119,8 @@ model Patient {
   renewalCheckouts RenewalCheckout[]
   clinicalSessionCase ClinicalSessionCase?
   transactions    Transaction[]
+  prs             PatientPR[]
+  challenges      PatientChallenge[]
   leadsConverted  Lead[]
   sessions        Session[]
   programPauses   ProgramPause[]
@@ -1775,4 +1777,37 @@ model WorkoutTemplate {
   updatedAt   DateTime @updatedAt
 
   @@index([createdAt])
+}
+
+// PRs (récords personales) del paciente — exclusivo del panel ADVANCE rolling.
+// El paciente los gestiona desde su app (autoeditar).
+model PatientPR {
+  id          String   @id @default(cuid())
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  name        String                                  // "Snatch", "Fran", "Back Squat", "Murph"...
+  value       String                                  // "100 kg", "3:21", "12 rounds"
+  unit        String?                                 // opcional ("kg", "tiempo", "reps")
+  recordedAt  DateTime @default(now())
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  @@index([patientId, recordedAt])
+}
+
+// Reto del mes — el coach configura uno por paciente cada mes (más adelante
+// añadiremos la UI de gestión por parte del coach).
+model PatientChallenge {
+  id          String   @id @default(cuid())
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  year        Int
+  month       Int                                     // 0..11
+  title       String                                  // "Romper Fran en sub-4"
+  description String?                                 // detalle del reto
+  completed   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([patientId, year, month])
 }

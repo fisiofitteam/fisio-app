@@ -1,8 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Trophy, BarChart3, BookOpen, Users } from "lucide-react";
 import { PatientSessionMenu, patientLogout } from "@/components/PatientSessionMenu";
+
+// Icono de WhatsApp en amarillo (currentColor para compat con la API de Lucide).
+function WhatsAppIcon({ size = 22, style, className }: { size?: number; strokeWidth?: number; style?: React.CSSProperties; className?: string }) {
+  return (
+    <svg viewBox="0 0 32 32" width={size} height={size} fill="currentColor" style={style} className={className} aria-hidden>
+      <path d="M16 .5C7.4.5.5 7.4.5 16c0 2.8.7 5.4 2 7.8L.5 31.5l7.9-2.1c2.3 1.2 4.9 1.9 7.6 1.9 8.6 0 15.5-6.9 15.5-15.5S24.6.5 16 .5zm0 28c-2.4 0-4.7-.6-6.7-1.8l-.5-.3-4.7 1.2 1.3-4.6-.3-.5C3.9 20.5 3.2 18.3 3.2 16 3.2 8.9 8.9 3.2 16 3.2S28.8 8.9 28.8 16 23.1 28.5 16 28.5zm7.4-9.4c-.4-.2-2.4-1.2-2.7-1.3-.4-.1-.6-.2-.9.2-.3.4-1 1.3-1.2 1.5-.2.2-.4.3-.8.1-.4-.2-1.7-.6-3.2-2-1.2-1.1-2-2.4-2.2-2.8-.2-.4 0-.6.2-.8.2-.2.4-.4.5-.7.2-.2.2-.4.4-.6.1-.3 0-.5 0-.7-.1-.2-.9-2.1-1.2-2.9-.3-.8-.6-.7-.9-.7h-.7c-.2 0-.6.1-1 .5-.3.4-1.3 1.3-1.3 3.1s1.3 3.6 1.5 3.9c.2.2 2.6 4 6.3 5.6.9.4 1.6.6 2.1.8.9.3 1.7.2 2.3.1.7-.1 2.4-1 2.7-1.9.3-.9.3-1.7.2-1.9-.1-.2-.3-.3-.7-.5z" />
+    </svg>
+  );
+}
 
 type RollingTask = {
   id: string;
@@ -48,6 +57,11 @@ function formatWeekLabel(iso: string): string {
 
 export function PatientHomeRolling({
   firstName,
+  patientId,
+  patientPhotoUrl,
+  whatsappGroupUrl,
+  communityUnread,
+  challenge,
   mode,
   weekStartIso,
   title,
@@ -56,6 +70,10 @@ export function PatientHomeRolling({
 }: {
   firstName: string;
   patientId: string;
+  patientPhotoUrl?: string | null;
+  whatsappGroupUrl?: string | null;
+  communityUnread?: number;
+  challenge?: { id: string; title: string; description: string | null; completed: boolean } | null;
   mode: "ready" | "pending" | "expired";
   weekStartIso: string;
   title?: string | null;
@@ -108,24 +126,28 @@ export function PatientHomeRolling({
               type="button"
               title="Cerrar sesión"
               onClick={() => { if (confirm("¿Cerrar sesión?")) patientLogout(); }}
-              className="flex items-center justify-center font-bold flex-shrink-0 cursor-pointer"
+              className="flex items-center justify-center font-bold flex-shrink-0 cursor-pointer overflow-hidden"
               style={{
                 width: 52, height: 52, borderRadius: 14,
-                background: "linear-gradient(135deg, var(--p-accent) 0%, #F59E0B 100%)",
+                background: patientPhotoUrl ? "transparent" : "linear-gradient(135deg, var(--p-accent) 0%, #F59E0B 100%)",
                 color: "var(--p-accent-ink)",
                 fontSize: 22,
                 letterSpacing: "-0.03em",
-                border: "none",
+                border: patientPhotoUrl ? "1px solid var(--p-border-strong)" : "none",
               }}
             >
-              {initial}
+              {patientPhotoUrl ? (
+                <img src={patientPhotoUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                initial
+              )}
             </button>
             <div>
               <div className="text-2xl font-bold" style={{ letterSpacing: "-0.03em" }}>
                 Hola, {firstName}
               </div>
               <div className="text-xs" style={{ color: "var(--p-text-faint)" }}>
-                Esta es tu semana
+                Modo ADVANCE
               </div>
             </div>
           </div>
@@ -146,6 +168,73 @@ export function PatientHomeRolling({
             </div>
           )}
         </header>
+
+        {/* 🎯 Reto del mes — destacado si el coach lo ha configurado */}
+        {challenge && (
+          <section
+            className="rounded-2xl p-4 mb-5"
+            style={{
+              background: "linear-gradient(135deg, var(--p-accent) 0%, #F59E0B 100%)",
+              color: "var(--p-accent-ink)",
+            }}
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-lg">🎯</span>
+              <span className="text-[10px] font-bold tracking-wider uppercase">Reto del mes</span>
+              {challenge.completed && (
+                <span className="text-[10px] font-bold ml-auto px-1.5 py-0.5 rounded" style={{ background: "rgba(10,10,10,0.15)" }}>
+                  ✓ COMPLETADO
+                </span>
+              )}
+            </div>
+            <h3 className="text-lg font-bold leading-tight mb-1" style={{ letterSpacing: "-0.02em" }}>
+              {challenge.title}
+            </h3>
+            {challenge.description && (
+              <p className="text-sm" style={{ color: "rgba(10,10,10,0.75)" }}>
+                {challenge.description}
+              </p>
+            )}
+          </section>
+        )}
+
+        {/* Grid de accesos compactos */}
+        <div className="grid grid-cols-2 gap-3 mb-6">
+          <RollingActionCard
+            href={`/paciente/${patientId}/prs`}
+            Icon={Trophy}
+            label="Mis PRs"
+            sublabel="Tus máximos"
+          />
+          <RollingActionCard
+            href={`/paciente/${patientId}/metricas`}
+            Icon={BarChart3}
+            label="Mis métricas"
+            sublabel="Fatiga, RPE, sueño…"
+          />
+          <RollingActionCard
+            href={`/paciente/${patientId}/biblioteca`}
+            Icon={BookOpen}
+            label="Biblioteca"
+            sublabel="Recursos y vídeos"
+          />
+          <RollingActionCard
+            href={`/paciente/${patientId}/comunidad`}
+            Icon={Users}
+            label="Comunidad"
+            sublabel={communityUnread && communityUnread > 0 ? "Tienes novedades" : "Equipo y atletas"}
+            badge={communityUnread}
+          />
+          {whatsappGroupUrl && (
+            <RollingActionCard
+              href={whatsappGroupUrl}
+              Icon={WhatsAppIcon}
+              label="Mi seguimiento"
+              sublabel="Grupo de WhatsApp"
+              external
+            />
+          )}
+        </div>
 
         <div className="text-[11px] font-medium mb-1 tracking-wider" style={{ color: "var(--p-text-faint)" }}>
           SEMANA · {formatWeekLabel(weekStartIso).toUpperCase()}
@@ -258,3 +347,55 @@ function RollingTaskCard({ task }: { task: RollingTask }) {
     </div>
   );
 }
+
+function RollingActionCard({
+  href, Icon, label, sublabel, external, badge,
+}: {
+  href: string;
+  Icon: any;
+  label: string;
+  sublabel: string;
+  external?: boolean;
+  badge?: number;
+}) {
+  const className = "block rounded-2xl px-3 py-3 transition-transform active:scale-95 relative";
+  const style = {
+    background: "var(--p-surface)",
+    color: "var(--p-text)",
+    border: "1px solid var(--p-border)",
+  } as const;
+  const content = (
+    <>
+      {badge !== undefined && badge > 0 && (
+        <span
+          className="absolute flex items-center justify-center font-bold rounded-full"
+          style={{
+            top: -6, right: -6,
+            minWidth: 20, height: 20, padding: "0 5px",
+            background: "#EF4444", color: "#FFFFFF",
+            fontSize: 11,
+            border: "2px solid var(--p-bg, #0A0A0A)",
+          }}
+        >
+          {badge > 9 ? "9+" : badge}
+        </span>
+      )}
+      <div className="flex items-center gap-2.5">
+        <Icon size={22} strokeWidth={2} className="flex-shrink-0" style={{ color: "var(--p-accent)" }} />
+        <div className="min-w-0">
+          <div className="font-semibold text-sm leading-tight truncate" style={{ letterSpacing: "-0.02em" }}>
+            {label}
+          </div>
+          <div className="text-[10px] leading-tight truncate" style={{ color: "var(--p-text-dim)", letterSpacing: "-0.005em" }}>
+            {sublabel}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+  if (external) {
+    return <a href={href} target="_blank" rel="noopener noreferrer" className={className} style={style}>{content}</a>;
+  }
+  return <Link href={href} className={className} style={style}>{content}</Link>;
+}
+

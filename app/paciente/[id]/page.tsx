@@ -179,10 +179,38 @@ export default async function PatientHome({ params }: { params: { id: string } }
     // Título: usar el del entrenamiento si hay, si no el de accesorios
     const headerTitle = (trnWeek?.title || accWeek?.title) || null;
 
+    // ── Datos para el nuevo panel ADVANCE rolling ──────────────────────────
+    const nowR = new Date();
+    const sinceR = patient.communityLastSeenAt ?? patient.startedAt ?? new Date(0);
+    const [rolledNewPosts, rolledNewComments, rolledNewReactions, currentChallenge] = await Promise.all([
+      prisma.communityFeedPost.count({
+        where: { published: true, createdAt: { gt: sinceR }, NOT: { patientAuthorId: patient.id } },
+      }),
+      prisma.communityComment.count({
+        where: { createdAt: { gt: sinceR }, post: { patientAuthorId: patient.id }, NOT: { patientId: patient.id } },
+      }),
+      prisma.communityReaction.count({
+        where: { createdAt: { gt: sinceR }, post: { patientAuthorId: patient.id }, NOT: { patientId: patient.id } },
+      }),
+      prisma.patientChallenge.findUnique({
+        where: { patientId_year_month: { patientId: patient.id, year: nowR.getFullYear(), month: nowR.getMonth() } },
+      }),
+    ]);
+    const rollingUnread = rolledNewPosts + rolledNewComments + rolledNewReactions;
+
     return (
       <PatientHomeRolling
         firstName={firstName}
         patientId={patient.id}
+        patientPhotoUrl={patient.photoUrl}
+        whatsappGroupUrl={patient.whatsappGroupUrl}
+        communityUnread={rollingUnread}
+        challenge={currentChallenge ? {
+          id: currentChallenge.id,
+          title: currentChallenge.title,
+          description: currentChallenge.description,
+          completed: currentChallenge.completed,
+        } : null}
         mode={anyPublished ? "ready" : "pending"}
         weekStartIso={thisMonday.toISOString()}
         title={headerTitle}
