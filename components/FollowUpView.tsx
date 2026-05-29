@@ -100,7 +100,7 @@ export function FollowUpView({
       )}
 
       {/* Tabs de closer para CEO */}
-      {currentUser.role === "ceo" && closers.length > 1 && (
+      {(currentUser.role === "ceo" || currentUser.role === "setter") && closers.length > 1 && (
         <div className="flex gap-1 mb-4 border-b border-neutral-200">
           {closers.map((c) => {
             const isActive = activeCloserId === c.id;

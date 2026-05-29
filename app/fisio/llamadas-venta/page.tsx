@@ -10,7 +10,7 @@ export default async function LlamadasVentaPage({
   searchParams: { status?: string; closer?: string; view?: string };
 }) {
   const user = (await getActiveProfessional())!;
-  if (user.role !== "ceo" && user.role !== "closer") redirect("/fisio");
+  if (user.role !== "ceo" && user.role !== "closer" && user.role !== "setter") redirect("/fisio");
 
   const status = ["scheduled", "won", "lost", "cancelled", "no_show"].includes(searchParams.status ?? "")
     ? searchParams.status!
@@ -22,19 +22,22 @@ export default async function LlamadasVentaPage({
     orderBy: [{ role: "asc" }, { fullName: "asc" }], // ceo primero (por orden alfabético del role)
   });
 
-  // Para CEO: filtro por closer activo. Por defecto Ales (él mismo)
+  // CEO y setter pueden filtrar por closer (la setter no tiene closer propio, así
+  // que cae al primero disponible). Closer ve solo lo suyo.
   let activeCloserId: string;
   if (user.role === "ceo") {
     activeCloserId = searchParams.closer || user.id;
+  } else if (user.role === "setter") {
+    activeCloserId = searchParams.closer || closers[0]?.id || "";
   } else {
     activeCloserId = user.id; // closer ve solo lo suyo
   }
 
   const baseWhere = { closerId: activeCloserId };
 
-  // Vista Follow-up embebida en la página de llamadas (solo CEO; el closer la
-  // tiene como pestaña propia en el sidebar).
-  const view = user.role === "ceo" && searchParams.view === "followup" ? "followup" : "calls";
+  // Vista Follow-up embebida en la página de llamadas (CEO y setter; el closer
+  // la tiene como pestaña propia en el sidebar).
+  const view = (user.role === "ceo" || user.role === "setter") && searchParams.view === "followup" ? "followup" : "calls";
   if (view === "followup") {
     const fuLeads = await prisma.lead.findMany({
       where: { closerId: activeCloserId, inFollowUp: true },

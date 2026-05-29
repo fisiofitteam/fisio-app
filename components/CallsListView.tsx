@@ -147,16 +147,16 @@ export function CallsListView({
         </button>
       </header>
 
-      {/* Toggle Llamadas / Follow-up (solo CEO) */}
-      {currentUser.role === "ceo" && (
+      {/* Toggle Llamadas / Follow-up (CEO y setter — visión global) */}
+      {(currentUser.role === "ceo" || currentUser.role === "setter") && (
         <div className="flex gap-1 mb-3 border-b border-neutral-200">
           <span className="px-4 py-2 text-sm font-medium border-b-2 border-neutral-900 text-neutral-900">📞 Llamadas</span>
           <a href={`/fisio/llamadas-venta?view=followup&closer=${activeCloserId}`} className="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-neutral-500 hover:text-neutral-900">🔁 Follow-up</a>
         </div>
       )}
 
-      {/* Tabs de closer (solo para CEO) */}
-      {currentUser.role === "ceo" && closers.length > 1 && (
+      {/* Tabs de closer (CEO y setter para alternar entre closers) */}
+      {(currentUser.role === "ceo" || currentUser.role === "setter") && closers.length > 1 && (
         <div className="flex gap-1 mb-3 border-b border-neutral-200">
           {closers.map((c) => {
             const isActive = activeCloserId === c.id;
