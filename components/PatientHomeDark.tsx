@@ -11,7 +11,26 @@ import {
   ChevronRight,
   ArrowLeft,
   Settings,
+  Users,
 } from "lucide-react";
+
+// Icono de WhatsApp compatible con la API de Lucide (acepta size + style.color).
+// El fill usa currentColor para que herede el color del style del padre.
+function WhatsAppIcon({ size = 22, style, className }: { size?: number; strokeWidth?: number; style?: React.CSSProperties; className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 32 32"
+      width={size}
+      height={size}
+      fill="currentColor"
+      style={style}
+      className={className}
+      aria-hidden
+    >
+      <path d="M16 .5C7.4.5.5 7.4.5 16c0 2.8.7 5.4 2 7.8L.5 31.5l7.9-2.1c2.3 1.2 4.9 1.9 7.6 1.9 8.6 0 15.5-6.9 15.5-15.5S24.6.5 16 .5zm0 28c-2.4 0-4.7-.6-6.7-1.8l-.5-.3-4.7 1.2 1.3-4.6-.3-.5C3.9 20.5 3.2 18.3 3.2 16 3.2 8.9 8.9 3.2 16 3.2S28.8 8.9 28.8 16 23.1 28.5 16 28.5zm7.4-9.4c-.4-.2-2.4-1.2-2.7-1.3-.4-.1-.6-.2-.9.2-.3.4-1 1.3-1.2 1.5-.2.2-.4.3-.8.1-.4-.2-1.7-.6-3.2-2-1.2-1.1-2-2.4-2.2-2.8-.2-.4 0-.6.2-.8.2-.2.4-.4.5-.7.2-.2.2-.4.4-.6.1-.3 0-.5 0-.7-.1-.2-.9-2.1-1.2-2.9-.3-.8-.6-.7-.9-.7h-.7c-.2 0-.6.1-1 .5-.3.4-1.3 1.3-1.3 3.1s1.3 3.6 1.5 3.9c.2.2 2.6 4 6.3 5.6.9.4 1.6.6 2.1.8.9.3 1.7.2 2.3.1.7-.1 2.4-1 2.7-1.9.3-.9.3-1.7.2-1.9-.1-.2-.3-.3-.7-.5z" />
+    </svg>
+  );
+}
 import { PatientNav } from "@/components/PatientNav";
 import { PatientSessionMenu, patientLogout } from "@/components/PatientSessionMenu";
 
@@ -227,22 +246,6 @@ export function PatientHomeDark({
             </div>
             </div>
 
-            {patient.whatsappGroupUrl && (
-              <a
-                href={patient.whatsappGroupUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex flex-col items-center gap-1 flex-shrink-0"
-                title="Abrir tu grupo de seguimiento"
-              >
-                <span className="flex items-center justify-center rounded-full" style={{ width: 44, height: 44, background: "#25D366" }}>
-                  <svg viewBox="0 0 32 32" width="24" height="24" fill="#fff" aria-hidden>
-                    <path d="M16 .5C7.4.5.5 7.4.5 16c0 2.8.7 5.4 2 7.8L.5 31.5l7.9-2.1c2.3 1.2 4.9 1.9 7.6 1.9 8.6 0 15.5-6.9 15.5-15.5S24.6.5 16 .5zm0 28c-2.4 0-4.7-.6-6.7-1.8l-.5-.3-4.7 1.2 1.3-4.6-.3-.5C3.9 20.5 3.2 18.3 3.2 16 3.2 8.9 8.9 3.2 16 3.2S28.8 8.9 28.8 16 23.1 28.5 16 28.5zm7.4-9.4c-.4-.2-2.4-1.2-2.7-1.3-.4-.1-.6-.2-.9.2-.3.4-1 1.3-1.2 1.5-.2.2-.4.3-.8.1-.4-.2-1.7-.6-3.2-2-1.2-1.1-2-2.4-2.2-2.8-.2-.4 0-.6.2-.8.2-.2.4-.4.5-.7.2-.2.2-.4.4-.6.1-.3 0-.5 0-.7-.1-.2-.9-2.1-1.2-2.9-.3-.8-.6-.7-.9-.7h-.7c-.2 0-.6.1-1 .5-.3.4-1.3 1.3-1.3 3.1s1.3 3.6 1.5 3.9c.2.2 2.6 4 6.3 5.6.9.4 1.6.6 2.1.8.9.3 1.7.2 2.3.1.7-.1 2.4-1 2.7-1.9.3-.9.3-1.7.2-1.9-.1-.2-.3-.3-.7-.5z" />
-                  </svg>
-                </span>
-                <span className="text-[11px] font-medium" style={{ color: "var(--p-text-dim)" }}>Mi seguimiento</span>
-              </a>
-            )}
           </div>
 
           {/* Frase de marca */}
@@ -290,6 +293,21 @@ export function PatientHomeDark({
             label="Biblioteca"
             sublabel="Recursos y vídeos"
           />
+          <ActionCard
+            href={`/paciente/${patient.id}/comunidad`}
+            Icon={Users}
+            label="Comunidad"
+            sublabel="Equipo y otros atletas"
+          />
+          {patient.whatsappGroupUrl && (
+            <ActionCard
+              href={patient.whatsappGroupUrl}
+              Icon={WhatsAppIcon}
+              label="Mi seguimiento"
+              sublabel="Grupo de WhatsApp"
+              external
+            />
+          )}
         </div>
 
         {/* Plan de hoy / próxima sesión - card destacada */}
@@ -419,45 +437,55 @@ function ActionCard({
   label,
   sublabel,
   highlight,
+  external,
 }: {
   href: string;
   Icon: any;
   label: string;
   sublabel: string;
   highlight?: boolean;
+  external?: boolean;
 }) {
-  return (
-    <Link
-      href={href}
-      className="block rounded-2xl px-3 py-3 transition-transform active:scale-95"
-      style={{
-        background: highlight ? "linear-gradient(135deg, var(--p-accent) 0%, #F59E0B 100%)" : "var(--p-surface)",
-        color: highlight ? "var(--p-accent-ink)" : "var(--p-text)",
-        border: highlight ? "none" : "1px solid var(--p-border)",
-      }}
-    >
-      <div className="flex items-center gap-2.5">
-        <Icon
-          size={22}
-          strokeWidth={2}
-          className="flex-shrink-0"
-          style={{ color: highlight ? "var(--p-accent-ink)" : "var(--p-accent)" }}
-        />
-        <div className="min-w-0">
-          <div className="font-semibold text-sm leading-tight truncate" style={{ letterSpacing: "-0.02em" }}>
-            {label}
-          </div>
-          <div
-            className="text-[10px] leading-tight truncate"
-            style={{
-              color: highlight ? "rgba(10,10,10,0.7)" : "var(--p-text-dim)",
-              letterSpacing: "-0.005em",
-            }}
-          >
-            {sublabel}
-          </div>
+  const className = "block rounded-2xl px-3 py-3 transition-transform active:scale-95";
+  const style = {
+    background: highlight ? "linear-gradient(135deg, var(--p-accent) 0%, #F59E0B 100%)" : "var(--p-surface)",
+    color: highlight ? "var(--p-accent-ink)" : "var(--p-text)",
+    border: highlight ? "none" : "1px solid var(--p-border)",
+  } as const;
+  const content = (
+    <div className="flex items-center gap-2.5">
+      <Icon
+        size={22}
+        strokeWidth={2}
+        className="flex-shrink-0"
+        style={{ color: highlight ? "var(--p-accent-ink)" : "var(--p-accent)" }}
+      />
+      <div className="min-w-0">
+        <div className="font-semibold text-sm leading-tight truncate" style={{ letterSpacing: "-0.02em" }}>
+          {label}
+        </div>
+        <div
+          className="text-[10px] leading-tight truncate"
+          style={{
+            color: highlight ? "rgba(10,10,10,0.7)" : "var(--p-text-dim)",
+            letterSpacing: "-0.005em",
+          }}
+        >
+          {sublabel}
         </div>
       </div>
+    </div>
+  );
+  if (external) {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" className={className} style={style}>
+        {content}
+      </a>
+    );
+  }
+  return (
+    <Link href={href} className={className} style={style}>
+      {content}
     </Link>
   );
 }
