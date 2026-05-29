@@ -102,10 +102,14 @@ export type LeadOriginMetrics = {
   setterPct: number | null;
   aiWon: number;
   aiLost: number;
+  aiNoShow: number;
   setterWon: number;
   setterLost: number;
+  setterNoShow: number;
   aiCloseRate: number | null;     // won / (won+lost) %
   setterCloseRate: number | null;
+  aiNoShowRate: number | null;    // no_show / (won+lost+no_show) %
+  setterNoShowRate: number | null;
 };
 
 export async function calculateLeadOriginMetrics(
@@ -121,30 +125,38 @@ export async function calculateLeadOriginMetrics(
     select: { aiScheduled: true, status: true },
   });
 
-  let aiCount = 0, aiWon = 0, aiLost = 0;
-  let setterCount = 0, setterWon = 0, setterLost = 0;
+  let aiCount = 0, aiWon = 0, aiLost = 0, aiNoShow = 0;
+  let setterCount = 0, setterWon = 0, setterLost = 0, setterNoShow = 0;
   for (const l of leads) {
     if (l.aiScheduled) {
       aiCount++;
       if (l.status === "won") aiWon++;
       else if (l.status === "lost") aiLost++;
+      else if (l.status === "no_show") aiNoShow++;
     } else {
       setterCount++;
       if (l.status === "won") setterWon++;
       else if (l.status === "lost") setterLost++;
+      else if (l.status === "no_show") setterNoShow++;
     }
   }
   const total = aiCount + setterCount;
   const pct = (n: number) => total > 0 ? Math.round((n / total) * 100) : null;
   const closeRate = (won: number, lost: number) =>
     won + lost > 0 ? Math.round((won / (won + lost)) * 100) : null;
+  // No-show: del total de llamadas decididas (won+lost+no_show), cuántas no acudieron
+  const noShowRate = (won: number, lost: number, ns: number) =>
+    won + lost + ns > 0 ? Math.round((ns / (won + lost + ns)) * 100) : null;
 
   return {
     aiCount, setterCount, total,
     aiPct: pct(aiCount), setterPct: pct(setterCount),
-    aiWon, aiLost, setterWon, setterLost,
+    aiWon, aiLost, aiNoShow,
+    setterWon, setterLost, setterNoShow,
     aiCloseRate: closeRate(aiWon, aiLost),
     setterCloseRate: closeRate(setterWon, setterLost),
+    aiNoShowRate: noShowRate(aiWon, aiLost, aiNoShow),
+    setterNoShowRate: noShowRate(setterWon, setterLost, setterNoShow),
   };
 }
 

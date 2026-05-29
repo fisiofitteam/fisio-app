@@ -8,7 +8,12 @@ export function LeadOriginBlock({
   metrics: LeadOriginMetrics;
   periodLabel: string;
 }) {
-  const { aiCount, setterCount, total, aiPct, setterPct, aiCloseRate, setterCloseRate, aiWon, aiLost, setterWon, setterLost } = metrics;
+  const {
+    aiCount, setterCount, total, aiPct, setterPct,
+    aiCloseRate, setterCloseRate, aiWon, aiLost,
+    aiNoShow, setterNoShow, aiNoShowRate, setterNoShowRate,
+    setterWon, setterLost,
+  } = metrics;
 
   return (
     <section className="card mb-3 relative overflow-hidden">
@@ -43,8 +48,10 @@ export function LeadOriginBlock({
               count={aiCount}
               pct={aiPct}
               closeRate={aiCloseRate}
+              noShowRate={aiNoShowRate}
               won={aiWon}
               lost={aiLost}
+              noShow={aiNoShow}
             />
             <OriginCard
               color="#0A0A0A"
@@ -52,8 +59,10 @@ export function LeadOriginBlock({
               count={setterCount}
               pct={setterPct}
               closeRate={setterCloseRate}
+              noShowRate={setterNoShowRate}
               won={setterWon}
               lost={setterLost}
+              noShow={setterNoShow}
             />
           </div>
         </>
@@ -63,15 +72,17 @@ export function LeadOriginBlock({
 }
 
 function OriginCard({
-  color, label, count, pct, closeRate, won, lost,
+  color, label, count, pct, closeRate, noShowRate, won, lost, noShow,
 }: {
   color: string;
   label: string;
   count: number;
   pct: number | null;
   closeRate: number | null;
+  noShowRate: number | null;
   won: number;
   lost: number;
+  noShow: number;
 }) {
   return (
     <div className="rounded-lg p-3 border border-neutral-200">
@@ -85,16 +96,25 @@ function OriginCard({
           <span className="text-sm text-neutral-500 tabular-nums">{pct}% del total</span>
         )}
       </div>
-      <div className="mt-2 pt-2 border-t border-neutral-100">
-        <div className="flex items-baseline gap-2">
-          <span className="text-xs text-neutral-500">% cierre:</span>
-          <span className="text-lg font-semibold tabular-nums" style={{ color }}>
+
+      <div className="mt-2 pt-2 border-t border-neutral-100 grid grid-cols-2 gap-3">
+        <div>
+          <div className="text-xs text-neutral-500">% cierre</div>
+          <div className="text-lg font-semibold tabular-nums" style={{ color }}>
             {closeRate !== null ? `${closeRate}%` : "—"}
-          </span>
+          </div>
+          <div className="text-[11px] text-neutral-400 mt-0.5">
+            {won}V · {lost}P
+          </div>
         </div>
-        <div className="text-[11px] text-neutral-400 mt-0.5">
-          {won} vendidas · {lost} perdidas
-          {won + lost === 0 && " · sin decisiones aún"}
+        <div>
+          <div className="text-xs text-neutral-500">% no-show</div>
+          <div className="text-lg font-semibold tabular-nums text-amber-700">
+            {noShowRate !== null ? `${noShowRate}%` : "—"}
+          </div>
+          <div className="text-[11px] text-neutral-400 mt-0.5">
+            {noShow} no acudieron
+          </div>
         </div>
       </div>
     </div>
