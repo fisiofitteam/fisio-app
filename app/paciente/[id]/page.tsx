@@ -247,6 +247,37 @@ export default async function PatientHome({ params }: { params: { id: string } }
   const welcomeLine1 = applyVars(pickedWelcome.line1, welcomeVars);
   const welcomeLine2 = applyVars(pickedWelcome.line2, welcomeVars);
 
+  // ── Badge de novedades de la comunidad ─────────────────────────────────
+  // Cuenta: posts publicados, comentarios y likes en SUS posts desde la última
+  // vez que abrió la pestaña de Comunidad. Cuando entra, se actualiza la fecha.
+  const since = patient.communityLastSeenAt ?? patient.startedAt ?? new Date(0);
+  const [newPostsCount, newCommentsCount, newReactionsCount] = await Promise.all([
+    prisma.communityFeedPost.count({
+      where: {
+        published: true,
+        createdAt: { gt: since },
+        // No contamos sus propios posts
+        NOT: { patientAuthorId: patient.id },
+      },
+    }),
+    prisma.communityComment.count({
+      where: {
+        createdAt: { gt: since },
+        post: { patientAuthorId: patient.id },
+        // No contamos sus propios comentarios
+        NOT: { patientId: patient.id },
+      },
+    }),
+    prisma.communityReaction.count({
+      where: {
+        createdAt: { gt: since },
+        post: { patientAuthorId: patient.id },
+        NOT: { patientId: patient.id },
+      },
+    }),
+  ]);
+  const communityUnread = newPostsCount + newCommentsCount + newReactionsCount;
+
   return (
     <PatientHomeDark
       welcomeLine1={welcomeLine1}
@@ -262,6 +293,7 @@ export default async function PatientHome({ params }: { params: { id: string } }
         whatsappGroupUrl: patient.whatsappGroupUrl,
         photoUrl: patient.photoUrl,
         shippingComplete: !!(patient.shippingStreet && patient.shippingNumber && patient.shippingCity && patient.shippingPostalCode),
+        communityUnread,
       }}
       todaySessions={todaySessions.map((s) => ({
         id: s.id,

@@ -98,6 +98,9 @@ model Patient {
   anamnesisData          String?     // JSON: { [clavePregunta]: valor }
   anamnesisCompletedAt   DateTime?
 
+  // Última vez que abrió la comunidad (para badge "X notificaciones")
+  communityLastSeenAt    DateTime?
+
   // Checklist de tareas iniciales (JSON)
   // Estructura: { "anamnesis": false, "contract": false, "firstSession": false }
   onboardingTasks        Json?

@@ -57,6 +57,7 @@ type Patient = {
   whatsappGroupUrl: string | null;
   photoUrl: string | null;
   shippingComplete: boolean;
+  communityUnread: number;
 };
 
 type Adherence = {
@@ -297,7 +298,8 @@ export function PatientHomeDark({
             href={`/paciente/${patient.id}/comunidad`}
             Icon={Users}
             label="Comunidad"
-            sublabel="Equipo y otros atletas"
+            sublabel={patient.communityUnread > 0 ? "Tienes novedades" : "Equipo y otros atletas"}
+            badge={patient.communityUnread}
           />
           {patient.whatsappGroupUrl && (
             <ActionCard
@@ -438,6 +440,7 @@ function ActionCard({
   sublabel,
   highlight,
   external,
+  badge,
 }: {
   href: string;
   Icon: any;
@@ -445,36 +448,53 @@ function ActionCard({
   sublabel: string;
   highlight?: boolean;
   external?: boolean;
+  badge?: number;
 }) {
-  const className = "block rounded-2xl px-3 py-3 transition-transform active:scale-95";
+  const className = "block rounded-2xl px-3 py-3 transition-transform active:scale-95 relative";
   const style = {
     background: highlight ? "linear-gradient(135deg, var(--p-accent) 0%, #F59E0B 100%)" : "var(--p-surface)",
     color: highlight ? "var(--p-accent-ink)" : "var(--p-text)",
     border: highlight ? "none" : "1px solid var(--p-border)",
   } as const;
   const content = (
-    <div className="flex items-center gap-2.5">
-      <Icon
-        size={22}
-        strokeWidth={2}
-        className="flex-shrink-0"
-        style={{ color: highlight ? "var(--p-accent-ink)" : "var(--p-accent)" }}
-      />
-      <div className="min-w-0">
-        <div className="font-semibold text-sm leading-tight truncate" style={{ letterSpacing: "-0.02em" }}>
-          {label}
-        </div>
-        <div
-          className="text-[10px] leading-tight truncate"
+    <>
+      {badge !== undefined && badge > 0 && (
+        <span
+          className="absolute flex items-center justify-center font-bold rounded-full"
           style={{
-            color: highlight ? "rgba(10,10,10,0.7)" : "var(--p-text-dim)",
-            letterSpacing: "-0.005em",
+            top: -6, right: -6,
+            minWidth: 20, height: 20, padding: "0 5px",
+            background: "#EF4444", color: "#FFFFFF",
+            fontSize: 11,
+            border: "2px solid var(--p-bg, #0A0A0A)",
           }}
         >
-          {sublabel}
+          {badge > 9 ? "9+" : badge}
+        </span>
+      )}
+      <div className="flex items-center gap-2.5">
+        <Icon
+          size={22}
+          strokeWidth={2}
+          className="flex-shrink-0"
+          style={{ color: highlight ? "var(--p-accent-ink)" : "var(--p-accent)" }}
+        />
+        <div className="min-w-0">
+          <div className="font-semibold text-sm leading-tight truncate" style={{ letterSpacing: "-0.02em" }}>
+            {label}
+          </div>
+          <div
+            className="text-[10px] leading-tight truncate"
+            style={{
+              color: highlight ? "rgba(10,10,10,0.7)" : "var(--p-text-dim)",
+              letterSpacing: "-0.005em",
+            }}
+          >
+            {sublabel}
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
   if (external) {
     return (

@@ -8,6 +8,9 @@ export default async function PatientCommunityPage({ params }: { params: { id: s
   const patient = await prisma.patient.findUnique({ where: { id: params.id }, select: { id: true, fullName: true, photoUrl: true } });
   if (!patient) notFound();
 
+  // Marca la comunidad como vista (reset del badge de novedades en la home).
+  prisma.patient.update({ where: { id: patient.id }, data: { communityLastSeenAt: new Date() } }).catch(() => {});
+
   const [posts, courses, myReactions, myProgress] = await Promise.all([
     prisma.communityFeedPost.findMany({
       where: { published: true },
