@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -11,120 +12,208 @@ export type CalendarEventItem = {
   subtitle?: string;
   startISO: string;
   endISO: string;
-  color: "purple" | "blue" | "amber" | "emerald" | "rose" | "neutral" | "teal";
+  ownerId: string | null;       // profesional al que "pertenece" (closer en calls, pro en leaves)
   href?: string;
   allDay?: boolean;
 };
 
-const COLOR_STYLES: Record<CalendarEventItem["color"], { bg: string; border: string; text: string; dot: string }> = {
-  purple:  { bg: "#F3E8FF", border: "#C4B5FD", text: "#5B21B6", dot: "#8B5CF6" },
-  blue:    { bg: "#DBEAFE", border: "#93C5FD", text: "#1E40AF", dot: "#2563EB" },
-  amber:   { bg: "#FEF3C7", border: "#FCD34D", text: "#92400E", dot: "#F59E0B" },
-  emerald: { bg: "#D1FAE5", border: "#6EE7B7", text: "#065F46", dot: "#10B981" },
-  rose:    { bg: "#FFE4E6", border: "#FDA4AF", text: "#9F1239", dot: "#F43F5E" },
-  neutral: { bg: "#F5F5F5", border: "#D4D4D4", text: "#404040", dot: "#737373" },
-  teal:    { bg: "#CCFBF1", border: "#5EEAD4", text: "#115E59", dot: "#14B8A6" },
-};
+export type ProUI = { id: string; fullName: string; role: string };
 
-function ymd(d: Date): string {
-  // YYYY-MM-DD en local
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+// ── Paleta determinista por profesional ──────────────────────────────────────
+const PALETTE = [
+  { bg: "#DBEAFE", border: "#60A5FA", text: "#1E3A8A", dot: "#2563EB" }, // azul
+  { bg: "#F3E8FF", border: "#C084FC", text: "#5B21B6", dot: "#8B5CF6" }, // morado
+  { bg: "#DCFCE7", border: "#4ADE80", text: "#065F46", dot: "#10B981" }, // verde
+  { bg: "#FEE2E2", border: "#F87171", text: "#991B1B", dot: "#EF4444" }, // rojo
+  { bg: "#FEF3C7", border: "#FACC15", text: "#854D0E", dot: "#F59E0B" }, // ámbar
+  { bg: "#CFFAFE", border: "#22D3EE", text: "#155E75", dot: "#06B6D4" }, // cian
+  { bg: "#FCE7F3", border: "#F472B6", text: "#9D174D", dot: "#EC4899" }, // rosa
+  { bg: "#E0E7FF", border: "#818CF8", text: "#3730A3", dot: "#6366F1" }, // índigo
+];
+function hashCode(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h;
+}
+function colorForOwner(ownerId: string | null): typeof PALETTE[number] {
+  if (!ownerId) return { bg: "#F5F5F5", border: "#D4D4D4", text: "#404040", dot: "#737373" };
+  return PALETTE[hashCode(ownerId) % PALETTE.length];
+}
+function colorForKind(kind: CalendarEventItem["kind"]): typeof PALETTE[number] {
+  if (kind === "meeting") return { bg: "#E0E7FF", border: "#A5B4FC", text: "#3730A3", dot: "#6366F1" };
+  if (kind === "slot")    return { bg: "#CCFBF1", border: "#5EEAD4", text: "#115E59", dot: "#14B8A6" };
+  if (kind === "leave")   return { bg: "#FEF3C7", border: "#FCD34D", text: "#92400E", dot: "#F59E0B" };
+  return { bg: "#F5F5F5", border: "#D4D4D4", text: "#404040", dot: "#737373" };
 }
 
-function hhmm(iso: string): string {
-  return new Date(iso).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+// ── Helpers de tiempo en Madrid ──────────────────────────────────────────────
+const TZ = "Europe/Madrid";
+function madridYMD(iso: string): string {
+  return new Date(iso).toLocaleDateString("sv-SE", { timeZone: TZ });
 }
+function madridMinutes(iso: string): number {
+  const fmt = new Intl.DateTimeFormat("en-GB", {
+    timeZone: TZ, hour: "2-digit", minute: "2-digit", hour12: false,
+  });
+  const parts = fmt.formatToParts(new Date(iso));
+  let h = 0, m = 0;
+  for (const p of parts) {
+    if (p.type === "hour") h = parseInt(p.value);
+    if (p.type === "minute") m = parseInt(p.value);
+  }
+  return h * 60 + m;
+}
+function madridHHMM(iso: string): string {
+  return new Date(iso).toLocaleTimeString("es-ES", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
+}
+
+// ── Grid config ──────────────────────────────────────────────────────────────
+const START_HOUR = 7;
+const END_HOUR = 22;
+const HOUR_HEIGHT = 56;         // px por hora
+const TOTAL_HOURS = END_HOUR - START_HOUR; // 15
+const TOTAL_HEIGHT = TOTAL_HOURS * HOUR_HEIGHT;
+const START_MIN = START_HOUR * 60;
+const END_MIN = END_HOUR * 60;
 
 const WEEKDAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
+// ── Asignación de carriles para eventos solapados en el mismo día ────────────
+function assignLanes(events: { startMin: number; endMin: number; id: string }[]) {
+  const sorted = [...events].sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
+  const lanes: { endMin: number }[] = [];
+  const eventLane = new Map<string, number>();
+  for (const ev of sorted) {
+    let assigned = -1;
+    for (let i = 0; i < lanes.length; i++) {
+      if (lanes[i].endMin <= ev.startMin) { assigned = i; break; }
+    }
+    if (assigned === -1) {
+      lanes.push({ endMin: ev.endMin });
+      assigned = lanes.length - 1;
+    } else {
+      lanes[assigned].endMin = ev.endMin;
+    }
+    eventLane.set(ev.id, assigned);
+  }
+  return { eventLane, laneCount: Math.max(1, lanes.length) };
+}
+
 export function TeamCalendarView({
-  events, weekStartISO, currentUserRole,
+  events, weekStartISO, pros, currentUserId, showFilterSidebar, canSeeSlots,
 }: {
   events: CalendarEventItem[];
   weekStartISO: string;
-  currentUserRole: string;
+  pros: ProUI[];
+  currentUserId: string;
+  showFilterSidebar: boolean;
+  canSeeSlots: boolean;
 }) {
   const router = useRouter();
-  const weekStart = new Date(weekStartISO);
 
-  // Construir 7 columnas (Lun-Dom)
-  const days: { date: Date; key: string; label: string; dayNum: number; isToday: boolean }[] = [];
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(weekStart);
-    d.setDate(d.getDate() + i);
-    days.push({
-      date: d,
-      key: ymd(d),
-      label: WEEKDAYS[i],
-      dayNum: d.getDate(),
-      isToday: d.getTime() === today.getTime(),
+  // ── Filtros (sidebar) ───────────────────────────────────────────────────
+  const proIds = pros.map((p) => p.id);
+  const [visiblePros, setVisiblePros] = useState<Set<string>>(new Set(proIds));
+  const [showMeetings, setShowMeetings] = useState(true);
+  const [showLeaves, setShowLeaves] = useState(true);
+  const [showSlots, setShowSlots] = useState(true);
+
+  function toggleProf(id: string) {
+    setVisiblePros((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
     });
   }
 
-  // Agrupar eventos por día (clave: YYYY-MM-DD del inicio del evento)
-  const byDay = new Map<string, CalendarEventItem[]>();
-  for (const ev of events) {
-    if (ev.allDay) {
-      // Asignar a cada día del rango [startISO, endISO)
+  // ── Generar columnas (días) en clave Madrid ─────────────────────────────
+  const days = useMemo(() => {
+    const out: { key: string; date: Date; weekdayIdx: number; dayNum: number; isToday: boolean }[] = [];
+    const todayKey = madridYMD(new Date().toISOString());
+    const ws = new Date(weekStartISO);
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(ws);
+      d.setUTCDate(d.getUTCDate() + i);
+      // Para sacar el "día Madrid" tomamos las 12:00 UTC de ese día (cae siempre en el día Madrid esperado)
+      const ref = new Date(d);
+      ref.setUTCHours(12, 0, 0, 0);
+      const key = madridYMD(ref.toISOString());
+      const dayNum = Number(key.split("-")[2]);
+      out.push({ key, date: ref, weekdayIdx: i, dayNum, isToday: key === todayKey });
+    }
+    return out;
+  }, [weekStartISO]);
+
+  // ── Filtrar y separar eventos ───────────────────────────────────────────
+  const filteredEvents = useMemo(() => {
+    return events.filter((ev) => {
+      if (ev.kind === "meeting" && !showMeetings) return false;
+      if (ev.kind === "leave" && !showLeaves) return false;
+      if (ev.kind === "slot" && (!canSeeSlots || !showSlots)) return false;
+      // Si el evento tiene owner, respetar visiblePros
+      if (ev.ownerId && !visiblePros.has(ev.ownerId)) return false;
+      return true;
+    });
+  }, [events, showMeetings, showLeaves, showSlots, canSeeSlots, visiblePros]);
+
+  // Eventos timed (no allDay) por día
+  const timedByDay = useMemo(() => {
+    const map = new Map<string, CalendarEventItem[]>();
+    for (const ev of filteredEvents) {
+      if (ev.allDay) continue;
+      const key = madridYMD(ev.startISO);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(ev);
+    }
+    return map;
+  }, [filteredEvents]);
+
+  // Eventos allDay (vacaciones) por día — los pintamos en una fila arriba
+  const allDayByDay = useMemo(() => {
+    const map = new Map<string, CalendarEventItem[]>();
+    for (const ev of filteredEvents) {
+      if (!ev.allDay) continue;
       const start = new Date(ev.startISO);
       const end = new Date(ev.endISO);
       for (const d of days) {
-        const dayStart = new Date(d.date);
-        const dayEnd = new Date(d.date);
-        dayEnd.setDate(dayEnd.getDate() + 1);
+        const dayStart = new Date(d.date); dayStart.setUTCHours(0, 0, 0, 0);
+        const dayEnd = new Date(dayStart); dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
         if (start < dayEnd && end > dayStart) {
-          const k = d.key;
-          if (!byDay.has(k)) byDay.set(k, []);
-          byDay.get(k)!.push(ev);
+          if (!map.has(d.key)) map.set(d.key, []);
+          map.get(d.key)!.push(ev);
         }
       }
-    } else {
-      const k = ymd(new Date(ev.startISO));
-      if (!byDay.has(k)) byDay.set(k, []);
-      byDay.get(k)!.push(ev);
     }
-  }
-  // Ordenar dentro de cada día por hora
-  for (const list of byDay.values()) {
-    list.sort((a, b) => a.startISO.localeCompare(b.startISO));
-  }
+    return map;
+  }, [filteredEvents, days]);
 
+  // ── Navegación entre semanas ────────────────────────────────────────────
   function navigate(deltaDays: number) {
-    const d = new Date(weekStart);
-    d.setDate(d.getDate() + deltaDays);
-    router.push(`/fisio/calendario?w=${ymd(d)}`);
+    const d = new Date(weekStartISO);
+    d.setUTCDate(d.getUTCDate() + deltaDays);
+    const ymd = d.toISOString().slice(0, 10);
+    router.push(`/fisio/calendario?w=${ymd}`);
   }
   function goToday() {
-    const t = new Date();
-    const dow = t.getDay() === 0 ? 7 : t.getDay();
-    t.setDate(t.getDate() - (dow - 1));
-    router.push(`/fisio/calendario?w=${ymd(t)}`);
+    const today = new Date();
+    const dow = today.getDay() === 0 ? 7 : today.getDay();
+    today.setDate(today.getDate() - (dow - 1));
+    router.push(`/fisio/calendario?w=${today.toISOString().slice(0, 10)}`);
   }
 
-  // Etiqueta del rango "Lun 3 — Dom 9 jun 2026"
-  const weekEndDate = new Date(weekStart);
-  weekEndDate.setDate(weekEndDate.getDate() + 6);
-  const rangeLabel = `${weekStart.toLocaleDateString("es-ES", { day: "numeric", month: "short" })} — ${weekEndDate.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })}`;
+  // Etiqueta del rango
+  const ws = new Date(weekStartISO);
+  const we = new Date(ws); we.setUTCDate(we.getUTCDate() + 6);
+  const rangeLabel = `${ws.toLocaleDateString("es-ES", { timeZone: TZ, day: "numeric", month: "short" })} — ${we.toLocaleDateString("es-ES", { timeZone: TZ, day: "numeric", month: "short", year: "numeric" })}`;
 
-  const totalEvents = events.length;
-  const counts = {
-    call: events.filter((e) => e.kind === "call").length,
-    meeting: events.filter((e) => e.kind === "meeting").length,
-    leave: events.filter((e) => e.kind === "leave").length,
-    slot: events.filter((e) => e.kind === "slot").length,
-  };
+  const hours = Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => START_HOUR + i);
 
   return (
-    <main>
-      <header className="mb-4 flex justify-between items-start flex-wrap gap-3">
+    <main className="flex flex-col">
+      <header className="mb-3 flex justify-between items-start flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-semibold">Calendario</h1>
-          <p className="text-xs text-neutral-500 mt-0.5">{rangeLabel}</p>
+          <p className="text-xs text-neutral-500 mt-0.5 capitalize">{rangeLabel} · horas en Madrid</p>
         </div>
         <div className="flex items-center gap-1">
           <button onClick={() => navigate(-7)} title="Semana anterior" className="p-2 rounded-lg hover:bg-neutral-100 text-neutral-600">
@@ -139,81 +228,158 @@ export function TeamCalendarView({
         </div>
       </header>
 
-      {/* Leyenda + contadores */}
-      <div className="flex flex-wrap items-center gap-3 mb-4 text-xs">
-        {counts.call > 0 && <Legend color="purple" label={`Llamadas (${counts.call})`} />}
-        {counts.meeting > 0 && <Legend color="blue" label={`Reuniones (${counts.meeting})`} />}
-        {counts.leave > 0 && <Legend color="amber" label={`Vacaciones (${counts.leave})`} />}
-        {counts.slot > 0 && <Legend color="teal" label={`Huecos libres (${counts.slot})`} />}
-        {totalEvents === 0 && <span className="text-neutral-400 italic">Sin eventos esta semana.</span>}
+      <div className="flex gap-3 items-start">
+        {/* Sidebar de filtros (solo managers/setter) */}
+        {showFilterSidebar && (
+          <aside className="hidden lg:block w-56 flex-shrink-0">
+            <div className="card sticky top-2">
+              <div className="text-[10px] uppercase tracking-wide text-neutral-500 font-medium mb-2">Mis calendarios</div>
+              <div className="space-y-1.5 mb-3">
+                {pros.map((p) => {
+                  const c = colorForOwner(p.id);
+                  const checked = visiblePros.has(p.id);
+                  return (
+                    <label key={p.id} className="flex items-center gap-2 cursor-pointer text-xs">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleProf(p.id)}
+                        className="w-3.5 h-3.5"
+                        style={{ accentColor: c.dot }}
+                      />
+                      <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: c.dot }} />
+                      <span className="truncate">{p.fullName.split(" ")[0]}{p.id === currentUserId && <span className="text-neutral-400"> (tú)</span>}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              <div className="text-[10px] uppercase tracking-wide text-neutral-500 font-medium mb-2 pt-2 border-t border-neutral-100">Categorías</div>
+              <div className="space-y-1.5">
+                <CategoryChk label="Reuniones internas" color={colorForKind("meeting").dot} checked={showMeetings} onToggle={() => setShowMeetings((v) => !v)} />
+                <CategoryChk label="Vacaciones" color={colorForKind("leave").dot} checked={showLeaves} onToggle={() => setShowLeaves((v) => !v)} />
+                {canSeeSlots && (
+                  <CategoryChk label="Huecos libres" color={colorForKind("slot").dot} checked={showSlots} onToggle={() => setShowSlots((v) => !v)} />
+                )}
+              </div>
+            </div>
+          </aside>
+        )}
+
+        {/* Grid del calendario */}
+        <section className="flex-1 min-w-0 overflow-x-auto">
+          <div className="rounded-xl border border-neutral-200 bg-white">
+            {/* Cabecera de días */}
+            <div className="grid sticky top-0 bg-white z-10 border-b border-neutral-200" style={{ gridTemplateColumns: `56px repeat(7, minmax(110px, 1fr))` }}>
+              <div className="px-2 py-2 text-[10px] text-neutral-400 uppercase">GMT+1/2</div>
+              {days.map((d) => (
+                <div key={d.key} className={`px-2 py-2 text-center ${d.isToday ? "bg-neutral-50" : ""}`}>
+                  <div className="text-[10px] uppercase tracking-wide text-neutral-500">{WEEKDAYS[d.weekdayIdx]}</div>
+                  <div className={`text-xl font-semibold tabular-nums ${d.isToday ? "text-neutral-900" : "text-neutral-700"}`}>{d.dayNum}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Fila "todo el día" para vacaciones */}
+            {[...allDayByDay.entries()].some(([, list]) => list.length > 0) && (
+              <div className="grid border-b border-neutral-200" style={{ gridTemplateColumns: `56px repeat(7, minmax(110px, 1fr))` }}>
+                <div className="px-2 py-1.5 text-[10px] text-neutral-400">Todo el día</div>
+                {days.map((d) => {
+                  const list = allDayByDay.get(d.key) ?? [];
+                  return (
+                    <div key={d.key} className={`px-1 py-1 space-y-0.5 ${d.isToday ? "bg-neutral-50" : ""}`} style={{ minHeight: 24 }}>
+                      {list.map((ev) => {
+                        const c = ev.ownerId ? colorForOwner(ev.ownerId) : colorForKind(ev.kind);
+                        return (
+                          <div key={ev.id + d.key} className="rounded px-1.5 py-0.5 text-[10px] leading-tight truncate" style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}` }}>
+                            {ev.title}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Grid de horas */}
+            <div className="grid relative" style={{ gridTemplateColumns: `56px repeat(7, minmax(110px, 1fr))` }}>
+              {/* Columna de horas */}
+              <div className="relative" style={{ height: TOTAL_HEIGHT }}>
+                {hours.map((h) => (
+                  <div key={h} className="absolute right-1 text-[10px] text-neutral-400 tabular-nums" style={{ top: (h - START_HOUR) * HOUR_HEIGHT - 6 }}>
+                    {String(h).padStart(2, "0")}:00
+                  </div>
+                ))}
+              </div>
+              {/* Columnas de días */}
+              {days.map((d) => {
+                const evs = (timedByDay.get(d.key) ?? []).filter((ev) => {
+                  const start = madridMinutes(ev.startISO);
+                  const end = madridMinutes(ev.endISO);
+                  return end > START_MIN && start < END_MIN;
+                });
+                const mapped = evs.map((ev) => ({
+                  id: ev.id,
+                  startMin: Math.max(madridMinutes(ev.startISO), START_MIN),
+                  endMin: Math.min(madridMinutes(ev.endISO), END_MIN),
+                }));
+                const { eventLane, laneCount } = assignLanes(mapped);
+                return (
+                  <div key={d.key} className={`relative border-l border-neutral-100 ${d.isToday ? "bg-neutral-50/60" : ""}`} style={{ height: TOTAL_HEIGHT }}>
+                    {/* Líneas horarias */}
+                    {hours.map((h) => (
+                      <div key={h} className="absolute left-0 right-0 border-t border-neutral-100" style={{ top: (h - START_HOUR) * HOUR_HEIGHT }} />
+                    ))}
+                    {/* Eventos */}
+                    {evs.map((ev) => {
+                      const startMin = Math.max(madridMinutes(ev.startISO), START_MIN);
+                      const endMin = Math.min(madridMinutes(ev.endISO), END_MIN);
+                      const top = ((startMin - START_MIN) / 60) * HOUR_HEIGHT;
+                      const height = Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT, 22);
+                      const lane = eventLane.get(ev.id) ?? 0;
+                      const widthPct = 100 / laneCount;
+                      const leftPct = lane * widthPct;
+                      const c = ev.ownerId ? colorForOwner(ev.ownerId) : colorForKind(ev.kind);
+                      const inner = (
+                        <div
+                          className="absolute rounded-md px-1.5 py-1 text-[10px] leading-tight overflow-hidden shadow-sm"
+                          style={{
+                            top, height: height - 2, left: `calc(${leftPct}% + 2px)`, width: `calc(${widthPct}% - 4px)`,
+                            background: c.bg, border: `1px solid ${c.border}`, color: c.text,
+                          }}
+                        >
+                          <div className="font-semibold truncate">{ev.title}</div>
+                          <div className="opacity-80 tabular-nums">{madridHHMM(ev.startISO)} – {madridHHMM(ev.endISO)}</div>
+                          {ev.subtitle && height > 50 && <div className="opacity-70 truncate">{ev.subtitle}</div>}
+                        </div>
+                      );
+                      return ev.href ? (
+                        <Link key={ev.id} href={ev.href} className="hover:opacity-90 transition-opacity">{inner}</Link>
+                      ) : (
+                        <div key={ev.id}>{inner}</div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
       </div>
 
-      {/* Grid semanal */}
-      <div className="grid grid-cols-1 md:grid-cols-7 gap-2">
-        {days.map((d) => {
-          const dayEvents = byDay.get(d.key) ?? [];
-          return (
-            <section
-              key={d.key}
-              className={`rounded-xl border ${d.isToday ? "border-neutral-900 bg-neutral-50" : "border-neutral-200 bg-white"} p-2 min-h-[140px]`}
-            >
-              <header className="mb-2 pb-2 border-b border-neutral-100">
-                <div className="flex items-baseline justify-between">
-                  <span className={`text-[10px] uppercase tracking-wide font-medium ${d.isToday ? "text-neutral-900" : "text-neutral-500"}`}>
-                    {d.label}
-                  </span>
-                  <span className={`text-lg font-semibold tabular-nums ${d.isToday ? "text-neutral-900" : "text-neutral-700"}`}>
-                    {d.dayNum}
-                  </span>
-                </div>
-              </header>
-              {dayEvents.length === 0 ? (
-                <p className="text-[11px] text-neutral-300 italic text-center mt-3">—</p>
-              ) : (
-                <div className="space-y-1.5">
-                  {dayEvents.map((ev) => (
-                    <EventCard key={ev.id + d.key} event={ev} />
-                  ))}
-                </div>
-              )}
-            </section>
-          );
-        })}
-      </div>
-
-      <p className="text-[11px] text-neutral-400 italic mt-4 text-center">
-        Vista de solo lectura. Para mover una llamada o editar un evento, ve a su ficha desde el botón.
+      <p className="text-[11px] text-neutral-400 italic mt-3 text-center">
+        Vista de solo lectura. Para mover una llamada o editar un evento, abre su ficha.
       </p>
     </main>
   );
 }
 
-function Legend({ color, label }: { color: CalendarEventItem["color"]; label: string }) {
-  const c = COLOR_STYLES[color];
+function CategoryChk({ label, color, checked, onToggle }: { label: string; color: string; checked: boolean; onToggle: () => void }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-neutral-700">
-      <span className="w-2.5 h-2.5 rounded-full" style={{ background: c.dot }} />
-      {label}
-    </span>
+    <label className="flex items-center gap-2 cursor-pointer text-xs">
+      <input type="checkbox" checked={checked} onChange={onToggle} className="w-3.5 h-3.5" style={{ accentColor: color }} />
+      <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: color }} />
+      <span>{label}</span>
+    </label>
   );
-}
-
-function EventCard({ event }: { event: CalendarEventItem }) {
-  const c = COLOR_STYLES[event.color];
-  const inner = (
-    <div
-      className="rounded-md px-2 py-1.5 text-[11px] leading-tight"
-      style={{ background: c.bg, border: `1px solid ${c.border}`, color: c.text }}
-    >
-      {!event.allDay && (
-        <div className="font-semibold tabular-nums opacity-80">{hhmm(event.startISO)}</div>
-      )}
-      <div className="font-medium truncate">{event.title}</div>
-      {event.subtitle && <div className="opacity-70 truncate">{event.subtitle}</div>}
-    </div>
-  );
-  if (event.href) {
-    return <Link href={event.href} className="block hover:opacity-90 transition-opacity">{inner}</Link>;
-  }
-  return inner;
 }
