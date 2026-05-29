@@ -18,6 +18,7 @@ type Lead = {
   aiSummary: string | null;
   meetingUrl: string | null;
   source: string | null;
+  aiScheduled: boolean;
   callScheduledAt: string;
   closer: Pro | null;
 };
@@ -68,6 +69,15 @@ export function SetterLeadsView({
 
   async function markNotified(leadId: string) {
     await fetch(`/api/leads/${leadId}/mark-setter-notified`, { method: "POST" });
+    router.refresh();
+  }
+
+  async function toggleAiScheduled(leadId: string, current: boolean) {
+    await fetch("/api/leads", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: leadId, aiScheduled: !current }),
+    });
     router.refresh();
   }
 
@@ -204,16 +214,28 @@ export function SetterLeadsView({
                 </div>
               </div>
 
-              {/* Botón: marcar como avisado al closer (lo saca del panel del setter) */}
-              <div className="mt-3 pt-3 border-t border-neutral-100 flex items-center justify-between gap-2">
-                <span className="text-[11px] text-neutral-500">Cuando avises al closer, marca aquí y este lead pasará a su panel.</span>
+              {/* Pie con acciones rápidas: marcar agendado por IA + avisado al closer */}
+              <div className="mt-3 pt-3 border-t border-neutral-100 flex items-center justify-between gap-2 flex-wrap">
                 <button
-                  onClick={() => markNotified(lead.id)}
-                  className="text-xs font-medium px-3 py-1.5 rounded-md"
-                  style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+                  onClick={() => toggleAiScheduled(lead.id, lead.aiScheduled)}
+                  className="text-xs font-medium px-2.5 py-1 rounded-full border transition-colors"
+                  style={lead.aiScheduled
+                    ? { background: "#8B5CF6", color: "#FFFFFF", borderColor: "#8B5CF6" }
+                    : { background: "transparent", color: "#737373", borderColor: "#D4D4D4" }}
+                  title="Marca si esta llamada la agendó la IA (para métricas)"
                 >
-                  ✓ Avisado
+                  🤖 {lead.aiScheduled ? "Agendado por IA" : "¿Agendado por IA?"}
                 </button>
+                <div className="flex items-center gap-2 ml-auto">
+                  <span className="text-[11px] text-neutral-500 hidden sm:inline">Cuando avises al closer →</span>
+                  <button
+                    onClick={() => markNotified(lead.id)}
+                    className="text-xs font-medium px-3 py-1.5 rounded-md"
+                    style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+                  >
+                    ✓ Avisado
+                  </button>
+                </div>
               </div>
             </article>
           ))}
@@ -278,6 +300,7 @@ function SetterLeadModal({
       : new Date().toISOString().slice(0, 16)
   );
   const [closerId, setCloserId] = useState(editingLead?.closer?.id ?? "");
+  const [aiScheduled, setAiScheduled] = useState(editingLead?.aiScheduled ?? false);
   const [saving, setSaving] = useState(false);
 
   async function save() {
@@ -301,6 +324,7 @@ function SetterLeadModal({
         aiSummary,
         callScheduledAt,
         closerId: closerId || null,
+        aiScheduled,
       }),
     });
     onSaved();
@@ -430,6 +454,17 @@ function SetterLeadModal({
               </select>
             </div>
           </div>
+
+          {/* Marcar si esta llamada la agendó la IA (para métricas a futuro) */}
+          <label className="flex items-center gap-2 text-sm cursor-pointer pt-2">
+            <input
+              type="checkbox"
+              checked={aiScheduled}
+              onChange={(e) => setAiScheduled(e.target.checked)}
+              className="w-4 h-4 accent-violet-600"
+            />
+            <span>🤖 Agendado por IA</span>
+          </label>
 
           <div className="flex justify-between items-center pt-2">
             {isEdit && (

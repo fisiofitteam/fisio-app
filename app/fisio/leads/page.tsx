@@ -72,6 +72,7 @@ export default async function LeadsPage({
         aiSummary: l.aiSummary,
         meetingUrl: l.meetingUrl,
         source: l.source,
+        aiScheduled: l.aiScheduled,
         callScheduledAt: l.callScheduledAt.toISOString(),
         closer: l.closer,
       }))}

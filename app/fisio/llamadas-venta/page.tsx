@@ -130,6 +130,7 @@ export default async function LlamadasVentaPage({
         setterNotifiedAt: l.setterNotifiedAt?.toISOString() ?? null,
         closerContactedAt: l.closerContactedAt?.toISOString() ?? null,
         reminderSentAt: l.reminderSentAt?.toISOString() ?? null,
+        aiScheduled: l.aiScheduled,
       }))}
       fisios={fisios.map((f) => ({ id: f.id, fullName: f.fullName, role: f.role }))}
       counts={{

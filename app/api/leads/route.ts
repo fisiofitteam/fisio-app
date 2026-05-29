@@ -60,6 +60,8 @@ export async function PATCH(req: NextRequest) {
     updateData.decidedAt = new Date();
   }
   if (rest.lostReason !== undefined) updateData.lostReason = rest.lostReason || null;
+  if (rest.aiScheduled !== undefined) updateData.aiScheduled = !!rest.aiScheduled;
+  if (rest.instagram !== undefined) updateData.instagram = rest.instagram || null;
 
   // Si marcamos inFollowUp=true y todavía no se había iniciado, autocalculamos las 4 fechas
   if (rest.inFollowUp === true) {

@@ -35,6 +35,8 @@ type Lead = {
   setterNotifiedAt: string | null;
   closerContactedAt: string | null;
   reminderSentAt: string | null;
+  // Trazabilidad de origen (para métricas)
+  aiScheduled: boolean;
 };
 
 const STATUS_TABS = [
@@ -410,6 +412,9 @@ function CallRow({
           {lead.status === "scheduled" && (
             <WorkflowActionButtons lead={lead} currentUser={currentUser} />
           )}
+
+          {/* Toggle "Agendado por IA" (visible siempre, clicable sin abrir modal) */}
+          <AiScheduledToggle lead={lead} />
         </div>
         <div className="text-right flex-shrink-0">
           <div className="text-xs font-medium text-blue-700 whitespace-nowrap">
@@ -418,6 +423,39 @@ function CallRow({
         </div>
       </div>
     </button>
+  );
+}
+
+// ============================================================================
+// Toggle "Agendado por IA" — visible en cada fila, marca/desmarca sin abrir modal
+// ============================================================================
+function AiScheduledToggle({ lead }: { lead: Lead }) {
+  const [loading, setLoading] = useState(false);
+  async function toggle(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (loading) return;
+    setLoading(true);
+    await fetch("/api/leads", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: lead.id, aiScheduled: !lead.aiScheduled }),
+    });
+    window.location.reload();
+  }
+  return (
+    <div className="mt-2">
+      <button
+        onClick={toggle}
+        disabled={loading}
+        title="Marca si esta llamada la agendó la IA (para métricas)"
+        className="text-[11px] font-medium px-2 py-0.5 rounded-full border transition-colors"
+        style={lead.aiScheduled
+          ? { background: "#8B5CF6", color: "#FFFFFF", borderColor: "#8B5CF6" }
+          : { background: "transparent", color: "#737373", borderColor: "#D4D4D4" }}
+      >
+        🤖 {lead.aiScheduled ? "Agendado por IA" : "¿IA?"}
+      </button>
+    </div>
   );
 }
 
@@ -564,6 +602,7 @@ function CallEditModal({
   const [lostReason, setLostReason] = useState(lead.lostReason ?? "precio");
   const [inFollowUp, setInFollowUp] = useState(lead.inFollowUp);
   const [followUpNote, setFollowUpNote] = useState(lead.followUpNote ?? "");
+  const [aiScheduled, setAiScheduled] = useState(lead.aiScheduled);
 
   const [saving, setSaving] = useState(false);
 
@@ -584,6 +623,7 @@ function CallEditModal({
         ...(status === "lost" && { lostReason }),
         inFollowUp,
         followUpNote,
+        aiScheduled,
       }),
     });
     onSaved();
@@ -743,6 +783,17 @@ function CallEditModal({
               />
             </div>
           )}
+
+          {/* Trazabilidad: ¿agendado por IA? — para métricas a futuro */}
+          <label className="flex items-center gap-2 text-sm cursor-pointer pt-1">
+            <input
+              type="checkbox"
+              checked={aiScheduled}
+              onChange={(e) => setAiScheduled(e.target.checked)}
+              className="w-4 h-4 accent-violet-600"
+            />
+            <span>🤖 Agendado por IA</span>
+          </label>
 
           <div className="flex justify-between items-center gap-2 pt-2">
             <button
