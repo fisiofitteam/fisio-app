@@ -12,7 +12,7 @@ export default async function PerfilPage() {
 
   const p = await prisma.professional.findUnique({
     where: { id: user.id },
-    select: { fullName: true, fiscalName: true, taxId: true, fiscalAddress: true, iban: true, photoUrl: true, vatExempt: true },
+    select: { fullName: true, fiscalName: true, taxId: true, fiscalAddress: true, iban: true, photoUrl: true, vatExempt: true, workSchedule: true },
   });
 
   return (
@@ -31,6 +31,7 @@ export default async function PerfilPage() {
           iban: p?.iban ?? "",
           photoUrl: p?.photoUrl ?? "",
           vatExempt: p?.vatExempt ?? true,
+          workSchedule: p?.workSchedule ?? "",
         }}
       />
     </main>

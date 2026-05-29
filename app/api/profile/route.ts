@@ -8,7 +8,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const p = await prisma.professional.findUnique({
     where: { id: user.id },
-    select: { fullName: true, fiscalName: true, taxId: true, fiscalAddress: true, iban: true, photoUrl: true, vatExempt: true },
+    select: { fullName: true, fiscalName: true, taxId: true, fiscalAddress: true, iban: true, photoUrl: true, vatExempt: true, workSchedule: true },
   });
   return NextResponse.json(p);
 }
@@ -29,6 +29,7 @@ export async function PUT(req: NextRequest) {
       iban: str(b.iban),
       photoUrl: str(b.photoUrl),
       vatExempt: b.vatExempt !== false,
+      workSchedule: str(b.workSchedule),
     },
   });
   return NextResponse.json({ ok: true });

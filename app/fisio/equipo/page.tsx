@@ -24,7 +24,7 @@ export default async function EquipoPage({
     select: {
       id: true, fullName: true, email: true, role: true, active: true,
       passwordHash: true, passwordResetToken: true, passwordResetExpires: true,
-      lastLoginAt: true,
+      lastLoginAt: true, workSchedule: true,
     },
   });
 
@@ -38,6 +38,7 @@ export default async function EquipoPage({
     hasPassword: !!p.passwordHash,
     pendingInvite: !p.passwordHash && !!p.passwordResetToken && !!p.passwordResetExpires && p.passwordResetExpires > now,
     lastLoginAt: p.lastLoginAt?.toISOString() ?? null,
+    workSchedule: p.workSchedule,
   }));
 
   // Vacaciones próximas y pasadas (3 meses atrás y 6 adelante)
@@ -69,6 +70,7 @@ export default async function EquipoPage({
         activeTab={tab}
         isManager={isManager}
         currentUserRole={user.role}
+        currentUserId={user.id}
         team={team}
         leaves={leaves.map((l) => ({
           id: l.id,

@@ -10,6 +10,7 @@ type Initial = {
   iban: string;
   photoUrl: string;
   vatExempt: boolean;
+  workSchedule: string;
 };
 
 export function ProfileEditor({ fullName, initial }: { fullName: string; initial: Initial }) {
@@ -19,6 +20,7 @@ export function ProfileEditor({ fullName, initial }: { fullName: string; initial
   const [iban, setIban] = useState(initial.iban);
   const [photoUrl, setPhotoUrl] = useState(initial.photoUrl);
   const [vatExempt, setVatExempt] = useState(initial.vatExempt);
+  const [workSchedule, setWorkSchedule] = useState(initial.workSchedule);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
@@ -28,7 +30,7 @@ export function ProfileEditor({ fullName, initial }: { fullName: string; initial
     const res = await fetch("/api/profile", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fiscalName, taxId, fiscalAddress, iban, photoUrl, vatExempt }),
+      body: JSON.stringify({ fiscalName, taxId, fiscalAddress, iban, photoUrl, vatExempt, workSchedule }),
     });
     if (res.ok) setMsg({ kind: "ok", text: "Guardado ✓" });
     else setMsg({ kind: "err", text: "No se pudo guardar." });
@@ -40,6 +42,20 @@ export function ProfileEditor({ fullName, initial }: { fullName: string; initial
       <section className="card space-y-3">
         <h2 className="font-medium text-sm">Foto</h2>
         <ImageUpload value={photoUrl} onChange={setPhotoUrl} hint="Cuadrada, ~400×400 px. Máx 5 MB." />
+      </section>
+
+      <section className="card space-y-3">
+        <div>
+          <h2 className="font-medium text-sm">🕒 Horario de trabajo</h2>
+          <p className="text-xs text-neutral-500 mt-0.5">Visible para el resto del equipo en la pestaña "Horario equipo".</p>
+        </div>
+        <textarea
+          className="input text-sm"
+          rows={2}
+          value={workSchedule}
+          onChange={(e) => setWorkSchedule(e.target.value)}
+          placeholder="Ej: Lunes a Viernes · 9:00 — 14:00 y 16:00 — 19:00"
+        />
       </section>
 
       <section className="card space-y-3">

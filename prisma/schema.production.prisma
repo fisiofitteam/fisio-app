@@ -154,6 +154,7 @@ model Professional {
   fiscalAddress  String?   // dirección fiscal
   iban           String?
   photoUrl       String?
+  workSchedule   String?   // horario de trabajo (texto libre, visible al equipo)
   vatExempt      Boolean   @default(true)  // exento de IVA (art. 20 Ley 37/1992)
 
   // Preferencias de notificación: JSON { [tipo]: boolean }. Tipo ausente = activado.

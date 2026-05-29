@@ -14,6 +14,7 @@ type TeamMember = {
   hasPassword: boolean;
   pendingInvite: boolean;
   lastLoginAt: string | null;
+  workSchedule: string | null;
 };
 
 type Leave = {
@@ -58,12 +59,14 @@ export function EquipoTabs({
   activeTab,
   isManager,
   currentUserRole,
+  currentUserId,
   team,
   leaves,
 }: {
   activeTab: string;
   isManager: boolean;
   currentUserRole: string;
+  currentUserId: string;
   team: TeamMember[];
   leaves: Leave[];
 }) {
@@ -103,7 +106,7 @@ export function EquipoTabs({
               : "border-transparent text-neutral-500 hover:text-neutral-900"
           }`}
         >
-          📅 Calendario equipo
+          🕒 Horario equipo
         </button>
         {canSeeClosingShifts && (
           <button
@@ -128,12 +131,15 @@ export function EquipoTabs({
       )}
 
       {activeTab === "calendario" && (
-        <CalendarView
-          team={team.filter((m) => m.active)}
-          leaves={leaves}
-          isManager={isManager}
-          onCreate={() => setCreatingLeave(true)}
-        />
+        <>
+          <SchedulesBlock team={team.filter((m) => m.active)} currentUserId={currentUserId} />
+          <CalendarView
+            team={team.filter((m) => m.active)}
+            leaves={leaves}
+            isManager={isManager}
+            onCreate={() => setCreatingLeave(true)}
+          />
+        </>
       )}
 
       {creatingLeave && (
@@ -902,3 +908,98 @@ function AddShiftModal({
     </div>
   );
 }
+
+// ── Bloque "Horario equipo": muestra el horario de cada miembro (texto libre).
+// Cada uno puede editar el suyo inline; el resto en solo lectura.
+function SchedulesBlock({ team, currentUserId }: { team: TeamMember[]; currentUserId: string }) {
+  return (
+    <section className="card mb-4">
+      <div className="mb-3">
+        <h2 className="font-medium text-sm">🕒 Horario del equipo</h2>
+        <p className="text-xs text-neutral-500 mt-0.5">
+          Cada uno edita el suyo. Lo verá todo el equipo.
+        </p>
+      </div>
+      <div className="divide-y divide-neutral-100">
+        {team.length === 0 && (
+          <p className="text-xs text-neutral-400 italic py-4 text-center">Sin miembros activos.</p>
+        )}
+        {team.map((m) => (
+          <ScheduleRow key={m.id} member={m} isMe={m.id === currentUserId} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ScheduleRow({ member, isMe }: { member: TeamMember; isMe: boolean }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(member.workSchedule ?? "");
+  const [saving, setSaving] = useState(false);
+  const router = useRouter();
+
+  async function save() {
+    setSaving(true);
+    await fetch("/api/profile", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workSchedule: value }),
+    });
+    setSaving(false);
+    setEditing(false);
+    router.refresh();
+  }
+
+  return (
+    <div className="py-3 flex items-start justify-between gap-3 flex-wrap">
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-medium">
+          {member.fullName}
+          {isMe && <span className="text-[10px] text-neutral-400 ml-1">(tú)</span>}
+        </div>
+        <div className="text-[11px] text-neutral-400 capitalize">{ROLE_LABEL_SCHED[member.role] ?? member.role}</div>
+      </div>
+      <div className="flex-1 min-w-[280px]">
+        {editing && isMe ? (
+          <div className="flex items-start gap-2">
+            <textarea
+              className="input text-sm flex-1"
+              rows={2}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              placeholder="Ej: L-V · 9:00-14:00 y 16:00-19:00"
+              autoFocus
+            />
+            <div className="flex flex-col gap-1">
+              <button onClick={save} disabled={saving} className="btn btn-primary text-xs">
+                {saving ? "..." : "Guardar"}
+              </button>
+              <button onClick={() => { setValue(member.workSchedule ?? ""); setEditing(false); }} className="text-xs text-neutral-500">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <div className="text-sm text-neutral-700 whitespace-pre-line flex-1">
+              {member.workSchedule || <span className="italic text-neutral-400">Sin horario configurado</span>}
+            </div>
+            {isMe && (
+              <button onClick={() => setEditing(true)} className="text-xs text-neutral-500 hover:text-neutral-900 flex-shrink-0">
+                ✏️ Editar
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const ROLE_LABEL_SCHED: Record<string, string> = {
+  ceo: "CEO",
+  head_success: "Head-success",
+  fisio: "Fisio",
+  closer: "Closer",
+  setter: "Setter",
+};

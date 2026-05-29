@@ -55,26 +55,39 @@ export default async function CalendarioPage({
   const seesAllCalls = isManager || user.role === "setter";
   const seesOwnCalls = user.role === "closer";
   const seesSlots = isManager || user.role === "setter";
-  const showFilterSidebar = isManager || user.role === "setter";
+  // Sidebar 'Mis calendarios': solo CEO y head-success. La setter ve directamente
+  // todos los eventos relevantes sin selector (cierra el ruido de pestaña vacía).
+  const showFilterSidebar = isManager;
 
-  // ── Profesionales (para colores y filtro) ───────────────────────────────
+  // ── Profesionales (para colores y filtro del sidebar) ───────────────────
+  // CEO ve a todo el equipo; head-success solo se ve a sí mismo y a los fisios
+  // (no muestra el equipo comercial).
+  const proWhere: any = { active: true };
+  if (user.role === "head_success") {
+    proWhere.OR = [{ id: user.id }, { role: "fisio" }];
+  }
   const allPros = await prisma.professional.findMany({
-    where: { active: true },
+    where: proWhere,
     select: { id: true, fullName: true, role: true },
     orderBy: { fullName: "asc" },
   });
 
   // ── Llamadas ────────────────────────────────────────────────────────────
+  // Solo aparecen si están activas (agendada/vendida/perdida) o en follow-up.
+  // Las canceladas y no-show no se muestran (se considera que ese hueco se libera).
   let calls: any[] = [];
   if (seesAllCalls || seesOwnCalls) {
     calls = await prisma.lead.findMany({
       where: {
         callScheduledAt: { gte: weekStart, lt: weekEnd },
-        status: { in: ["scheduled", "won", "lost", "no_show"] },
+        OR: [
+          { status: { in: ["scheduled", "won", "lost"] } },
+          { inFollowUp: true },
+        ],
         ...(seesOwnCalls ? { closerId: user.id } : {}),
       },
       select: {
-        id: true, fullName: true, callScheduledAt: true, status: true,
+        id: true, fullName: true, callScheduledAt: true, status: true, inFollowUp: true,
         closer: { select: { id: true, fullName: true } },
       },
       orderBy: { callScheduledAt: "asc" },
