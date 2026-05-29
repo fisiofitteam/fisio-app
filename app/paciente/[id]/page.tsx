@@ -192,9 +192,11 @@ export default async function PatientHome({ params }: { params: { id: string } }
       prisma.communityReaction.count({
         where: { createdAt: { gt: sinceR }, post: { patientAuthorId: patient.id }, NOT: { patientId: patient.id } },
       }),
-      prisma.patientChallenge.findUnique({
-        where: { patientId_year_month: { patientId: patient.id, year: nowR.getFullYear(), month: nowR.getMonth() } },
-      }),
+      // Si la tabla aún no se ha migrado (Neon), no rompemos: simplemente no
+      // mostramos el reto del mes hasta que llegue la columna.
+      prisma.monthlyChallenge.findUnique({
+        where: { year_month: { year: nowR.getFullYear(), month: nowR.getMonth() } },
+      }).catch(() => null),
     ]);
     const rollingUnread = rolledNewPosts + rolledNewComments + rolledNewReactions;
 
@@ -209,7 +211,6 @@ export default async function PatientHome({ params }: { params: { id: string } }
           id: currentChallenge.id,
           title: currentChallenge.title,
           description: currentChallenge.description,
-          completed: currentChallenge.completed,
         } : null}
         mode={anyPublished ? "ready" : "pending"}
         weekStartIso={thisMonday.toISOString()}

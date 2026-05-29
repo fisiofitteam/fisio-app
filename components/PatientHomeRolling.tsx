@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ArrowLeft, Trophy, BarChart3, BookOpen, Users } from "lucide-react";
 import { PatientSessionMenu, patientLogout } from "@/components/PatientSessionMenu";
+import { PatientNav } from "@/components/PatientNav";
 
 // Icono de WhatsApp en amarillo (currentColor para compat con la API de Lucide).
 function WhatsAppIcon({ size = 22, style, className }: { size?: number; strokeWidth?: number; style?: React.CSSProperties; className?: string }) {
@@ -73,7 +74,7 @@ export function PatientHomeRolling({
   patientPhotoUrl?: string | null;
   whatsappGroupUrl?: string | null;
   communityUnread?: number;
-  challenge?: { id: string; title: string; description: string | null; completed: boolean } | null;
+  challenge?: { id: string; title: string; description: string | null } | null;
   mode: "ready" | "pending" | "expired";
   weekStartIso: string;
   title?: string | null;
@@ -169,10 +170,33 @@ export function PatientHomeRolling({
           )}
         </header>
 
+        {/* 💪 Sesión de hoy — primer bloque accesible */}
+        {mode === "ready" && (
+          <section className="rounded-2xl p-4 mb-5" style={{ background: "rgba(252, 211, 77, 0.08)", border: "1px solid rgba(252, 211, 77, 0.25)" }}>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[10px] font-bold tracking-wider uppercase" style={{ color: "var(--p-accent)" }}>
+                Sesión de hoy · {DAY_NAMES[todayDow] || "Fin de semana"}
+              </span>
+            </div>
+            {(daysByDow[todayDow] ?? []).length === 0 ? (
+              <p className="text-sm italic" style={{ color: "var(--p-text-faint)" }}>
+                {todayDow >= 6 ? "Hoy descansas. ¡A recuperar!" : "Día de descanso."}
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {(daysByDow[todayDow] ?? []).map((t) => (
+                  <RollingTaskCard key={t.id} task={t} />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
         {/* 🎯 Reto del mes — destacado si el coach lo ha configurado */}
         {challenge && (
-          <section
-            className="rounded-2xl p-4 mb-5"
+          <Link
+            href={`/paciente/${patientId}/reto`}
+            className="block rounded-2xl p-4 mb-5 active:scale-95 transition-transform"
             style={{
               background: "linear-gradient(135deg, var(--p-accent) 0%, #F59E0B 100%)",
               color: "var(--p-accent-ink)",
@@ -181,11 +205,6 @@ export function PatientHomeRolling({
             <div className="flex items-center gap-2 mb-1">
               <span className="text-lg">🎯</span>
               <span className="text-[10px] font-bold tracking-wider uppercase">Reto del mes</span>
-              {challenge.completed && (
-                <span className="text-[10px] font-bold ml-auto px-1.5 py-0.5 rounded" style={{ background: "rgba(10,10,10,0.15)" }}>
-                  ✓ COMPLETADO
-                </span>
-              )}
             </div>
             <h3 className="text-lg font-bold leading-tight mb-1" style={{ letterSpacing: "-0.02em" }}>
               {challenge.title}
@@ -195,7 +214,8 @@ export function PatientHomeRolling({
                 {challenge.description}
               </p>
             )}
-          </section>
+            <div className="text-xs font-medium mt-2 underline">Ver leaderboard →</div>
+          </Link>
         )}
 
         {/* Grid de accesos compactos */}
@@ -294,6 +314,7 @@ export function PatientHomeRolling({
           </div>
         )}
       </div>
+      <PatientNav patientId={patientId} active="home" variant="advance" />
     </main>
   );
 }

@@ -1,22 +1,32 @@
 "use client";
 
 import Link from "next/link";
-import { Home, Calendar, Zap, ClipboardList, Users } from "lucide-react";
+import { Home, Calendar, Zap, ClipboardList, Users, Trophy, BarChart3 } from "lucide-react";
 
 export function PatientNav({
   patientId,
   active,
+  variant = "default",
 }: {
   patientId: string;
-  active: "home" | "semana" | "wod" | "adapt" | "comunidad" | "ajustes";
+  active: string;
+  variant?: "default" | "advance";
 }) {
-  const items = [
-    { id: "home", label: "Hoy", href: `/paciente/${patientId}`, Icon: Home },
-    { id: "semana", label: "Semana", href: `/paciente/${patientId}/semana`, Icon: Calendar },
-    { id: "wod", label: "WOD", href: `/paciente/${patientId}/wod`, Icon: Zap },
-    { id: "comunidad", label: "Comunidad", href: `/paciente/${patientId}/comunidad`, Icon: Users },
-    { id: "adapt", label: "Adaptaciones", href: `/paciente/${patientId}/adaptaciones`, Icon: ClipboardList },
-  ];
+  const items = variant === "advance"
+    ? [
+        { id: "home", label: "Hoy", href: `/paciente/${patientId}`, Icon: Home },
+        { id: "semana", label: "Semana", href: `/paciente/${patientId}/semana`, Icon: Calendar },
+        { id: "prs", label: "PRs", href: `/paciente/${patientId}/prs`, Icon: Trophy },
+        { id: "comunidad", label: "Comunidad", href: `/paciente/${patientId}/comunidad`, Icon: Users },
+        { id: "metricas", label: "Métricas", href: `/paciente/${patientId}/metricas`, Icon: BarChart3 },
+      ]
+    : [
+        { id: "home", label: "Hoy", href: `/paciente/${patientId}`, Icon: Home },
+        { id: "semana", label: "Semana", href: `/paciente/${patientId}/semana`, Icon: Calendar },
+        { id: "wod", label: "WOD", href: `/paciente/${patientId}/wod`, Icon: Zap },
+        { id: "comunidad", label: "Comunidad", href: `/paciente/${patientId}/comunidad`, Icon: Users },
+        { id: "adapt", label: "Adaptaciones", href: `/paciente/${patientId}/adaptaciones`, Icon: ClipboardList },
+      ];
 
   return (
     <nav

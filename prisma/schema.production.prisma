@@ -120,7 +120,7 @@ model Patient {
   clinicalSessionCase ClinicalSessionCase?
   transactions    Transaction[]
   prs             PatientPR[]
-  challenges      PatientChallenge[]
+  challengeResults MonthlyChallengeResult[]
   leadsConverted  Lead[]
   sessions        Session[]
   programPauses   ProgramPause[]
@@ -1795,19 +1795,38 @@ model PatientPR {
   @@index([patientId, recordedAt])
 }
 
-// Reto del mes — el coach configura uno por paciente cada mes (más adelante
-// añadiremos la UI de gestión por parte del coach).
-model PatientChallenge {
+// Reto mensual — un reto global por mes, configurable por el coach. Cada paciente
+// ADVANCE rolling envía su resultado y se construye un leaderboard.
+model MonthlyChallenge {
   id          String   @id @default(cuid())
-  patientId   String
-  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
   year        Int
   month       Int                                     // 0..11
-  title       String                                  // "Romper Fran en sub-4"
-  description String?                                 // detalle del reto
-  completed   Boolean  @default(false)
+  title       String                                  // "Fran sub-4"
+  description String?                                 // descripción / reglas
+  // Unidad para ordenar el leaderboard: "time" (menor mejor) o "kg/reps/score" (mayor mejor)
+  metric      String   @default("score")              // "time" | "score"
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@unique([patientId, year, month])
+  results     MonthlyChallengeResult[]
+
+  @@unique([year, month])
+}
+
+// Resultado de un paciente en un reto mensual.
+model MonthlyChallengeResult {
+  id          String   @id @default(cuid())
+  challengeId String
+  challenge   MonthlyChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  value       String                                  // "3:42" o "127" — texto libre, parseable según metric
+  unit        String?                                 // opcional, ej "kg"
+  notes       String?
+  recordedAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([challengeId, patientId])
+  @@index([challengeId])
 }

@@ -120,7 +120,7 @@ model Patient {
   clinicalSessionCase ClinicalSessionCase?
   transactions    Transaction[]
   prs             PatientPR[]
-  challenges      PatientChallenge[]
+  challengeResults MonthlyChallengeResult[]
   leadsConverted  Lead[]
   sessions        Session[]
   programPauses   ProgramPause[]
@@ -1794,18 +1794,35 @@ model PatientPR {
   @@index([patientId, recordedAt])
 }
 
-// Reto del mes — el coach lo configurará por paciente cada mes (UI próximamente).
-model PatientChallenge {
+// Reto mensual — un reto global por mes con leaderboard.
+model MonthlyChallenge {
   id          String   @id @default(cuid())
-  patientId   String
-  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
   year        Int
   month       Int
   title       String
   description String?
-  completed   Boolean  @default(false)
+  metric      String   @default("score")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@unique([patientId, year, month])
+  results     MonthlyChallengeResult[]
+
+  @@unique([year, month])
+}
+
+model MonthlyChallengeResult {
+  id          String   @id @default(cuid())
+  challengeId String
+  challenge   MonthlyChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  value       String
+  unit        String?
+  notes       String?
+  recordedAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([challengeId, patientId])
+  @@index([challengeId])
 }
