@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Trophy, BarChart3, BookOpen, Users } from "lucide-react";
+import { ArrowLeft, Trophy, BarChart3, BookOpen, Users, Target } from "lucide-react";
 import { PatientSessionMenu, patientLogout } from "@/components/PatientSessionMenu";
 import { PatientNav } from "@/components/PatientNav";
 
@@ -170,52 +170,27 @@ export function PatientHomeRolling({
           )}
         </header>
 
-        {/* 💪 Sesión de hoy — primer bloque accesible */}
-        {mode === "ready" && (
-          <section className="rounded-2xl p-4 mb-5" style={{ background: "rgba(252, 211, 77, 0.08)", border: "1px solid rgba(252, 211, 77, 0.25)" }}>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-[10px] font-bold tracking-wider uppercase" style={{ color: "var(--p-accent)" }}>
-                Sesión de hoy · {DAY_NAMES[todayDow] || "Fin de semana"}
-              </span>
-            </div>
-            {(daysByDow[todayDow] ?? []).length === 0 ? (
-              <p className="text-sm italic" style={{ color: "var(--p-text-faint)" }}>
-                {todayDow >= 6 ? "Hoy descansas. ¡A recuperar!" : "Día de descanso."}
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {(daysByDow[todayDow] ?? []).map((t) => (
-                  <RollingTaskCard key={t.id} task={t} />
-                ))}
-              </div>
-            )}
-          </section>
-        )}
-
-        {/* 🎯 Reto del mes — destacado si el coach lo ha configurado */}
-        {challenge && (
-          <Link
-            href={`/paciente/${patientId}/reto`}
-            className="block rounded-2xl p-4 mb-5 active:scale-95 transition-transform"
+        {/* 💪 Sesión de hoy — bloque destacado en amarillo (solo si hay tareas hoy) */}
+        {mode === "ready" && (daysByDow[todayDow] ?? []).length > 0 && (
+          <section
+            className="rounded-2xl p-4 mb-5"
             style={{
               background: "linear-gradient(135deg, var(--p-accent) 0%, #F59E0B 100%)",
               color: "var(--p-accent-ink)",
             }}
           >
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-lg">🎯</span>
-              <span className="text-[10px] font-bold tracking-wider uppercase">Reto del mes</span>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-lg">💪</span>
+              <span className="text-[10px] font-bold tracking-wider uppercase">
+                Sesión de hoy · {DAY_NAMES[todayDow]}
+              </span>
             </div>
-            <h3 className="text-lg font-bold leading-tight mb-1" style={{ letterSpacing: "-0.02em" }}>
-              {challenge.title}
-            </h3>
-            {challenge.description && (
-              <p className="text-sm" style={{ color: "rgba(10,10,10,0.75)" }}>
-                {challenge.description}
-              </p>
-            )}
-            <div className="text-xs font-medium mt-2 underline">Ver leaderboard →</div>
-          </Link>
+            <div className="space-y-2">
+              {(daysByDow[todayDow] ?? []).map((t) => (
+                <RollingTaskCard key={t.id} task={t} />
+              ))}
+            </div>
+          </section>
         )}
 
         {/* Grid de accesos compactos */}
@@ -252,6 +227,14 @@ export function PatientHomeRolling({
               label="Mi seguimiento"
               sublabel="Grupo de WhatsApp"
               external
+            />
+          )}
+          {challenge && (
+            <RollingActionCard
+              href={`/paciente/${patientId}/reto`}
+              Icon={Target}
+              label="Reto del mes"
+              sublabel={challenge.title}
             />
           )}
         </div>
