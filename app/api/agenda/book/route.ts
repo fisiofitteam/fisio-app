@@ -19,6 +19,7 @@ type BookBody = {
   fullName: string;
   email: string;
   phone: string;
+  instagram: string;
   motivo: string;
   tratamientosPrevios: string;
   impactoCrossfit: string;
@@ -39,6 +40,7 @@ export async function POST(req: NextRequest) {
     "fullName",
     "email",
     "phone",
+    "instagram",
     "motivo",
     "tratamientosPrevios",
     "impactoCrossfit",
@@ -63,6 +65,9 @@ export async function POST(req: NextRequest) {
   const email = body.email.trim().toLowerCase();
   const fullName = body.fullName.trim();
   const phone = body.phone.trim();
+  // Normalizar el handle de Instagram: minúsculas, sin espacios, asegurando @ al inicio
+  const igRaw = body.instagram.trim().replace(/^@+/, "").toLowerCase().replace(/\s+/g, "");
+  const instagram = igRaw ? `@${igRaw}` : "";
 
   // ─── Comprobación última de disponibilidad (race condition) ───
   // En el tiempo entre que cargamos los slots y el lead pulsa "confirmar",
@@ -142,6 +147,7 @@ export async function POST(req: NextRequest) {
       contactValue: email,
       email,
       phone,
+      instagram: instagram || null,
       motivo: body.motivo.trim(),
       tratamientosPrevios: body.tratamientosPrevios.trim(),
       impactoCrossfit: body.impactoCrossfit.trim(),

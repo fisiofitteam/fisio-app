@@ -285,6 +285,7 @@ model Lead {
   // Si lo creó la setter manualmente, quedan null.
   email           String?                                    // correo del formulario público
   phone           String?                                    // teléfono del formulario público
+  instagram       String?                                    // @usuario de Instagram (formulario público)
   country         String?                                    // país (opcional, no obligatorio)
   motivo          String?                                    // "¿Qué te trae aquí?"
   tratamientosPrevios String?                                // qué ha probado antes

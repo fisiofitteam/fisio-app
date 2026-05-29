@@ -13,38 +13,28 @@ type Slot = {
 
 const DAY_LABELS = ["", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
 
-function formatDateLabel(iso: string): string {
-  // Mostrar la fecha en hora de Madrid usando Intl
+// Todas las funciones de formato aceptan la TZ del usuario. Por defecto Madrid si
+// no se detecta, así no rompemos render SSR/cliente antiguo.
+function formatDateLabel(iso: string, tz: string = "Europe/Madrid"): string {
   const d = new Date(iso);
-  const dayName = d.toLocaleDateString("es-ES", { weekday: "long", timeZone: "Europe/Madrid" });
-  const day = d.toLocaleDateString("es-ES", { day: "numeric", timeZone: "Europe/Madrid" });
-  const month = d.toLocaleDateString("es-ES", { month: "long", timeZone: "Europe/Madrid" });
+  const dayName = d.toLocaleDateString("es-ES", { weekday: "long", timeZone: tz });
+  const day = d.toLocaleDateString("es-ES", { day: "numeric", timeZone: tz });
+  const month = d.toLocaleDateString("es-ES", { month: "long", timeZone: tz });
   return `${dayName} ${day} de ${month}`;
 }
 
-function dateKey(iso: string): string {
-  // YYYY-MM-DD en Madrid para agrupar slots por día
+function dateKey(iso: string, tz: string = "Europe/Madrid"): string {
+  // YYYY-MM-DD en la TZ indicada para agrupar slots por día
   const d = new Date(iso);
-  const parts = d.toLocaleDateString("sv-SE", { timeZone: "Europe/Madrid" }); // YYYY-MM-DD
-  return parts;
+  return d.toLocaleDateString("sv-SE", { timeZone: tz });
 }
 
-function formatHHMM(iso: string): string {
-  // HH:MM en Madrid
+function formatHHMM(iso: string, tz: string = "Europe/Madrid"): string {
   const d = new Date(iso);
   return d.toLocaleTimeString("es-ES", {
     hour: "2-digit",
     minute: "2-digit",
-    timeZone: "Europe/Madrid",
-  });
-}
-
-function formatHHMMLocal(iso: string): string {
-  // HH:MM en zona local del navegador
-  const d = new Date(iso);
-  return d.toLocaleTimeString("es-ES", {
-    hour: "2-digit",
-    minute: "2-digit",
+    timeZone: tz,
   });
 }
 
@@ -64,6 +54,7 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [instagram, setInstagram] = useState("");
   const [motivo, setMotivo] = useState("");
   const [tratamientosPrevios, setTratamientosPrevios] = useState("");
   const [impactoCrossfit, setImpactoCrossfit] = useState("");
@@ -82,11 +73,13 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
   // ¿El usuario ha pulsado "ver más fechas"?
   const [showLaterDays, setShowLaterDays] = useState(false);
 
-  // Huso horario del usuario (calculado en cliente)
+  // Huso horario del usuario (calculado en cliente). Si no lo tenemos aún —
+  // primer render SSR/antes del useEffect— usamos Madrid como base estable.
   const [userTz, setUserTz] = useState<string | null>(null);
   useEffect(() => {
     setUserTz(getUserTimezone());
   }, []);
+  const effectiveTz = userTz || "Europe/Madrid";
   const isUserInMadrid = userTz === "Europe/Madrid";
 
   /**
@@ -103,6 +96,9 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
     }
     if (phone.trim().length < 6) {
       errs.phone = "Introduce un teléfono válido";
+    }
+    if (instagram.trim().replace(/^@+/, "").length < 2) {
+      errs.instagram = "Indícanos tu usuario de Instagram";
     }
     if (motivo.trim().length < 3) {
       errs.motivo = "Cuéntanos brevemente tu lesión o molestia";
@@ -128,7 +124,7 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
     if (Object.keys(cleaned).length !== Object.keys(fieldErrors).length) {
       setFieldErrors(cleaned);
     }
-  }, [fullName, email, phone, motivo, tratamientosPrevios, impactoCrossfit]);
+  }, [fullName, email, phone, instagram, motivo, tratamientosPrevios, impactoCrossfit]);
 
   async function loadSlots() {
     setLoadingSlots(true);
@@ -195,6 +191,7 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
           fullName: fullName.trim(),
           email: email.trim(),
           phone: phone.trim(),
+          instagram: instagram.trim(),
           motivo: motivo.trim(),
           tratamientosPrevios: tratamientosPrevios.trim(),
           impactoCrossfit: impactoCrossfit.trim(),
@@ -224,10 +221,11 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
     }
   }
 
-  // Agrupar slots por día (clave: YYYY-MM-DD en Madrid)
+  // Agrupar slots por día EN LA TZ DEL USUARIO (un slot a las 23:30 Madrid puede
+  // ser del día siguiente para alguien en Bucarest, etc.)
   const slotsByDay = new Map<string, Slot[]>();
   for (const s of slots) {
-    const k = dateKey(s.startISO);
+    const k = dateKey(s.startISO, effectiveTz);
     if (!slotsByDay.has(k)) slotsByDay.set(k, []);
     slotsByDay.get(k)!.push(s);
   }
@@ -392,6 +390,27 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
                 </div>
               </div>
 
+              <div data-field="instagram">
+                <label className="text-xs block mb-1.5" style={{ color: "#A3A3A3" }}>
+                  Usuario de Instagram *
+                </label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2.5 rounded-lg text-sm"
+                  style={{
+                    background: "#1F1F1F",
+                    border: `1px solid ${fieldErrors.instagram ? "#DC2626" : "#404040"}`,
+                    color: "#FAFAFA",
+                  }}
+                  placeholder="@tuusuario"
+                  value={instagram}
+                  onChange={(e) => setInstagram(e.target.value)}
+                />
+                {fieldErrors.instagram && (
+                  <p className="text-xs mt-1" style={{ color: "#FCA5A5" }}>{fieldErrors.instagram}</p>
+                )}
+              </div>
+
               <div data-field="motivo">
                 <label className="text-xs block mb-1.5" style={{ color: "#A3A3A3" }}>
                   ¿Qué te trae aquí? Cuéntanos tu lesión/molestia *
@@ -500,17 +519,18 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
                 Videoconsulta de 45-60 minutos. Necesitamos al menos 24 horas de antelación.
               </p>
 
-              {/* Aviso de huso horario */}
+              {/* Aviso de huso horario — las horas salen ya en la TZ del usuario */}
               <div
                 className="rounded-lg px-3 py-2 mb-4 text-xs flex items-start gap-2"
                 style={{ background: "rgba(252, 211, 77, 0.08)", border: "1px solid rgba(252, 211, 77, 0.25)", color: "#FCD34D" }}
               >
                 <span className="flex-shrink-0">🕒</span>
                 <div>
-                  Las horas se muestran en <strong>horario de Madrid (España)</strong>.
+                  Las horas se muestran en tu zona horaria
+                  {userTz && <> (<strong>{userTz}</strong>)</>}.
                   {!isUserInMadrid && userTz && (
                     <>
-                      {" "}Tu zona horaria detectada es <strong>{userTz}</strong>. Verás también la hora local equivalente.
+                      {" "}También verás entre paréntesis la hora equivalente en Madrid (zona horaria de nuestro equipo).
                     </>
                   )}
                 </div>
@@ -545,6 +565,7 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
                           daySlots={daySlots}
                           selectedSlot={selectedSlot}
                           setSelectedSlot={setSelectedSlot}
+                          userTz={effectiveTz}
                           isUserInMadrid={isUserInMadrid}
                         />
                       ))}
@@ -588,6 +609,7 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
                               daySlots={daySlots}
                               selectedSlot={selectedSlot}
                               setSelectedSlot={setSelectedSlot}
+                              userTz={effectiveTz}
                               isUserInMadrid={isUserInMadrid}
                             />
                           ))}
@@ -612,11 +634,12 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
                   className="rounded-lg p-3 mt-4 text-sm"
                   style={{ background: "rgba(34, 197, 94, 0.1)", border: "1px solid #14532D", color: "#86EFAC" }}
                 >
-                  ✓ Has elegido el <strong>{formatDateLabel(selectedSlot.startISO)}</strong> a las{" "}
-                  <strong>{formatHHMM(selectedSlot.startISO)}</strong> (hora Madrid)
+                  ✓ Has elegido el <strong>{formatDateLabel(selectedSlot.startISO, effectiveTz)}</strong> a las{" "}
+                  <strong>{formatHHMM(selectedSlot.startISO, effectiveTz)}</strong>
+                  {userTz && <> ({userTz})</>}
                   {!isUserInMadrid && (
                     <>
-                      {" "}· {formatHHMMLocal(selectedSlot.startISO)} en tu hora local
+                      {" "}· equivale a {formatHHMM(selectedSlot.startISO, "Europe/Madrid")} en Madrid
                     </>
                   )}
                 </div>
@@ -685,11 +708,13 @@ function DayBlock({
   daySlots,
   selectedSlot,
   setSelectedSlot,
+  userTz,
   isUserInMadrid,
 }: {
   daySlots: Slot[];
   selectedSlot: Slot | null;
   setSelectedSlot: (s: Slot) => void;
+  userTz: string;
   isUserInMadrid: boolean;
 }) {
   return (
@@ -698,13 +723,13 @@ function DayBlock({
       style={{ background: "rgba(26, 26, 26, 0.85)", border: "1px solid #262626", backdropFilter: "blur(8px)" }}
     >
       <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#D4D4D4" }}>
-        {formatDateLabel(daySlots[0].startISO)}
+        {formatDateLabel(daySlots[0].startISO, userTz)}
       </h3>
       <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
         {daySlots.map((s) => {
           const isSelected = selectedSlot?.startISO === s.startISO;
-          const madridTime = formatHHMM(s.startISO);
-          const localTime = !isUserInMadrid ? formatHHMMLocal(s.startISO) : null;
+          const localTime = formatHHMM(s.startISO, userTz);
+          const madridTime = !isUserInMadrid ? formatHHMM(s.startISO, "Europe/Madrid") : null;
           return (
             <button
               key={s.startISO}
@@ -716,10 +741,10 @@ function DayBlock({
                 border: "1px solid " + (isSelected ? "#FAFAFA" : "#404040"),
               }}
             >
-              <div>{madridTime}</div>
-              {localTime && (
+              <div>{localTime}</div>
+              {madridTime && (
                 <div className="text-[10px] mt-0.5" style={{ opacity: 0.6 }}>
-                  {localTime} local
+                  {madridTime} Madrid
                 </div>
               )}
             </button>
