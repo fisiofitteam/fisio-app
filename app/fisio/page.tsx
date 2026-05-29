@@ -223,8 +223,9 @@ export default async function FisioPanelPage({
     const financeSummary = await calculateFinanceSummary(start, end);
 
     // Métricas de venta (período seleccionable)
-    const { calculateSalesMetrics, calculateSalesByCloser } = await import("@/lib/sales");
+    const { calculateSalesMetrics, calculateSalesByCloser, calculateLeadOriginMetrics } = await import("@/lib/sales");
     const { SalesMetricsBlock } = await import("@/components/SalesMetricsBlock");
+    const { LeadOriginBlock } = await import("@/components/LeadOriginBlock");
 
     const salesCustomRange = parseCustomRange(searchParams.salesFrom, searchParams.salesTo);
     const salesPeriod: any = salesCustomRange
@@ -246,17 +247,21 @@ export default async function FisioPanelPage({
 
     const salesGlobal = await calculateSalesMetrics(salesStart, salesEnd);
     const salesByCloser = await calculateSalesByCloser(salesStart, salesEnd);
+    const originMetrics = await calculateLeadOriginMetrics(salesStart, salesEnd);
 
     const salesBlock = (
-      <SalesMetricsBlock
-        period={salesPeriod}
-        periodLabel={salesLabel}
-        from={searchParams.salesFrom ?? ""}
-        to={searchParams.salesTo ?? ""}
-        metrics={salesGlobal}
-        perCloser={salesByCloser}
-        title="Métricas de venta — Equipo"
-      />
+      <>
+        <SalesMetricsBlock
+          period={salesPeriod}
+          periodLabel={salesLabel}
+          from={searchParams.salesFrom ?? ""}
+          to={searchParams.salesTo ?? ""}
+          metrics={salesGlobal}
+          perCloser={salesByCloser}
+          title="Métricas de venta — Equipo"
+        />
+        <LeadOriginBlock metrics={originMetrics} periodLabel={salesLabel} />
+      </>
     );
 
     return (

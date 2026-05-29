@@ -91,6 +91,63 @@ export async function calculateSalesMetrics(
   };
 }
 
+// ── Métricas por ORIGEN del lead (IA vs Setter) ─────────────────────────────
+// Volumen (cuántos leads agendados por cada origen) y tasa de cierre (won/(won+lost)).
+// Filtro principal por callScheduledAt en el período (cuándo entraron al pipeline).
+export type LeadOriginMetrics = {
+  aiCount: number;
+  setterCount: number;
+  total: number;
+  aiPct: number | null;       // % del volumen total
+  setterPct: number | null;
+  aiWon: number;
+  aiLost: number;
+  setterWon: number;
+  setterLost: number;
+  aiCloseRate: number | null;     // won / (won+lost) %
+  setterCloseRate: number | null;
+};
+
+export async function calculateLeadOriginMetrics(
+  start: Date,
+  end: Date,
+  closerId?: string
+): Promise<LeadOriginMetrics> {
+  const where: any = { callScheduledAt: { gte: start, lte: end } };
+  if (closerId) where.closerId = closerId;
+
+  const leads = await prisma.lead.findMany({
+    where,
+    select: { aiScheduled: true, status: true },
+  });
+
+  let aiCount = 0, aiWon = 0, aiLost = 0;
+  let setterCount = 0, setterWon = 0, setterLost = 0;
+  for (const l of leads) {
+    if (l.aiScheduled) {
+      aiCount++;
+      if (l.status === "won") aiWon++;
+      else if (l.status === "lost") aiLost++;
+    } else {
+      setterCount++;
+      if (l.status === "won") setterWon++;
+      else if (l.status === "lost") setterLost++;
+    }
+  }
+  const total = aiCount + setterCount;
+  const pct = (n: number) => total > 0 ? Math.round((n / total) * 100) : null;
+  const closeRate = (won: number, lost: number) =>
+    won + lost > 0 ? Math.round((won / (won + lost)) * 100) : null;
+
+  return {
+    aiCount, setterCount, total,
+    aiPct: pct(aiCount), setterPct: pct(setterCount),
+    aiWon, aiLost, setterWon, setterLost,
+    aiCloseRate: closeRate(aiWon, aiLost),
+    setterCloseRate: closeRate(setterWon, setterLost),
+  };
+}
+
 export type CloserBreakdown = {
   id: string;
   fullName: string;
