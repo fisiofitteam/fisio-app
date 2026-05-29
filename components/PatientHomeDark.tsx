@@ -203,17 +203,21 @@ export function PatientHomeDark({
               type="button"
               title="Cerrar sesión"
               onClick={() => { if (confirm("¿Cerrar sesión?")) patientLogout(); }}
-              className="flex items-center justify-center font-bold flex-shrink-0 cursor-pointer"
+              className="flex items-center justify-center font-bold flex-shrink-0 cursor-pointer overflow-hidden"
               style={{
                 width: 52, height: 52, borderRadius: 14,
-                background: "linear-gradient(135deg, var(--p-accent) 0%, #F59E0B 100%)",
+                background: patient.photoUrl ? "transparent" : "linear-gradient(135deg, var(--p-accent) 0%, #F59E0B 100%)",
                 color: "var(--p-accent-ink)",
                 fontSize: 22,
                 letterSpacing: "-0.03em",
-                border: "none",
+                border: patient.photoUrl ? "1px solid var(--p-border-strong)" : "none",
               }}
             >
-              {initial}
+              {patient.photoUrl ? (
+                <img src={patient.photoUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                initial
+              )}
             </button>
             <div>
               <div className="text-xs" style={{ color: "var(--p-text-dim)" }}>Bienvenido</div>
@@ -425,26 +429,26 @@ function ActionCard({
   return (
     <Link
       href={href}
-      className="block rounded-2xl p-4 transition-transform active:scale-95"
+      className="block rounded-2xl px-3 py-3 transition-transform active:scale-95"
       style={{
         background: highlight ? "linear-gradient(135deg, var(--p-accent) 0%, #F59E0B 100%)" : "var(--p-surface)",
         color: highlight ? "var(--p-accent-ink)" : "var(--p-text)",
         border: highlight ? "none" : "1px solid var(--p-border)",
-        minHeight: 130,
       }}
     >
-      <div className="flex flex-col h-full justify-between">
+      <div className="flex items-center gap-2.5">
         <Icon
-          size={28}
+          size={22}
           strokeWidth={2}
+          className="flex-shrink-0"
           style={{ color: highlight ? "var(--p-accent-ink)" : "var(--p-accent)" }}
         />
-        <div className="mt-auto">
-          <div className="font-semibold text-sm" style={{ letterSpacing: "-0.02em" }}>
+        <div className="min-w-0">
+          <div className="font-semibold text-sm leading-tight truncate" style={{ letterSpacing: "-0.02em" }}>
             {label}
           </div>
           <div
-            className="text-[11px] mt-0.5"
+            className="text-[10px] leading-tight truncate"
             style={{
               color: highlight ? "rgba(10,10,10,0.7)" : "var(--p-text-dim)",
               letterSpacing: "-0.005em",
