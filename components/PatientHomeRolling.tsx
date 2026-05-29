@@ -170,27 +170,32 @@ export function PatientHomeRolling({
           )}
         </header>
 
-        {/* 💪 Sesión de hoy — bloque destacado en amarillo (solo si hay tareas hoy) */}
+        {/* 💪 Sesión de hoy — CTA en amarillo (solo si hay tareas hoy). Lleva a
+            la página con el detalle: Accesorios primero, Entrenamiento después. */}
         {mode === "ready" && (daysByDow[todayDow] ?? []).length > 0 && (
-          <section
-            className="rounded-2xl p-4 mb-5"
+          <Link
+            href={`/paciente/${patientId}/sesion-hoy`}
+            className="block rounded-2xl p-5 mb-5 transition-transform active:scale-[0.98]"
             style={{
               background: "linear-gradient(135deg, var(--p-accent) 0%, #F59E0B 100%)",
               color: "var(--p-accent-ink)",
             }}
           >
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-lg">💪</span>
-              <span className="text-[10px] font-bold tracking-wider uppercase">
-                Sesión de hoy · {DAY_NAMES[todayDow]}
-              </span>
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[10px] font-bold tracking-wider uppercase opacity-80 mb-1">
+                  Hoy · {DAY_NAMES[todayDow]}
+                </div>
+                <div className="text-2xl font-bold flex items-center gap-2" style={{ letterSpacing: "-0.025em" }}>
+                  💪 Sesión de hoy
+                </div>
+                <div className="text-xs mt-1.5 font-medium opacity-80">
+                  Pulsa para empezar
+                </div>
+              </div>
+              <div className="text-2xl font-bold flex-shrink-0">→</div>
             </div>
-            <div className="space-y-2">
-              {(daysByDow[todayDow] ?? []).map((t) => (
-                <RollingTaskCard key={t.id} task={t} />
-              ))}
-            </div>
-          </section>
+          </Link>
         )}
 
         {/* Grid de accesos compactos */}

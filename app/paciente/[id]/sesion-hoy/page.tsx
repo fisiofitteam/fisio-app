@@ -1,0 +1,194 @@
+import { notFound } from "next/navigation";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
+import { prisma } from "@/lib/prisma";
+import { weekStartDate } from "@/lib/program-pauses";
+
+const DAY_NAMES = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+
+const TYPE_LABELS: Record<string, string> = {
+  WORKOUT: "Workout",
+  VIDEO: "Vídeo",
+  FORM: "Formulario",
+  EVOLUTION: "Evolución",
+};
+const TYPE_ICONS: Record<string, string> = {
+  WORKOUT: "💪",
+  VIDEO: "🎥",
+  FORM: "📝",
+  EVOLUTION: "📊",
+};
+
+type ResolvedTask = {
+  id: string;
+  type: string;
+  title: string;
+  bodyText: string | null;
+  youtubeUrl: string | null;
+};
+
+export default async function SesionHoyPage({ params }: { params: { id: string } }) {
+  const patient = await prisma.patient.findUnique({
+    where: { id: params.id },
+    select: {
+      id: true,
+      fullName: true,
+      rollingAccessoriesId: true,
+      rollingTrainingId: true,
+      rollingProgramId: true,
+    },
+  });
+  if (!patient) notFound();
+
+  const today = new Date();
+  const todayDow = today.getDay(); // 0..6 (0=domingo). Las tareas usan 1..5.
+  const thisMonday = weekStartDate(today);
+
+  const accId = patient.rollingAccessoriesId;
+  const trnId = patient.rollingTrainingId || patient.rollingProgramId;
+
+  async function fetchDayTasks(programId: string | null) {
+    if (!programId) return [];
+    const week = await prisma.rollingWeek.findUnique({
+      where: { programId_weekStartDate: { programId, weekStartDate: thisMonday } },
+      include: {
+        days: {
+          where: { dayOfWeek: todayDow },
+          include: { tasks: { orderBy: { order: "asc" } } },
+        },
+      },
+    });
+    if (!week || !week.publishedAt) return [];
+    return week.days.flatMap((d) => d.tasks);
+  }
+
+  const [accTasksRaw, trnTasksRaw] = await Promise.all([fetchDayTasks(accId), fetchDayTasks(trnId)]);
+
+  // Resolver vídeos referenciados
+  const videoIds = new Set<string>();
+  for (const t of [...accTasksRaw, ...trnTasksRaw]) {
+    if ((t.type === "VIDEO" || t.type === "WORKOUT") && t.videoId) videoIds.add(t.videoId);
+  }
+  const videosById: Record<string, { youtubeUrl: string }> = {};
+  if (videoIds.size > 0) {
+    const vids = await prisma.videoLibrary.findMany({
+      where: { id: { in: Array.from(videoIds) } },
+    });
+    for (const v of vids) videosById[v.id] = { youtubeUrl: v.youtubeUrl };
+  }
+
+  const resolve = (tasks: typeof accTasksRaw): ResolvedTask[] =>
+    tasks.map((t) => ({
+      id: t.id,
+      type: t.type,
+      title: t.title,
+      bodyText: t.bodyText,
+      youtubeUrl: t.videoId ? videosById[t.videoId]?.youtubeUrl ?? null : null,
+    }));
+
+  const accTasks = resolve(accTasksRaw);
+  const trnTasks = resolve(trnTasksRaw);
+  const hasAny = accTasks.length > 0 || trnTasks.length > 0;
+
+  return (
+    <main className="min-h-screen" style={{ color: "var(--p-text)" }}>
+      <div className="relative max-w-md mx-auto px-5 py-7 pb-16">
+        <Link
+          href={`/paciente/${patient.id}`}
+          className="inline-flex items-center gap-1 text-xs mb-6"
+          style={{ color: "var(--p-text-faint)" }}
+        >
+          <ArrowLeft size={12} /> Volver
+        </Link>
+
+        <header className="mb-6">
+          <div className="text-[10px] font-bold tracking-wider uppercase mb-1" style={{ color: "var(--p-text-faint)" }}>
+            {DAY_NAMES[todayDow]} · {today.toLocaleDateString("es-ES", { day: "numeric", month: "long" })}
+          </div>
+          <h1 className="text-3xl font-bold flex items-center gap-2" style={{ letterSpacing: "-0.03em" }}>
+            💪 Sesión de hoy
+          </h1>
+        </header>
+
+        {accTasks.length > 0 && (
+          <SectionBlock label="Accesorios" color="#3B82F6" tasks={accTasks} />
+        )}
+
+        {trnTasks.length > 0 && (
+          <SectionBlock label="Entrenamiento" color="#F59E0B" tasks={trnTasks} />
+        )}
+
+        {!hasAny && (
+          <section
+            className="rounded-2xl p-5 text-center py-10"
+            style={{ background: "var(--p-surface-2)", border: "1px solid var(--p-border)" }}
+          >
+            <div className="text-3xl mb-2">😴</div>
+            <p className="text-sm" style={{ color: "var(--p-text-dim)" }}>
+              No hay sesión programada para hoy.
+            </p>
+          </section>
+        )}
+      </div>
+    </main>
+  );
+}
+
+function SectionBlock({
+  label, color, tasks,
+}: {
+  label: string;
+  color: string;
+  tasks: ResolvedTask[];
+}) {
+  return (
+    <section className="mb-5">
+      <div
+        className="inline-flex items-center text-[10px] font-bold tracking-wider px-2 py-1 rounded mb-2"
+        style={{ background: `${color}22`, color }}
+      >
+        {label.toUpperCase()}
+      </div>
+      <div className="space-y-2">
+        {tasks.map((t) => <TaskCard key={t.id} task={t} />)}
+      </div>
+    </section>
+  );
+}
+
+function TaskCard({ task }: { task: ResolvedTask }) {
+  return (
+    <div className="rounded-2xl p-4" style={{ background: "var(--p-surface)", border: "1px solid var(--p-border)" }}>
+      <div className="flex items-start gap-2 mb-1">
+        <div className="text-lg">{TYPE_ICONS[task.type] || "•"}</div>
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-base" style={{ letterSpacing: "-0.015em" }}>
+            {task.title}
+          </div>
+          <div className="text-[10px] mt-0.5" style={{ color: "var(--p-text-faint)" }}>
+            {TYPE_LABELS[task.type] || task.type}
+          </div>
+        </div>
+      </div>
+      {task.bodyText && (
+        <div
+          className="text-sm whitespace-pre-wrap mt-3 leading-relaxed"
+          style={{ color: "var(--p-text-dim)" }}
+        >
+          {task.bodyText}
+        </div>
+      )}
+      {task.youtubeUrl && (
+        <a
+          href={task.youtubeUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-sm font-medium mt-3 hover:underline"
+          style={{ color: "var(--p-accent)" }}
+        >
+          Abrir vídeo →
+        </a>
+      )}
+    </div>
+  );
+}
