@@ -27,40 +27,46 @@ export async function POST(req: NextRequest) {
   });
 
   type Plan = { id: string; programId: string; from: string; to: string; conflict: boolean };
-  const plan: Plan[] = [];
-  // Para detectar colisiones tras el shift (otra week del mismo program que ya esté
-  // en la fecha destino), construimos un índice.
-  const existingByKey = new Set(
-    weeks.map((w) => `${w.programId}__${w.weekStartDate.toISOString()}`),
-  );
-
-  for (const w of weeks) {
+  const plan: Plan[] = weeks.map((w) => {
     const current = w.weekStartDate;
-    // Sumar 7 días en UTC y normalizar a midnight UTC del día calendario destino.
     const shifted = new Date(current);
     shifted.setUTCDate(shifted.getUTCDate() + 7);
     const targetUtc = new Date(
       Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate()),
     );
-    const targetKey = `${w.programId}__${targetUtc.toISOString()}`;
-    const conflict = existingByKey.has(targetKey) && targetKey !== `${w.programId}__${current.toISOString()}`;
-    plan.push({
+    return {
       id: w.id,
       programId: w.programId,
       from: current.toISOString(),
       to: targetUtc.toISOString(),
-      conflict,
-    });
+      conflict: false, // se calcula abajo sobre el estado FINAL
+    };
+  });
+
+  // Conflicto real = dos planes acaban en la misma (programId, to). Como todas
+  // las semanas se desplazan +7, normalmente no hay colisión (el destino estaba
+  // libre porque la otra semana también se mueve). Solo se daría conflicto si
+  // hubiese duplicados en origen, lo que el unique constraint ya impide.
+  const finalCounts = new Map<string, number>();
+  for (const p of plan) {
+    const k = `${p.programId}__${p.to}`;
+    finalCounts.set(k, (finalCounts.get(k) || 0) + 1);
+  }
+  for (const p of plan) {
+    const k = `${p.programId}__${p.to}`;
+    if ((finalCounts.get(k) || 0) > 1) p.conflict = true;
   }
 
   if (dryRun) {
     return NextResponse.json({ dryRun: true, count: plan.length, plan });
   }
 
-  // Aplicar. Saltamos los conflictivos (raro: dos semanas del mismo programa
-  // que tras el shift caen en la misma fecha).
+  // Aplicar en orden descendente por `from`. Así, al mover una semana, su
+  // destino ya está libre porque la semana que estaba allí se movió antes.
+  // Esto evita violar @@unique([programId, weekStartDate]) durante el proceso.
+  const sortedPlan = [...plan].sort((a, b) => (a.from < b.from ? 1 : -1));
   let updated = 0;
-  for (const p of plan) {
+  for (const p of sortedPlan) {
     if (p.conflict) continue;
     await prisma.rollingWeek.update({
       where: { id: p.id },
