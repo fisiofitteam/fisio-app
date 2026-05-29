@@ -100,13 +100,35 @@ export function effectiveWeekIndex(startedAt: Date, totalPausedDays: number): nu
 }
 
 /**
- * Devuelve el lunes 00:00 de la semana que contiene `date`.
+ * Devuelve el lunes 00:00 UTC de la semana de Madrid que contiene `date`.
+ *
+ * IMPORTANTE: se calcula la semana en zona horaria de Madrid (Europe/Madrid)
+ * y se devuelve como UTC midnight de la fecha calendario de ese lunes.
+ * Antes esto se hacía con `setHours` / `getDay` que en Vercel (UTC) provocaba
+ * un desplazamiento de 7 días cuando el cliente enviaba el lunes en Madrid
+ * (p.ej. lunes 25-may 00:00 Madrid = 24-may 22:00 UTC → con setHours(0) caía
+ * en domingo 24-may UTC y el offset -6 lo dejaba en lunes 18-may).
+ *
+ * Resultado: lunes en formato `YYYY-MM-DDT00:00:00.000Z` correspondiente al
+ * lunes en Madrid de la semana que contiene `date`.
  */
 export function weekStartDate(date: Date): Date {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  const day = d.getDay(); // 0 = domingo, 1 = lunes, ...
-  const offset = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + offset);
-  return d;
+  // 1. Extraer la fecha calendario en Madrid de `date`.
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Madrid",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = fmt.formatToParts(date);
+  const y = Number(parts.find((p) => p.type === "year")!.value);
+  const m = Number(parts.find((p) => p.type === "month")!.value) - 1;
+  const d = Number(parts.find((p) => p.type === "day")!.value);
+  // 2. Construir un Date UTC midnight de esa fecha calendario.
+  const utc = new Date(Date.UTC(y, m, d));
+  // 3. Calcular el día de la semana en UTC y retroceder hasta el lunes.
+  const dow = utc.getUTCDay(); // 0 = domingo, 1 = lunes...
+  const offset = dow === 0 ? -6 : 1 - dow;
+  utc.setUTCDate(utc.getUTCDate() + offset);
+  return utc;
 }
