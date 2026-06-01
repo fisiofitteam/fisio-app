@@ -155,7 +155,6 @@ export default async function PatientExportPage({
           <>
             <Section title="Ficha clínica">
               <Grid>
-                <Field label="Deporte" value={patient.sport} />
                 <Field label="Diagnóstico" value={patient.diagnosis} />
                 <Field label="Zona corporal" value={patient.bodyZone} />
                 <Field label="Programa" value={patient.programType} />

@@ -10,6 +10,7 @@ export type AnamnesisFieldType =
   | "select"
   | "radio"
   | "scale" // 0-10
+  | "multiselect" // chips múltiples, valor = array de strings
   | "date";
 
 export type AnamnesisField = {
@@ -19,15 +20,32 @@ export type AnamnesisField = {
   required?: boolean;
   placeholder?: string;
   help?: string;
-  options?: string[]; // para select/radio
+  options?: string[]; // para select/radio/multiselect
 };
 
 export type AnamnesisStep = {
   id: string;
   title: string;
   description?: string;
+  /**
+   * Disposición de los campos del paso. "grid-2" los pinta en 2 columnas
+   * (útil para pares como zona corporal + lado). Default = stacked.
+   */
+  layout?: "stacked" | "grid-2";
   fields: AnamnesisField[];
 };
+
+// Opciones canónicas para la zona corporal afectada.
+export const BODY_ZONES = [
+  "Hombro",
+  "Cervical",
+  "Lumbar",
+  "Cadera",
+  "Rodilla",
+  "Codo",
+  "Muñeca",
+];
+export const BODY_SIDES = ["Derecha", "Izquierda", "Ambas"];
 
 // Cuestionario inicial. Pensado para fisio + deporte (CrossFit). Edítalo libremente.
 export const ANAMNESIS_STEPS: AnamnesisStep[] = [
@@ -76,11 +94,32 @@ export const ANAMNESIS_STEPS: AnamnesisStep[] = [
         type: "textarea",
         required: true,
       },
-      { key: "bodyZone", label: "Zona del cuerpo afectada", type: "text", required: true, placeholder: "Ej: Hombro derecho" },
       { key: "onsetWhen", label: "¿Desde cuándo?", type: "text", placeholder: "Ej: Hace 2 meses" },
       { key: "howHappened", label: "¿Cómo ocurrió?", type: "textarea", placeholder: "Gesto, accidente, progresivo..." },
       { key: "medicalDiagnosis", label: "¿Tienes diagnóstico médico?", type: "radio", options: ["Sí", "No"] },
       { key: "medicalDiagnosisDetail", label: "¿Cuál? (si aplica)", type: "text" },
+    ],
+  },
+  {
+    id: "bodyzone",
+    title: "Zona afectada",
+    description: "Selecciona la(s) zona(s) y el lado donde tienes la molestia.",
+    layout: "grid-2",
+    fields: [
+      {
+        key: "bodyZones",
+        label: "Zona corporal",
+        type: "multiselect",
+        required: true,
+        options: BODY_ZONES,
+      },
+      {
+        key: "bodySides",
+        label: "Lado",
+        type: "multiselect",
+        required: true,
+        options: BODY_SIDES,
+      },
     ],
   },
   {
@@ -133,10 +172,34 @@ export function missingRequiredAnamnesis(
     for (const f of step.fields) {
       if (!f.required) continue;
       const v = answers[f.key];
+      if (f.type === "multiselect") {
+        if (!Array.isArray(v) || v.length === 0) missing.push(f.key);
+        continue;
+      }
       if (v === undefined || v === null || String(v).trim() === "") missing.push(f.key);
     }
   }
   return missing;
+}
+
+/**
+ * Resumen legible de la zona corporal afectada a partir de las respuestas de
+ * anamnesis. Se usa como cache denormalizada en Patient.bodyZone, así la ficha
+ * clínica puede mostrarla sin tener que parsear el JSON cada vez.
+ *
+ * Devuelve "" si no hay datos suficientes. Mantiene compat con el campo legacy
+ * `bodyZone` (string) por si algún paciente antiguo todavía lo tiene.
+ */
+export function summarizeBodyZone(answers: Record<string, unknown>): string {
+  const zones = Array.isArray(answers.bodyZones) ? answers.bodyZones.map(String) : [];
+  const sides = Array.isArray(answers.bodySides) ? answers.bodySides.map(String) : [];
+  if (zones.length === 0) {
+    // Fallback al campo legacy si existe
+    return typeof answers.bodyZone === "string" ? answers.bodyZone : "";
+  }
+  const zonesStr = zones.join(", ");
+  const sidesStr = sides.length ? ` (${sides.join(", ")})` : "";
+  return zonesStr + sidesStr;
 }
 
 // ============================================================================

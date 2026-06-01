@@ -117,6 +117,10 @@ function AnamnesisWizard({
     for (const f of step.fields) {
       if (!f.required) continue;
       const v = answers[f.key];
+      if (f.type === "multiselect") {
+        if (!Array.isArray(v) || v.length === 0) return true;
+        continue;
+      }
       if (v === undefined || v === null || String(v).trim() === "") return true;
     }
     return false;
@@ -164,7 +168,7 @@ function AnamnesisWizard({
         <h2 className="text-lg font-semibold mb-1">{step.title}</h2>
         {step.description && <p className="text-sm text-neutral-500 mb-4">{step.description}</p>}
 
-        <div className="space-y-4">
+        <div className={step.layout === "grid-2" ? "grid grid-cols-1 sm:grid-cols-2 gap-4" : "space-y-4"}>
           {step.fields.map((f) => (
             <FieldInput key={f.key} field={f} value={answers[f.key]} onChange={(v) => setValue(f.key, v)} />
           ))}
@@ -296,6 +300,34 @@ function FieldInput({
               {n}
             </button>
           ))}
+        </div>
+      )}
+
+      {field.type === "multiselect" && (
+        <div className="flex flex-wrap gap-2">
+          {field.options?.map((o) => {
+            const selected = Array.isArray(value) && (value as unknown[]).includes(o);
+            return (
+              <button
+                key={o}
+                type="button"
+                onClick={() => {
+                  const current = Array.isArray(value) ? [...(value as string[])] : [];
+                  const idx = current.indexOf(o);
+                  if (idx >= 0) current.splice(idx, 1);
+                  else current.push(o);
+                  onChange(current);
+                }}
+                className={`text-sm px-3 py-1.5 rounded-lg border transition ${
+                  selected
+                    ? "bg-neutral-900 text-white border-neutral-900"
+                    : "bg-white border-neutral-300 text-neutral-700 hover:border-neutral-500"
+                }`}
+              >
+                {selected ? "✓ " : ""}{o}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

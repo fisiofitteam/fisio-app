@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActivePatient } from "@/lib/auth";
-import { missingRequiredAnamnesis, parseOnboardingTasks } from "@/lib/onboarding-content";
+import {
+  missingRequiredAnamnesis,
+  parseOnboardingTasks,
+  summarizeBodyZone,
+} from "@/lib/onboarding-content";
 import { getOnboardingConfig } from "@/lib/onboarding-config";
 
 // POST /api/patient/onboarding
@@ -40,11 +44,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Derivar resumen de zona corporal para la ficha clínica (cache denormalizada).
+    // Si el paciente no marcó nada en los multiselects, se mantiene el bodyZone
+    // previo (no lo borramos: respetamos lo que el fisio pudo haber anotado a mano).
+    const bodyZoneSummary = summarizeBodyZone(data as Record<string, unknown>);
+
     const updated = await prisma.patient.update({
       where: { id: patient.id },
       data: {
         anamnesisData: JSON.stringify(data),
         anamnesisCompletedAt: new Date(),
+        ...(bodyZoneSummary ? { bodyZone: bodyZoneSummary } : {}),
         onboardingTasks: { ...tasks, anamnesis: true },
       },
       select: { onboardingTasks: true },

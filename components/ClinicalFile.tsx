@@ -8,7 +8,6 @@ import { RollingAssignmentBlock } from "./RollingAssignmentBlock";
 type Patient = {
   id: string;
   fullName: string;
-  sport: string;
   diagnosis: string;
   bodyZone: string;
   appliedProfileName: string;
@@ -38,9 +37,11 @@ function daysUntilRenewal(start: string, months: number): number | null {
 export function ClinicalFile({ patient, isManager }: { patient: Patient; isManager: boolean }) {
   const router = useRouter();
   const [fullName, setFullName] = useState(patient.fullName);
-  const [sport, setSport] = useState(patient.sport);
   const [diagnosis, setDiagnosis] = useState(patient.diagnosis);
-  const [bodyZone, setBodyZone] = useState(patient.bodyZone ?? "");
+  // bodyZone es read-only en la ficha: la fuente de verdad es la anamnesis
+  // (paso "Zona afectada" del onboarding) y se sincroniza vía
+  // /api/patient/onboarding → summarizeBodyZone().
+  const bodyZone = patient.bodyZone ?? "";
   const [subscriptionStartDate, setSubscriptionStartDate] = useState(patient.subscriptionStartDate);
   const [subscriptionPeriodMonths, setSubscriptionPeriodMonths] = useState(patient.subscriptionPeriodMonths);
   const [whatsappGroupUrl, setWhatsappGroupUrl] = useState(patient.whatsappGroupUrl);
@@ -59,9 +60,7 @@ export function ClinicalFile({ patient, isManager }: { patient: Patient; isManag
       body: JSON.stringify({
         id: patient.id,
         fullName,
-        sport,
         diagnosis,
-        bodyZone: bodyZone || null,
         subscriptionStartDate: subscriptionStartDate || null,
         subscriptionPeriodMonths: Number(subscriptionPeriodMonths) || 4,
         whatsappGroupUrl: whatsappGroupUrl || null,
@@ -91,16 +90,24 @@ export function ClinicalFile({ patient, isManager }: { patient: Patient; isManag
           <input className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} />
         </div>
         <div>
-          <label className="text-xs text-neutral-500 block mb-1">Deporte</label>
-          <input className="input" value={sport} onChange={(e) => setSport(e.target.value)} placeholder="CrossFit, Hyrox..." />
-        </div>
-        <div>
           <label className="text-xs text-neutral-500 block mb-1">Diagnóstico / motivo</label>
           <textarea className="input" rows={3} value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} />
         </div>
         <div>
-          <label className="text-xs text-neutral-500 block mb-1">Zona corporal</label>
-          <input className="input" value={bodyZone} onChange={(e) => setBodyZone(e.target.value)} placeholder="Ej: hombro, lumbar, rodilla..." />
+          <label className="text-xs text-neutral-500 block mb-1">Zona corporal afectada</label>
+          <div
+            className="text-sm px-3 py-2 rounded-lg"
+            style={{ background: "#FAFAFA", border: "1px solid #E5E5E5", minHeight: 38 }}
+          >
+            {bodyZone ? (
+              <span>{bodyZone}</span>
+            ) : (
+              <span className="text-neutral-400 italic">El paciente aún no la ha rellenado en la anamnesis.</span>
+            )}
+          </div>
+          <p className="text-[11px] text-neutral-400 mt-1">
+            Lo rellena el paciente en el cuestionario inicial (paso "Zona afectada").
+          </p>
         </div>
         <div>
           <label className="text-xs text-neutral-500 block mb-1">
