@@ -73,6 +73,10 @@ model Patient {
   assignedProfessionalId String?
   assignedProfessional   Professional? @relation("PatientAssignedTo", fields: [assignedProfessionalId], references: [id])
 
+  // Revisión de cargas (cada X semanas).
+  loadReviewIntervalWeeks Int      @default(4)
+  loadReviewLastAt        DateTime?
+
   // ─── ONBOARDING v57 ─────────────────────────────────────────────────────
   // Estado del flujo de onboarding tras pagar:
   //   "pending_assignment" → ha pagado, Miguel aún no le ha asignado fisio

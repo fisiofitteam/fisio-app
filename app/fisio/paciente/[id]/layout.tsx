@@ -6,6 +6,7 @@ import { ProgressRing } from "@/components/ProgressRing";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { PatientPill } from "@/components/PatientPills";
 import { GoToPatient } from "@/components/GoToPatient";
+import { LoadReviewIntervalSelector } from "@/components/LoadReviewIntervalSelector";
 import { calculateAdherence } from "@/lib/adherence";
 import { getActiveProfessional } from "@/lib/session";
 
@@ -75,7 +76,11 @@ export default async function PatientLayout({
               </p>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <LoadReviewIntervalSelector
+              patientId={patient.id}
+              initialWeeks={patient.loadReviewIntervalWeeks ?? 4}
+            />
             <Link href={`/fisio/paciente/${patient.id}/exportar`} className="btn btn-ghost text-xs" title="Exportar toda la información del paciente en PDF">
               🖨️ Exportar PDF
             </Link>

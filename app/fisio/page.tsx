@@ -6,10 +6,12 @@ import { getActiveProfessional } from "@/lib/session";
 import { calculateAdherence } from "@/lib/adherence";
 import { getPeriodRange, calculateFinanceSummary, type Period } from "@/lib/finance";
 import { getProgramEndingsForProfessional } from "@/lib/program-endings";
+import { getLoadReviewsForProfessional } from "@/lib/load-reviews";
 import { TeamMetricsBlock } from "@/components/TeamMetricsBlock";
 import { CEOPanelTabs } from "@/components/CEOPanelTabs";
 import { FisioPanelTabs } from "@/components/FisioPanelTabs";
 import { ProgramEndingsBox } from "@/components/ProgramEndingsBox";
+import { LoadReviewsBox } from "@/components/LoadReviewsBox";
 
 const TYPE_LABELS: Record<string, string> = {
   optimizacion: "Optimización",
@@ -133,6 +135,12 @@ export default async function FisioPanelPage({
 
   // Programas asignados a punto de terminar (≤7 días) → recuadro + campanita
   const programEndings = await getProgramEndingsForProfessional(user.id);
+
+  // Controles de cargas pendientes de revisar (cada loadReviewIntervalWeeks).
+  // El head_success ve los de todos los fisios; un fisio normal ve solo los suyos.
+  const loadReviews = await getLoadReviewsForProfessional(user.id, {
+    all: user.role === "head_success" || user.role === "ceo",
+  });
 
   // Métricas para managers en el período seleccionado
   let teamRenewals = { renewed: 0, lost: 0, total: 0, rate: null as number | null };
@@ -282,7 +290,10 @@ export default async function FisioPanelPage({
     <>
       {isManager && teamBlock}
 
-      <ProgramEndingsBox initialItems={programEndings} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-5">
+        <ProgramEndingsBox initialItems={programEndings} />
+        <LoadReviewsBox initialItems={loadReviews} />
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <section className="card">

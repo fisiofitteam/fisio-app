@@ -152,6 +152,8 @@ export async function PATCH(req: NextRequest) {
     shippingPhone,
     shirtSize,
     country,
+    loadReviewIntervalWeeks,
+    loadReviewLastAt,
     programMode,
     rollingProgramId,
     rollingAccessoriesId,
@@ -251,6 +253,12 @@ export async function PATCH(req: NextRequest) {
       ...(shippingPhone !== undefined && { shippingPhone: shippingPhone || null }),
       ...(shirtSize !== undefined && { shirtSize: shirtSize || null }),
       ...(country !== undefined && { country: country || null }),
+      ...(loadReviewIntervalWeeks !== undefined && {
+        loadReviewIntervalWeeks: Math.max(2, Math.min(5, Number(loadReviewIntervalWeeks) || 4)),
+      }),
+      ...(loadReviewLastAt !== undefined && {
+        loadReviewLastAt: loadReviewLastAt ? new Date(loadReviewLastAt) : null,
+      }),
       ...(programMode !== undefined && { programMode: programMode === "rolling" ? "rolling" : "fixed" }),
       ...(rollingProgramId !== undefined && { rollingProgramId: rollingProgramId || null }),
       ...(rollingAccessoriesId !== undefined && { rollingAccessoriesId: rollingAccessoriesId || null }),
