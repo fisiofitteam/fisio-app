@@ -49,6 +49,7 @@ export function PatientsList({
   counts,
   professionals,
   rollingPrograms,
+  advanceDashboard,
 }: {
   patients: Patient[];
   currentUser: CurrentUser;
@@ -56,6 +57,8 @@ export function PatientsList({
   counts: { all: number; unassigned: number; mine: number; byPro: Record<string, number> };
   professionals: ProInfo[];
   rollingPrograms: { id: string; name: string }[];
+  /** Dashboard agregado ADVANCE (server). Solo se muestra cuando tab === "advance". */
+  advanceDashboard?: React.ReactNode;
 }) {
   const router = useRouter();
   const [reassigning, setReassigning] = useState<Patient | null>(null);
@@ -112,44 +115,54 @@ export function PatientsList({
                 />
               );
             })}
+          <TabButton active={tab === "advance"} label="⚡ Advance" onClick={() => switchTab("advance")} />
         </div>
       )}
 
-      {/* Cuadro resumen: cuando estás en pestaña de un fisio concreto (mine o pro:) */}
-      {patients.length > 0 && (tab === "mine" || tab.startsWith("pro:")) && (
-        <FisioSummary patients={patients} isManager={currentUser.isManager} />
-      )}
-
-      {patients.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-sm text-neutral-500 italic mb-4">
-            {tab === "unassigned"
-              ? "No hay pacientes por asignar. ¡Bien!"
-              : tab === "mine"
-              ? "No tienes pacientes asignados todavía."
-              : "Sin pacientes en esta vista."}
-          </p>
-          {currentUser.isManager && tab !== "unassigned" && (
-            <button
-              onClick={() => setCreating(true)}
-              className="text-sm font-medium px-4 py-2 rounded-lg"
-              style={{ background: "#0A0A0A", color: "#FAFAFA" }}
-            >
-              + Crear primer paciente
-            </button>
-          )}
-        </div>
+      {/* Si la pestaña activa es "advance", renderizamos el dashboard agregado en
+          lugar de la lista de pacientes. El header (h1 + botón nuevo paciente) y
+          el TabBar siguen visibles. */}
+      {tab === "advance" && currentUser.isManager ? (
+        <>{advanceDashboard}</>
       ) : (
-        <div className="space-y-3">
-          {patients.map((p) => (
-            <PatientRow
-              key={p.id}
-              patient={p}
-              isManager={currentUser.isManager}
-              onReassign={() => setReassigning(p)}
-            />
-          ))}
-        </div>
+        <>
+          {/* Cuadro resumen: cuando estás en pestaña de un fisio concreto (mine o pro:) */}
+          {patients.length > 0 && (tab === "mine" || tab.startsWith("pro:")) && (
+            <FisioSummary patients={patients} isManager={currentUser.isManager} />
+          )}
+
+          {patients.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-sm text-neutral-500 italic mb-4">
+                {tab === "unassigned"
+                  ? "No hay pacientes por asignar. ¡Bien!"
+                  : tab === "mine"
+                  ? "No tienes pacientes asignados todavía."
+                  : "Sin pacientes en esta vista."}
+              </p>
+              {currentUser.isManager && tab !== "unassigned" && (
+                <button
+                  onClick={() => setCreating(true)}
+                  className="text-sm font-medium px-4 py-2 rounded-lg"
+                  style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+                >
+                  + Crear primer paciente
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {patients.map((p) => (
+                <PatientRow
+                  key={p.id}
+                  patient={p}
+                  isManager={currentUser.isManager}
+                  onReassign={() => setReassigning(p)}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {reassigning && currentUser.isManager && (

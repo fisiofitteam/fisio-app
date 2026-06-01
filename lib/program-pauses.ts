@@ -34,6 +34,26 @@ function todayMidnight(): Date {
   return d;
 }
 
+/**
+ * Devuelve la fecha de HOY en Madrid como UTC midnight estable.
+ * Útil para columnas tipo "recordedDate" con `@@unique([patientId, recordedDate])`
+ * donde queremos 1 fila por paciente/día calendario Madrid sin sufrir el bug
+ * de TZ que afectaba a `weekStartDate` (ver doc en esa función).
+ */
+export function todayMadridUtc(): Date {
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Madrid",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = fmt.formatToParts(new Date());
+  const y = Number(parts.find((p) => p.type === "year")!.value);
+  const m = Number(parts.find((p) => p.type === "month")!.value) - 1;
+  const d = Number(parts.find((p) => p.type === "day")!.value);
+  return new Date(Date.UTC(y, m, d));
+}
+
 function daysBetween(a: Date, b: Date): number {
   const ms = b.getTime() - a.getTime();
   return Math.round(ms / (1000 * 60 * 60 * 24));

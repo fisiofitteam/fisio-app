@@ -1,0 +1,254 @@
+// ============================================================================
+// SCHEMA RELEVANTE — Sistema Agenda → Leads → Llamadas
+// ============================================================================
+// Extracto del schema de FisioFit con SOLO los modelos involucrados en el flujo
+// de la landing pública /agenda, la gestión de leads (setter/closer) y la
+// agenda de llamadas (calendario del equipo).
+//
+// Para portar a otro vertical (p.ej. NUTRICIÓN) basta con renombrar:
+//   - CrossFit → CrossFit / fitness  (queda solo en copy, no en schema)
+//   - motivo / tratamientosPrevios / impactoCrossfit → renombrar/reaprovechar
+//   - "fisio" → "nutricionista" (role en Professional)
+//
+// Datasource original: Postgres en Neon. En dev se usa SQLite para velocidad
+// (ver schema.dev.prisma vs schema.production.prisma del proyecto original).
+// ============================================================================
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ─── Professional: el equipo ────────────────────────────────────────────────
+// El rol "setter" abre los leads que llegan, "closer" hace la videoconsulta,
+// "ceo" / "head_success" tienen acceso completo (managers).
+model Professional {
+  id        String   @id @default(cuid())
+  fullName  String
+  email     String?  @unique
+  role      String                                     // "ceo" | "head_success" | "fisio" | "setter" | "closer"
+  createdAt DateTime @default(now())
+
+  passwordHash         String?
+  passwordResetToken   String?  @unique
+  passwordResetExpires DateTime?
+  passwordSetAt        DateTime?
+  lastLoginAt          DateTime?
+  active               Boolean  @default(true)
+
+  photoUrl       String?
+  workSchedule   String?
+
+  notificationPrefs Json?                              // preferencias por tipo
+
+  leadsAsSetter     Lead[]       @relation("LeadsAsSetter")
+  leadsAsCloser     Lead[]       @relation("LeadsAsCloser")
+  closingShifts     ClosingShift[]       @relation("ClosingShifts")
+  defaultShifts     DefaultClosingShift[]
+}
+
+// ─── Lead: el corazón del sistema comercial ─────────────────────────────────
+// Un Lead nace cuando alguien reserva en /agenda (source="landing") o cuando
+// un setter lo crea manualmente. Recorre status scheduled→won/lost/no_show
+// y opcionalmente inFollowUp para 4 fechas predefinidas de follow-up.
+model Lead {
+  id              String    @id @default(cuid())
+  fullName        String
+  contactType     String                                     // "phone" | "instagram" | "email"
+  contactValue    String                                     // ej. "+34 600 123 456" o "@usuario"
+  aiSummary       String?                                    // resumen breve de la IA o de la setter
+  callScheduledAt DateTime                                   // fecha/hora de la llamada
+
+  // status: "scheduled" | "won" | "lost" | "cancelled" | "no_show"
+  status          String    @default("scheduled")
+  inFollowUp      Boolean   @default(false)
+  followUpNote    String?
+  followUpDate    DateTime?
+
+  // ─── Follow-up automático: 4 fechas + checkbox por cada una ───
+  followUpStartedAt DateTime?
+  followUp24hDate    DateTime?
+  followUp24hDone    Boolean @default(false)
+  followUp48hDate    DateTime?
+  followUp48hDone    Boolean @default(false)
+  followUp30dDate    DateTime?
+  followUp30dDone    Boolean @default(false)
+  followUp90dDate    DateTime?
+  followUp90dDone    Boolean @default(false)
+
+  setterId        String?
+  setter          Professional? @relation("LeadsAsSetter", fields: [setterId], references: [id], onDelete: SetNull)
+
+  closerId        String?
+  closer          Professional? @relation("LeadsAsCloser", fields: [closerId], references: [id], onDelete: SetNull)
+
+  // Si se gana → se convierte en Patient (no incluido aquí; se cubre en otro export)
+  convertedPatientId String?
+  // convertedPatient   Patient? @relation(fields: [convertedPatientId], references: [id], onDelete: SetNull)
+
+  lostReason      String?                                    // "precio" | "no_encaja" | "ghosting" | "otro"
+
+  // ─── Campos rellenados por landing pública ───
+  email           String?
+  phone           String?
+  instagram       String?
+  aiScheduled     Boolean   @default(false)
+  country         String?
+  motivo          String?                                    // "¿Qué te trae aquí?"
+  tratamientosPrevios String?                                // qué ha probado antes
+  impactoCrossfit String?                                    // cómo afecta a su día a día (RENOMBRAR EN NUTRICIÓN)
+  meetingUrl      String?                                    // URL de Google Meet
+  googleEventId   String?                                    // id del evento en Calendar
+  source          String?                                    // "landing" | "manual" | "ads_meta" | ...
+  bookedAt        DateTime?
+
+  // ─── Etapas del flujo comercial ───
+  setterNotifiedAt    DateTime?                              // setter avisó al closer
+  closerContactedAt   DateTime?                              // closer envió caso de éxito
+  reminderSentAt      DateTime?                              // closer mandó recordatorio del día anterior
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  decidedAt       DateTime?
+
+  @@index([status])
+  @@index([callScheduledAt])
+  @@index([closerId])
+  @@index([inFollowUp])
+}
+
+// ─── Plantilla por defecto del calendario de llamadas ───────────────────────
+// Aplicada a todas las semanas a menos que la semana tenga WeekOverride.
+// L 18-20 = Alba, M 9-13 = Carla, etc. La landing /agenda usa esto como fuente
+// de verdad para los slots.
+model DefaultClosingShift {
+  id                  String   @id @default(cuid())
+  dayOfWeek           Int                                          // 1=L, 2=M, ..., 7=D
+  startTime           String                                       // "HH:MM"
+  endTime             String                                       // "HH:MM"
+  closerId            String
+  closer              Professional @relation(fields: [closerId], references: [id])
+  slotDurationMinutes Int      @default(60)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([dayOfWeek])
+  @@index([closerId])
+}
+
+// ─── Override de semana concreta ──────────────────────────────────────────
+// Si una semana se edita, se crea un WeekOverride con useDefault=false y se
+// copian las franjas actuales en ClosingShift. Si useDefault=true (o no
+// existe el override), se usa la plantilla.
+model WeekOverride {
+  id              String   @id @default(cuid())
+  weekStartDate   DateTime @unique                         // lunes 00:00 UTC
+  useDefault      Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([weekStartDate])
+}
+
+// ─── Franja específica de una semana (cuando hay override) ─────────────────
+model ClosingShift {
+  id              String   @id @default(cuid())
+  weekStartDate   DateTime
+  dayOfWeek       Int
+  startTime       String
+  endTime         String
+  closerId        String
+  closer          Professional @relation("ClosingShifts", fields: [closerId], references: [id], onDelete: Cascade)
+  notes           String?
+  slotDurationMinutes Int     @default(60)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([weekStartDate, dayOfWeek])
+  @@index([closerId])
+}
+
+// ─── Bloqueos puntuales (vacaciones, festivos, etc.) ───────────────────────
+// La landing los detecta y los descarta de los slots disponibles.
+model AgendaBlock {
+  id                String    @id @default(cuid())
+  blockedDate       DateTime                                  // YYYY-MM-DD a las 00:00 Madrid
+  blockedStartTime  String?                                   // "HH:MM" o null (= todo el día)
+  blockedEndTime    String?
+  reason            String?
+  createdBy         String?
+  createdAt         DateTime  @default(now())
+
+  @@index([blockedDate])
+}
+
+// ─── Notificaciones in-app del equipo ──────────────────────────────────────
+// Flujo de etapas:
+//  1. Lead agenda → notificación "lead_new" para todos los SETTERS
+//  2. Setter marca "avisado" → notificación "lead_assigned" para el CLOSER asignado
+//  3. Cron 09:00 día anterior → notificación "call_reminder" para el CLOSER
+model TeamNotification {
+  id              String   @id @default(cuid())
+  targetRole          String?    // "setter" | "closer" | "ceo" | etc.
+  targetProfessionalId String?
+  type            String                                      // "lead_new" | "lead_assigned" | "call_reminder"
+  leadId          String?
+  title           String
+  body            String
+  actionUrl       String?
+  refKey          String?                                     // clave estable para deduplicación
+  readAt          DateTime?
+  createdAt       DateTime @default(now())
+
+  @@index([targetRole, readAt])
+  @@index([targetProfessionalId, readAt])
+  @@index([leadId])
+  @@index([refKey])
+}
+
+// ─── Llamadas post-conversión (atención al paciente) ───────────────────────
+// Independiente del flujo de venta. Son llamadas programadas a pacientes ya
+// activos (optimización del programa, renovación, etc).
+// PORTAR A NUTRICIÓN: requiere modelo Patient (no incluido en este export).
+model ScheduledCall {
+  id          String   @id @default(cuid())
+  patientId   String
+  // patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  scheduledAt DateTime
+  type        String   @default("optimizacion")     // "optimizacion" | "renovacion"
+  notes       String?
+  completedAt DateTime?
+  outcome     String?
+  createdAt   DateTime @default(now())
+
+  @@index([scheduledAt])
+  @@index([patientId])
+}
+
+// ─── Config CMS de landings (copy editable por CEO) ────────────────────────
+// El CEO edita en /fisio/biblioteca → Landings; aquí guarda el JSON con todo
+// el copy. Los componentes de la landing leen via lib/landing-config.ts.
+model LandingConfig {
+  id        String   @id                              // "agenda" | "agenda_gracias" | "renewal" | "contract"
+  content   String                                    // JSON serializado
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
+
+// ─── Conexión OAuth a Google Calendar (singleton) ──────────────────────────
+// El CEO conecta una cuenta (videoconsultas@) en Ajustes → Integraciones.
+// La landing usa este token para listar slots ocupados y crear eventos con Meet.
+model GoogleCalendarConnection {
+  id                String   @id @default(cuid())
+  googleEmail       String                                 // calendar primary
+  accessTokenEnc    String                                 // encrypted (lib/encryption)
+  refreshTokenEnc   String?
+  tokenExpiresAt    DateTime
+  lastUsedAt        DateTime?
+  createdAt         DateTime @default(now())
+}

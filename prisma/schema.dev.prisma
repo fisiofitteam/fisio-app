@@ -121,6 +121,7 @@ model Patient {
   transactions    Transaction[]
   prs             PatientPR[]
   challengeResults MonthlyChallengeResult[]
+  dailyLogs       PatientDailyLog[]
   leadsConverted  Lead[]
   sessions        Session[]
   programPauses   ProgramPause[]
@@ -1792,6 +1793,24 @@ model PatientPR {
   createdAt   DateTime @default(now())
 
   @@index([patientId, recordedAt])
+}
+
+// Log diario del paciente — los ADVANCE rolling registran tras entrenar.
+// 3 valores 0-10: fatiga, rpe, sleep. Una entrada por paciente/día (upsert
+// por recordedDate = UTC midnight del día Madrid).
+model PatientDailyLog {
+  id           String   @id @default(cuid())
+  patientId    String
+  patient      Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  recordedDate DateTime
+  fatigue      Int
+  rpe          Int
+  sleep        Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([patientId, recordedDate])
+  @@index([patientId, recordedDate])
 }
 
 // Reto mensual — un reto global por mes con leaderboard.

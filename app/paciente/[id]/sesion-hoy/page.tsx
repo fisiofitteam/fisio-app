@@ -2,7 +2,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
-import { weekStartDate } from "@/lib/program-pauses";
+import { weekStartDate, todayMadridUtc } from "@/lib/program-pauses";
+import { PatientDailyLogForm } from "@/components/PatientDailyLogForm";
 
 const DAY_NAMES = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
@@ -90,6 +91,12 @@ export default async function SesionHoyPage({ params }: { params: { id: string }
   const trnTasks = resolve(trnTasksRaw);
   const hasAny = accTasks.length > 0 || trnTasks.length > 0;
 
+  // Log diario de hoy (para precargar el formulario si ya registró)
+  const todayUtc = todayMadridUtc();
+  const todayLog = await prisma.patientDailyLog.findUnique({
+    where: { patientId_recordedDate: { patientId: patient.id, recordedDate: todayUtc } },
+  }).catch(() => null);
+
   return (
     <main className="min-h-screen" style={{ color: "var(--p-text)" }}>
       <div className="relative max-w-md mx-auto px-5 py-7 pb-16">
@@ -116,6 +123,22 @@ export default async function SesionHoyPage({ params }: { params: { id: string }
 
         {trnTasks.length > 0 && (
           <SectionBlock label="Entrenamiento" color="#F59E0B" tasks={trnTasks} />
+        )}
+
+        {hasAny && (
+          <section className="mt-6">
+            <div className="text-[10px] font-bold tracking-wider uppercase mb-2" style={{ color: "var(--p-text-faint)" }}>
+              ✍️ ¿Cómo te ha ido?
+            </div>
+            <PatientDailyLogForm
+              initial={todayLog ? { fatigue: todayLog.fatigue, rpe: todayLog.rpe, sleep: todayLog.sleep } : null}
+            />
+            <div className="text-center mt-3">
+              <Link href={`/paciente/${patient.id}/metricas`} className="text-xs underline" style={{ color: "var(--p-text-faint)" }}>
+                Ver histórico de métricas →
+              </Link>
+            </div>
+          </section>
         )}
 
         {!hasAny && (
