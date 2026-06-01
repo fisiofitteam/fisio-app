@@ -217,6 +217,7 @@ export default async function PatientHome({ params }: { params: { id: string } }
         title={headerTitle}
         days={flatDays}
         daysToExpire={daysToExpire}
+        needsShirtSize={patient.programType === "ADVANCE" && !patient.shirtSize}
       />
     );
   }

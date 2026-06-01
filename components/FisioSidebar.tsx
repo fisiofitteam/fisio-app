@@ -41,7 +41,7 @@ const PACIENTES: Item = { id: "pacientes", label: "Pacientes", Icon: Users, href
 const LEADS: Item = { id: "leads", label: "Leads", Icon: Target, href: "/fisio/leads", match: (p) => p.startsWith("/fisio/leads") };
 const LLAMADAS_VENTA: Item = { id: "llamadas-venta", label: "Llamadas", Icon: PhoneCall, href: "/fisio/llamadas-venta", match: (p) => p.startsWith("/fisio/llamadas-venta") };
 const FOLLOWUP: Item = { id: "followup", label: "Follow-up", Icon: Repeat, href: "/fisio/followup", match: (p) => p.startsWith("/fisio/followup") };
-const PARCHES: Item = { id: "parches", label: "Parches", Icon: Gift, href: "/fisio/parches", match: (p) => p.startsWith("/fisio/parches") };
+const REGALOS: Item = { id: "regalos", label: "Regalos", Icon: Gift, href: "/fisio/regalos", match: (p) => p.startsWith("/fisio/regalos") || p.startsWith("/fisio/parches") };
 const CONTENIDO: Item = { id: "contenido", label: "Contenido", Icon: Sparkles, href: "/fisio/contenido/calendario", match: (p) => p.startsWith("/fisio/contenido") };
 const BIBLIOTECA: Item = { id: "biblioteca", label: "Biblioteca", Icon: BookOpen, href: "/fisio/biblioteca", match: (p) => p.startsWith("/fisio/biblioteca") };
 const REUNIONES: Item = { id: "reuniones", label: "Reuniones", Icon: Stethoscope, href: "/fisio/reuniones", match: (p) => p.startsWith("/fisio/reuniones") };
@@ -63,7 +63,7 @@ function itemsForRole(role: string): Item[] {
     return [PANEL, PACIENTES, ADVANCE, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, AJUSTES];
   }
   if (role === "setter") {
-    return [LEADS, LLAMADAS_VENTA, PARCHES, TAREAS, CONTENIDO, COMUNIDAD, REUNIONES, CALENDARIO, EQUIPO, AJUSTES];
+    return [LEADS, LLAMADAS_VENTA, REGALOS, TAREAS, CONTENIDO, COMUNIDAD, REUNIONES, CALENDARIO, EQUIPO, AJUSTES];
   }
   if (role === "closer") {
     return [PANEL, LLAMADAS_VENTA, FOLLOWUP, TAREAS, COMUNIDAD, REUNIONES, CALENDARIO, EQUIPO, AJUSTES];

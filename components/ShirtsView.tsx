@@ -6,10 +6,11 @@ import { useRouter } from "next/navigation";
 type Patient = {
   id: string;
   fullName: string;
-  startedAt: string;
   programType: string | null;
-  patchSent: boolean;
-  patchSentAt: string | null;
+  programStartedAt: string | null;
+  shirtSize: string | null;
+  shirtSent: boolean;
+  shirtSentAt: string | null;
   shippingAddress: string | null;
   shippingStreet: string | null;
   shippingNumber: string | null;
@@ -22,8 +23,8 @@ type Patient = {
   shippingPhone: string | null;
 };
 
-// Construye la primera línea de la dirección a partir de los campos estructurados;
-// si solo existe el campo legacy de texto libre, lo devuelve tal cual.
+const SIZES = ["XS", "S", "M", "L", "XL", "XXL"];
+
 function buildAddressLine1(p: Patient): string {
   if (p.shippingStreet) {
     const parts = [p.shippingStreet];
@@ -42,15 +43,22 @@ function buildAddressLine2(p: Patient): string {
   if (p.shippingProvince) line += ` (${p.shippingProvince})`;
   return line;
 }
+function hasShipping(p: Patient): boolean {
+  const structured = !!(p.shippingStreet && p.shippingNumber && p.shippingCity && p.shippingPostalCode);
+  if (structured) return true;
+  return !!(p.shippingAddress && p.shippingCity && p.shippingPostalCode);
+}
 
-export function PatchesView({
+export function ShirtsView({
   view,
   patients,
   counts,
+  isManager,
 }: {
   view: "pending" | "sent";
   patients: Patient[];
   counts: { pending: number; sent: number };
+  isManager: boolean;
 }) {
   const router = useRouter();
   const [loadingId, setLoadingId] = useState<string | null>(null);
@@ -66,25 +74,13 @@ export function PatchesView({
 
   async function toggleSent(patientId: string, sent: boolean) {
     setLoadingId(patientId);
-    await fetch("/api/patients/patch", {
+    await fetch("/api/patients/shirt", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ patientId, sent }),
     });
     router.refresh();
     setLoadingId(null);
-  }
-
-  function daysSince(iso: string): number {
-    return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
-  }
-
-  function hasShipping(p: Patient): boolean {
-    // Estructurada (preferida): calle + número + ciudad + CP
-    const structured = !!(p.shippingStreet && p.shippingNumber && p.shippingCity && p.shippingPostalCode);
-    if (structured) return true;
-    // Legacy: texto libre + ciudad + CP
-    return !!(p.shippingAddress && p.shippingCity && p.shippingPostalCode);
   }
 
   return (
@@ -96,7 +92,7 @@ export function PatchesView({
             view === "pending" ? "bg-neutral-900 text-white" : "bg-white border border-neutral-200"
           }`}
         >
-          📦 Pendientes de enviar
+          📦 Pendientes
           <span className={`text-[10px] px-1.5 rounded-full ${view === "pending" ? "bg-white/20" : "bg-neutral-100"}`}>
             {counts.pending}
           </span>
@@ -107,7 +103,7 @@ export function PatchesView({
             view === "sent" ? "bg-neutral-900 text-white" : "bg-white border border-neutral-200"
           }`}
         >
-          ✓ Enviados
+          ✓ Enviadas
           <span className={`text-[10px] px-1.5 rounded-full ${view === "sent" ? "bg-white/20" : "bg-neutral-100"}`}>
             {counts.sent}
           </span>
@@ -117,7 +113,9 @@ export function PatchesView({
       <section className="card">
         {patients.length === 0 ? (
           <p className="text-sm text-neutral-400 text-center py-12 italic">
-            {view === "pending" ? "No hay parches pendientes. ¡Todo enviado!" : "Aún no se ha enviado ningún parche."}
+            {view === "pending"
+              ? "No hay camisetas pendientes de enviar."
+              : "Aún no se ha enviado ninguna camiseta."}
           </p>
         ) : (
           <div className="divide-y divide-neutral-100">
@@ -126,24 +124,25 @@ export function PatchesView({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
                     <span className="font-medium">{p.fullName}</span>
-                    {p.programType && (
-                      <span className="text-[10px] uppercase bg-neutral-100 text-neutral-700 border border-neutral-300 px-2 py-0.5 rounded-full font-medium">
-                        {p.programType}
+                    <span className="text-[10px] uppercase bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full font-semibold">
+                      ADVANCE
+                    </span>
+                    {p.shirtSize ? (
+                      <span className="text-[11px] font-bold text-neutral-900 bg-neutral-100 border border-neutral-300 px-2 py-0.5 rounded">
+                        Talla {p.shirtSize}
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-amber-700 italic">
+                        · sin talla aún
                       </span>
                     )}
-                    {view === "pending" && (
-                      <span className="text-[11px] text-amber-700">
-                        · alta hace {daysSince(p.startedAt)} {daysSince(p.startedAt) === 1 ? "día" : "días"}
-                      </span>
-                    )}
-                    {view === "sent" && p.patchSentAt && (
+                    {view === "sent" && p.shirtSentAt && (
                       <span className="text-[11px] text-emerald-700">
-                        · enviado {new Date(p.patchSentAt).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
+                        · enviada {new Date(p.shirtSentAt).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
                       </span>
                     )}
                   </div>
 
-                  {/* Datos de envío */}
                   {hasShipping(p) ? (
                     <div className="text-xs text-neutral-600 leading-relaxed mt-1.5 bg-neutral-50 rounded px-2 py-1.5">
                       <div>📍 {buildAddressLine1(p)}</div>
@@ -160,7 +159,7 @@ export function PatchesView({
                     onClick={() => setEditing(p)}
                     className="text-[11px] text-blue-600 hover:underline mt-1.5"
                   >
-                    {hasShipping(p) ? "Editar dirección" : "+ Añadir dirección"}
+                    Editar talla y dirección
                   </button>
                 </div>
 
@@ -168,11 +167,17 @@ export function PatchesView({
                   {view === "pending" ? (
                     <button
                       onClick={() => toggleSent(p.id, true)}
-                      disabled={loadingId === p.id || !hasShipping(p)}
+                      disabled={loadingId === p.id || !hasShipping(p) || !p.shirtSize}
                       className="btn btn-accent text-xs whitespace-nowrap disabled:opacity-50"
-                      title={!hasShipping(p) ? "Añade dirección antes de marcar como enviado" : ""}
+                      title={
+                        !p.shirtSize
+                          ? "Falta talla"
+                          : !hasShipping(p)
+                          ? "Falta dirección"
+                          : ""
+                      }
                     >
-                      {loadingId === p.id ? "..." : "✓ Marcar enviado"}
+                      {loadingId === p.id ? "..." : "✓ Marcar enviada"}
                     </button>
                   ) : (
                     <button
@@ -191,7 +196,7 @@ export function PatchesView({
       </section>
 
       {editing && (
-        <ShippingModal
+        <ShirtModal
           patient={editing}
           onClose={() => setEditing(null)}
           onSaved={() => {
@@ -204,7 +209,7 @@ export function PatchesView({
   );
 }
 
-function ShippingModal({
+function ShirtModal({
   patient,
   onClose,
   onSaved,
@@ -213,6 +218,7 @@ function ShippingModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const [size, setSize] = useState(patient.shirtSize ?? "");
   const [v, setV] = useState({
     shippingStreet: patient.shippingStreet ?? "",
     shippingNumber: patient.shippingNumber ?? "",
@@ -237,6 +243,7 @@ function ShippingModal({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         id: patient.id,
+        shirtSize: size || null,
         ...Object.fromEntries(Object.entries(v).map(([k, val]) => [k, val.trim() || null])),
       }),
     });
@@ -247,58 +254,81 @@ function ShippingModal({
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl max-w-md w-full p-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-4">
-          <h3 className="font-medium">Datos de envío · {patient.fullName}</h3>
+          <h3 className="font-medium">👕 Camiseta · {patient.fullName}</h3>
           <button onClick={onClose} className="text-neutral-400 text-xl">✕</button>
         </div>
 
         <div className="space-y-3">
-          <div className="grid grid-cols-3 gap-2">
-            <div className="col-span-2">
-              <label className="text-xs text-neutral-500 block mb-1">Calle</label>
-              <input className="input text-sm" value={v.shippingStreet} onChange={(e) => field("shippingStreet", e.target.value)} placeholder="Calle Mayor" autoFocus />
-            </div>
-            <div>
-              <label className="text-xs text-neutral-500 block mb-1">Número</label>
-              <input className="input text-sm" value={v.shippingNumber} onChange={(e) => field("shippingNumber", e.target.value)} placeholder="23" />
-            </div>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <label className="text-xs text-neutral-500 block mb-1">Piso</label>
-              <input className="input text-sm" value={v.shippingFloor} onChange={(e) => field("shippingFloor", e.target.value)} placeholder="3º" />
-            </div>
-            <div>
-              <label className="text-xs text-neutral-500 block mb-1">Escalera / Patio</label>
-              <input className="input text-sm" value={v.shippingStaircase} onChange={(e) => field("shippingStaircase", e.target.value)} placeholder="B" />
-            </div>
-            <div>
-              <label className="text-xs text-neutral-500 block mb-1">Puerta</label>
-              <input className="input text-sm" value={v.shippingDoor} onChange={(e) => field("shippingDoor", e.target.value)} placeholder="A" />
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1.5">Talla</label>
+            <div className="flex gap-1.5 flex-wrap">
+              {SIZES.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setSize(size === s ? "" : s)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border ${
+                    size === s
+                      ? "bg-neutral-900 text-white border-neutral-900"
+                      : "bg-white border-neutral-300 text-neutral-700 hover:border-neutral-500"
+                  }`}
+                >
+                  {s}
+                </button>
+              ))}
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs text-neutral-500 block mb-1">Población</label>
-              <input className="input text-sm" value={v.shippingCity} onChange={(e) => field("shippingCity", e.target.value)} placeholder="Valencia" />
+
+          <div className="pt-2 border-t border-neutral-100">
+            <div className="text-xs text-neutral-500 mb-2">Dirección de envío</div>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="col-span-2">
+                <label className="text-xs text-neutral-500 block mb-1">Calle</label>
+                <input className="input text-sm" value={v.shippingStreet} onChange={(e) => field("shippingStreet", e.target.value)} placeholder="Calle Mayor" />
+              </div>
+              <div>
+                <label className="text-xs text-neutral-500 block mb-1">Número</label>
+                <input className="input text-sm" value={v.shippingNumber} onChange={(e) => field("shippingNumber", e.target.value)} placeholder="23" />
+              </div>
             </div>
-            <div>
-              <label className="text-xs text-neutral-500 block mb-1">Provincia</label>
-              <input className="input text-sm" value={v.shippingProvince} onChange={(e) => field("shippingProvince", e.target.value)} placeholder="Valencia" />
+            <div className="grid grid-cols-3 gap-2 mt-2">
+              <div>
+                <label className="text-xs text-neutral-500 block mb-1">Piso</label>
+                <input className="input text-sm" value={v.shippingFloor} onChange={(e) => field("shippingFloor", e.target.value)} placeholder="3º" />
+              </div>
+              <div>
+                <label className="text-xs text-neutral-500 block mb-1">Escalera</label>
+                <input className="input text-sm" value={v.shippingStaircase} onChange={(e) => field("shippingStaircase", e.target.value)} placeholder="B" />
+              </div>
+              <div>
+                <label className="text-xs text-neutral-500 block mb-1">Puerta</label>
+                <input className="input text-sm" value={v.shippingDoor} onChange={(e) => field("shippingDoor", e.target.value)} placeholder="A" />
+              </div>
             </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs text-neutral-500 block mb-1">Código postal</label>
-              <input className="input text-sm" value={v.shippingPostalCode} onChange={(e) => field("shippingPostalCode", e.target.value)} placeholder="46001" />
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              <div>
+                <label className="text-xs text-neutral-500 block mb-1">Población</label>
+                <input className="input text-sm" value={v.shippingCity} onChange={(e) => field("shippingCity", e.target.value)} placeholder="Valencia" />
+              </div>
+              <div>
+                <label className="text-xs text-neutral-500 block mb-1">Provincia</label>
+                <input className="input text-sm" value={v.shippingProvince} onChange={(e) => field("shippingProvince", e.target.value)} placeholder="Valencia" />
+              </div>
             </div>
-            <div>
-              <label className="text-xs text-neutral-500 block mb-1">Teléfono</label>
-              <input className="input text-sm" value={v.shippingPhone} onChange={(e) => field("shippingPhone", e.target.value)} placeholder="+34 600 000 000" />
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              <div>
+                <label className="text-xs text-neutral-500 block mb-1">Código postal</label>
+                <input className="input text-sm" value={v.shippingPostalCode} onChange={(e) => field("shippingPostalCode", e.target.value)} placeholder="46001" />
+              </div>
+              <div>
+                <label className="text-xs text-neutral-500 block mb-1">Teléfono</label>
+                <input className="input text-sm" value={v.shippingPhone} onChange={(e) => field("shippingPhone", e.target.value)} placeholder="+34 600 000 000" />
+              </div>
             </div>
           </div>
 
           <button onClick={save} disabled={saving} className="btn btn-primary w-full text-sm">
-            {saving ? "Guardando..." : "Guardar dirección"}
+            {saving ? "Guardando..." : "Guardar"}
           </button>
         </div>
       </div>

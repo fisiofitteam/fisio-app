@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowLeft, Trophy, BarChart3, BookOpen, Users, Target } from "lucide-react";
 import { PatientSessionMenu, patientLogout } from "@/components/PatientSessionMenu";
 import { PatientNav } from "@/components/PatientNav";
+import { PatientShirtSizePicker } from "@/components/PatientShirtSizePicker";
 
 // Icono de WhatsApp en amarillo (currentColor para compat con la API de Lucide).
 function WhatsAppIcon({ size = 22, style, className }: { size?: number; strokeWidth?: number; style?: React.CSSProperties; className?: string }) {
@@ -68,6 +69,7 @@ export function PatientHomeRolling({
   title,
   days,
   daysToExpire,
+  needsShirtSize,
 }: {
   firstName: string;
   patientId: string;
@@ -80,6 +82,8 @@ export function PatientHomeRolling({
   title?: string | null;
   days: RollingDay[];
   daysToExpire?: number | null;
+  /** true si el paciente aún no ha rellenado su talla de camiseta ADVANCE. */
+  needsShirtSize?: boolean;
 }) {
   const initial = firstName[0]?.toUpperCase() ?? "?";
 
@@ -169,6 +173,8 @@ export function PatientHomeRolling({
             </div>
           )}
         </header>
+
+        {needsShirtSize && <PatientShirtSizePicker />}
 
         {/* 💪 Sesión de hoy — CTA en amarillo (solo si hay tareas hoy). Lleva a
             la página con el detalle: Accesorios primero, Entrenamiento después. */}

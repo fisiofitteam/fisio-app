@@ -26,6 +26,11 @@ model Patient {
   // Parche de bienvenida (regalo del setter al iniciar el programa)
   patchSent                Boolean   @default(false)
   patchSentAt              DateTime?
+  // Camiseta ADVANCE: se le pregunta la talla al paciente al entrar en ADVANCE.
+  // El equipo (setter / manager) la prepara y envía. shirtSize: "XS"|"S"|"M"|"L"|"XL"|"XXL".
+  shirtSize                String?
+  shirtSent                Boolean   @default(false)
+  shirtSentAt              DateTime?
   shippingAddress          String?    // legacy / texto libre (se mantiene por compat)
   shippingStreet           String?    // calle (ej. "Calle Mayor")
   shippingNumber           String?    // número (ej. "23")
