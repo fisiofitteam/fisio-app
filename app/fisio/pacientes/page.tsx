@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { calculateAdherence } from "@/lib/adherence";
 import { getActiveProfessional } from "@/lib/session";
 import { PatientsList } from "@/components/PatientsList";
+import { SetterPatientsView } from "@/components/SetterPatientsView";
 
 function monthsConsumed(startDate: Date | null): number {
   if (!startDate) return 0;
@@ -16,6 +17,56 @@ export default async function PatientsListPage({
   searchParams: { tab?: string };
 }) {
   const user = (await getActiveProfessional())!;
+
+  // Setter ve una vista simplificada: solo info de envío y fiscal de TODOS los
+  // pacientes. No ve diagnóstico, programa, adherencia, etc.
+  if (user.role === "setter") {
+    const patients = await prisma.patient.findMany({
+      orderBy: { fullName: "asc" },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        programType: true,
+        country: true,
+        contractDNI: true,
+        shirtSize: true,
+        shippingAddress: true,
+        shippingStreet: true,
+        shippingNumber: true,
+        shippingFloor: true,
+        shippingStaircase: true,
+        shippingDoor: true,
+        shippingCity: true,
+        shippingProvince: true,
+        shippingPostalCode: true,
+        shippingPhone: true,
+      },
+    });
+    return (
+      <SetterPatientsView
+        patients={patients.map((p) => ({
+          id: p.id,
+          fullName: p.fullName,
+          email: p.email ?? null,
+          programType: p.programType,
+          country: p.country,
+          contractDNI: p.contractDNI,
+          shirtSize: p.shirtSize,
+          shippingAddress: p.shippingAddress,
+          shippingStreet: p.shippingStreet,
+          shippingNumber: p.shippingNumber,
+          shippingFloor: p.shippingFloor,
+          shippingStaircase: p.shippingStaircase,
+          shippingDoor: p.shippingDoor,
+          shippingCity: p.shippingCity,
+          shippingProvince: p.shippingProvince,
+          shippingPostalCode: p.shippingPostalCode,
+          shippingPhone: p.shippingPhone,
+        }))}
+      />
+    );
+  }
 
   // Si no es manager, fuerza tab=mine (solo ve los suyos)
   const tab = user.isManager ? (searchParams.tab ?? "all") : "mine";

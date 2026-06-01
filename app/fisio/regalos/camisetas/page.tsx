@@ -14,10 +14,17 @@ export default async function RegalosCamisetasPage({
 
   // Solo pacientes ADVANCE de España (logística). Legacy null se asume España.
   const countryFilter = { OR: [{ country: "España" }, { country: null }] } as const;
+
+  // En "Enviadas" solo los últimos 30 días.
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const sentWindow = { shirtSentAt: { gte: thirtyDaysAgo } };
+
   const baseWhere = {
     programType: "ADVANCE",
     shirtSent: view === "sent",
     ...countryFilter,
+    ...(view === "sent" ? sentWindow : {}),
   };
 
   const patients = await prisma.patient.findMany({
@@ -46,7 +53,7 @@ export default async function RegalosCamisetasPage({
 
   const counts = await Promise.all([
     prisma.patient.count({ where: { programType: "ADVANCE", shirtSent: false, ...countryFilter } }),
-    prisma.patient.count({ where: { programType: "ADVANCE", shirtSent: true, ...countryFilter } }),
+    prisma.patient.count({ where: { programType: "ADVANCE", shirtSent: true, ...countryFilter, ...sentWindow } }),
   ]);
 
   return (

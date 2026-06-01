@@ -12,8 +12,17 @@ export default async function RegalosParchesPage({
   // Solo enviamos a España (logística). Legacy (country=null) se asume España.
   const countryFilter = { OR: [{ country: "España" }, { country: null }] } as const;
 
+  // En "Enviados" mostramos solo los últimos 30 días para que no crezca infinito.
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const sentWindow = { patchSentAt: { gte: thirtyDaysAgo } };
+
   const patients = await prisma.patient.findMany({
-    where: { ...countryFilter, patchSent: view === "sent" },
+    where: {
+      ...countryFilter,
+      patchSent: view === "sent",
+      ...(view === "sent" ? sentWindow : {}),
+    },
     orderBy: view === "sent" ? { patchSentAt: "desc" } : { startedAt: "desc" },
     select: {
       id: true,
@@ -37,7 +46,7 @@ export default async function RegalosParchesPage({
 
   const counts = await Promise.all([
     prisma.patient.count({ where: { ...countryFilter, patchSent: false } }),
-    prisma.patient.count({ where: { ...countryFilter, patchSent: true } }),
+    prisma.patient.count({ where: { ...countryFilter, patchSent: true, ...sentWindow } }),
   ]);
 
   return (
