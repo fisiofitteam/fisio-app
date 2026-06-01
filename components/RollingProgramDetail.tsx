@@ -225,7 +225,7 @@ export function RollingProgramDetail({
   return (
     <main>
       <header className="mb-5">
-        <Link href="/fisio/biblioteca/rolling" className="text-xs text-neutral-500 hover:underline mb-2 inline-block">
+        <Link href="/fisio/advance/rolling" className="text-xs text-neutral-500 hover:underline mb-2 inline-block">
           ← Volver a programas rolling
         </Link>
         <div className="flex items-start justify-between gap-3">

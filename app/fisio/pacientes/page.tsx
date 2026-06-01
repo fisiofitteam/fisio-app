@@ -2,8 +2,6 @@ import { prisma } from "@/lib/prisma";
 import { calculateAdherence } from "@/lib/adherence";
 import { getActiveProfessional } from "@/lib/session";
 import { PatientsList } from "@/components/PatientsList";
-import { AdvanceDashboard } from "@/components/AdvanceDashboard";
-import { todayMadridUtc } from "@/lib/program-pauses";
 
 function monthsConsumed(startDate: Date | null): number {
   if (!startDate) return 0;
@@ -50,19 +48,15 @@ export default async function PatientsListPage({
   }
   // tab === "all" → sin filtro
 
-  // Si estamos en la pestaña ADVANCE, no necesitamos cargar la lista (no se
-  // renderiza). Saltamos la query pesada de pacientes + adherencias.
-  const patients = tab === "advance"
-    ? []
-    : await prisma.patient.findMany({
-        where,
-        include: {
-          _count: { select: { adaptations: true, programAssignments: true } },
-          appliedLevel: { include: { profile: true } },
-          assignedProfessional: { select: { id: true, fullName: true, role: true } },
-        },
-        orderBy: { fullName: "asc" },
-      });
+  const patients = await prisma.patient.findMany({
+    where,
+    include: {
+      _count: { select: { adaptations: true, programAssignments: true } },
+      appliedLevel: { include: { profile: true } },
+      assignedProfessional: { select: { id: true, fullName: true, role: true } },
+    },
+    orderBy: { fullName: "asc" },
+  });
 
   // Contar por pestaña (solo si es manager)
   let counts: { all: number; unassigned: number; mine: number; byPro: Record<string, number> } = {
@@ -113,85 +107,6 @@ export default async function PatientsListPage({
     };
   });
 
-  // Dashboard ADVANCE (solo si tab=advance y manager). Calculamos en server
-  // los agregados de los últimos 60 días y pasamos el componente ya renderizado
-  // como ReactNode a PatientsList, que decide cuándo mostrarlo.
-  let advanceDashboard: React.ReactNode = null;
-  if (user.isManager && tab === "advance") {
-    const today = todayMadridUtc();
-    const start = new Date(today);
-    start.setUTCDate(start.getUTCDate() - 59); // 60 días incluyendo hoy
-
-    const [logs, advanceRollingPatients] = await Promise.all([
-      prisma.patientDailyLog.findMany({
-        where: { recordedDate: { gte: start } },
-        select: {
-          patientId: true,
-          recordedDate: true,
-          fatigue: true,
-          rpe: true,
-          sleep: true,
-        },
-      }).catch(() => [] as any[]),
-      prisma.patient.count({
-        where: {
-          programMode: "rolling",
-          OR: [
-            { rollingAccessoriesId: { not: null } },
-            { rollingTrainingId: { not: null } },
-            { rollingProgramId: { not: null } },
-          ],
-        },
-      }),
-    ]);
-
-    // Construir mapa día -> agregado
-    type Bucket = { fatigue: number[]; rpe: number[]; sleep: number[] };
-    const byDay = new Map<string, Bucket>();
-    for (let i = 0; i < 60; i++) {
-      const d = new Date(start);
-      d.setUTCDate(d.getUTCDate() + i);
-      byDay.set(d.toISOString(), { fatigue: [], rpe: [], sleep: [] });
-    }
-    const todayMs = today.getTime();
-    const sevenAgoMs = todayMs - 6 * 86400000;
-    const thirtyAgoMs = todayMs - 29 * 86400000;
-    const loggers7 = new Set<string>();
-    const loggers30 = new Set<string>();
-
-    for (const e of logs) {
-      const key = e.recordedDate.toISOString();
-      const b = byDay.get(key);
-      if (b) {
-        b.fatigue.push(e.fatigue);
-        b.rpe.push(e.rpe);
-        b.sleep.push(e.sleep);
-      }
-      const ms = e.recordedDate.getTime();
-      if (ms >= thirtyAgoMs) loggers30.add(e.patientId);
-      if (ms >= sevenAgoMs) loggers7.add(e.patientId);
-    }
-    const avg = (xs: number[]) => xs.length ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10 : null;
-    const daily = Array.from(byDay.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([dateIso, b]) => ({
-        dateIso,
-        fatigueAvg: avg(b.fatigue),
-        rpeAvg: avg(b.rpe),
-        sleepAvg: avg(b.sleep),
-        entries: b.fatigue.length,
-      }));
-
-    advanceDashboard = (
-      <AdvanceDashboard
-        daily={daily}
-        advanceRollingPatients={advanceRollingPatients}
-        uniqueLoggers7d={loggers7.size}
-        uniqueLoggers30d={loggers30.size}
-      />
-    );
-  }
-
   return (
     <PatientsList
       patients={mapped}
@@ -200,7 +115,6 @@ export default async function PatientsListPage({
       counts={counts}
       professionals={professionals.map((p) => ({ id: p.id, fullName: p.fullName, role: p.role }))}
       rollingPrograms={rollingPrograms}
-      advanceDashboard={advanceDashboard}
     />
   );
 }

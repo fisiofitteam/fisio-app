@@ -24,6 +24,7 @@ import {
   Stethoscope,
   CalendarDays,
   Gauge,
+  Zap,
   LucideIcon,
 } from "lucide-react";
 
@@ -45,7 +46,7 @@ const CONTENIDO: Item = { id: "contenido", label: "Contenido", Icon: Sparkles, h
 const BIBLIOTECA: Item = { id: "biblioteca", label: "Biblioteca", Icon: BookOpen, href: "/fisio/biblioteca", match: (p) => p.startsWith("/fisio/biblioteca") };
 const REUNIONES: Item = { id: "reuniones", label: "Reuniones", Icon: Stethoscope, href: "/fisio/reuniones", match: (p) => p.startsWith("/fisio/reuniones") };
 const CALENDARIO: Item = { id: "calendario", label: "Calendario", Icon: CalendarDays, href: "/fisio/calendario", match: (p) => p.startsWith("/fisio/calendario") };
-const RETOS: Item = { id: "retos", label: "Retos", Icon: Target, href: "/fisio/retos", match: (p) => p.startsWith("/fisio/retos") };
+const ADVANCE: Item = { id: "advance", label: "Advance", Icon: Zap, href: "/fisio/advance", match: (p) => p.startsWith("/fisio/advance") };
 const COMUNIDAD: Item = { id: "comunidad", label: "Comunidad", Icon: CalendarDays, href: "/fisio/comunidad", match: (p) => p.startsWith("/fisio/comunidad") };
 const TAREAS: Item = { id: "tareas", label: "Tareas", Icon: CheckSquare, href: "/fisio/tareas", match: (p) => p.startsWith("/fisio/tareas") };
 const LLAMADAS: Item = { id: "llamadas", label: "Llamadas", Icon: Phone, href: "/fisio/llamadas", match: (p) => p.startsWith("/fisio/llamadas") };
@@ -56,10 +57,10 @@ const AJUSTES: Item = { id: "ajustes", label: "Ajustes", Icon: Settings, href: "
 
 function itemsForRole(role: string): Item[] {
   if (role === "ceo") {
-    return [PANEL, PACIENTES, LLAMADAS_VENTA, CONTENIDO, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, RETOS, TAREAS, RECURSOS, FINANZAS, EQUIPO, AJUSTES];
+    return [PANEL, PACIENTES, ADVANCE, LLAMADAS_VENTA, CONTENIDO, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, RECURSOS, FINANZAS, EQUIPO, AJUSTES];
   }
   if (role === "head_success") {
-    return [PANEL, PACIENTES, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, RETOS, TAREAS, LLAMADAS, RECURSOS, EQUIPO, AJUSTES];
+    return [PANEL, PACIENTES, ADVANCE, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, AJUSTES];
   }
   if (role === "setter") {
     return [LEADS, LLAMADAS_VENTA, PARCHES, TAREAS, CONTENIDO, COMUNIDAD, REUNIONES, CALENDARIO, EQUIPO, AJUSTES];

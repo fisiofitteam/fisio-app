@@ -84,10 +84,7 @@ export function LibrarySidebar({ showOnboarding = false, showCatalog = false }: 
   ];
 
   function isActive(id: string) {
-    // "Programas" engloba también Rolling (subapartado).
-    if (id === "programas") {
-      return pathname.startsWith("/fisio/biblioteca/programas") || pathname.startsWith("/fisio/biblioteca/rolling");
-    }
+    // Rolling vivía bajo "Programas" en biblioteca; ahora vive en /fisio/advance/rolling.
     return pathname.startsWith(`/fisio/biblioteca/${id}`);
   }
 

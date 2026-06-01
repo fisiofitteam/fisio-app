@@ -57,7 +57,7 @@ export function RollingPrograms({ programs, isManager }: { programs: Program[]; 
           {active.map((p) => (
             <Link
               key={p.id}
-              href={`/fisio/biblioteca/rolling/${p.id}`}
+              href={`/fisio/advance/rolling/${p.id}`}
               className="block rounded-xl px-4 py-3 hover:bg-neutral-50 transition"
               style={{ background: "#FFFFFF", border: "1px solid #E5E5E5" }}
             >
@@ -87,7 +87,7 @@ export function RollingPrograms({ programs, isManager }: { programs: Program[]; 
             {archived.map((p) => (
               <Link
                 key={p.id}
-                href={`/fisio/biblioteca/rolling/${p.id}`}
+                href={`/fisio/advance/rolling/${p.id}`}
                 className="block rounded-xl px-4 py-3 hover:bg-neutral-50 transition opacity-60"
                 style={{ background: "#FAFAFA", border: "1px solid #E5E5E5" }}
               >
