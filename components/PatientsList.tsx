@@ -573,21 +573,27 @@ function CreatePatientModal({
             />
           </div>
 
-          <div>
-            <label className="text-xs text-neutral-500 block mb-1">Fisio asignado</label>
-            <select
-              className="input text-sm w-full"
-              value={assignedProfessionalId}
-              onChange={(e) => setAssignedProfessionalId(e.target.value)}
-            >
-              <option value="">— Sin asignar (asignar luego) —</option>
-              {professionals.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.role === "head_success" ? "⭐ " : "🩺 "}{p.fullName}
-                </option>
-              ))}
-            </select>
-          </div>
+          {professionals.length > 0 ? (
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">Fisio asignado</label>
+              <select
+                className="input text-sm w-full"
+                value={assignedProfessionalId}
+                onChange={(e) => setAssignedProfessionalId(e.target.value)}
+              >
+                <option value="">— Sin asignar (asignar luego) —</option>
+                {professionals.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.role === "head_success" ? "⭐ " : "🩺 "}{p.fullName}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="text-xs text-neutral-600 bg-neutral-50 border border-neutral-200 rounded px-3 py-2">
+              Se te asignará automáticamente como fisio de este paciente.
+            </div>
+          )}
 
           <div>
             <label className="text-xs text-neutral-500 block mb-1">Programa contratado</label>

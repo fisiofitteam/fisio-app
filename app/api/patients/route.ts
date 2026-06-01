@@ -73,6 +73,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Auto-asignación: durante el traspaso de pacientes a la plataforma, si quien
+  // crea es un fisio normal (no manager), se le auto-asigna como fisio del
+  // paciente, ignorando lo que venga en el body. Los managers (CEO /
+  // head_success) sí pueden asignar a quien quieran (o dejar sin asignar).
+  const finalAssigneeId = user.role === "fisio"
+    ? user.id
+    : (assignedProfessionalId || null);
+
   // 1) Crear paciente
   const patient = await prisma.patient.create({
     data: {
@@ -84,7 +92,7 @@ export async function POST(req: NextRequest) {
       subscriptionStartDate: new Date(),
       subscriptionPeriodMonths: Number(subscriptionPeriodMonths) || 4,
       subscriptionTotalMonths: Number(subscriptionPeriodMonths) || 4,
-      assignedProfessionalId: assignedProfessionalId || null,
+      assignedProfessionalId: finalAssigneeId,
       programType: programType || null,
       programMode: mode,
       rollingProgramId: mode === "rolling" ? rollingProgramId : null,
