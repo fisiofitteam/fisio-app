@@ -68,8 +68,12 @@ export default async function PatientsListPage({
     );
   }
 
-  // Si no es manager, fuerza tab=mine (solo ve los suyos)
-  const tab = user.isManager ? (searchParams.tab ?? "all") : "mine";
+  // Si no es manager, fuerza tab=mine (solo ve los suyos).
+  // Head_success: default a "mine" para que se centre en sus pacientes; las
+  // pestañas "Todos" / "Por asignar" siguen disponibles si las necesita.
+  // CEO: default a "all" como antes.
+  const defaultTab = user.role === "head_success" ? "mine" : "all";
+  const tab = user.isManager ? (searchParams.tab ?? defaultTab) : "mine";
 
   const professionals = user.isManager
     ? await prisma.professional.findMany({
