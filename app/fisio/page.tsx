@@ -206,12 +206,13 @@ export default async function FisioPanelPage({
     </header>
   );
 
+  // Solo dejamos los 2 KPIs estables (pacientes y renovaciones). Las tarjetas
+  // de "Tareas pendientes" y "Formularios por revisar" se quitaron porque ya
+  // tienen su propia sección detallada más abajo y duplicaban información.
   const kpis = (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-5">
+    <div className="grid grid-cols-2 gap-2 mb-5 max-w-md">
       <KpiCard label={isManager ? "Pacientes totales" : "Mis pacientes"} value={patients.length} />
       <KpiCard label="Renuevan en 30d" value={renewalsIn30} accent={renewalsIn30 > 0 ? "warning" : undefined} />
-      <KpiCard label="Tareas pendientes" value={tasks.length} accent={tasks.length > 0 ? "info" : undefined} />
-      <KpiCard label="Formularios por revisar" value={pendingForms.length} accent={pendingForms.length > 0 ? "info" : undefined} />
     </div>
   );
 
