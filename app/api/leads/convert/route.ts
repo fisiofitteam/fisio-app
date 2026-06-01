@@ -55,6 +55,7 @@ export async function POST(req: NextRequest) {
       email: normalizedEmail,
       sport: "CrossFit",
       diagnosis: lead.aiSummary ?? null,
+      country: lead.country ?? null,
       shippingPhone: phone?.trim() || null,
       subscriptionStartDate: startDate,
       subscriptionPeriodMonths: months,

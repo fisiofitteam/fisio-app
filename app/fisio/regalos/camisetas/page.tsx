@@ -12,8 +12,13 @@ export default async function RegalosCamisetasPage({
   const user = (await getActiveProfessional())!;
   const view = searchParams.view === "sent" ? "sent" : "pending";
 
-  // Solo pacientes en ADVANCE (es a quienes va la camiseta)
-  const baseWhere = { programType: "ADVANCE", shirtSent: view === "sent" } as const;
+  // Solo pacientes ADVANCE de España (logística). Legacy null se asume España.
+  const countryFilter = { OR: [{ country: "España" }, { country: null }] } as const;
+  const baseWhere = {
+    programType: "ADVANCE",
+    shirtSent: view === "sent",
+    ...countryFilter,
+  };
 
   const patients = await prisma.patient.findMany({
     where: baseWhere,
@@ -40,8 +45,8 @@ export default async function RegalosCamisetasPage({
   });
 
   const counts = await Promise.all([
-    prisma.patient.count({ where: { programType: "ADVANCE", shirtSent: false } }),
-    prisma.patient.count({ where: { programType: "ADVANCE", shirtSent: true } }),
+    prisma.patient.count({ where: { programType: "ADVANCE", shirtSent: false, ...countryFilter } }),
+    prisma.patient.count({ where: { programType: "ADVANCE", shirtSent: true, ...countryFilter } }),
   ]);
 
   return (

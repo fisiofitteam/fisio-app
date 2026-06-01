@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { AgendaLandingCopy } from "@/lib/landing-content";
+import { COUNTRIES, DEFAULT_COUNTRY } from "@/lib/countries";
 
 type Slot = {
   startISO: string;
@@ -54,6 +55,7 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [country, setCountry] = useState<string>(DEFAULT_COUNTRY);
   const [instagram, setInstagram] = useState("");
   const [motivo, setMotivo] = useState("");
   const [tratamientosPrevios, setTratamientosPrevios] = useState("");
@@ -100,6 +102,9 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
     if (instagram.trim().replace(/^@+/, "").length < 2) {
       errs.instagram = "Indícanos tu usuario de Instagram";
     }
+    if (!country || country.trim() === "") {
+      errs.country = "Selecciona tu país";
+    }
     if (motivo.trim().length < 3) {
       errs.motivo = "Cuéntanos brevemente tu lesión o molestia";
     }
@@ -124,7 +129,7 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
     if (Object.keys(cleaned).length !== Object.keys(fieldErrors).length) {
       setFieldErrors(cleaned);
     }
-  }, [fullName, email, phone, instagram, motivo, tratamientosPrevios, impactoCrossfit]);
+  }, [fullName, email, phone, instagram, country, motivo, tratamientosPrevios, impactoCrossfit]);
 
   async function loadSlots() {
     setLoadingSlots(true);
@@ -191,6 +196,7 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
           fullName: fullName.trim(),
           email: email.trim(),
           phone: phone.trim(),
+          country: country.trim(),
           instagram: instagram.trim(),
           motivo: motivo.trim(),
           tratamientosPrevios: tratamientosPrevios.trim(),
@@ -390,25 +396,49 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
                 </div>
               </div>
 
-              <div data-field="instagram">
-                <label className="text-xs block mb-1.5" style={{ color: "#A3A3A3" }}>
-                  Usuario de Instagram *
-                </label>
-                <input
-                  type="text"
-                  className="w-full px-3 py-2.5 rounded-lg text-sm"
-                  style={{
-                    background: "#1F1F1F",
-                    border: `1px solid ${fieldErrors.instagram ? "#DC2626" : "#404040"}`,
-                    color: "#FAFAFA",
-                  }}
-                  placeholder="@tuusuario"
-                  value={instagram}
-                  onChange={(e) => setInstagram(e.target.value)}
-                />
-                {fieldErrors.instagram && (
-                  <p className="text-xs mt-1" style={{ color: "#FCA5A5" }}>{fieldErrors.instagram}</p>
-                )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div data-field="instagram">
+                  <label className="text-xs block mb-1.5" style={{ color: "#A3A3A3" }}>
+                    Usuario de Instagram *
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2.5 rounded-lg text-sm"
+                    style={{
+                      background: "#1F1F1F",
+                      border: `1px solid ${fieldErrors.instagram ? "#DC2626" : "#404040"}`,
+                      color: "#FAFAFA",
+                    }}
+                    placeholder="@tuusuario"
+                    value={instagram}
+                    onChange={(e) => setInstagram(e.target.value)}
+                  />
+                  {fieldErrors.instagram && (
+                    <p className="text-xs mt-1" style={{ color: "#FCA5A5" }}>{fieldErrors.instagram}</p>
+                  )}
+                </div>
+                <div data-field="country">
+                  <label className="text-xs block mb-1.5" style={{ color: "#A3A3A3" }}>
+                    País *
+                  </label>
+                  <select
+                    className="w-full px-3 py-2.5 rounded-lg text-sm"
+                    style={{
+                      background: "#1F1F1F",
+                      border: `1px solid ${fieldErrors.country ? "#DC2626" : "#404040"}`,
+                      color: "#FAFAFA",
+                    }}
+                    value={country}
+                    onChange={(e) => setCountry(e.target.value)}
+                  >
+                    {COUNTRIES.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                  {fieldErrors.country && (
+                    <p className="text-xs mt-1" style={{ color: "#FCA5A5" }}>{fieldErrors.country}</p>
+                  )}
+                </div>
               </div>
 
               <div data-field="motivo">

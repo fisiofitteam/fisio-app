@@ -40,6 +40,8 @@ model Patient {
   shippingProvince         String?    // provincia
   shippingPostalCode       String?    // código postal
   shippingPhone            String?
+  // País del paciente (se copia desde Lead.country al convertir).
+  country                  String?
 
   // Tipo de programa contratado y dificultad percibida (etiquetas visibles)
   programType String?                                   // "RECUPERA" | "CONSOLIDA" | "ADVANCE"

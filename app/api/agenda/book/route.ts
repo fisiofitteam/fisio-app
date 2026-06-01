@@ -19,6 +19,7 @@ type BookBody = {
   fullName: string;
   email: string;
   phone: string;
+  country: string;
   instagram: string;
   motivo: string;
   tratamientosPrevios: string;
@@ -40,6 +41,7 @@ export async function POST(req: NextRequest) {
     "fullName",
     "email",
     "phone",
+    "country",
     "instagram",
     "motivo",
     "tratamientosPrevios",
@@ -147,6 +149,7 @@ export async function POST(req: NextRequest) {
       contactValue: email,
       email,
       phone,
+      country: body.country.trim(),
       instagram: instagram || null,
       motivo: body.motivo.trim(),
       tratamientosPrevios: body.tratamientosPrevios.trim(),

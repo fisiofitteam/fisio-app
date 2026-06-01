@@ -41,6 +41,10 @@ model Patient {
   shippingProvince         String?    // provincia
   shippingPostalCode       String?    // código postal
   shippingPhone            String?
+  // País del paciente. Se copia desde Lead.country al convertir. Se usa
+  // para filtrar envíos físicos (parches/camisetas) a solo España por
+  // logística. Null = legacy, se asume España.
+  country                  String?
 
   // Tipo de programa contratado y dificultad percibida (etiquetas visibles)
   programType String?                                   // "RECUPERA" | "CONSOLIDA" | "ADVANCE"
