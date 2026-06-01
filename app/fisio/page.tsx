@@ -137,9 +137,10 @@ export default async function FisioPanelPage({
   const programEndings = await getProgramEndingsForProfessional(user.id);
 
   // Controles de cargas pendientes de revisar (cada loadReviewIntervalWeeks).
-  // El head_success ve los de todos los fisios; un fisio normal ve solo los suyos.
+  // El CEO ve los de todos; el head_success y los fisios solo los de SUS
+  // pacientes asignados.
   const loadReviews = await getLoadReviewsForProfessional(user.id, {
-    all: user.role === "head_success" || user.role === "ceo",
+    all: user.role === "ceo",
   });
 
   // Métricas para managers en el período seleccionado
@@ -286,10 +287,12 @@ export default async function FisioPanelPage({
   }
 
   // === Resto (Head + fisios) ===
+  // El bloque teamBlock vivía dentro del panel principal cuando el usuario era
+  // manager. Ahora lo sacamos a una pestaña dedicada "Métricas equipo" para
+  // que el head_success use el panel principal solo para su trabajo con
+  // pacientes (programas a terminar, cargas, formularios, etc.).
   const panelContent = (
     <>
-      {isManager && teamBlock}
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-5">
         <ProgramEndingsBox initialItems={programEndings} />
         <LoadReviewsBox initialItems={loadReviews} />
@@ -420,7 +423,11 @@ export default async function FisioPanelPage({
     <main>
       {headerContent}
       {kpis}
-      <FisioPanelTabs panel={panelContent} professionalId={user.id} />
+      <FisioPanelTabs
+        panel={panelContent}
+        teamBlock={isManager ? teamBlock : null}
+        professionalId={user.id}
+      />
     </main>
   );
 }
