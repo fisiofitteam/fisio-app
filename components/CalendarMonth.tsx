@@ -187,7 +187,14 @@ export function CalendarMonth({
     if (!session) return;
     const currentKey = dayKey(new Date(session.scheduledDate));
     if (currentKey === overId) return;
-    // En lugar de mover directamente, abrimos modal con elección
+    // Sesiones completadas: el arrastre SIEMPRE duplica (no abrimos modal).
+    // Mover una completada cambiaría la fecha de cuando se hizo, que rara vez
+    // es lo que se quiere; lo natural es crear una nueva copia limpia.
+    if (session.completedAt) {
+      executeDuplicate(session, overId);
+      return;
+    }
+    // No completada: abrimos el modal con elección Mover/Duplicar como siempre.
     setDropAction({ session, targetKey: overId });
   }
 
@@ -220,11 +227,17 @@ export function CalendarMonth({
     const oldDate = new Date(session.scheduledDate);
     newDate.setHours(oldDate.getHours(), oldDate.getMinutes(), 0, 0);
     const tasksSnapshot = JSON.parse(session.tasksSnapshot);
-    // Regenerar ids dentro del snapshot para evitar colisiones
-    const newSnapshot = tasksSnapshot.map((t: any) => ({
-      ...t,
-      id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-    }));
+    // Regenerar ids dentro del snapshot para evitar colisiones y limpiar
+    // cualquier rastro de completado/respuesta por tarea (por si alguna vez
+    // un task type guardó estado en el propio snapshot). El nuevo registro
+    // de sesión nace sin completedAt y sin responses.
+    const newSnapshot = tasksSnapshot.map((t: any) => {
+      const { completed, completedAt, response, responses, ...rest } = t;
+      return {
+        ...rest,
+        id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      };
+    });
     await fetch("/api/sessions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -336,7 +349,7 @@ export function CalendarMonth({
         </DndContext>
 
         <div className="mt-3 text-xs text-neutral-500 italic">
-          💡 Click en día vacío → crea sesión o asigna programa · Arrastra entre días para mover/duplicar · Mantén el arrastre sobre ← o → para cambiar de mes · Usa el botón ↗ del chip para saltar a cualquier fecha
+          💡 Click en día vacío → crea sesión o asigna programa · Arrastra entre días para mover/duplicar (las ✓ completadas siempre se duplican) · Mantén el arrastre sobre ← o → para cambiar de mes · Usa el botón ↗ del chip para saltar a cualquier fecha
         </div>
       </section>
 
@@ -505,17 +518,26 @@ function MoveToDateModal({
   const currentKey = dayKey(new Date(session.scheduledDate));
   const [target, setTarget] = useState(currentKey);
   const [busy, setBusy] = useState<"move" | "dup" | null>(null);
+  const isCompleted = !!session.completedAt;
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl w-full max-w-sm p-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-3">
-          <h3 className="font-medium text-sm">↗ Mover sesión a otra fecha</h3>
+          <h3 className="font-medium text-sm">
+            {isCompleted ? "↗ Duplicar sesión completada" : "↗ Mover sesión a otra fecha"}
+          </h3>
           <button onClick={onClose} className="text-neutral-400 text-xl leading-none px-2">✕</button>
         </div>
         <p className="text-xs text-neutral-500 mb-3">
-          {session.programName} · actualmente {new Date(session.scheduledDate).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })}
+          {session.programName} · {isCompleted ? "completada el " : "actualmente "}
+          {new Date(session.scheduledDate).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })}
         </p>
+        {isCompleted && (
+          <p className="text-[11px] text-neutral-500 italic mb-3">
+            Las sesiones completadas no se mueven (su fecha es histórica). Aquí se crea una copia nueva sin marcar como completada.
+          </p>
+        )}
         <div className="mb-4">
           <label className="text-xs text-neutral-500 block mb-1.5">Nueva fecha</label>
           <input
@@ -529,19 +551,25 @@ function MoveToDateModal({
           <button
             onClick={async () => { setBusy("dup"); await onDuplicate(target); }}
             disabled={busy !== null || target === currentKey}
-            className="text-sm px-3 py-2 rounded-lg disabled:opacity-50"
-            style={{ background: "#F5F5F5", color: "#0A0A0A", border: "1px solid #E5E5E5" }}
+            className={`text-sm px-3 py-2 rounded-lg disabled:opacity-50 ${isCompleted ? "font-semibold" : ""}`}
+            style={
+              isCompleted
+                ? { background: "#0A0A0A", color: "#FAFAFA" }
+                : { background: "#F5F5F5", color: "#0A0A0A", border: "1px solid #E5E5E5" }
+            }
           >
             {busy === "dup" ? "..." : "Duplicar aquí"}
           </button>
-          <button
-            onClick={async () => { setBusy("move"); await onMove(target); }}
-            disabled={busy !== null || target === currentKey}
-            className="text-sm font-semibold px-3 py-2 rounded-lg disabled:opacity-50"
-            style={{ background: "#0A0A0A", color: "#FAFAFA" }}
-          >
-            {busy === "move" ? "..." : "Mover aquí"}
-          </button>
+          {!isCompleted && (
+            <button
+              onClick={async () => { setBusy("move"); await onMove(target); }}
+              disabled={busy !== null || target === currentKey}
+              className="text-sm font-semibold px-3 py-2 rounded-lg disabled:opacity-50"
+              style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+            >
+              {busy === "move" ? "..." : "Mover aquí"}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -651,6 +679,7 @@ function DraggableSession({ session, onMoveToDate }: { session: Session; onMoveT
   // Si no hay nada que mostrar, no rendereamos (día de descanso, sesión vacía)
   if (!displayTitle) return null;
 
+  const isCompleted = !!session.completedAt;
   return (
     <div
       ref={setNodeRef}
@@ -658,17 +687,18 @@ function DraggableSession({ session, onMoveToDate }: { session: Session; onMoveT
       {...listeners}
       {...attributes}
       className={`relative text-[10px] px-1 py-0.5 pr-4 rounded truncate cursor-grab active:cursor-grabbing group ${
-        session.completedAt ? "bg-emerald-100 text-emerald-800" : colorFor(session.programType)
+        isCompleted ? "bg-emerald-100 text-emerald-800" : colorFor(session.programType)
       }`}
+      title={isCompleted ? "Arrastra para duplicar esta sesión completada en otro día" : "Arrastra para mover o duplicar"}
     >
-      {session.completedAt && "✓ "}
+      {isCompleted && "✓ "}
       {displayTitle}
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); onMoveToDate(); }}
         onPointerDown={(e) => e.stopPropagation()}
         className="absolute right-0.5 top-1/2 -translate-y-1/2 px-1 text-[10px] leading-none rounded hover:bg-black/10"
-        title="Mover a otra fecha (cualquier mes)"
+        title={isCompleted ? "Duplicar a otra fecha" : "Mover a otra fecha (cualquier mes)"}
       >
         ↗
       </button>
