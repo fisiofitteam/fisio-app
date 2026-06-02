@@ -8,6 +8,7 @@ import { PatientPill } from "@/components/PatientPills";
 import { GoToPatient } from "@/components/GoToPatient";
 import { LoadReviewIntervalSelector } from "@/components/LoadReviewIntervalSelector";
 import { PatientNotesButton } from "@/components/PatientNotesButton";
+import { PatientAccessLinkButton } from "@/components/PatientAccessLinkButton";
 import { calculateAdherence } from "@/lib/adherence";
 import { getActiveProfessional } from "@/lib/session";
 
@@ -86,6 +87,7 @@ export default async function PatientLayout({
               patientId={patient.id}
               initialNotes={patient.fisioNotes ?? null}
             />
+            <PatientAccessLinkButton patientId={patient.id} patientName={patient.fullName} />
             <Link href={`/fisio/paciente/${patient.id}/exportar`} className="btn btn-ghost text-xs" title="Exportar toda la información del paciente en PDF">
               🖨️ Exportar PDF
             </Link>

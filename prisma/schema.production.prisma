@@ -91,6 +91,13 @@ model Patient {
   // fisio). Texto libre, editable desde la pestaña Formularios del paciente.
   anamnesisCallNotes      String?
 
+  // Magic link de acceso 1-clic. Niki lo copia desde la ficha del paciente y
+  // lo manda por WhatsApp; el paciente lo pulsa y entra a la app sin código
+  // ni contraseña. Token con caducidad larga (365 días). Reutilizable mientras
+  // siga vigente; regenerable si hay sospecha de fuga.
+  accessToken             String?   @unique
+  accessTokenExpiresAt    DateTime?
+
   // ─── ONBOARDING v57 ─────────────────────────────────────────────────────
   // Estado del flujo de onboarding tras pagar:
   //   "pending_assignment" → ha pagado, Miguel aún no le ha asignado fisio

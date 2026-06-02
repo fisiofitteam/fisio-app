@@ -83,6 +83,10 @@ model Patient {
   // Notas de la "Llamada Anamnesis".
   anamnesisCallNotes      String?
 
+  // Magic link de acceso 1-clic (sin código). Caducidad larga (365 días).
+  accessToken             String?   @unique
+  accessTokenExpiresAt    DateTime?
+
   // ─── ONBOARDING v57 ─────────────────────────────────────────────────────
   // Estado del flujo de onboarding tras pagar:
   //   "pending_assignment" → ha pagado, Miguel aún no le ha asignado fisio

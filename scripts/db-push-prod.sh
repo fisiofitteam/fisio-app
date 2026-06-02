@@ -61,7 +61,16 @@ fi
 echo "DATABASE_URL=\"$URL\"" > "$ENV_REAL"
 
 echo "🚀 Aplicando schema a Neon..."
-npx prisma db push --skip-generate
+# Si pasas 'force' como argumento (npm run db:push:prod -- force), añadimos
+# --accept-data-loss. Útil cuando Prisma marca un falso positivo (p. ej. nueva
+# columna nullable con UNIQUE, donde no hay pérdida real porque NULL es
+# distinto en Postgres). Revisa el warning antes de usarlo.
+EXTRA_FLAGS=""
+if [ "${1:-}" = "force" ]; then
+  EXTRA_FLAGS="--accept-data-loss"
+  echo "⚠️  Modo 'force': se pasa --accept-data-loss"
+fi
+npx prisma db push --skip-generate $EXTRA_FLAGS
 
 echo "↩️  Restaurando .env original..."
 mv "$ENV_BAK" "$ENV_REAL"
