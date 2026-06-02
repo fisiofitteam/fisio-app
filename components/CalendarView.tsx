@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -217,8 +217,8 @@ async function movePiece(pieceId: string, weekId: string, dayOfWeek: number) {
 }
 
 function MonthGrid({
-  month,
-  year,
+  month: propMonth,
+  year: propYear,
   weeks,
   events,
   onSwitchMonth,
@@ -232,6 +232,48 @@ function MonthGrid({
   const router = useRouter();
   const [eventModal, setEventModal] = useState<{ date: string; event: CalEvent | null } | null>(null);
   const [creatingWeek, setCreatingWeek] = useState(false);
+  const [movePieceModal, setMovePieceModal] = useState<{ pieceId: string; pieceTitle: string; currentDate: string } | null>(null);
+
+  // Estado local del mes mostrado. Inicial = props (URL). Cambiar localmente
+  // permite el auto-avance durante el arrastre sin perder el drag nativo
+  // (los eventos vienen pre-cargados ±2 meses; las weeks no se filtran por mes).
+  const [month, setMonth] = useState(propMonth);
+  const [year, setYear] = useState(propYear);
+  useEffect(() => { setMonth(propMonth); setYear(propYear); }, [propMonth, propYear]);
+
+  function shiftMonthLocal(delta: number) {
+    let m = month + delta;
+    let y = year;
+    if (m < 1) { m = 12; y -= 1; }
+    if (m > 12) { m = 1; y += 1; }
+    setMonth(m); setYear(y);
+  }
+
+  // Track si hay un drag de pieza en curso (para enseñar las flechas como
+  // drop zones).
+  const [dragging, setDragging] = useState(false);
+
+  // Timer del auto-avance al mantener encima de prev/next.
+  const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [advancePending, setAdvancePending] = useState<"prev" | "next" | null>(null);
+
+  function startAdvance(dir: "prev" | "next") {
+    if (advancePending === dir) return;
+    cancelAdvance();
+    setAdvancePending(dir);
+    advanceTimer.current = setTimeout(() => {
+      shiftMonthLocal(dir === "prev" ? -1 : 1);
+      setAdvancePending(null);
+      advanceTimer.current = null;
+    }, 500);
+  }
+  function cancelAdvance() {
+    if (advanceTimer.current) {
+      clearTimeout(advanceTimer.current);
+      advanceTimer.current = null;
+    }
+    setAdvancePending(null);
+  }
 
   // Crea (o abre, si ya existe) la semana de contenido para un lunes dado y
   // lleva a su vista para editarla.
@@ -311,12 +353,36 @@ function MonthGrid({
   return (
     <>
       <div className="flex items-center justify-between mb-3">
-        <button onClick={() => onSwitchMonth(-1)} className="text-sm px-3 py-1.5 border border-neutral-200 rounded hover:bg-neutral-50">
-          ← {MONTH_NAMES[month === 1 ? 12 : month - 1]}
+        <button
+          onClick={() => { shiftMonthLocal(-1); router.push(`?month=${month === 1 ? 12 : month - 1}&year=${month === 1 ? year - 1 : year}`); }}
+          onDragEnter={(e) => { e.preventDefault(); startAdvance("prev"); }}
+          onDragOver={(e) => { e.preventDefault(); }}
+          onDragLeave={() => cancelAdvance()}
+          className="text-sm px-3 py-1.5 rounded transition-colors"
+          style={{
+            background: dragging && advancePending === "prev" ? "#FEF3C7" : "#FFFFFF",
+            color: dragging && advancePending === "prev" ? "#92400E" : "#0A0A0A",
+            border: dragging ? "1px dashed " + (advancePending === "prev" ? "#F59E0B" : "#E5E5E5") : "1px solid #E5E5E5",
+          }}
+          title={dragging ? "Mantén el arrastre aquí para cambiar de mes" : ""}
+        >
+          ← {MONTH_NAMES[month === 1 ? 12 : month - 1]}{advancePending === "prev" && "…"}
         </button>
         <h2 className="text-lg font-semibold">{MONTH_NAMES[month]} {year}</h2>
-        <button onClick={() => onSwitchMonth(1)} className="text-sm px-3 py-1.5 border border-neutral-200 rounded hover:bg-neutral-50">
-          {MONTH_NAMES[month === 12 ? 1 : month + 1]} →
+        <button
+          onClick={() => { shiftMonthLocal(1); router.push(`?month=${month === 12 ? 1 : month + 1}&year=${month === 12 ? year + 1 : year}`); }}
+          onDragEnter={(e) => { e.preventDefault(); startAdvance("next"); }}
+          onDragOver={(e) => { e.preventDefault(); }}
+          onDragLeave={() => cancelAdvance()}
+          className="text-sm px-3 py-1.5 rounded transition-colors"
+          style={{
+            background: dragging && advancePending === "next" ? "#FEF3C7" : "#FFFFFF",
+            color: dragging && advancePending === "next" ? "#92400E" : "#0A0A0A",
+            border: dragging ? "1px dashed " + (advancePending === "next" ? "#F59E0B" : "#E5E5E5") : "1px solid #E5E5E5",
+          }}
+          title={dragging ? "Mantén el arrastre aquí para cambiar de mes" : ""}
+        >
+          {MONTH_NAMES[month === 12 ? 1 : month + 1]} →{advancePending === "next" && "…"}
         </button>
       </div>
 
@@ -434,8 +500,17 @@ function MonthGrid({
                               e.dataTransfer.setData("text/source-week-id", dp.weekId);
                               e.dataTransfer.setData("text/source-dayofweek", String(dp.piece.dayOfWeek));
                               e.dataTransfer.effectAllowed = "move";
+                              setDragging(true);
                             }}
-                            className="relative flex flex-col gap-0.5 text-[10px] px-1.5 py-1 rounded bg-neutral-100 hover:bg-neutral-200 leading-tight cursor-move overflow-hidden"
+                            onDragEnd={() => {
+                              setDragging(false);
+                              cancelAdvance();
+                              // Si auto-avanzamos durante el drag, sincroniza URL
+                              if (month !== propMonth || year !== propYear) {
+                                router.push(`?month=${month}&year=${year}`);
+                              }
+                            }}
+                            className="relative flex flex-col gap-0.5 text-[10px] px-1.5 py-1 pr-5 rounded bg-neutral-100 hover:bg-neutral-200 leading-tight cursor-move overflow-hidden"
                             title={`${fmtLabel}${dp.piece.hook ? " · " + dp.piece.hook : ""}${dp.weekTheme ? " · " + dp.weekTheme : ""}`}
                           >
                             {statusIcon && (
@@ -443,6 +518,23 @@ function MonthGrid({
                                 {statusIcon}
                               </span>
                             )}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setMovePieceModal({
+                                  pieceId: dp.piece.id,
+                                  pieceTitle: label,
+                                  currentDate: dateKey,
+                                });
+                              }}
+                              draggable={false}
+                              className="absolute bottom-0.5 right-0.5 text-[10px] leading-none px-1 rounded hover:bg-black/10"
+                              title="Mover a otra fecha (cualquier mes)"
+                            >
+                              ↗
+                            </button>
                             <div className="flex items-start gap-1 pr-3">
                               <span className="flex-shrink-0">{fmtIcon}</span>
                               <span className="line-clamp-2 break-words flex-1 min-w-0">
@@ -471,7 +563,7 @@ function MonthGrid({
       </section>
 
       <p className="text-[11px] text-neutral-500 italic mt-2">
-        💡 Click en cualquier día para añadir un evento (masterclass, workshop, apertura de plazas…).
+        💡 Click en cualquier día para añadir un evento · Arrastra piezas entre días para mover · Mantén el arrastre sobre ← o → para cambiar de mes · Usa ↗ en cada pieza para saltar a cualquier fecha.
       </p>
 
       {eventModal && (
@@ -482,7 +574,84 @@ function MonthGrid({
           onSaved={() => { setEventModal(null); router.refresh(); }}
         />
       )}
+
+      {movePieceModal && (
+        <MovePieceModal
+          pieceTitle={movePieceModal.pieceTitle}
+          currentDate={movePieceModal.currentDate}
+          weeks={weeks}
+          onClose={() => setMovePieceModal(null)}
+          onMove={async (newDate) => {
+            const target = findWeekForDate(weeks, newDate);
+            if (!target) {
+              alert("Ese día no está dentro de ninguna semana planificada. Crea la semana antes de mover la pieza.");
+              return;
+            }
+            const ok = await movePiece(movePieceModal.pieceId, target.weekId, target.dayOfWeek);
+            if (ok) {
+              setMovePieceModal(null);
+              router.refresh();
+            } else {
+              alert("Error al mover la pieza");
+            }
+          }}
+        />
+      )}
     </>
+  );
+}
+
+function MovePieceModal({
+  pieceTitle,
+  currentDate,
+  weeks,
+  onClose,
+  onMove,
+}: {
+  pieceTitle: string;
+  currentDate: string;
+  weeks: Week[];
+  onClose: () => void;
+  onMove: (newDate: string) => Promise<void>;
+}) {
+  const [target, setTarget] = useState(currentDate);
+  const [busy, setBusy] = useState(false);
+  const hasWeek = !!findWeekForDate(weeks, target);
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-sm p-4" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-medium text-sm">↗ Mover pieza a otra fecha</h3>
+          <button onClick={onClose} className="text-neutral-400 text-xl leading-none px-2">✕</button>
+        </div>
+        <p className="text-xs text-neutral-500 mb-3 line-clamp-2">{pieceTitle}</p>
+        <div className="mb-3">
+          <label className="text-xs text-neutral-500 block mb-1.5">Nueva fecha</label>
+          <input
+            type="date"
+            className="input text-sm w-full"
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+          />
+          {target !== currentDate && !hasWeek && (
+            <p className="text-[11px] text-amber-700 mt-1">
+              ⚠ Esa fecha no está dentro de una semana de contenido. Crea la semana antes.
+            </p>
+          )}
+        </div>
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="text-sm px-3 py-2" style={{ color: "#737373" }}>Cancelar</button>
+          <button
+            onClick={async () => { setBusy(true); await onMove(target); setBusy(false); }}
+            disabled={busy || target === currentDate || !hasWeek}
+            className="text-sm font-semibold px-3 py-2 rounded-lg disabled:opacity-50"
+            style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+          >
+            {busy ? "..." : "Mover aquí"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

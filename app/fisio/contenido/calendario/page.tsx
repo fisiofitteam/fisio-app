@@ -24,11 +24,12 @@ export default async function CalendarPage({
   if (zoneFilter !== "all") where.bodyZone = zoneFilter;
   if (typeFilter !== "all") where.weekType = typeFilter;
 
-  // Rango del mes mostrado (con margen de una semana antes y después para cubrir cuadrícula)
+  // Rango de eventos ampliado: mes mostrado +/- 2 meses, así el cliente
+  // tiene datos listos al auto-avanzar meses mientras arrastra una pieza.
   const monthStart = new Date(Date.UTC(year, month - 1, 1));
   const monthEnd = new Date(Date.UTC(year, month, 0, 23, 59, 59));
-  const rangeStart = new Date(monthStart); rangeStart.setUTCDate(monthStart.getUTCDate() - 7);
-  const rangeEnd = new Date(monthEnd); rangeEnd.setUTCDate(monthEnd.getUTCDate() + 7);
+  const rangeStart = new Date(Date.UTC(year, month - 3, 1));
+  const rangeEnd = new Date(Date.UTC(year, month + 2, 0, 23, 59, 59));
 
   const [weeks, events] = await Promise.all([
     prisma.contentWeek.findMany({

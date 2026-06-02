@@ -12,8 +12,11 @@ export default async function PatientCalendarTab({
   const year = searchParams.y ? Number(searchParams.y) : now.getFullYear();
   const month = searchParams.m ? Number(searchParams.m) : now.getMonth();
 
-  const firstDay = new Date(year, month, 1);
-  const lastDay = new Date(year, month + 1, 0, 23, 59, 59);
+  // Ventana ampliada: el mes visible +/- 2 meses, así el cliente tiene datos
+  // listos cuando el usuario auto-avanza meses mientras arrastra. Si necesita
+  // mover una sesión más lejos, usa el botón "↗ Mover" del propio chip.
+  const firstDay = new Date(year, month - 2, 1);
+  const lastDay = new Date(year, month + 3, 0, 23, 59, 59);
 
   const sessions = await prisma.programSession.findMany({
     where: {

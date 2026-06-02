@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   DndContext,
   DragEndEvent,
+  DragOverEvent,
   PointerSensor,
   useSensor,
   useSensors,
@@ -84,6 +85,18 @@ export function CalendarMonth({
   allPrograms: ProgramOption[];
 }) {
   const router = useRouter();
+  // Estado local de mes/año. Inicial = lo que viene del server (URL). Cambiar
+  // localmente nos permite auto-avanzar durante un arrastre sin perder el drag
+  // (los datos de ±2 meses ya vienen pre-cargados desde el server).
+  const [currentYear, setCurrentYear] = useState(year);
+  const [currentMonth, setCurrentMonth] = useState(month);
+  // Si el server nos pasa otro mes (porque el usuario tocó la URL), nos
+  // resincronizamos.
+  useEffect(() => {
+    setCurrentYear(year);
+    setCurrentMonth(month);
+  }, [year, month]);
+
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [assignmentModal, setAssignmentModal] = useState<{ date: string } | null>(null);
   const [addChoice, setAddChoice] = useState<{ date: string } | null>(null);
@@ -91,6 +104,58 @@ export function CalendarMonth({
   const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null);
   const [dragging, setDragging] = useState<Session | null>(null);
   const [dropAction, setDropAction] = useState<{ session: Session; targetKey: string } | null>(null);
+  const [moveToDateSession, setMoveToDateSession] = useState<Session | null>(null);
+
+  // Auto-avance al mantener el arrastre sobre las flechas de prev/next mes.
+  // Mantenemos un timer y la "zona" sobre la que está el drag para arrancarlo
+  // solo una vez por hover.
+  const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const advanceZone = useRef<"prev" | "next" | null>(null);
+  const [advancePending, setAdvancePending] = useState<"prev" | "next" | null>(null);
+
+  function clearAdvance() {
+    if (advanceTimer.current) {
+      clearTimeout(advanceTimer.current);
+      advanceTimer.current = null;
+    }
+    advanceZone.current = null;
+    setAdvancePending(null);
+  }
+
+  function scheduleAdvance(dir: "prev" | "next") {
+    if (advanceZone.current === dir) return; // ya programado
+    clearAdvance();
+    advanceZone.current = dir;
+    setAdvancePending(dir);
+    advanceTimer.current = setTimeout(() => {
+      // Ejecutar el cambio de mes localmente
+      switchMonthLocal(dir === "prev" ? -1 : 1);
+      // Re-arrancar para permitir saltos consecutivos (otro hold = otro mes)
+      advanceZone.current = null;
+      setAdvancePending(null);
+      advanceTimer.current = null;
+    }, 500);
+  }
+
+  function switchMonthLocal(delta: number) {
+    let m = currentMonth + delta;
+    let y = currentYear;
+    if (m < 0) { m = 11; y -= 1; }
+    if (m > 11) { m = 0; y += 1; }
+    setCurrentMonth(m);
+    setCurrentYear(y);
+  }
+
+  function navigateMonth(delta: number) {
+    // Navegación normal (no durante drag): cambia estado local + URL.
+    let m = currentMonth + delta;
+    let y = currentYear;
+    if (m < 0) { m = 11; y -= 1; }
+    if (m > 11) { m = 0; y += 1; }
+    setCurrentMonth(m);
+    setCurrentYear(y);
+    router.push(`?y=${y}&m=${m}`);
+  }
 
   const sessionsByDay = useMemo(() => {
     const map: Record<string, Session[]> = {};
@@ -103,28 +168,39 @@ export function CalendarMonth({
     return map;
   }, [sessions]);
 
-  const grid = useMemo(() => buildMonthGrid(year, month), [year, month]);
-  const prevMonth = month === 0 ? { y: year - 1, m: 11 } : { y: year, m: month - 1 };
-  const nextMonth = month === 11 ? { y: year + 1, m: 0 } : { y: year, m: month + 1 };
+  const grid = useMemo(() => buildMonthGrid(currentYear, currentMonth), [currentYear, currentMonth]);
+  const prevMonth = currentMonth === 0 ? { y: currentYear - 1, m: 11 } : { y: currentYear, m: currentMonth - 1 };
+  const nextMonth = currentMonth === 11 ? { y: currentYear + 1, m: 0 } : { y: currentYear, m: currentMonth + 1 };
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   function onDragEnd(e: DragEndEvent) {
     setDragging(null);
+    clearAdvance();
     if (!e.over) return;
+    const overId = String(e.over.id);
+    // Si soltó sobre las zonas de auto-avance, no hacemos nada (era solo para
+    // cambiar de mes; ya se aplicó si mantuvo 500ms).
+    if (overId === "__prev_month__" || overId === "__next_month__") return;
     const sessionId = String(e.active.id);
-    const newDateKey = String(e.over.id);
     const session = sessions.find((s) => s.id === sessionId);
     if (!session) return;
     const currentKey = dayKey(new Date(session.scheduledDate));
-    if (currentKey === newDateKey) return;
+    if (currentKey === overId) return;
     // En lugar de mover directamente, abrimos modal con elección
-    setDropAction({ session, targetKey: newDateKey });
+    setDropAction({ session, targetKey: overId });
   }
 
   function onDragStart(e: any) {
     const session = sessions.find((s) => s.id === String(e.active.id));
     if (session) setDragging(session);
+  }
+
+  function onDragOver(e: DragOverEvent) {
+    const overId = e.over?.id ? String(e.over.id) : null;
+    if (overId === "__prev_month__") scheduleAdvance("prev");
+    else if (overId === "__next_month__") scheduleAdvance("next");
+    else clearAdvance();
   }
 
   async function executeMove(session: Session, targetKey: string) {
@@ -206,17 +282,24 @@ export function CalendarMonth({
       </section>
 
       <section className="card mb-4">
-        <div className="flex justify-between items-center mb-3">
-          <Link href={`?y=${prevMonth.y}&m=${prevMonth.m}`} className="text-sm text-neutral-500 hover:text-neutral-900">
-            ← {MONTH_NAMES[prevMonth.m].slice(0, 3)}
-          </Link>
-          <h2 className="font-medium">{MONTH_NAMES[month]} {year}</h2>
-          <Link href={`?y=${nextMonth.y}&m=${nextMonth.m}`} className="text-sm text-neutral-500 hover:text-neutral-900">
-            {MONTH_NAMES[nextMonth.m].slice(0, 3)} →
-          </Link>
-        </div>
-
-        <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
+        <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragOver={onDragOver}>
+          <div className="flex justify-between items-center mb-3">
+            <MonthNavZone
+              dir="prev"
+              label={`← ${MONTH_NAMES[prevMonth.m].slice(0, 3)}`}
+              onClick={() => navigateMonth(-1)}
+              pending={advancePending === "prev"}
+              dragging={!!dragging}
+            />
+            <h2 className="font-medium">{MONTH_NAMES[currentMonth]} {currentYear}</h2>
+            <MonthNavZone
+              dir="next"
+              label={`${MONTH_NAMES[nextMonth.m].slice(0, 3)} →`}
+              onClick={() => navigateMonth(1)}
+              pending={advancePending === "next"}
+              dragging={!!dragging}
+            />
+          </div>
           <div className="grid grid-cols-5 gap-1">
             {DAY_HEADERS.map((d) => (
               <div key={d} className="text-center text-xs text-neutral-400 py-1 font-medium">{d}</div>
@@ -238,6 +321,7 @@ export function CalendarMonth({
                     if (daySessions.length > 0) setSelectedDay(key);
                     else setAddChoice({ date: key });
                   }}
+                  onMoveToDate={(s) => setMoveToDateSession(s)}
                 />
               );
             })}
@@ -252,7 +336,7 @@ export function CalendarMonth({
         </DndContext>
 
         <div className="mt-3 text-xs text-neutral-500 italic">
-          💡 Click en un día vacío → crea sesión suelta o asigna programa · Arrastra sesiones entre días para mover o duplicar
+          💡 Click en día vacío → crea sesión o asigna programa · Arrastra entre días para mover/duplicar · Mantén el arrastre sobre ← o → para cambiar de mes · Usa el botón ↗ del chip para saltar a cualquier fecha
         </div>
       </section>
 
@@ -350,6 +434,116 @@ export function CalendarMonth({
           }}
         />
       )}
+
+      {moveToDateSession && (
+        <MoveToDateModal
+          session={moveToDateSession}
+          onClose={() => setMoveToDateSession(null)}
+          onMove={async (targetKey) => {
+            const s = moveToDateSession;
+            setMoveToDateSession(null);
+            await executeMove(s, targetKey);
+          }}
+          onDuplicate={async (targetKey) => {
+            const s = moveToDateSession;
+            setMoveToDateSession(null);
+            await executeDuplicate(s, targetKey);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Botón de navegación de mes que además es zona droppable: si mantienes un
+// drag encima 500ms, el mes cambia automáticamente y el arrastre continúa.
+function MonthNavZone({
+  dir,
+  label,
+  onClick,
+  pending,
+  dragging,
+}: {
+  dir: "prev" | "next";
+  label: string;
+  onClick: () => void;
+  pending: boolean;
+  dragging: boolean;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: dir === "prev" ? "__prev_month__" : "__next_month__" });
+  const highlight = dragging && (isOver || pending);
+  return (
+    <button
+      ref={setNodeRef}
+      onClick={onClick}
+      className="text-sm px-2 py-1 rounded transition-colors"
+      style={{
+        background: highlight ? "#FEF3C7" : "transparent",
+        color: highlight ? "#92400E" : "#737373",
+        border: dragging ? "1px dashed " + (highlight ? "#F59E0B" : "#E5E5E5") : "1px solid transparent",
+      }}
+      title={dragging ? "Mantén el arrastre aquí para cambiar de mes" : label}
+    >
+      {label}
+      {pending && <span className="ml-1 animate-pulse">…</span>}
+    </button>
+  );
+}
+
+// Modal para mover/duplicar una sesión a cualquier fecha (incluyendo otros meses).
+function MoveToDateModal({
+  session,
+  onClose,
+  onMove,
+  onDuplicate,
+}: {
+  session: Session;
+  onClose: () => void;
+  onMove: (targetKey: string) => Promise<void>;
+  onDuplicate: (targetKey: string) => Promise<void>;
+}) {
+  const currentKey = dayKey(new Date(session.scheduledDate));
+  const [target, setTarget] = useState(currentKey);
+  const [busy, setBusy] = useState<"move" | "dup" | null>(null);
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-sm p-4" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-medium text-sm">↗ Mover sesión a otra fecha</h3>
+          <button onClick={onClose} className="text-neutral-400 text-xl leading-none px-2">✕</button>
+        </div>
+        <p className="text-xs text-neutral-500 mb-3">
+          {session.programName} · actualmente {new Date(session.scheduledDate).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })}
+        </p>
+        <div className="mb-4">
+          <label className="text-xs text-neutral-500 block mb-1.5">Nueva fecha</label>
+          <input
+            type="date"
+            className="input text-sm w-full"
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+          />
+        </div>
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={async () => { setBusy("dup"); await onDuplicate(target); }}
+            disabled={busy !== null || target === currentKey}
+            className="text-sm px-3 py-2 rounded-lg disabled:opacity-50"
+            style={{ background: "#F5F5F5", color: "#0A0A0A", border: "1px solid #E5E5E5" }}
+          >
+            {busy === "dup" ? "..." : "Duplicar aquí"}
+          </button>
+          <button
+            onClick={async () => { setBusy("move"); await onMove(target); }}
+            disabled={busy !== null || target === currentKey}
+            className="text-sm font-semibold px-3 py-2 rounded-lg disabled:opacity-50"
+            style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+          >
+            {busy === "move" ? "..." : "Mover aquí"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -389,6 +583,7 @@ function DroppableDay({
   dayNumber,
   sessions,
   onClick,
+  onMoveToDate,
 }: {
   dateKey: string;
   inMonth: boolean;
@@ -396,6 +591,7 @@ function DroppableDay({
   dayNumber: number;
   sessions: Session[];
   onClick: () => void;
+  onMoveToDate: (s: Session) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: dateKey });
 
@@ -418,7 +614,7 @@ function DroppableDay({
       {sessions.length > 0 && (
         <div className="mt-1 space-y-0.5">
           {sessions.slice(0, 2).map((s) => (
-            <DraggableSession key={s.id} session={s} />
+            <DraggableSession key={s.id} session={s} onMoveToDate={() => onMoveToDate(s)} />
           ))}
           {sessions.length > 2 && <div className="text-[10px] text-neutral-500">+{sessions.length - 2}</div>}
         </div>
@@ -427,7 +623,7 @@ function DroppableDay({
   );
 }
 
-function DraggableSession({ session }: { session: Session }) {
+function DraggableSession({ session, onMoveToDate }: { session: Session; onMoveToDate: () => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: session.id });
   const style = transform
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, opacity: isDragging ? 0.4 : 1 }
@@ -461,12 +657,21 @@ function DraggableSession({ session }: { session: Session }) {
       style={style}
       {...listeners}
       {...attributes}
-      className={`text-[10px] px-1 py-0.5 rounded truncate cursor-grab active:cursor-grabbing ${
+      className={`relative text-[10px] px-1 py-0.5 pr-4 rounded truncate cursor-grab active:cursor-grabbing group ${
         session.completedAt ? "bg-emerald-100 text-emerald-800" : colorFor(session.programType)
       }`}
     >
       {session.completedAt && "✓ "}
       {displayTitle}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onMoveToDate(); }}
+        onPointerDown={(e) => e.stopPropagation()}
+        className="absolute right-0.5 top-1/2 -translate-y-1/2 px-1 text-[10px] leading-none rounded hover:bg-black/10"
+        title="Mover a otra fecha (cualquier mes)"
+      >
+        ↗
+      </button>
     </div>
   );
 }
