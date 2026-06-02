@@ -47,7 +47,7 @@ export function CallAnamnesisSection({
   return (
     <section>
       <h2 className="font-medium mb-2">Llamada Anamnesis</h2>
-      <details className="card group" open={hasContent ? undefined : false}>
+      <details className="card group">
         <summary className="flex justify-between items-center gap-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
           <div>
             <div className="font-medium text-sm">📞 Notas de la llamada de anamnesis</div>
