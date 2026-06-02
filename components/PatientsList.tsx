@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { ProgressRing } from "@/components/ProgressRing";
 import { PatientPill, PROGRAM_TYPES, DIFFICULTIES, PROGRAM_LABELS, DIFFICULTY_LABELS } from "@/components/PatientPills";
+import { LegacyCreatePatientModal } from "@/components/LegacyCreatePatientModal";
 
 type Patient = {
   id: string;
@@ -60,6 +61,7 @@ export function PatientsList({
   const router = useRouter();
   const [reassigning, setReassigning] = useState<Patient | null>(null);
   const [creating, setCreating] = useState(false);
+  const [creatingLegacy, setCreatingLegacy] = useState(false);
   // Managers y fisios pueden crear pacientes (de momento).
   const canCreate = currentUser.isManager || currentUser.role === "fisio";
 
@@ -76,13 +78,23 @@ export function PatientsList({
       <header className="mb-4 flex items-start justify-between gap-3">
         <h1 className="text-xl font-semibold">Pacientes</h1>
         {canCreate && (
-          <button
-            onClick={() => setCreating(true)}
-            className="text-sm font-medium px-3 py-2 rounded-lg whitespace-nowrap"
-            style={{ background: "#0A0A0A", color: "#FAFAFA" }}
-          >
-            + Nuevo paciente
-          </button>
+          <div className="flex gap-1.5 flex-wrap justify-end">
+            <button
+              onClick={() => setCreatingLegacy(true)}
+              className="text-sm font-medium px-3 py-2 rounded-lg whitespace-nowrap"
+              style={{ background: "#FFFFFF", color: "#0A0A0A", border: "1px solid #E5E5E5" }}
+              title="Migrar paciente que ya tenemos fuera de la plataforma"
+            >
+              📥 Paciente existente
+            </button>
+            <button
+              onClick={() => setCreating(true)}
+              className="text-sm font-medium px-3 py-2 rounded-lg whitespace-nowrap"
+              style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+            >
+              + Nuevo paciente
+            </button>
+          </div>
         )}
       </header>
 
@@ -171,6 +183,18 @@ export function PatientsList({
           onClose={() => setCreating(false)}
           onCreated={(patientId) => {
             setCreating(false);
+            router.push(`/fisio/paciente/${patientId}`);
+          }}
+        />
+      )}
+
+      {creatingLegacy && canCreate && (
+        <LegacyCreatePatientModal
+          professionals={professionals}
+          rollingPrograms={rollingPrograms}
+          onClose={() => setCreatingLegacy(false)}
+          onCreated={(patientId) => {
+            setCreatingLegacy(false);
             router.push(`/fisio/paciente/${patientId}`);
           }}
         />

@@ -27,6 +27,12 @@ export async function POST(req: NextRequest) {
     amountPaid,
     programMode,        // "fixed" | "rolling"
     rollingProgramId,   // requerido si programMode = "rolling"
+    // Flujo "paciente existente" (migración): si legacy=true, NO se genera la
+    // Transaction de ingreso, se ignora amountPaid y se respeta la
+    // subscriptionStartDate enviada (puede ser pasada). Hace que el alta no
+    // contamine las métricas de "ingresos por altas".
+    legacy,
+    subscriptionStartDate: customStartDateIso,
   } = body;
 
   // Validaciones mínimas
@@ -81,6 +87,18 @@ export async function POST(req: NextRequest) {
     ? user.id
     : (assignedProfessionalId || null);
 
+  const isLegacy = legacy === true;
+  // Fecha de inicio del periodo actual. Legacy puede pasar una fecha pasada.
+  // Si no se pasa nada, hoy.
+  let startDate = new Date();
+  if (customStartDateIso && typeof customStartDateIso === "string") {
+    const parsed = new Date(customStartDateIso);
+    if (!isNaN(parsed.getTime())) {
+      parsed.setHours(0, 0, 0, 0);
+      startDate = parsed;
+    }
+  }
+
   // 1) Crear paciente
   const patient = await prisma.patient.create({
     data: {
@@ -89,7 +107,7 @@ export async function POST(req: NextRequest) {
       sport: "CrossFit",
       diagnosis: diagnosis?.trim() || null,
       shippingPhone: shippingPhone?.trim() || null,
-      subscriptionStartDate: new Date(),
+      subscriptionStartDate: startDate,
       subscriptionPeriodMonths: Number(subscriptionPeriodMonths) || 4,
       subscriptionTotalMonths: Number(subscriptionPeriodMonths) || 4,
       assignedProfessionalId: finalAssigneeId,
@@ -99,7 +117,9 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // 1b) Crear automáticamente Periodo 1 en SubscriptionRenewal
+  // 1b) Crear automáticamente Periodo 1 en SubscriptionRenewal con la fecha
+  // de inicio real (puede ser pasada para legacy). Esto es lo que alimenta
+  // la lógica de "renueva en X días" y el flujo de RenewalCheckout.
   const periodStart = patient.subscriptionStartDate ?? new Date();
   const periodEnd = new Date(periodStart);
   periodEnd.setMonth(periodEnd.getMonth() + patient.subscriptionPeriodMonths);
@@ -111,13 +131,14 @@ export async function POST(req: NextRequest) {
       startDate: periodStart,
       endDate: periodEnd,
       status: "active",
-      amountPaid: amountPaid && Number(amountPaid) > 0 ? Number(amountPaid) : null,
-      notes: "Alta inicial",
+      amountPaid: !isLegacy && amountPaid && Number(amountPaid) > 0 ? Number(amountPaid) : null,
+      notes: isLegacy ? "Migración (paciente existente)" : "Alta inicial",
     },
   });
 
-  // 2) Si se indicó importe, generar transacción
-  if (amountPaid && Number(amountPaid) > 0) {
+  // 2) Si NO es legacy y se indicó importe, generar transacción de ingreso.
+  // En el flujo legacy nunca generamos Transaction para no contaminar métricas.
+  if (!isLegacy && amountPaid && Number(amountPaid) > 0) {
     await prisma.transaction.create({
       data: {
         type: "income_new",
