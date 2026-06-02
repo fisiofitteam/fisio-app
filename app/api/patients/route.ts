@@ -163,6 +163,7 @@ export async function PATCH(req: NextRequest) {
     loadReviewIntervalWeeks,
     loadReviewLastAt,
     fisioNotes,
+    anamnesisCallNotes,
     programMode,
     rollingProgramId,
     rollingAccessoriesId,
@@ -270,6 +271,9 @@ export async function PATCH(req: NextRequest) {
       }),
       ...(fisioNotes !== undefined && {
         fisioNotes: typeof fisioNotes === "string" && fisioNotes.trim() ? fisioNotes : null,
+      }),
+      ...(anamnesisCallNotes !== undefined && {
+        anamnesisCallNotes: typeof anamnesisCallNotes === "string" && anamnesisCallNotes.trim() ? anamnesisCallNotes : null,
       }),
       ...(programMode !== undefined && { programMode: programMode === "rolling" ? "rolling" : "fixed" }),
       ...(rollingProgramId !== undefined && { rollingProgramId: rollingProgramId || null }),

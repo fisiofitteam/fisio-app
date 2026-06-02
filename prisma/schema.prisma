@@ -80,6 +80,9 @@ model Patient {
   // Notas internas del fisio sobre el paciente.
   fisioNotes              String?
 
+  // Notas de la "Llamada Anamnesis".
+  anamnesisCallNotes      String?
+
   // ─── ONBOARDING v57 ─────────────────────────────────────────────────────
   // Estado del flujo de onboarding tras pagar:
   //   "pending_assignment" → ha pagado, Miguel aún no le ha asignado fisio

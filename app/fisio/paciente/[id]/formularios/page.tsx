@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getOnboardingConfig } from "@/lib/onboarding-config";
+import { CallAnamnesisSection } from "@/components/CallAnamnesisSection";
 
 function fDate(d: Date | string): string {
   return new Date(d).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
@@ -128,6 +129,9 @@ export default async function PatientFormsTab({ params }: { params: { id: string
           </details>
         )}
       </section>
+
+      {/* ── Llamada Anamnesis (texto manual) ───────────────────────────── */}
+      <CallAnamnesisSection patientId={patient.id} initialText={patient.anamnesisCallNotes ?? null} />
 
       {/* ── Formularios de sesión ───────────────────────────────────────── */}
       <section>

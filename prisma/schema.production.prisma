@@ -87,6 +87,10 @@ model Patient {
   // el botón "Notas" en la cabecera de la ficha. Solo visible al equipo.
   fisioNotes              String?
 
+  // Notas de la "Llamada Anamnesis" (videollamada de valoración inicial con el
+  // fisio). Texto libre, editable desde la pestaña Formularios del paciente.
+  anamnesisCallNotes      String?
+
   // ─── ONBOARDING v57 ─────────────────────────────────────────────────────
   // Estado del flujo de onboarding tras pagar:
   //   "pending_assignment" → ha pagado, Miguel aún no le ha asignado fisio
