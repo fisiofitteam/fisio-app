@@ -77,6 +77,9 @@ model Patient {
   loadReviewIntervalWeeks Int      @default(4)
   loadReviewLastAt        DateTime?
 
+  // Notas internas del fisio sobre el paciente.
+  fisioNotes              String?
+
   // ─── ONBOARDING v57 ─────────────────────────────────────────────────────
   // Estado del flujo de onboarding tras pagar:
   //   "pending_assignment" → ha pagado, Miguel aún no le ha asignado fisio

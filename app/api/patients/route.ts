@@ -162,6 +162,7 @@ export async function PATCH(req: NextRequest) {
     country,
     loadReviewIntervalWeeks,
     loadReviewLastAt,
+    fisioNotes,
     programMode,
     rollingProgramId,
     rollingAccessoriesId,
@@ -266,6 +267,9 @@ export async function PATCH(req: NextRequest) {
       }),
       ...(loadReviewLastAt !== undefined && {
         loadReviewLastAt: loadReviewLastAt ? new Date(loadReviewLastAt) : null,
+      }),
+      ...(fisioNotes !== undefined && {
+        fisioNotes: typeof fisioNotes === "string" && fisioNotes.trim() ? fisioNotes : null,
       }),
       ...(programMode !== undefined && { programMode: programMode === "rolling" ? "rolling" : "fixed" }),
       ...(rollingProgramId !== undefined && { rollingProgramId: rollingProgramId || null }),

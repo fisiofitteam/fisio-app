@@ -7,6 +7,7 @@ import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { PatientPill } from "@/components/PatientPills";
 import { GoToPatient } from "@/components/GoToPatient";
 import { LoadReviewIntervalSelector } from "@/components/LoadReviewIntervalSelector";
+import { PatientNotesButton } from "@/components/PatientNotesButton";
 import { calculateAdherence } from "@/lib/adherence";
 import { getActiveProfessional } from "@/lib/session";
 
@@ -80,6 +81,10 @@ export default async function PatientLayout({
             <LoadReviewIntervalSelector
               patientId={patient.id}
               initialWeeks={patient.loadReviewIntervalWeeks ?? 4}
+            />
+            <PatientNotesButton
+              patientId={patient.id}
+              initialNotes={patient.fisioNotes ?? null}
             />
             <Link href={`/fisio/paciente/${patient.id}/exportar`} className="btn btn-ghost text-xs" title="Exportar toda la información del paciente en PDF">
               🖨️ Exportar PDF
