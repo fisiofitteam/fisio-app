@@ -8,8 +8,15 @@ type Template = { id: string; title: string; bodyText: string; exerciseIds: stri
 export function WorkoutTaskEditor({ task, onClose, onSave }: { task: any; onClose: () => void; onSave?: (snapshot: any) => void }) {
   const [title, setTitle] = useState(task.title);
   const [bodyText, setBodyText] = useState(task.workout?.bodyText ?? task.bodyText ?? "");
+  // Soporta 3 formas de leer ejercicios:
+  //   - task.workout.exercises[].exercise (modo BD)
+  //   - task.exercises[]                  (snapshot moderno)
+  //   - task.linkedExercises[]            (snapshot legacy, mantenido por compat)
   const [linkedExercises, setLinkedExercises] = useState<any[]>(
-    task.workout?.exercises?.map((we: any) => we.exercise) ?? task.linkedExercises ?? []
+    task.workout?.exercises?.map((we: any) => we.exercise)
+      ?? task.exercises
+      ?? task.linkedExercises
+      ?? []
   );
   const [library, setLibrary] = useState<any[]>([]);
   const [search, setSearch] = useState("");
@@ -70,13 +77,23 @@ export function WorkoutTaskEditor({ task, onClose, onSave }: { task: any; onClos
         });
       } catch {}
     }
-    // Modo snapshot: devuelve el task actualizado por callback
+    // Modo snapshot: devuelve el task actualizado por callback. Emitimos
+    // `exercises` con el shape plano que espera SessionRunner (lo que generamos
+    // en generateSessions). Limpiamos cualquier `linkedExercises` legacy para
+    // que el snapshot quede normalizado.
     if (onSave) {
+      const { linkedExercises: _legacy, ...rest } = task;
       onSave({
-        ...task,
+        ...rest,
         title,
         bodyText,
-        linkedExercises,
+        exercises: linkedExercises.map((ex: any) => ({
+          id: ex.id,
+          name: ex.name,
+          category: ex.category,
+          youtubeUrl: ex.youtubeUrl ?? null,
+          description: ex.description ?? null,
+        })),
       });
       setSaving(false);
       onClose();

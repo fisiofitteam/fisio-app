@@ -968,7 +968,7 @@ function EditSessionModal({
       title: type === "WORKOUT" ? "Workout" : type === "VIDEO" ? "Vídeo" : type === "FORM" ? "Formulario" : "Registrar evolución",
       order: tasks.length,
     };
-    if (type === "WORKOUT") { newTask.bodyText = ""; newTask.linkedExercises = []; }
+    if (type === "WORKOUT") { newTask.bodyText = ""; newTask.exercises = []; }
     if (type === "VIDEO") { newTask.youtubeUrl = ""; newTask.description = ""; }
     if (type === "FORM") { newTask.questions = "[]"; }
     if (type === "EVOLUTION") { newTask.instructions = ""; }

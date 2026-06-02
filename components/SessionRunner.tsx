@@ -4,18 +4,37 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { youtubeEmbedUrl } from "@/lib/youtube";
 
+type Exercise = { id: string; name: string; category: string; youtubeUrl: string | null; description: string | null };
+
 type Task = {
   id: string;
   type: "WORKOUT" | "VIDEO" | "FORM" | "EVOLUTION";
   title: string;
   order: number;
   bodyText?: string;
-  exercises?: { id: string; name: string; category: string; youtubeUrl: string | null; description: string | null }[];
+  // Snapshot moderno: `exercises` con campos planos.
+  exercises?: Exercise[];
+  // Snapshots antiguos guardaron los ejercicios bajo `linkedExercises` (legacy
+  // del WorkoutTaskEditor en modo snapshot). Toleramos ambos.
+  linkedExercises?: Exercise[];
   youtubeUrl?: string;
   description?: string | null;
   questions?: { id: string; text: string; type: string; min?: number; max?: number; options?: string[] }[];
   instructions?: string | null;
 };
+
+// Normaliza la lista de ejercicios de una tarea WORKOUT independientemente de
+// cómo se serializó el snapshot.
+function getTaskExercises(t: Task): Exercise[] {
+  const arr = t.exercises ?? t.linkedExercises ?? [];
+  return arr.map((ex: any) => ({
+    id: String(ex.id),
+    name: String(ex.name ?? ""),
+    category: String(ex.category ?? ""),
+    youtubeUrl: ex.youtubeUrl ?? null,
+    description: ex.description ?? null,
+  }));
+}
 
 export function SessionRunner({
   sessionId,
@@ -75,18 +94,20 @@ export function SessionRunner({
             </div>
           </div>
 
-          {task.type === "WORKOUT" && (
+          {task.type === "WORKOUT" && (() => {
+            const ex = getTaskExercises(task);
+            return (
             <div>
               {task.bodyText && (
                 <pre className="whitespace-pre-wrap font-mono text-sm bg-neutral-50 p-3 rounded-lg">
                   {task.bodyText}
                 </pre>
               )}
-              {task.exercises && task.exercises.length > 0 && (
+              {ex.length > 0 && (
                 <div className="mt-3">
                   <div className="text-xs text-neutral-500 mb-2">Vídeos de referencia</div>
                   <div className="space-y-2">
-                    {task.exercises.map((ex) => {
+                    {ex.map((ex) => {
                       const embed = ex.youtubeUrl ? youtubeEmbedUrl(ex.youtubeUrl) : null;
                       const isOpen = expandedExercise === ex.id;
                       return (
@@ -122,7 +143,8 @@ export function SessionRunner({
                 </div>
               )}
             </div>
-          )}
+            );
+          })()}
 
           {task.type === "VIDEO" && (
             <div>
