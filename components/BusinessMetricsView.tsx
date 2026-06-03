@@ -132,12 +132,6 @@ function ResumenView({
         <Kpi label="Beneficio" value={eur(m.profit)} tone={m.profit >= 0 ? "neutral" : "red"} sub={m.profitPct !== null ? `${m.profitPct >= 0 ? "+" : ""}${m.profitPct}% sobre ingresos` : undefined} />
       </Section>
 
-      <Section title="Adquisición (período)">
-        <Kpi label="Altas nuevas" value={String(m.newAltas)} sub={m.newSaleRevenue > 0 ? eur(m.newSaleRevenue) : undefined} />
-        <Kpi label="Ticket medio" value={m.ticketAvg !== null ? eur(m.ticketAvg) : "—"} sub="por alta nueva" />
-        <Kpi label="CAC" value={m.cac !== null ? eur(m.cac) : "—"} sub={`ADS ${eur(m.marketingSpend)} + comisión ${eur(m.closerCommission)} + sueldo ${eur(m.closerSalary)}`} />
-      </Section>
-
       <Section title="Llamadas comerciales (período)">
         <Kpi label="Agendadas" value={String(m.callsScheduled)} sub="leads con cita en el periodo" />
         <Kpi label="Realizadas" value={String(m.callsDone)} sub="won o lost (sí asistió)" />
@@ -147,6 +141,12 @@ function ResumenView({
           tone={m.showRate !== null && m.showRate >= 70 ? "emerald" : m.showRate !== null && m.showRate < 50 ? "red" : "neutral"}
           sub={m.callsNoShow > 0 ? `${m.callsNoShow} no_show · base ${m.callsDone + m.callsNoShow}` : "sin no_shows aún"}
         />
+      </Section>
+
+      <Section title="Adquisición (período)">
+        <Kpi label="Altas nuevas" value={String(m.newAltas)} sub={m.newSaleRevenue > 0 ? eur(m.newSaleRevenue) : undefined} />
+        <Kpi label="Ticket medio" value={m.ticketAvg !== null ? eur(m.ticketAvg) : "—"} sub="por alta nueva" />
+        <Kpi label="CAC" value={m.cac !== null ? eur(m.cac) : "—"} sub={`ADS ${eur(m.marketingSpend)} + comisión ${eur(m.closerCommission)} + sueldo ${eur(m.closerSalary)}`} />
       </Section>
 
       <Section title="Cliente y retención">
