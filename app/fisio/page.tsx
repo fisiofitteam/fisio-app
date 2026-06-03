@@ -12,6 +12,8 @@ import { CEOPanelTabs } from "@/components/CEOPanelTabs";
 import { FisioPanelTabs } from "@/components/FisioPanelTabs";
 import { ProgramEndingsBox } from "@/components/ProgramEndingsBox";
 import { LoadReviewsBox } from "@/components/LoadReviewsBox";
+import { WeeklyTeamTasksBoard } from "@/components/WeeklyTeamTasksBoard";
+import { buildWeeklyBoardForProfessional } from "@/lib/weekly-team-tasks";
 
 const TYPE_LABELS: Record<string, string> = {
   optimizacion: "Optimización",
@@ -142,6 +144,14 @@ export default async function FisioPanelPage({
   const loadReviews = await getLoadReviewsForProfessional(user.id, {
     all: user.role === "ceo",
   });
+
+  // Board semanal de tareas del equipo (fisio / head_success). El CEO ve los
+  // dos paneles + edita en /fisio/tareas; fisios y head_success ven solo el
+  // suyo en modo "self" (las completadas desaparecen).
+  const weeklyBoard =
+    user.role === "fisio" || user.role === "head_success"
+      ? await buildWeeklyBoardForProfessional(user.id, user.role)
+      : null;
 
   // Métricas para managers en el período seleccionado
   let teamRenewals = { renewed: 0, lost: 0, total: 0, rate: null as number | null };
@@ -294,6 +304,16 @@ export default async function FisioPanelPage({
   // pacientes (programas a terminar, cargas, formularios, etc.).
   const panelContent = (
     <>
+      {weeklyBoard && (
+        <div className="mb-5">
+          <WeeklyTeamTasksBoard
+            board={weeklyBoard}
+            role={user.role as "fisio" | "head_success"}
+            mode="self"
+          />
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-5">
         <ProgramEndingsBox initialItems={programEndings} />
         <LoadReviewsBox initialItems={loadReviews} />
@@ -327,36 +347,9 @@ export default async function FisioPanelPage({
           )}
         </section>
 
-        <section className="card">
-          <div className="flex justify-between items-center mb-3">
-            <h2 className="font-medium text-sm">Tareas pendientes</h2>
-            <Link href="/fisio/tareas" className="text-xs text-neutral-500 hover:text-neutral-900">Ver todas →</Link>
-          </div>
-          {tasks.length === 0 ? (
-            <p className="text-xs text-neutral-400 py-4 text-center">No hay tareas pendientes</p>
-          ) : (
-            <div className="divide-y divide-neutral-100">
-              {tasks.map((t) => (
-                <div key={t.id} className="py-2 text-sm">
-                  <div className="flex items-start gap-2">
-                    <span className="text-neutral-300 mt-0.5">☐</span>
-                    <div className="flex-1 min-w-0">
-                      <div>{t.title}</div>
-                      <div className="text-xs text-neutral-500 mt-0.5 flex gap-2">
-                        {t.patient && <span>· {t.patient.fullName}</span>}
-                        {t.dueDate && (
-                          <span className={daysFromNow(t.dueDate) < 0 ? "text-red-600" : daysFromNow(t.dueDate) <= 1 ? "text-amber-700" : ""}>
-                            {formatDueDate(t.dueDate)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
+{/* "Tareas pendientes" (FisioTask) se quitó del panel — se sustituyó por
+            WeeklyTeamTasksBoard arriba. La página /fisio/tareas mantiene la
+            antigua lista para FisioTask por compat, pero no se enseña aquí. */}
 
         <section className="card">
           <div className="flex justify-between items-center mb-3">

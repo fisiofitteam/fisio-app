@@ -213,6 +213,7 @@ model Professional {
   communityFeedPosts     CommunityFeedPost[] @relation("FeedPostAuthor")
   communityFeedComments  CommunityComment[]  @relation("FeedCommentAuthor")
   communityFeedReactions CommunityReaction[] @relation("FeedReactionAuthor")
+  weeklyTeamTaskCompletions WeeklyTeamTaskCompletion[] @relation("WeeklyTeamTaskCompletions")
 }
 
 // Condiciones laborales / compensación de un profesional (1:1). Solo CEO edita.
@@ -1760,6 +1761,49 @@ model CommunityLessonProgress {
 
   @@unique([lessonId, patientId])
   @@index([patientId])
+}
+
+// ============================================================================
+// TAREAS SEMANALES DEL EQUIPO (panel principal de fisios y head_success)
+// ============================================================================
+// El CEO configura tareas recurrentes que aparecen cada semana en el panel
+// principal de los fisios y del head_success. Cada tarea va asignada a un día
+// y un rol. Las completaciones se trackean por semana → cada lunes 00:00
+// Madrid las tareas vuelven a aparecer "pendientes" (sin reset real en BD: la
+// vista filtra por weekStartDate). Historial completo para auditoría del CEO.
+//
+// targetRole: "fisio" | "head_success" (singular por ahora).
+// dayOfWeek:  1..5 (L..V).
+// ============================================================================
+
+model WeeklyTeamTask {
+  id          String   @id @default(cuid())
+  title       String                              // "Pasar feedback", "Soporte", ...
+  dayOfWeek   Int                                 // 1=L, 2=M, 3=X, 4=J, 5=V
+  targetRole  String                              // "fisio" | "head_success"
+  order       Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  completions WeeklyTeamTaskCompletion[]
+
+  @@index([targetRole, dayOfWeek, order])
+}
+
+model WeeklyTeamTaskCompletion {
+  id             String   @id @default(cuid())
+  taskId         String
+  task           WeeklyTeamTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  professionalId String
+  professional   Professional   @relation("WeeklyTeamTaskCompletions", fields: [professionalId], references: [id], onDelete: Cascade)
+  // Lunes 00:00 UTC de la semana Madrid en la que se marcó (misma técnica que
+  // weekStartDate() de lib/program-pauses).
+  weekStartDate  DateTime
+  completedAt    DateTime @default(now())
+
+  @@unique([taskId, professionalId, weekStartDate])
+  @@index([weekStartDate, professionalId])
 }
 
 // Datos manuales mensuales del cuadro de mandos (seguidores, inversión ADS).

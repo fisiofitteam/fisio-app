@@ -202,6 +202,7 @@ model Professional {
   communityFeedPosts     CommunityFeedPost[] @relation("FeedPostAuthor")
   communityFeedComments  CommunityComment[]  @relation("FeedCommentAuthor")
   communityFeedReactions CommunityReaction[] @relation("FeedReactionAuthor")
+  weeklyTeamTaskCompletions WeeklyTeamTaskCompletion[] @relation("WeeklyTeamTaskCompletions")
 }
 
 // Condiciones laborales / compensación de un profesional (1:1). Solo CEO edita.
@@ -1749,6 +1750,34 @@ model CommunityLessonProgress {
 
   @@unique([lessonId, patientId])
   @@index([patientId])
+}
+
+// Tareas semanales del equipo (mismo patrón que prod).
+model WeeklyTeamTask {
+  id          String   @id @default(cuid())
+  title       String
+  dayOfWeek   Int
+  targetRole  String
+  order       Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  completions WeeklyTeamTaskCompletion[]
+
+  @@index([targetRole, dayOfWeek, order])
+}
+
+model WeeklyTeamTaskCompletion {
+  id             String   @id @default(cuid())
+  taskId         String
+  task           WeeklyTeamTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  professionalId String
+  professional   Professional   @relation("WeeklyTeamTaskCompletions", fields: [professionalId], references: [id], onDelete: Cascade)
+  weekStartDate  DateTime
+  completedAt    DateTime @default(now())
+
+  @@unique([taskId, professionalId, weekStartDate])
+  @@index([weekStartDate, professionalId])
 }
 
 // Datos manuales mensuales del cuadro de mandos (seguidores, inversión ADS).
