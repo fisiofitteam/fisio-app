@@ -35,13 +35,21 @@ export default async function TasksPage() {
   const prevMonday = new Date(monday);
   prevMonday.setUTCDate(prevMonday.getUTCDate() - 7);
 
-  const [allTasks, professionals, allCompletions, adHocFisio, adHocHead] = await Promise.all([
+  const adHocOrderBy = [
+    { active: "desc" as const },
+    { kind: "asc" as const },
+    { startDate: "asc" as const },
+    { dayOfMonth: "asc" as const },
+    { createdAt: "asc" as const },
+  ];
+
+  const [allTasks, professionals, allCompletions, adHocFisio, adHocHead, adHocSetter, adHocCloser] = await Promise.all([
     prisma.weeklyTeamTask.findMany({
       where: { active: true, targetRole: { in: ["fisio", "head_success"] } },
       orderBy: [{ targetRole: "asc" }, { dayOfWeek: "asc" }, { order: "asc" }],
     }),
     prisma.professional.findMany({
-      where: { role: { in: ["fisio", "head_success"] }, active: true },
+      where: { role: { in: ["fisio", "head_success", "setter", "closer"] }, active: true },
       orderBy: [{ role: "asc" }, { fullName: "asc" }],
       select: { id: true, fullName: true, role: true },
     }),
@@ -49,23 +57,19 @@ export default async function TasksPage() {
       where: { weekStartDate: { in: [monday, prevMonday] } },
       select: { taskId: true, professionalId: true, weekStartDate: true },
     }),
-    prisma.teamTaskAdHoc.findMany({
-      where: { targetRole: "fisio" },
-      orderBy: [{ active: "desc" }, { kind: "asc" }, { startDate: "asc" }, { dayOfMonth: "asc" }, { createdAt: "asc" }],
-    }),
-    prisma.teamTaskAdHoc.findMany({
-      where: { targetRole: "head_success" },
-      orderBy: [{ active: "desc" }, { kind: "asc" }, { startDate: "asc" }, { dayOfMonth: "asc" }, { createdAt: "asc" }],
-    }),
+    prisma.teamTaskAdHoc.findMany({ where: { targetRole: "fisio" }, orderBy: adHocOrderBy }),
+    prisma.teamTaskAdHoc.findMany({ where: { targetRole: "head_success" }, orderBy: adHocOrderBy }),
+    prisma.teamTaskAdHoc.findMany({ where: { targetRole: "setter" }, orderBy: adHocOrderBy }),
+    prisma.teamTaskAdHoc.findMany({ where: { targetRole: "closer" }, orderBy: adHocOrderBy }),
   ]);
 
-  // En la lista de asignados de tareas "para fisios" incluimos también al
-  // head_success: ejerce las dos cosas, así que se le puede asignar (o no)
-  // explícitamente una tarea de fisio. Le añadimos ⭐ para distinguirlo.
+  // Pickers de asignados por rol.
   const fisioPros = professionals
     .filter((p) => p.role === "fisio" || p.role === "head_success")
     .map((p) => ({ id: p.id, fullName: p.role === "head_success" ? `${p.fullName} ⭐` : p.fullName }));
   const headPros = professionals.filter((p) => p.role === "head_success").map((p) => ({ id: p.id, fullName: p.fullName }));
+  const setterPros = professionals.filter((p) => p.role === "setter").map((p) => ({ id: p.id, fullName: p.fullName }));
+  const closerPros = professionals.filter((p) => p.role === "closer").map((p) => ({ id: p.id, fullName: p.fullName }));
 
   function parseAssigneesJson(json: string | null | undefined): string[] {
     if (!json) return [];
@@ -183,6 +187,24 @@ export default async function TasksPage() {
         )}
         <AdHocTasksManager role="head_success" initialTasks={serializeAdHoc(adHocHead)} professionals={headPros} canCreateThisRole={isCeo} />
       </section>
+
+      {isCeo && (
+        <section className="space-y-3">
+          <h2 className="text-sm font-medium text-neutral-700 px-1">💼 Equipo comercial</h2>
+          <AdHocTasksManager
+            role="setter"
+            initialTasks={serializeAdHoc(adHocSetter)}
+            professionals={setterPros}
+            canCreateThisRole={true}
+          />
+          <AdHocTasksManager
+            role="closer"
+            initialTasks={serializeAdHoc(adHocCloser)}
+            professionals={closerPros}
+            canCreateThisRole={true}
+          />
+        </section>
+      )}
 
       {isCeo && <CeoTeamTasksAudit audit={audit} />}
     </main>

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 
-const VALID_ROLES = ["fisio", "head_success"];
+const VALID_ROLES = ["fisio", "head_success", "setter", "closer"];
 const VALID_KINDS = ["monthly", "monthly_weekday", "range"];
 
 // GET /api/team-tasks-adhoc?role=fisio → lista CRUD para CEO + head_success.

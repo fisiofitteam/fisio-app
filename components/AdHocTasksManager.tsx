@@ -20,9 +20,23 @@ type AdHocTask = {
 };
 
 type ProfessionalLite = { id: string; fullName: string };
+type RoleKey = "fisio" | "head_success" | "setter" | "closer";
 
 const NTH_LABELS: Record<number, string> = { 1: "1er", 2: "2º", 3: "3er", 4: "4º", [-1]: "último" };
 const DAY_NAMES_LONG = ["", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
+
+const ROLE_LABEL_SINGULAR: Record<RoleKey, string> = {
+  fisio: "Fisios",
+  head_success: "Head Success",
+  setter: "Setter",
+  closer: "Closers",
+};
+const ROLE_LABEL_PLURAL: Record<RoleKey, string> = {
+  fisio: "fisios",
+  head_success: "head success",
+  setter: "setters",
+  closer: "closers",
+};
 
 function fmtSchedule(t: AdHocTask): string {
   if (t.kind === "monthly") return `día ${t.dayOfMonth} de cada mes`;
@@ -47,14 +61,14 @@ export function AdHocTasksManager({
   professionals,
   canCreateThisRole,
 }: {
-  role: "fisio" | "head_success";
+  role: RoleKey;
   initialTasks: AdHocTask[];
   professionals: ProfessionalLite[];
   canCreateThisRole: boolean;
 }) {
   const router = useRouter();
   const [creating, setCreating] = useState(false);
-  const roleLabel = role === "fisio" ? "fisios" : "head success";
+  const roleLabel = ROLE_LABEL_PLURAL[role as RoleKey] ?? role;
 
   async function remove(taskId: string) {
     if (!confirm("¿Borrar esta tarea? Se elimina también su historial de completaciones.")) return;
@@ -76,7 +90,7 @@ export function AdHocTasksManager({
       <div className="flex items-baseline justify-between mb-3 gap-2 flex-wrap">
         <h3 className="text-sm font-medium flex items-center gap-1.5">
           <CalendarRange size={14} className="text-neutral-500" />
-          Tareas puntuales · {role === "fisio" ? "Fisios" : "Head Success"}
+          Tareas puntuales · {ROLE_LABEL_SINGULAR[role as RoleKey] ?? role}
         </h3>
         {canCreateThisRole && !creating && (
           <button
@@ -157,7 +171,7 @@ function NewTaskForm({
   onCancel,
   onCreated,
 }: {
-  role: "fisio" | "head_success";
+  role: RoleKey;
   professionals: ProfessionalLite[];
   onCancel: () => void;
   onCreated: () => void;
@@ -314,12 +328,12 @@ function NewTaskForm({
               onChange={(e) => setAssignToAll(e.target.checked)}
               className="w-3.5 h-3.5"
             />
-            <span className="font-medium">Todos los {role === "fisio" ? "fisios" : "head success"}</span>
+            <span className="font-medium">Todos los {ROLE_LABEL_PLURAL[role as RoleKey] ?? role}</span>
           </label>
           {!assignToAll && (
             <div className="space-y-0.5 pl-5">
               {professionals.length === 0 ? (
-                <p className="text-[11px] text-neutral-400 italic">No hay {role === "fisio" ? "fisios" : "head success"} disponibles.</p>
+                <p className="text-[11px] text-neutral-400 italic">No hay {ROLE_LABEL_PLURAL[role as RoleKey] ?? role} disponibles.</p>
               ) : (
                 professionals.map((p) => (
                   <label key={p.id} className="flex items-center gap-2 text-xs cursor-pointer py-0.5">

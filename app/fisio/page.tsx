@@ -57,9 +57,9 @@ export default async function FisioPanelPage({
 }) {
   const user = (await getActiveProfessional())!;
 
-  // Setter va directo a su lista de leads agendados
+  // === SETTER: panel propio (llamadas agendadas, show rate, IA vs setter, tareas) ===
   if (user.role === "setter") {
-    redirect("/fisio/leads");
+    return renderSetterPanel(user, searchParams);
   }
 
   // === CLOSER: panel propio con métricas + ventas del período ===
@@ -562,8 +562,17 @@ async function renderCloserPanel(
   const commission = Math.round(metrics.revenue * 0.10);
   const eur = (n: number) => `${n.toLocaleString("es-ES", { maximumFractionDigits: 0 })} €`;
 
+  // Tareas puntuales del closer
+  const adHocTasks = await buildAdHocActiveForProfessional(user.id, "closer");
+
   const panelContent = (
     <>
+      {adHocTasks.length > 0 && (
+        <div className="mb-5">
+          <AdHocTasksCard tasks={adHocTasks} />
+        </div>
+      )}
+
       <SalesMetricsBlock
         period={salesPeriod}
         periodLabel={pLabel}
@@ -660,6 +669,114 @@ async function renderCloserPanel(
     <main>
       <header className="mb-5">
         <h1 className="text-xl font-semibold">Panel de control</h1>
+        <p className="text-xs text-neutral-500 mt-0.5">
+          Hola {user.fullName.split(" ")[0]} · {new Date().toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
+        </p>
+      </header>
+      <FisioPanelTabs panel={panelContent} professionalId={user.id} />
+    </main>
+  );
+}
+
+// ============================================================================
+// SETTER (Niki): panel propio con métricas de llamadas + IA vs setter + tareas
+// ============================================================================
+async function renderSetterPanel(
+  user: { id: string; fullName: string },
+  searchParams: { salesPeriod?: string; salesFrom?: string; salesTo?: string }
+) {
+  const { calculateLeadOriginMetrics } = await import("@/lib/sales");
+  const { LeadOriginBlock } = await import("@/components/LeadOriginBlock");
+  const { FisioPanelTabs } = await import("@/components/FisioPanelTabs");
+
+  const customRange = parseCustomRange(searchParams.salesFrom, searchParams.salesTo);
+  const salesPeriod: any = customRange
+    ? "custom"
+    : (["month", "quarter", "year"].includes(searchParams.salesPeriod ?? "")
+      ? searchParams.salesPeriod
+      : "month");
+
+  let pStart: Date, pEnd: Date, pLabel: string;
+  if (customRange) {
+    pStart = customRange.start; pEnd = customRange.end;
+    const fmt = (d: Date) => d.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
+    pLabel = `${fmt(pStart)} → ${fmt(pEnd)}`;
+  } else {
+    const r = getPeriodRange(salesPeriod);
+    pStart = r.start; pEnd = r.end; pLabel = r.label;
+  }
+
+  // Métricas de llamadas del período (todas las leads con cita en el rango)
+  const leadsInPeriod = await prisma.lead.findMany({
+    where: { callScheduledAt: { gte: pStart, lte: pEnd } },
+    select: { status: true },
+  });
+  const callsScheduled = leadsInPeriod.length;
+  const callsDone = leadsInPeriod.filter((l) => l.status === "won" || l.status === "lost").length;
+  const callsNoShow = leadsInPeriod.filter((l) => l.status === "no_show").length;
+  const showBase = callsDone + callsNoShow;
+  const showRate = showBase > 0 ? Math.round((callsDone / showBase) * 100) : null;
+
+  // IA vs Setter (origen de los leads en el período)
+  const originMetrics = await calculateLeadOriginMetrics(pStart, pEnd);
+
+  // Tareas puntuales del setter
+  const adHocTasks = await buildAdHocActiveForProfessional(user.id, "setter");
+
+  const panelContent = (
+    <>
+      {adHocTasks.length > 0 && (
+        <div className="mb-5">
+          <AdHocTasksCard tasks={adHocTasks} />
+        </div>
+      )}
+
+      {/* KPIs de llamadas del período */}
+      <section className="card mb-5">
+        <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
+          <h2 className="font-medium text-sm">Llamadas del período</h2>
+          <span className="text-xs text-neutral-500 capitalize">{pLabel}</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="rounded-xl p-4 border border-neutral-200 bg-neutral-50">
+            <div className="text-xs uppercase text-neutral-600 font-medium">Agendadas</div>
+            <div className="text-3xl font-bold text-neutral-900 mt-1 tabular-nums">{callsScheduled}</div>
+            <div className="text-xs text-neutral-600 mt-0.5">leads con cita en el periodo</div>
+          </div>
+          <div className="rounded-xl p-4 border border-blue-200" style={{ background: "#EFF6FF" }}>
+            <div className="text-xs uppercase text-blue-700 font-medium">Realizadas</div>
+            <div className="text-3xl font-bold text-blue-800 mt-1 tabular-nums">{callsDone}</div>
+            <div className="text-xs text-blue-700 mt-0.5">won o lost (sí asistió)</div>
+          </div>
+          <div
+            className="rounded-xl p-4 border"
+            style={{
+              background: showRate !== null && showRate >= 70 ? "#ECFDF5" : showRate !== null && showRate < 50 ? "#FEF2F2" : "#FAFAFA",
+              borderColor: showRate !== null && showRate >= 70 ? "#A7F3D0" : showRate !== null && showRate < 50 ? "#FECACA" : "#E5E5E5",
+            }}
+          >
+            <div className="text-xs uppercase font-medium" style={{ color: showRate !== null && showRate >= 70 ? "#047857" : showRate !== null && showRate < 50 ? "#B91C1C" : "#525252" }}>
+              Show rate
+            </div>
+            <div className="text-3xl font-bold mt-1 tabular-nums" style={{ color: showRate !== null && showRate >= 70 ? "#065F46" : showRate !== null && showRate < 50 ? "#7F1D1D" : "#171717" }}>
+              {showRate !== null ? `${showRate}%` : "—"}
+            </div>
+            <div className="text-xs mt-0.5" style={{ color: showRate !== null && showRate >= 70 ? "#047857" : showRate !== null && showRate < 50 ? "#B91C1C" : "#525252" }}>
+              {callsNoShow > 0 ? `${callsNoShow} no_show · base ${showBase}` : "sin no_shows aún"}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* IA vs Setter */}
+      <LeadOriginBlock metrics={originMetrics} periodLabel={pLabel} />
+    </>
+  );
+
+  return (
+    <main>
+      <header className="mb-5">
+        <h1 className="text-xl font-semibold">Panel de Niki</h1>
         <p className="text-xs text-neutral-500 mt-0.5">
           Hola {user.fullName.split(" ")[0]} · {new Date().toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
         </p>
