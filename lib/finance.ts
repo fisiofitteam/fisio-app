@@ -2,6 +2,24 @@ import { prisma } from "./prisma";
 
 export type Period = "month" | "quarter" | "year";
 
+/**
+ * Rango de un mes concreto en formato "YYYY-MM" (p. ej. "2025-03").
+ * Útil para el cuadro de mandos cuando el usuario elige un mes histórico.
+ * Devuelve null si el formato es inválido.
+ */
+export function parseSpecificMonth(value: string | undefined | null): { start: Date; end: Date; label: string } | null {
+  if (!value) return null;
+  const m = value.match(/^(\d{4})-(\d{1,2})$/);
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = Number(m[2]) - 1;
+  if (month < 0 || month > 11) return null;
+  const start = new Date(year, month, 1, 0, 0, 0);
+  const end = new Date(year, month + 1, 0, 23, 59, 59);
+  const label = start.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
+  return { start, end, label };
+}
+
 export function getPeriodRange(period: Period): { start: Date; end: Date; label: string } {
   const now = new Date();
   const year = now.getFullYear();

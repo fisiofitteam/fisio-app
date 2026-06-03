@@ -10,10 +10,11 @@ const eur = (n: number) => `${n.toLocaleString("es-ES", { maximumFractionDigits:
 const MONTH_ABBR = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
 export function BusinessMetricsView({
-  period, periodLabel, m, monthly, goals,
+  period, periodLabel, specificMonth, m, monthly, goals,
 }: {
   period: Period;
   periodLabel: string;
+  specificMonth: string | null;
   m: BusinessMetrics;
   monthly: MonthlyMetrics;
   goals: Record<string, Record<number, number>>;
@@ -24,6 +25,22 @@ export function BusinessMetricsView({
   function setQuery(key: string, value: string) {
     const url = new URL(window.location.href);
     url.searchParams.set(key, value);
+    router.push(url.pathname + url.search);
+    router.refresh();
+  }
+
+  function setPeriodMode(p: Period) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("period", p);
+    url.searchParams.delete("specificMonth");
+    router.push(url.pathname + url.search);
+    router.refresh();
+  }
+
+  function setSpecificMonth(value: string) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("specificMonth", value);
+    url.searchParams.delete("period");
     router.push(url.pathname + url.search);
     router.refresh();
   }
@@ -46,7 +63,14 @@ export function BusinessMetricsView({
       </div>
 
       {view === "resumen" ? (
-        <ResumenView period={period} periodLabel={periodLabel} m={m} onPeriod={(p) => setQuery("period", p)} />
+        <ResumenView
+          period={period}
+          periodLabel={periodLabel}
+          specificMonth={specificMonth}
+          m={m}
+          onPeriod={setPeriodMode}
+          onSpecificMonth={setSpecificMonth}
+        />
       ) : (
         <MesesView monthly={monthly} goals={goals} onYear={(y) => setQuery("year", String(y))} />
       )}
@@ -56,21 +80,49 @@ export function BusinessMetricsView({
 
 /* ─────────────────────────── RESUMEN ─────────────────────────── */
 
-function ResumenView({ period, periodLabel, m, onPeriod }: { period: Period; periodLabel: string; m: BusinessMetrics; onPeriod: (p: Period) => void }) {
+function ResumenView({
+  period, periodLabel, specificMonth, m, onPeriod, onSpecificMonth,
+}: {
+  period: Period;
+  periodLabel: string;
+  specificMonth: string | null;
+  m: BusinessMetrics;
+  onPeriod: (p: Period) => void;
+  onSpecificMonth: (value: string) => void;
+}) {
+  const isSpecific = !!specificMonth;
+  // Para el input <input type="month"> necesitamos "YYYY-MM".
+  const currentSpecific = specificMonth ?? new Date().toISOString().slice(0, 7);
+
   return (
     <>
       <div className="flex justify-between items-center flex-wrap gap-2 mb-4">
         <p className="text-xs text-neutral-500 capitalize">{periodLabel}</p>
-        <div className="flex bg-neutral-100 rounded-lg p-0.5">
-          {(["month", "quarter", "year"] as Period[]).map((p) => (
-            <button
-              key={p}
-              onClick={() => onPeriod(p)}
-              className={`px-3 py-1 text-xs rounded-md transition-colors ${period === p ? "bg-white shadow-sm font-medium" : "text-neutral-600 hover:text-neutral-900"}`}
-            >
-              {p === "month" ? "Mensual" : p === "quarter" ? "Trimestral" : "Anual"}
-            </button>
-          ))}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex bg-neutral-100 rounded-lg p-0.5">
+            {(["month", "quarter", "year"] as Period[]).map((p) => (
+              <button
+                key={p}
+                onClick={() => onPeriod(p)}
+                className={`px-3 py-1 text-xs rounded-md transition-colors ${
+                  !isSpecific && period === p ? "bg-white shadow-sm font-medium" : "text-neutral-600 hover:text-neutral-900"
+                }`}
+              >
+                {p === "month" ? "Mes actual" : p === "quarter" ? "Trim. actual" : "Año actual"}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1">
+            <label className="text-[10px] uppercase tracking-wider text-neutral-500">Mes específico</label>
+            <input
+              type="month"
+              value={currentSpecific}
+              max={new Date().toISOString().slice(0, 7)}
+              onChange={(e) => onSpecificMonth(e.target.value)}
+              className={`text-xs px-2 py-1 rounded-md border ${isSpecific ? "bg-white border-neutral-400 font-medium" : "bg-neutral-100 border-neutral-200 text-neutral-600"}`}
+              style={{ minWidth: 130 }}
+            />
+          </div>
         </div>
       </div>
 
@@ -84,6 +136,17 @@ function ResumenView({ period, periodLabel, m, onPeriod }: { period: Period; per
         <Kpi label="Altas nuevas" value={String(m.newAltas)} sub={m.newSaleRevenue > 0 ? eur(m.newSaleRevenue) : undefined} />
         <Kpi label="Ticket medio" value={m.ticketAvg !== null ? eur(m.ticketAvg) : "—"} sub="por alta nueva" />
         <Kpi label="CAC" value={m.cac !== null ? eur(m.cac) : "—"} sub={`ADS ${eur(m.marketingSpend)} + comisión ${eur(m.closerCommission)} + sueldo ${eur(m.closerSalary)}`} />
+      </Section>
+
+      <Section title="Llamadas comerciales (período)">
+        <Kpi label="Agendadas" value={String(m.callsScheduled)} sub="leads con cita en el periodo" />
+        <Kpi label="Realizadas" value={String(m.callsDone)} sub="won o lost (sí asistió)" />
+        <Kpi
+          label="Show rate"
+          value={m.showRate !== null ? `${m.showRate}%` : "—"}
+          tone={m.showRate !== null && m.showRate >= 70 ? "emerald" : m.showRate !== null && m.showRate < 50 ? "red" : "neutral"}
+          sub={m.callsNoShow > 0 ? `${m.callsNoShow} no_show · base ${m.callsDone + m.callsNoShow}` : "sin no_shows aún"}
+        />
       </Section>
 
       <Section title="Cliente y retención">
@@ -122,6 +185,9 @@ function MesesView({ monthly, goals, onYear }: { monthly: MonthlyMetrics; goals:
   const { months, annual, programTypes, year } = monthly;
 
   const ventasRows: RowDef[] = [
+    { label: "Llamadas agendadas", get: (r: Row) => r.callsScheduled, fmt: "int" },
+    { label: "Llamadas realizadas", get: (r: Row) => r.callsDone, fmt: "int" },
+    { label: "% show rate", get: (r: Row) => r.showRate, fmt: "pct" },
     { label: "Altas (total)", get: (r: Row) => r.altasCount, fmt: "int" },
     ...programTypes.map((prog) => ({ label: `Altas · ${prettyProgram(prog)}`, get: (r: Row) => r.altasByProgram[prog] ?? 0, fmt: "int" as const })),
     { label: "Renovaciones", get: (r: Row) => r.renewedCount, fmt: "int" },

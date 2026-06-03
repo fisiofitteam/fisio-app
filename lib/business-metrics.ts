@@ -30,6 +30,15 @@ export type BusinessMetrics = {
   ltv: number | null;
   ltvPatients: number;
   ltvCacRatio: number | null;
+
+  // Llamadas comerciales del periodo. Cuentan por callScheduledAt (la fecha
+  // para la que se agendó la llamada), no por cuándo se decidió el outcome.
+  callsScheduled: number;          // todas las leads con callScheduledAt en el periodo
+  callsDone: number;               // status ∈ {won, lost}
+  callsNoShow: number;             // status = no_show
+  // Show rate = done / (done + no_show). Excluye cancelaciones legítimas y
+  // leads aún sin decidir. null si no hay base.
+  showRate: number | null;
 };
 
 // ─── Vista por meses (un año) ────────────────────────────────────────────────
@@ -54,6 +63,11 @@ export type MonthlyRow = {
   adsConversion: number | null;   // Conversión ADs (sin fórmula por ahora)
   totalFollowers: number | null;
   costPerFollower: number | null;
+  // Llamadas comerciales del mes (por callScheduledAt).
+  callsScheduled: number;
+  callsDone: number;
+  callsNoShow: number;
+  showRate: number | null;
 };
 
 export type MonthlyMetrics = {
@@ -67,7 +81,7 @@ export async function computeMonthlyBusinessMetrics(year: number): Promise<Month
   const yearStart = new Date(Date.UTC(year, 0, 1));
   const yearEnd = new Date(Date.UTC(year, 11, 31, 23, 59, 59));
 
-  const [txs, renewals, newAltaTxs, inputs] = await Promise.all([
+  const [txs, renewals, newAltaTxs, inputs, leads] = await Promise.all([
     prisma.transaction.findMany({
       where: { occurredAt: { gte: yearStart, lte: yearEnd } },
       select: { type: true, amount: true, occurredAt: true },
@@ -81,12 +95,17 @@ export async function computeMonthlyBusinessMetrics(year: number): Promise<Month
       select: { occurredAt: true, amount: true, patient: { select: { programType: true } } },
     }),
     prisma.businessMonthlyInput.findMany({ where: { year } }),
+    prisma.lead.findMany({
+      where: { callScheduledAt: { gte: yearStart, lte: yearEnd } },
+      select: { callScheduledAt: true, status: true },
+    }),
   ]);
 
   const months: MonthlyRow[] = Array.from({ length: 12 }, (_, m) => ({
     month: m, altasCount: 0, altasByProgram: {}, altasRevenueByProgram: {}, renewedCount: 0, lostCount: 0, refunds: null,
     income: 0, incomeNew: 0, incomeRenewal: 0, expense: 0, profit: 0, profitPct: null, renewalRate: null,
     newFollowers: null, adsSpend: null, adsConversion: null, totalFollowers: null, costPerFollower: null,
+    callsScheduled: 0, callsDone: 0, callsNoShow: 0, showRate: null,
   }));
 
   for (const t of txs) {
@@ -118,6 +137,15 @@ export async function computeMonthlyBusinessMetrics(year: number): Promise<Month
     }
   }
 
+  // Llamadas comerciales (por callScheduledAt)
+  for (const l of leads) {
+    const m = months[new Date(l.callScheduledAt).getUTCMonth()];
+    if (!m) continue;
+    m.callsScheduled++;
+    if (l.status === "won" || l.status === "lost") m.callsDone++;
+    else if (l.status === "no_show") m.callsNoShow++;
+  }
+
   // Datos manuales
   for (const i of inputs) {
     const m = months[i.month];
@@ -135,6 +163,8 @@ export async function computeMonthlyBusinessMetrics(year: number): Promise<Month
     m.profitPct = m.income > 0 ? Math.round((m.profit / m.income) * 100) : null;
     const decided = m.renewedCount + m.lostCount;
     m.renewalRate = decided > 0 ? Math.round((m.renewedCount / decided) * 100) : null;
+    const showBase = m.callsDone + m.callsNoShow;
+    m.showRate = showBase > 0 ? Math.round((m.callsDone / showBase) * 100) : null;
   }
 
   // Anual
@@ -142,6 +172,7 @@ export async function computeMonthlyBusinessMetrics(year: number): Promise<Month
     altasCount: 0, altasByProgram: {}, altasRevenueByProgram: {}, renewedCount: 0, lostCount: 0, refunds: 0,
     income: 0, incomeNew: 0, incomeRenewal: 0, expense: 0, profit: 0, profitPct: null, renewalRate: null,
     newFollowers: 0, adsSpend: 0, adsConversion: 0, totalFollowers: null, costPerFollower: null,
+    callsScheduled: 0, callsDone: 0, callsNoShow: 0, showRate: null,
   };
   let lastTotalFollowers: number | null = null;
   for (const m of months) {
@@ -158,6 +189,9 @@ export async function computeMonthlyBusinessMetrics(year: number): Promise<Month
     if (m.adsConversion != null) annual.adsConversion = (annual.adsConversion ?? 0) + m.adsConversion;
     if (m.totalFollowers != null) lastTotalFollowers = m.totalFollowers;
     if (m.refunds != null) annual.refunds = (annual.refunds ?? 0) + m.refunds;
+    annual.callsScheduled += m.callsScheduled;
+    annual.callsDone += m.callsDone;
+    annual.callsNoShow += m.callsNoShow;
     for (const [prog, rev] of Object.entries(m.altasRevenueByProgram)) {
       annual.altasRevenueByProgram[prog] = (annual.altasRevenueByProgram[prog] ?? 0) + rev;
     }
@@ -170,6 +204,8 @@ export async function computeMonthlyBusinessMetrics(year: number): Promise<Month
   const decidedY = annual.renewedCount + annual.lostCount;
   annual.renewalRate = decidedY > 0 ? Math.round((annual.renewedCount / decidedY) * 100) : null;
   annual.costPerFollower = annual.adsSpend && annual.newFollowers ? Math.round((annual.adsSpend / annual.newFollowers) * 100) / 100 : null;
+  const showBaseY = annual.callsDone + annual.callsNoShow;
+  annual.showRate = showBaseY > 0 ? Math.round((annual.callsDone / showBaseY) * 100) : null;
 
   return { year, programTypes, months, annual };
 }
@@ -199,6 +235,17 @@ export async function computeBusinessMetrics(start: Date, end: Date): Promise<Bu
   const closerCommission = Math.round(summary.incomeNew * CLOSER_COMMISSION_RATE);
   const cac = summary.countNew > 0 ? Math.round((marketingSpend + closerCommission + closerSalary) / summary.countNew) : null;
   const ticketAvg = summary.countNew > 0 ? Math.round(summary.incomeNew / summary.countNew) : null;
+
+  // Llamadas comerciales del periodo (por fecha agendada).
+  const leadsInPeriod = await prisma.lead.findMany({
+    where: { callScheduledAt: { gte: start, lte: end } },
+    select: { status: true },
+  });
+  const callsScheduled = leadsInPeriod.length;
+  const callsDone = leadsInPeriod.filter((l) => l.status === "won" || l.status === "lost").length;
+  const callsNoShow = leadsInPeriod.filter((l) => l.status === "no_show").length;
+  const callsShowBase = callsDone + callsNoShow;
+  const showRate = callsShowBase > 0 ? Math.round((callsDone / callsShowBase) * 100) : null;
 
   // Renovaciones decididas en el período
   const renewals = await prisma.subscriptionRenewal.findMany({
@@ -268,5 +315,9 @@ export async function computeBusinessMetrics(start: Date, end: Date): Promise<Bu
     ltv,
     ltvPatients,
     ltvCacRatio,
+    callsScheduled,
+    callsDone,
+    callsNoShow,
+    showRate,
   };
 }

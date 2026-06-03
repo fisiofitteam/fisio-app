@@ -1,0 +1,226 @@
+// ============================================================================
+// SCHEMA RELEVANTE — Pestaña Comunidad
+// ============================================================================
+// Extracto del schema de FisioFit con SOLO los modelos involucrados en la
+// pestaña Comunidad. Hay DOS subsistemas independientes que coexisten dentro
+// de "Comunidad":
+//
+//   1. PLAN DE CONTENIDO INTERNO (calendario de planificación del equipo)
+//      - CommunityPost  (un post programado por día)
+//      - CommunityIdea  (banco de ideas reutilizables)
+//      Esto NO lo ve el paciente. Es la herramienta de planificación de
+//      contenido tipo "calendario editorial".
+//
+//   2. COMUNIDAD CARA AL PACIENTE (estilo Skool / Circle)
+//      - Classroom: CommunityModule → CommunitySection → CommunityLesson
+//        + CommunityLessonProgress por paciente.
+//      - Muro social: CommunityFeedPost + CommunityComment + CommunityReaction
+//        (autor puede ser Professional o Patient).
+//
+// Datasource original: Postgres en Neon. En dev se usa SQLite (en el dev
+// schema los campos `categories String @default("[]")` son JSON serializado
+// como string para compat).
+// ============================================================================
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ─── Solo los campos relevantes de Patient/Professional ─────────────────────
+// (En tu app reusa tus modelos; esto es para que se vea el shape esperado.)
+
+model Patient {
+  id        String   @id @default(cuid())
+  fullName  String
+  email     String?  @unique
+  photoUrl  String?
+
+  // Reset del badge "novedades en comunidad" al entrar la última vez.
+  communityLastSeenAt DateTime?
+
+  // Relaciones inversas con la comunidad:
+  communityFeedPosts     CommunityFeedPost[]   @relation("FeedPostPatientAuthor")
+  communityComments      CommunityComment[]
+  communityReactions     CommunityReaction[]
+  communityProgress      CommunityLessonProgress[]
+}
+
+model Professional {
+  id        String   @id @default(cuid())
+  fullName  String
+  email     String?  @unique
+  role      String                                     // "ceo" | "head_success" | "fisio" | "setter" | "closer"
+  photoUrl  String?
+
+  // Relaciones inversas con la comunidad:
+  communityFeedPosts     CommunityFeedPost[] @relation("FeedPostAuthor")
+  communityFeedComments  CommunityComment[]  @relation("FeedCommentAuthor")
+  communityFeedReactions CommunityReaction[] @relation("FeedReactionAuthor")
+}
+
+// ============================================================================
+// 1. PLAN DE CONTENIDO INTERNO (calendario editorial del equipo)
+// ============================================================================
+// El equipo programa qué contenido va cada día. Categorías típicas:
+// "entretener" | "conectar" | "ayudar" | "educar" | "convertir"
+// Pensado para alimentar la estrategia de redes / newsletter, no se enseña
+// al paciente.
+
+model CommunityPost {
+  id           String   @id @default(cuid())
+  date         DateTime @unique                          // día del post (UTC midnight)
+  category     String                                    // "entretener" | "conectar" | "ayudar" | "educar" | "convertir"
+  assignedToId String?                                   // profesional que publica (manual)
+  text         String?                                   // idea / contenido del día
+  done         Boolean  @default(false)
+  createdById  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([date])
+}
+
+// Banco de ideas reutilizables, clasificadas por categoría.
+// Al programar una idea, se marca used=true y se crea un CommunityPost.
+model CommunityIdea {
+  id          String   @id @default(cuid())
+  categories  String   @default("[]")                   // JSON array de categorías
+  text        String
+  used        Boolean  @default(false)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([used])
+}
+
+// ============================================================================
+// 2. COMUNIDAD CARA AL PACIENTE
+// ============================================================================
+
+// ── Classroom ───────────────────────────────────────────────────────────────
+// Estructura tipo Skool: Curso → Secciones → Lecciones (con vídeo embebido).
+
+model CommunityModule {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  coverUrl    String?                                   // portada (Vercel Blob)
+  order       Int      @default(0)
+  published   Boolean  @default(true)                   // visible para pacientes
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  sections    CommunitySection[]
+
+  @@index([order])
+}
+
+model CommunitySection {
+  id        String   @id @default(cuid())
+  moduleId  String
+  module    CommunityModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  title     String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lessons   CommunityLesson[]
+
+  @@index([moduleId, order])
+}
+
+model CommunityLesson {
+  id          String   @id @default(cuid())
+  sectionId   String
+  section     CommunitySection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  videoUrl    String                                    // YouTube/Vimeo URL
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  progress    CommunityLessonProgress[]
+
+  @@index([sectionId, order])
+}
+
+// Progreso por paciente (lecciones completadas → barra de avance del curso).
+model CommunityLessonProgress {
+  id          String   @id @default(cuid())
+  lessonId    String
+  lesson      CommunityLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  patientId   String
+  patient     Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  completedAt DateTime @default(now())
+
+  @@unique([lessonId, patientId])
+  @@index([patientId])
+}
+
+// ── Muro social ─────────────────────────────────────────────────────────────
+// Post con autor que puede ser Professional O Patient (uno de los dos).
+// Soporta imagen, vídeo, categoría, pin para destacar.
+
+model CommunityFeedPost {
+  id              String   @id @default(cuid())
+  // Autor: EXACTAMENTE uno de estos dos rellenos.
+  authorId        String?
+  author          Professional? @relation("FeedPostAuthor", fields: [authorId], references: [id])
+  patientAuthorId String?
+  patientAuthor   Patient? @relation("FeedPostPatientAuthor", fields: [patientAuthorId], references: [id], onDelete: Cascade)
+
+  category        String   @default("general")          // ver lib/community-feed.ts
+  title           String?
+  body            String
+  imageUrl        String?                               // Vercel Blob (subida via /api/community/upload)
+  videoUrl        String?                               // YouTube/Vimeo URL
+  pinned          Boolean  @default(false)
+  published       Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  comments    CommunityComment[]
+  reactions   CommunityReaction[]
+
+  @@index([pinned, createdAt])
+  @@index([category])
+}
+
+model CommunityComment {
+  id             String   @id @default(cuid())
+  postId         String
+  post           CommunityFeedPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  // Autor: EXACTAMENTE uno de estos dos rellenos.
+  patientId      String?
+  patient        Patient? @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  professionalId String?
+  professional   Professional? @relation("FeedCommentAuthor", fields: [professionalId], references: [id])
+  body           String
+  createdAt      DateTime @default(now())
+
+  @@index([postId, createdAt])
+}
+
+// Reacción (like). Único por usuario y post — un toggle.
+model CommunityReaction {
+  id             String   @id @default(cuid())
+  postId         String
+  post           CommunityFeedPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  patientId      String?
+  patient        Patient? @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  professionalId String?
+  professional   Professional? @relation("FeedReactionAuthor", fields: [professionalId], references: [id])
+  type           String   @default("like")
+  createdAt      DateTime @default(now())
+
+  @@unique([postId, patientId])
+  @@unique([postId, professionalId])
+}
