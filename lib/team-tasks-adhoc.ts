@@ -121,8 +121,13 @@ export async function buildAdHocActiveForProfessional(
   const year = today.getUTCFullYear();
   const monthIdx = today.getUTCMonth();
 
+  // head_success ejerce también como fisio: ve sus tareas + las de fisio.
+  // Si una concreta no le aplica por assignees explícitos, el filtro inferior
+  // la descarta.
+  const roles = role === "head_success" ? ["fisio", "head_success"] : [role];
+
   const allTasks = await prisma.teamTaskAdHoc.findMany({
-    where: { targetRole: role, active: true },
+    where: { targetRole: { in: roles }, active: true },
     orderBy: [{ kind: "asc" }, { startDate: "asc" }, { dayOfMonth: "asc" }, { createdAt: "asc" }],
   });
 

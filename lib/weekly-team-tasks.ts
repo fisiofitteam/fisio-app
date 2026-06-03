@@ -34,9 +34,12 @@ export async function buildWeeklyBoardForProfessional(
 ): Promise<WeeklyBoard> {
   const monday = weekStartDate(new Date());
 
+  // head_success ejerce también como fisio: ve sus tareas semanales + las de fisio.
+  const roles = role === "head_success" ? ["fisio", "head_success"] : [role];
+
   const [tasks, completions] = await Promise.all([
     prisma.weeklyTeamTask.findMany({
-      where: { targetRole: role, active: true },
+      where: { targetRole: { in: roles }, active: true },
       orderBy: [{ dayOfWeek: "asc" }, { order: "asc" }, { createdAt: "asc" }],
     }),
     prisma.weeklyTeamTaskCompletion.findMany({

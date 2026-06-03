@@ -18,8 +18,11 @@ export async function POST(req: NextRequest) {
   const task = await prisma.teamTaskAdHoc.findUnique({ where: { id: taskId } });
   if (!task) return NextResponse.json({ error: "Tarea no encontrada" }, { status: 404 });
 
-  // Solo el profesional del rol destinatario puede marcar (CEO también para pruebas).
-  if (user.role !== "ceo" && task.targetRole !== user.role) {
+  // Solo el profesional del rol destinatario puede marcar (CEO también para
+  // pruebas). head_success también puede marcar tareas de fisio porque
+  // ejerce las dos cosas.
+  const allowedRoles = user.role === "head_success" ? ["fisio", "head_success"] : [user.role];
+  if (user.role !== "ceo" && !allowedRoles.includes(task.targetRole)) {
     return NextResponse.json({ error: "Esta tarea no es para tu rol" }, { status: 403 });
   }
 

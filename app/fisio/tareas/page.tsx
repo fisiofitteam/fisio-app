@@ -59,7 +59,12 @@ export default async function TasksPage() {
     }),
   ]);
 
-  const fisioPros = professionals.filter((p) => p.role === "fisio").map((p) => ({ id: p.id, fullName: p.fullName }));
+  // En la lista de asignados de tareas "para fisios" incluimos también al
+  // head_success: ejerce las dos cosas, así que se le puede asignar (o no)
+  // explícitamente una tarea de fisio. Le añadimos ⭐ para distinguirlo.
+  const fisioPros = professionals
+    .filter((p) => p.role === "fisio" || p.role === "head_success")
+    .map((p) => ({ id: p.id, fullName: p.role === "head_success" ? `${p.fullName} ⭐` : p.fullName }));
   const headPros = professionals.filter((p) => p.role === "head_success").map((p) => ({ id: p.id, fullName: p.fullName }));
 
   function parseAssigneesJson(json: string | null | undefined): string[] {

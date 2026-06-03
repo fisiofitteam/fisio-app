@@ -18,7 +18,9 @@ export async function POST(req: NextRequest) {
   // puede simular marcado para pruebas).
   const task = await prisma.weeklyTeamTask.findUnique({ where: { id: taskId } });
   if (!task) return NextResponse.json({ error: "Tarea no encontrada" }, { status: 404 });
-  if (user.role !== "ceo" && task.targetRole !== user.role) {
+  // head_success también puede marcar tareas de fisio (ejerce las dos cosas).
+  const allowedRoles = user.role === "head_success" ? ["fisio", "head_success"] : [user.role];
+  if (user.role !== "ceo" && !allowedRoles.includes(task.targetRole)) {
     return NextResponse.json({ error: "Esta tarea no es para tu rol" }, { status: 403 });
   }
 
