@@ -11,6 +11,7 @@ export type NotificationTypeDef = {
 export const NOTIFICATION_TYPES: NotificationTypeDef[] = [
   { value: "lead_new", label: "Lead nuevo sin contactar", description: "Cuando entra un lead por la agenda o la landing.", roles: ["setter"] },
   { value: "lead_assigned", label: "Lead asignado para llamar", description: "Cuando un setter te asigna un lead para contactar.", roles: ["closer", "ceo"] },
+  { value: "lead_rescheduled", label: "Lead re-agendado", description: "Cuando un lead cambia su cita desde el enlace público de re-agenda.", roles: ["setter", "closer", "ceo"] },
   { value: "call_reminder", label: "Recordatorio de llamada", description: "Aviso del día anterior para enviar recordatorio + vídeo.", roles: ["closer", "ceo"] },
   { value: "patient_new_unassigned", label: "Paciente nuevo sin asignar", description: "Pago confirmado: falta asignarle fisio.", roles: ["head_success"] },
   { value: "sale_payment_failed", label: "Pago fallido", description: "Un cobro de Stripe ha fallado.", roles: ["head_success"] },

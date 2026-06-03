@@ -222,3 +222,24 @@ export function getMeetLink(event: CalendarEvent): string | null {
   const entry = event.conferenceData?.entryPoints?.find((e) => e.entryPointType === "video");
   return entry?.uri || null;
 }
+
+/**
+ * Borra un evento del calendar y notifica a los attendees (sendUpdates=all).
+ *
+ * Best-effort: si el evento ya no existe o el API devuelve 404/410, no
+ * lanzamos error — solo loggeamos. Otros errores HTTP se propagan.
+ */
+export async function deleteEvent(eventId: string): Promise<void> {
+  if (!eventId) return;
+  const token = await getValidAccessToken();
+  const calendarId = await getCalendarId();
+  const url = `${CALENDAR_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`;
+  const res = await fetch(url, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  // 204 No Content = OK; 404/410 = ya no existe (lo damos por bueno)
+  if (res.ok || res.status === 404 || res.status === 410) return;
+  const text = await res.text();
+  throw new Error(`Calendar delete event failed: ${res.status} ${text}`);
+}

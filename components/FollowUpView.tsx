@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { RescheduleLinkButton } from "@/components/RescheduleLinkButton";
 
 type Pro = { id: string; fullName: string; role: string };
 
@@ -230,6 +231,10 @@ function FollowUpEditModal({ lead, onClose, onSaved }: { lead: Lead; onClose: ()
           </div>
 
           <button onClick={save} disabled={saving} className="btn btn-primary text-sm w-full">{saving ? "Guardando..." : "Guardar"}</button>
+
+          <div className="pt-1">
+            <RescheduleLinkButton leadId={lead.id} leadStatus={lead.status} />
+          </div>
 
           {/* Resultado: marcar vendido / perdido (sale de follow-up) */}
           <div className="border-t border-neutral-100 pt-3">

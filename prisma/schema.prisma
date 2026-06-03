@@ -325,6 +325,11 @@ model Lead {
   source          String?                                    // "landing" | "manual" | (futuros: "ads_meta", "ads_google", ...)
   bookedAt        DateTime?                                  // momento exacto en que se hizo la reserva pública
 
+  // ─── Re-agenda autoservicio ───
+  rescheduleToken     String?   @unique
+  rescheduleTokenAt   DateTime?
+  rescheduledAt       DateTime?
+
   // ─── Etapas comerciales (workflow setter → closer) ───
   // Cuándo el setter marcó "avisado" (paso 1 hecho)
   setterNotifiedAt    DateTime?

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { RescheduleLinkButton } from "@/components/RescheduleLinkButton";
 
 type Pro = { id: string; fullName: string; role: string };
 
@@ -466,12 +467,18 @@ function SetterLeadModal({
             <span>🤖 Agendado por IA</span>
           </label>
 
-          <div className="flex justify-between items-center pt-2">
-            {isEdit && (
-              <button onClick={remove} disabled={saving} className="text-xs text-red-600">
-                🗑️ Eliminar
-              </button>
-            )}
+          <div className="flex justify-between items-center pt-2 flex-wrap gap-2">
+            <div className="flex items-center gap-3">
+              {isEdit && (
+                <button onClick={remove} disabled={saving} className="text-xs text-red-600">
+                  🗑️ Eliminar
+                </button>
+              )}
+              {/* La setter solo ve leads "scheduled" → siempre tiene sentido el enlace */}
+              {isEdit && (
+                <RescheduleLinkButton leadId={editingLead!.id} leadStatus="scheduled" />
+              )}
+            </div>
             <button
               onClick={save}
               disabled={!fullName || (!phone.trim() && !email.trim()) || saving}

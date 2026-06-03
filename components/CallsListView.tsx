@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { PaymentLinkModal } from "@/components/PaymentLinkModal";
+import { RescheduleLinkButton } from "@/components/RescheduleLinkButton";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -795,22 +796,25 @@ function CallEditModal({
             <span>🤖 Agendado por IA</span>
           </label>
 
-          <div className="flex justify-between items-center gap-2 pt-2">
-            <button
-              onClick={async () => {
-                if (!window.confirm(`¿Seguro que quieres borrar el lead "${lead.fullName}"? Esta acción no se puede deshacer.`)) return;
-                const res = await fetch(`/api/leads?id=${lead.id}`, { method: "DELETE" });
-                if (res.ok) {
-                  onSaved();
-                } else {
-                  const data = await res.json().catch(() => ({}));
-                  alert(data.error || "No se pudo borrar el lead");
-                }
-              }}
-              className="text-xs text-red-600 hover:underline"
-            >
-              🗑️ Borrar lead
-            </button>
+          <div className="flex justify-between items-center gap-2 pt-2 flex-wrap">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={async () => {
+                  if (!window.confirm(`¿Seguro que quieres borrar el lead "${lead.fullName}"? Esta acción no se puede deshacer.`)) return;
+                  const res = await fetch(`/api/leads?id=${lead.id}`, { method: "DELETE" });
+                  if (res.ok) {
+                    onSaved();
+                  } else {
+                    const data = await res.json().catch(() => ({}));
+                    alert(data.error || "No se pudo borrar el lead");
+                  }
+                }}
+                className="text-xs text-red-600 hover:underline"
+              >
+                🗑️ Borrar lead
+              </button>
+              <RescheduleLinkButton leadId={lead.id} leadStatus={lead.status} />
+            </div>
             <div className="flex gap-2">
               {status !== "lost" && !lead.convertedPatient && (
                 <button onClick={() => onConvert(lead)} className="btn btn-accent text-sm">
