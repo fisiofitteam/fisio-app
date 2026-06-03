@@ -15,6 +15,7 @@
     "bootstrap:admin": "tsx prisma/bootstrap-admin.ts",
     "schema:dev": "node scripts/use-schema.js dev",
     "schema:prod": "node scripts/use-schema.js prod",
+    "reset:prelaunch": "bash scripts/reset-prelaunch.sh",
     "setup": "prisma db push && tsx prisma/seed.ts"
   },
   "dependencies": {
