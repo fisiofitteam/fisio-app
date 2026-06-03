@@ -1929,3 +1929,20 @@ model MonthlyChallengeResult {
   @@unique([challengeId, patientId])
   @@index([challengeId])
 }
+
+model TeamMeeting {
+  id           String   @id @default(cuid())
+  category     String
+  title        String
+  scheduledAt  DateTime?
+  preparation  String?
+  summary      String?
+  status       String   @default("upcoming")
+  createdById  String?
+  attendeeIds  String   @default("[]")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([category, scheduledAt])
+}
+

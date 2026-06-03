@@ -1979,3 +1979,33 @@ model MonthlyChallengeResult {
   @@unique([challengeId, patientId])
   @@index([challengeId])
 }
+
+// ============================================================================
+// REUNIONES DEL EQUIPO (Reuniones)
+// ============================================================================
+// 4 pestañas en /fisio/reuniones. 3 categorías van por este modelo
+// (la 4ª pestaña 'Sesiones clínicas' sigue usando ClinicalSessionCase):
+//   "head_success" — acceso: CEO + head_success (prep CEO+head_success).
+//   "comercial"    — acceso: CEO + setter + closer (prep CEO+setter).
+//   "other"        — acceso: attendeesIds + CEO + head_success + setter.
+//                    Prep: CEO + head_success + setter.
+//
+// Cada reunión tiene dos campos de texto largos: preparation (notas previas,
+// solo managers) y summary (resumen, visible a todos los con acceso).
+// ============================================================================
+model TeamMeeting {
+  id           String   @id @default(cuid())
+  category     String                                  // "head_success" | "comercial" | "other"
+  title        String
+  scheduledAt  DateTime?
+  preparation  String?                                 // texto largo, solo managers
+  summary      String?                                 // texto largo, visible al equipo de esa categoría
+  status       String   @default("upcoming")           // "upcoming" | "done" | "cancelled"
+  createdById  String?
+  attendeeIds  String   @default("[]")                 // JSON array de Professional.id (solo "other")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([category, scheduledAt])
+}
+
