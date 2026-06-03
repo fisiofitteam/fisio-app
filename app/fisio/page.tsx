@@ -687,7 +687,6 @@ async function renderSetterPanel(
 ) {
   const { calculateLeadOriginMetrics } = await import("@/lib/sales");
   const { LeadOriginBlock } = await import("@/components/LeadOriginBlock");
-  const { FisioPanelTabs } = await import("@/components/FisioPanelTabs");
 
   const customRange = parseCustomRange(searchParams.salesFrom, searchParams.salesTo);
   const salesPeriod: any = customRange
@@ -781,7 +780,7 @@ async function renderSetterPanel(
           Hola {user.fullName.split(" ")[0]} · {new Date().toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
         </p>
       </header>
-      <FisioPanelTabs panel={panelContent} professionalId={user.id} />
+      {panelContent}
     </main>
   );
 }
