@@ -70,7 +70,7 @@ function madridHHMM(iso: string): string {
 // ── Grid config ──────────────────────────────────────────────────────────────
 const START_HOUR = 7;
 const END_HOUR = 22;
-const HOUR_HEIGHT = 28;         // px por hora
+const HOUR_HEIGHT = 42;         // px por hora (término medio entre la versión original 56 y la compacta 28)
 const TOTAL_HOURS = END_HOUR - START_HOUR; // 15
 const TOTAL_HEIGHT = TOTAL_HOURS * HOUR_HEIGHT;
 const START_MIN = START_HOUR * 60;
@@ -301,8 +301,9 @@ export function TeamCalendarView({
               </div>
             )}
 
-            {/* Grid de horas */}
-            <div className="grid relative" style={{ gridTemplateColumns: `56px repeat(${VISIBLE_DAYS}, minmax(110px, 1fr))` }}>
+            {/* Grid de horas. Padding vertical para que los labels de 7:00 y 22:00
+                (posicionados a top:-6 y top:TOTAL_HEIGHT-6) se vean enteros. */}
+            <div className="grid relative py-2.5" style={{ gridTemplateColumns: `56px repeat(${VISIBLE_DAYS}, minmax(110px, 1fr))` }}>
               {/* Columna de horas */}
               <div className="relative" style={{ height: TOTAL_HEIGHT }}>
                 {hours.map((h) => (
