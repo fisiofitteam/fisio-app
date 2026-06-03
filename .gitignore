@@ -31,3 +31,27 @@ npm-debug.log*
 
 # Backups locales
 *.bak
+
+# Capacitor — build outputs nativos (las CARPETAS ios/ y android/ SÍ van a git,
+# pero sus builds no).
+ios/App/build
+ios/App/Pods
+ios/App/Podfile.lock
+ios/DerivedData
+ios/App/output
+android/.gradle
+android/local.properties
+android/build
+android/app/build
+android/captures
+android/.idea
+android/app/release
+android/app/debug
+android/app/src/main/assets/public
+
+# Assets fuente (generados desde el SVG; se pueden recrear con scripts/generate-assets.mjs)
+assets/icon-only.png
+assets/icon-foreground.png
+assets/icon-background.png
+assets/splash.png
+assets/splash-dark.png
