@@ -1817,20 +1817,29 @@ model WeeklyTeamTaskCompletion {
 //               occurrenceDate = primer día del mes UTC.
 //   "range"   → startDate, endDate (inclusivos). Una sola instancia, vigente
 //               mientras hoy esté dentro del rango. occurrenceDate = startDate.
+// kind:
+//   "monthly"         → dayOfMonth (1..31). Cada mes una instancia.
+//   "monthly_weekday" → nthWeek (1..4 ó -1=último) + dayOfWeek (1=L..7=D).
+//                       Ej. 1er lunes / 3er viernes / último jueves.
+//   "range"           → startDate, endDate (inclusivos).
+// assigneesJson: JSON array de Professional.id; "[]" = todos los del role.
 model TeamTaskAdHoc {
-  id          String   @id @default(cuid())
-  title       String
-  targetRole  String                                  // "fisio" | "head_success"
-  kind        String                                  // "monthly" | "range"
-  dayOfMonth  Int?
-  startDate   DateTime?
-  endDate     DateTime?
-  active      Boolean  @default(true)
-  createdById String?                                 // FK informativo al Professional
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String   @id @default(cuid())
+  title         String
+  targetRole    String                                // "fisio" | "head_success"
+  kind          String                                // "monthly" | "monthly_weekday" | "range"
+  dayOfMonth    Int?
+  nthWeek       Int?                                  // 1..4 ó -1
+  dayOfWeek     Int?                                  // 1=L..7=D
+  startDate     DateTime?
+  endDate       DateTime?
+  assigneesJson String   @default("[]")
+  active        Boolean  @default(true)
+  createdById   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  completions TeamTaskAdHocCompletion[]
+  completions   TeamTaskAdHocCompletion[]
 
   @@index([targetRole, active])
 }

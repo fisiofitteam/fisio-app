@@ -59,15 +59,27 @@ export default async function TasksPage() {
     }),
   ]);
 
+  const fisioPros = professionals.filter((p) => p.role === "fisio").map((p) => ({ id: p.id, fullName: p.fullName }));
+  const headPros = professionals.filter((p) => p.role === "head_success").map((p) => ({ id: p.id, fullName: p.fullName }));
+
+  function parseAssigneesJson(json: string | null | undefined): string[] {
+    if (!json) return [];
+    try { const a = JSON.parse(json); return Array.isArray(a) ? a.filter((x) => typeof x === "string") : []; }
+    catch { return []; }
+  }
+
   const serializeAdHoc = (arr: typeof adHocFisio) =>
     arr.map((t) => ({
       id: t.id,
       title: t.title,
       targetRole: t.targetRole,
-      kind: t.kind as "monthly" | "range",
+      kind: t.kind as "monthly" | "monthly_weekday" | "range",
       dayOfMonth: t.dayOfMonth,
+      nthWeek: t.nthWeek,
+      dayOfWeek: t.dayOfWeek,
       startDate: t.startDate?.toISOString() ?? null,
       endDate: t.endDate?.toISOString() ?? null,
+      assigneeIds: parseAssigneesJson(t.assigneesJson),
       active: t.active,
     }));
 
@@ -149,7 +161,7 @@ export default async function TasksPage() {
             subtitle="Añade, edita o quita tareas por día"
           />
         )}
-        <AdHocTasksManager role="fisio" initialTasks={serializeAdHoc(adHocFisio)} canCreateThisRole={true} />
+        <AdHocTasksManager role="fisio" initialTasks={serializeAdHoc(adHocFisio)} professionals={fisioPros} canCreateThisRole={true} />
       </section>
 
       <section className="space-y-3">
@@ -163,7 +175,7 @@ export default async function TasksPage() {
             subtitle="Añade, edita o quita tareas por día"
           />
         )}
-        <AdHocTasksManager role="head_success" initialTasks={serializeAdHoc(adHocHead)} canCreateThisRole={isCeo} />
+        <AdHocTasksManager role="head_success" initialTasks={serializeAdHoc(adHocHead)} professionals={headPros} canCreateThisRole={isCeo} />
       </section>
 
       {isCeo && <CeoTeamTasksAudit audit={audit} />}

@@ -1782,18 +1782,21 @@ model WeeklyTeamTaskCompletion {
 }
 
 model TeamTaskAdHoc {
-  id          String   @id @default(cuid())
-  title       String
-  targetRole  String
-  kind        String
-  dayOfMonth  Int?
-  startDate   DateTime?
-  endDate     DateTime?
-  active      Boolean  @default(true)
-  createdById String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  completions TeamTaskAdHocCompletion[]
+  id            String   @id @default(cuid())
+  title         String
+  targetRole    String
+  kind          String
+  dayOfMonth    Int?
+  nthWeek       Int?
+  dayOfWeek     Int?
+  startDate     DateTime?
+  endDate       DateTime?
+  assigneesJson String   @default("[]")
+  active        Boolean  @default(true)
+  createdById   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  completions   TeamTaskAdHocCompletion[]
 
   @@index([targetRole, active])
 }
