@@ -214,6 +214,7 @@ model Professional {
   communityFeedComments  CommunityComment[]  @relation("FeedCommentAuthor")
   communityFeedReactions CommunityReaction[] @relation("FeedReactionAuthor")
   weeklyTeamTaskCompletions WeeklyTeamTaskCompletion[] @relation("WeeklyTeamTaskCompletions")
+  teamTaskAdHocCompletions  TeamTaskAdHocCompletion[]  @relation("TeamTaskAdHocCompletions")
 }
 
 // Condiciones laborales / compensación de un profesional (1:1). Solo CEO edita.
@@ -1804,6 +1805,48 @@ model WeeklyTeamTaskCompletion {
 
   @@unique([taskId, professionalId, weekStartDate])
   @@index([weekStartDate, professionalId])
+}
+
+// Tareas puntuales: cadencia mensual (día X de cada mes) o rango libre de
+// fechas. Se crean desde /fisio/tareas (CEO + head_success). Aparecen en el
+// panel "Tareas" del rol destinatario.
+//
+// kind:
+//   "monthly" → dayOfMonth (1..31). Cada mes es una instancia; se considera
+//               completada para ese mes si hay TeamTaskAdHocCompletion con
+//               occurrenceDate = primer día del mes UTC.
+//   "range"   → startDate, endDate (inclusivos). Una sola instancia, vigente
+//               mientras hoy esté dentro del rango. occurrenceDate = startDate.
+model TeamTaskAdHoc {
+  id          String   @id @default(cuid())
+  title       String
+  targetRole  String                                  // "fisio" | "head_success"
+  kind        String                                  // "monthly" | "range"
+  dayOfMonth  Int?
+  startDate   DateTime?
+  endDate     DateTime?
+  active      Boolean  @default(true)
+  createdById String?                                 // FK informativo al Professional
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  completions TeamTaskAdHocCompletion[]
+
+  @@index([targetRole, active])
+}
+
+model TeamTaskAdHocCompletion {
+  id             String   @id @default(cuid())
+  taskId         String
+  task           TeamTaskAdHoc @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  professionalId String
+  professional   Professional   @relation("TeamTaskAdHocCompletions", fields: [professionalId], references: [id], onDelete: Cascade)
+  // Para monthly: primer día del mes (UTC). Para range: startDate de la tarea.
+  occurrenceDate DateTime
+  completedAt    DateTime @default(now())
+
+  @@unique([taskId, professionalId, occurrenceDate])
+  @@index([occurrenceDate, professionalId])
 }
 
 // Datos manuales mensuales del cuadro de mandos (seguidores, inversión ADS).

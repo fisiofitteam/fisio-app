@@ -3,17 +3,22 @@ import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 import { WeeklyTeamTasksBoard } from "@/components/WeeklyTeamTasksBoard";
 import { CeoTeamTasksAudit } from "@/components/CeoTeamTasksAudit";
+import { AdHocTasksManager } from "@/components/AdHocTasksManager";
 import { buildWeeklyBoardForProfessional, DAY_NAMES } from "@/lib/weekly-team-tasks";
 import { weekStartDate } from "@/lib/program-pauses";
 
 export const dynamic = "force-dynamic";
 
-// /fisio/tareas — CEO gestiona las tareas semanales de fisios y head_success.
-// Para los demás roles, redirige al panel principal (donde ya ven su board).
+// /fisio/tareas — CEO + head_success gestionan tareas del equipo.
+//   - Tareas semanales: solo CEO crea/edita (board "Fisios" + board "Head Success").
+//   - Tareas puntuales (mensual / rango): CEO crea para los dos roles; head_success
+//     solo para fisios.
+// Otros roles → redirect al panel.
 export default async function TasksPage() {
   const user = await getActiveProfessional();
   if (!user) redirect("/login");
-  if (user.role !== "ceo") redirect("/fisio");
+  if (user.role !== "ceo" && user.role !== "head_success") redirect("/fisio");
+  const isCeo = user.role === "ceo";
 
   // Board "vista equipo" desde la perspectiva del propio CEO. Se usa
   // buildWeeklyBoardForProfessional con un id que nunca tendrá completaciones,
@@ -30,7 +35,7 @@ export default async function TasksPage() {
   const prevMonday = new Date(monday);
   prevMonday.setUTCDate(prevMonday.getUTCDate() - 7);
 
-  const [allTasks, professionals, allCompletions] = await Promise.all([
+  const [allTasks, professionals, allCompletions, adHocFisio, adHocHead] = await Promise.all([
     prisma.weeklyTeamTask.findMany({
       where: { active: true, targetRole: { in: ["fisio", "head_success"] } },
       orderBy: [{ targetRole: "asc" }, { dayOfWeek: "asc" }, { order: "asc" }],
@@ -44,7 +49,27 @@ export default async function TasksPage() {
       where: { weekStartDate: { in: [monday, prevMonday] } },
       select: { taskId: true, professionalId: true, weekStartDate: true },
     }),
+    prisma.teamTaskAdHoc.findMany({
+      where: { targetRole: "fisio" },
+      orderBy: [{ active: "desc" }, { kind: "asc" }, { startDate: "asc" }, { dayOfMonth: "asc" }, { createdAt: "asc" }],
+    }),
+    prisma.teamTaskAdHoc.findMany({
+      where: { targetRole: "head_success" },
+      orderBy: [{ active: "desc" }, { kind: "asc" }, { startDate: "asc" }, { dayOfMonth: "asc" }, { createdAt: "asc" }],
+    }),
   ]);
+
+  const serializeAdHoc = (arr: typeof adHocFisio) =>
+    arr.map((t) => ({
+      id: t.id,
+      title: t.title,
+      targetRole: t.targetRole,
+      kind: t.kind as "monthly" | "range",
+      dayOfMonth: t.dayOfMonth,
+      startDate: t.startDate?.toISOString() ?? null,
+      endDate: t.endDate?.toISOString() ?? null,
+      active: t.active,
+    }));
 
   // Para cada profesional × semana, qué tareas NO ha marcado.
   type AuditEntry = {
@@ -113,29 +138,35 @@ export default async function TasksPage() {
         </p>
       </header>
 
-      <section className="space-y-2">
+      <section className="space-y-3">
         <h2 className="text-sm font-medium text-neutral-700 px-1">🩺 Fisios</h2>
-        <WeeklyTeamTasksBoard
-          board={fisioBoard}
-          role="fisio"
-          mode="ceo"
-          title="Tareas semanales · Fisios"
-          subtitle="Añade, edita o quita tareas por día"
-        />
+        {isCeo && (
+          <WeeklyTeamTasksBoard
+            board={fisioBoard}
+            role="fisio"
+            mode="ceo"
+            title="Tareas semanales · Fisios"
+            subtitle="Añade, edita o quita tareas por día"
+          />
+        )}
+        <AdHocTasksManager role="fisio" initialTasks={serializeAdHoc(adHocFisio)} canCreateThisRole={true} />
       </section>
 
-      <section className="space-y-2">
+      <section className="space-y-3">
         <h2 className="text-sm font-medium text-neutral-700 px-1">⭐ Head Success</h2>
-        <WeeklyTeamTasksBoard
-          board={headBoard}
-          role="head_success"
-          mode="ceo"
-          title="Tareas semanales · Head Success"
-          subtitle="Añade, edita o quita tareas por día"
-        />
+        {isCeo && (
+          <WeeklyTeamTasksBoard
+            board={headBoard}
+            role="head_success"
+            mode="ceo"
+            title="Tareas semanales · Head Success"
+            subtitle="Añade, edita o quita tareas por día"
+          />
+        )}
+        <AdHocTasksManager role="head_success" initialTasks={serializeAdHoc(adHocHead)} canCreateThisRole={isCeo} />
       </section>
 
-      <CeoTeamTasksAudit audit={audit} />
+      {isCeo && <CeoTeamTasksAudit audit={audit} />}
     </main>
   );
 }

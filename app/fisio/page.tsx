@@ -14,6 +14,8 @@ import { ProgramEndingsBox } from "@/components/ProgramEndingsBox";
 import { LoadReviewsBox } from "@/components/LoadReviewsBox";
 import { WeeklyTeamTasksBoard } from "@/components/WeeklyTeamTasksBoard";
 import { buildWeeklyBoardForProfessional } from "@/lib/weekly-team-tasks";
+import { AdHocTasksCard } from "@/components/AdHocTasksCard";
+import { buildAdHocActiveForProfessional } from "@/lib/team-tasks-adhoc";
 
 const TYPE_LABELS: Record<string, string> = {
   optimizacion: "Optimización",
@@ -148,10 +150,13 @@ export default async function FisioPanelPage({
   // Board semanal de tareas del equipo (fisio / head_success). El CEO ve los
   // dos paneles + edita en /fisio/tareas; fisios y head_success ven solo el
   // suyo en modo "self" (las completadas desaparecen).
-  const weeklyBoard =
+  const [weeklyBoard, adHocTasks] =
     user.role === "fisio" || user.role === "head_success"
-      ? await buildWeeklyBoardForProfessional(user.id, user.role)
-      : null;
+      ? await Promise.all([
+          buildWeeklyBoardForProfessional(user.id, user.role),
+          buildAdHocActiveForProfessional(user.id, user.role),
+        ])
+      : [null, []];
 
   // Métricas para managers en el período seleccionado
   let teamRenewals = { renewed: 0, lost: 0, total: 0, rate: null as number | null };
@@ -298,22 +303,31 @@ export default async function FisioPanelPage({
   }
 
   // === Resto (Head + fisios) ===
-  // El bloque teamBlock vivía dentro del panel principal cuando el usuario era
-  // manager. Ahora lo sacamos a una pestaña dedicada "Métricas equipo" para
-  // que el head_success use el panel principal solo para su trabajo con
-  // pacientes (programas a terminar, cargas, formularios, etc.).
-  const panelContent = (
-    <>
+  // El panel se divide en 2 sub-pestañas dentro de FisioPanelTabs:
+  //   "📋 Tareas"            → board semanal + tareas puntuales
+  //   "👥 Gestión de pacientes" → programas, cargas, renovaciones, formularios,
+  //                              llamadas
+  // Más las pestañas externas Métricas equipo (head_success) y salario.
+  const tareasContent = (
+    <div className="space-y-3">
       {weeklyBoard && (
-        <div className="mb-5">
-          <WeeklyTeamTasksBoard
-            board={weeklyBoard}
-            role={user.role as "fisio" | "head_success"}
-            mode="self"
-          />
-        </div>
+        <WeeklyTeamTasksBoard
+          board={weeklyBoard}
+          role={user.role as "fisio" | "head_success"}
+          mode="self"
+        />
       )}
+      {adHocTasks.length > 0 && <AdHocTasksCard tasks={adHocTasks} />}
+      {!weeklyBoard && adHocTasks.length === 0 && (
+        <p className="text-sm text-neutral-400 italic text-center py-12">
+          No hay tareas configuradas para tu rol.
+        </p>
+      )}
+    </div>
+  );
 
+  const gestionContent = (
+    <>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-5">
         <ProgramEndingsBox initialItems={programEndings} />
         <LoadReviewsBox initialItems={loadReviews} />
@@ -418,7 +432,8 @@ export default async function FisioPanelPage({
       {headerContent}
       {kpis}
       <FisioPanelTabs
-        panel={panelContent}
+        tareasContent={tareasContent}
+        gestionContent={gestionContent}
         teamBlock={isManager ? teamBlock : null}
         professionalId={user.id}
       />
