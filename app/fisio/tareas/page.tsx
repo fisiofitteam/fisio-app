@@ -158,15 +158,15 @@ export default async function TasksPage() {
 
       <section className="space-y-3">
         <h2 className="text-sm font-medium text-neutral-700 px-1">🩺 Fisios</h2>
-        {isCeo && (
-          <WeeklyTeamTasksBoard
-            board={fisioBoard}
-            role="fisio"
-            mode="ceo"
-            title="Tareas semanales · Fisios"
-            subtitle="Añade, edita o quita tareas por día"
-          />
-        )}
+        {/* Tanto CEO como head_success pueden añadir/quitar tareas semanales
+            del board de fisios. */}
+        <WeeklyTeamTasksBoard
+          board={fisioBoard}
+          role="fisio"
+          mode="ceo"
+          title="Tareas semanales · Fisios"
+          subtitle="Añade, edita o quita tareas por día"
+        />
         <AdHocTasksManager role="fisio" initialTasks={serializeAdHoc(adHocFisio)} professionals={fisioPros} canCreateThisRole={true} />
       </section>
 

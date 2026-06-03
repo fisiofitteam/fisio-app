@@ -2,10 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 
-// PATCH /api/team-tasks/[id] → editar título / día / orden / active (CEO).
+// PATCH /api/team-tasks/[id] → editar título / día / orden / active.
+// CEO puede editar cualquier tarea. Head_success solo las de targetRole="fisio".
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const user = await getActiveProfessional();
-  if (!user || user.role !== "ceo") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!user || (user.role !== "ceo" && user.role !== "head_success")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const task = await prisma.weeklyTeamTask.findUnique({ where: { id: params.id } });
+  if (!task) return NextResponse.json({ error: "Tarea no encontrada" }, { status: 404 });
+  if (user.role === "head_success" && task.targetRole !== "fisio") {
+    return NextResponse.json({ error: "Head Success solo gestiona tareas de Fisios" }, { status: 403 });
+  }
 
   const b = await req.json().catch(() => ({}));
   const data: any = {};
@@ -26,10 +35,19 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   return NextResponse.json(updated);
 }
 
-// DELETE /api/team-tasks/[id] (CEO). Cascade borra completaciones históricas.
+// DELETE /api/team-tasks/[id]. CEO cualquier tarea, head_success solo fisio.
+// Cascade borra completaciones históricas.
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   const user = await getActiveProfessional();
-  if (!user || user.role !== "ceo") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!user || (user.role !== "ceo" && user.role !== "head_success")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const task = await prisma.weeklyTeamTask.findUnique({ where: { id: params.id } });
+  if (!task) return NextResponse.json({ error: "Tarea no encontrada" }, { status: 404 });
+  if (user.role === "head_success" && task.targetRole !== "fisio") {
+    return NextResponse.json({ error: "Head Success solo gestiona tareas de Fisios" }, { status: 403 });
+  }
 
   await prisma.weeklyTeamTask.delete({ where: { id: params.id } });
   return NextResponse.json({ ok: true });
