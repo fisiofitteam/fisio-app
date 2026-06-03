@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 
-const MIN_DAYS_TO_COMPENSATE = 8; // Solo aplicamos bonus si vacaciones >= 8 días
+// Bonus a pacientes Y descuento de salario solo si vacaciones >= 5 días.
+// El descuento de salario se aplica en lib/compensation.ts (no aquí).
+export const MIN_DAYS_TO_COMPENSATE = 5;
 
 function todayMidnight(): Date {
   const d = new Date();
@@ -162,13 +164,20 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  if (!(user.role === "ceo" || user.role === "head_success")) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
 
   const { professionalId, startDate, endDate, notes } = await req.json();
   if (!professionalId || !startDate || !endDate) {
     return NextResponse.json({ error: "Faltan datos" }, { status: 400 });
+  }
+
+  // Cualquier miembro del equipo puede crear sus PROPIAS vacaciones. Solo
+  // CEO y head_success pueden crear vacaciones de otros.
+  const isManager = user.role === "ceo" || user.role === "head_success";
+  if (!isManager && professionalId !== user.id) {
+    return NextResponse.json(
+      { error: "Solo puedes registrar tus propias vacaciones" },
+      { status: 403 }
+    );
   }
 
   const start = new Date(startDate);
@@ -222,15 +231,22 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  if (!(user.role === "ceo" || user.role === "head_success")) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
 
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
   const leave = await prisma.professionalLeave.findUnique({ where: { id } });
   if (!leave) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  // Cualquier miembro puede cancelar sus propias vacaciones; managers
+  // pueden cancelar cualquier vacación.
+  const isManager = user.role === "ceo" || user.role === "head_success";
+  if (!isManager && leave.professionalId !== user.id) {
+    return NextResponse.json(
+      { error: "Solo puedes cancelar tus propias vacaciones" },
+      { status: 403 }
+    );
+  }
 
   if (leave.status === "applied" && leave.daysApplied > 0) {
     await revertLeaveBonus(id);

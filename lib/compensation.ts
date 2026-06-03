@@ -2,6 +2,10 @@
 // Solo servidor (usa prisma).
 import { prisma } from "@/lib/prisma";
 
+// Umbral de días de vacaciones para activar descuento de salario.
+// Debe coincidir con MIN_DAYS_TO_COMPENSATE en app/api/professional-leaves/route.ts.
+const MIN_LEAVE_DAYS_FOR_DISCOUNT = 5;
+
 export type CompensationConfig = {
   baseSalary: number;
   perActivePatient: number;
@@ -49,7 +53,22 @@ export type SalaryResult = {
   renewalOthersRevenue: number;
   newSaleCount: number;
   newSaleRevenue: number;
-  breakdown: { fixed: number; patients: number; renewals: number; newSales: number };
+  /** Días naturales del mes (28, 30 ó 31) usados para la regla de 3 del descuento. */
+  daysInMonth: number;
+  /** Días de vacaciones del profesional cuyo rango [startDate, endDate] cae dentro del mes,
+   *  contando solo las ausencias con totalDays >= 5 (umbral de compensación). */
+  vacationDaysInMonth: number;
+  breakdown: {
+    fixed: number;
+    patients: number;
+    renewals: number;
+    newSales: number;
+    /** Descuento por vacaciones (siempre ≤ 0). Se aplica sobre el bruto del mes
+     *  con regla de 3: (bruto / díasMes) × díasVacacionesEnMes. */
+    vacation: number;
+  };
+  /** Bruto antes de descuento, útil para mostrar el desglose en métricas. */
+  grossTotal: number;
   total: number;
 };
 
@@ -96,13 +115,59 @@ export async function computeMonthlySalary(
   const newSaleCount = sales.length;
   const newSaleRevenue = sales.reduce((s, x) => s + (x.amountCents || 0), 0) / 100;
 
-  const breakdown = {
-    fixed: config.baseSalary,
-    patients: config.perActivePatient * activePatients,
-    renewals: (config.renewalOwnPct / 100) * renewalOwnRevenue + (config.renewalOthersPct / 100) * renewalOthersRevenue,
-    newSales: (config.newSaleCommissionPct / 100) * newSaleRevenue,
-  };
-  const total = breakdown.fixed + breakdown.patients + breakdown.renewals + breakdown.newSales;
+  // Días naturales del mes (UTC) — base para la regla de 3 del descuento.
+  const daysInMonth = Math.round((end.getTime() - start.getTime()) / 86400000);
+
+  // Vacaciones del profesional que se solapan con este mes.
+  // Solo cuentan las que duran >= MIN_LEAVE_DAYS_FOR_DISCOUNT (igual al umbral
+  // de compensación a pacientes). Para cada una, contamos los días naturales
+  // del rango que caen DENTRO de [start, end).
+  const leaves = await prisma.professionalLeave.findMany({
+    where: {
+      professionalId,
+      // status != "cancelled": "pending" y "applied" descuentan; "cancelled" no.
+      status: { in: ["pending", "applied"] },
+      // Solapamiento con el mes: startDate < end AND endDate >= start.
+      startDate: { lt: end },
+      endDate: { gte: start },
+    },
+    select: { startDate: true, endDate: true },
+  });
+
+  let vacationDaysInMonth = 0;
+  for (const l of leaves) {
+    const ls = new Date(l.startDate);
+    const le = new Date(l.endDate);
+    // totalDays del rango completo (no del recorte mensual): controla el umbral.
+    const totalDays = Math.round((le.getTime() - ls.getTime()) / 86400000) + 1;
+    if (totalDays < MIN_LEAVE_DAYS_FOR_DISCOUNT) continue;
+
+    // Recorte del rango al mes en curso.
+    const clipStart = ls < start ? start : ls;
+    // endDate es inclusivo en el modelo → para contar días sumamos +1 al diff.
+    const leaveEndExclusive = new Date(le.getTime() + 86400000);
+    const clipEndExclusive = leaveEndExclusive > end ? end : leaveEndExclusive;
+    const days = Math.max(0, Math.round((clipEndExclusive.getTime() - clipStart.getTime()) / 86400000));
+    vacationDaysInMonth += days;
+  }
+
+  const fixed = config.baseSalary;
+  const patients = config.perActivePatient * activePatients;
+  const renewals =
+    (config.renewalOwnPct / 100) * renewalOwnRevenue +
+    (config.renewalOthersPct / 100) * renewalOthersRevenue;
+  const newSales = (config.newSaleCommissionPct / 100) * newSaleRevenue;
+  const grossTotal = fixed + patients + renewals + newSales;
+
+  // Regla de 3 sobre el bruto del mes — se descuenta lo correspondiente a los
+  // días de vacaciones que caen dentro del mes.
+  const vacation =
+    vacationDaysInMonth > 0 && daysInMonth > 0
+      ? -((grossTotal / daysInMonth) * vacationDaysInMonth)
+      : 0;
+
+  const breakdown = { fixed, patients, renewals, newSales, vacation };
+  const total = grossTotal + vacation;
 
   return {
     config,
@@ -112,7 +177,10 @@ export async function computeMonthlySalary(
     renewalOthersRevenue,
     newSaleCount,
     newSaleRevenue,
+    daysInMonth,
+    vacationDaysInMonth,
     breakdown,
+    grossTotal,
     total,
   };
 }

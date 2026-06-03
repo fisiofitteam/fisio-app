@@ -5,12 +5,15 @@ import { useEffect, useState } from "react";
 
 type Salary = {
   config: { baseSalary: number; perActivePatient: number; renewalOwnPct: number; renewalOthersPct: number; newSaleCommissionPct: number };
-  breakdown: { fixed: number; patients: number; renewals: number; newSales: number };
+  breakdown: { fixed: number; patients: number; renewals: number; newSales: number; vacation: number };
   activePatients: number;
   renewalOwnCount: number;
   renewalOwnRevenue: number;
   newSaleCount: number;
   newSaleRevenue: number;
+  daysInMonth: number;
+  vacationDaysInMonth: number;
+  grossTotal: number;
   total: number;
 };
 
@@ -125,6 +128,14 @@ export function MySalaryTab({ professionalId }: { professionalId: string }) {
                 )}
                 {salary.config.newSaleCommissionPct > 0 && (
                   <div className="flex justify-between"><span className="text-neutral-600">Comisión ventas ({salary.config.newSaleCommissionPct}%)</span><span className="tabular-nums">{eur(salary.breakdown.newSales)}</span></div>
+                )}
+                {salary.vacationDaysInMonth > 0 && (
+                  <div className="flex justify-between" style={{ color: "#B45309" }}>
+                    <span>
+                      Descuento vacaciones ({salary.vacationDaysInMonth} {salary.vacationDaysInMonth === 1 ? "día" : "días"} de {salary.daysInMonth})
+                    </span>
+                    <span className="tabular-nums">{eur(salary.breakdown.vacation)}</span>
+                  </div>
                 )}
                 <div className="flex justify-between border-t border-neutral-200 pt-1.5 font-semibold"><span>Total estimado del mes</span><span className="tabular-nums">{eur(salary.total)}</span></div>
               </div>

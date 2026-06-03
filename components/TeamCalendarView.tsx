@@ -70,7 +70,7 @@ function madridHHMM(iso: string): string {
 // ── Grid config ──────────────────────────────────────────────────────────────
 const START_HOUR = 7;
 const END_HOUR = 22;
-const HOUR_HEIGHT = 56;         // px por hora
+const HOUR_HEIGHT = 28;         // px por hora
 const TOTAL_HOURS = END_HOUR - START_HOUR; // 15
 const TOTAL_HEIGHT = TOTAL_HOURS * HOUR_HEIGHT;
 const START_MIN = START_HOUR * 60;

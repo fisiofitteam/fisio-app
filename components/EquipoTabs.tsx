@@ -137,6 +137,7 @@ export function EquipoTabs({
             team={team.filter((m) => m.active)}
             leaves={leaves}
             isManager={isManager}
+            currentUserId={currentUserId}
             onCreate={() => setCreatingLeave(true)}
           />
         </>
@@ -144,7 +145,12 @@ export function EquipoTabs({
 
       {creatingLeave && (
         <CreateLeaveModal
-          team={team.filter((m) => m.active && ["ceo", "head_success", "fisio"].includes(m.role))}
+          team={
+            isManager
+              ? team.filter((m) => m.active && ["ceo", "head_success", "fisio"].includes(m.role))
+              : team.filter((m) => m.id === currentUserId)
+          }
+          lockToSelf={!isManager}
           onClose={() => setCreatingLeave(false)}
           onSaved={() => {
             setCreatingLeave(false);
@@ -160,11 +166,13 @@ function CalendarView({
   team,
   leaves,
   isManager,
+  currentUserId,
   onCreate,
 }: {
   team: TeamMember[];
   leaves: Leave[];
   isManager: boolean;
+  currentUserId: string;
   onCreate: () => void;
 }) {
   // Separar pasadas, activas y futuras
@@ -192,15 +200,15 @@ function CalendarView({
           {active.length > 0 && `${active.length} actualmente fuera · `}
           {upcoming.length} próximas
         </p>
-        {isManager && (
-          <button
-            onClick={onCreate}
-            className="text-xs font-medium px-3 py-2 rounded-lg"
-            style={{ background: "#0A0A0A", color: "#FAFAFA" }}
-          >
-            + Añadir vacaciones
-          </button>
-        )}
+        {/* Todos los miembros pueden añadir sus propias vacaciones. Los managers
+            pueden además elegir a quién en el formulario. */}
+        <button
+          onClick={onCreate}
+          className="text-xs font-medium px-3 py-2 rounded-lg"
+          style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+        >
+          + Añadir vacaciones
+        </button>
       </div>
 
       {active.length > 0 && (
@@ -209,9 +217,18 @@ function CalendarView({
             🌴 Actualmente fuera
           </h3>
           <div className="space-y-2">
-            {active.map((l) => (
-              <LeaveCard key={l.id} leave={l} isManager={isManager} onCancel={() => cancelLeave(l.id)} highlighted />
-            ))}
+            {active.map((l) => {
+              const canCancel = isManager || l.professionalId === currentUserId;
+              return (
+                <LeaveCard
+                  key={l.id}
+                  leave={l}
+                  canCancel={canCancel}
+                  onCancel={() => cancelLeave(l.id)}
+                  highlighted
+                />
+              );
+            })}
           </div>
         </section>
       )}
@@ -222,9 +239,17 @@ function CalendarView({
             📅 Próximas vacaciones
           </h3>
           <div className="space-y-2">
-            {upcoming.map((l) => (
-              <LeaveCard key={l.id} leave={l} isManager={isManager} onCancel={() => cancelLeave(l.id)} />
-            ))}
+            {upcoming.map((l) => {
+              const canCancel = isManager || l.professionalId === currentUserId;
+              return (
+                <LeaveCard
+                  key={l.id}
+                  leave={l}
+                  canCancel={canCancel}
+                  onCancel={() => cancelLeave(l.id)}
+                />
+              );
+            })}
           </div>
         </section>
       )}
@@ -236,7 +261,7 @@ function CalendarView({
           </h3>
           <div className="space-y-2">
             {past.map((l) => (
-              <LeaveCard key={l.id} leave={l} isManager={false} muted />
+              <LeaveCard key={l.id} leave={l} canCancel={false} muted />
             ))}
           </div>
         </section>
@@ -246,12 +271,8 @@ function CalendarView({
         <div className="text-center py-12">
           <p className="text-sm text-neutral-500">
             No hay vacaciones registradas.
-            {isManager && (
-              <>
-                <br />
-                <span className="text-xs">Pulsa "+ Añadir vacaciones" para empezar.</span>
-              </>
-            )}
+            <br />
+            <span className="text-xs">Pulsa "+ Añadir vacaciones" para empezar.</span>
           </p>
         </div>
       )}
@@ -261,13 +282,13 @@ function CalendarView({
 
 function LeaveCard({
   leave,
-  isManager,
+  canCancel,
   onCancel,
   highlighted,
   muted,
 }: {
   leave: Leave;
-  isManager: boolean;
+  canCancel: boolean;
   onCancel?: () => void;
   highlighted?: boolean;
   muted?: boolean;
@@ -308,7 +329,7 @@ function LeaveCard({
           )}
           {leave.status === "applied" && leave.daysApplied === 0 && (
             <div className="text-[11px] mt-0.5" style={{ color: "#737373" }}>
-              Sin compensación (vacaciones &lt; 8 días)
+              Sin compensación (vacaciones &lt; 5 días)
             </div>
           )}
           {leave.notes && (
@@ -317,7 +338,7 @@ function LeaveCard({
             </div>
           )}
         </div>
-        {isManager && onCancel && (
+        {canCancel && onCancel && (
           <button
             onClick={onCancel}
             className="text-xs text-red-600 hover:underline shrink-0"
@@ -332,10 +353,13 @@ function LeaveCard({
 
 function CreateLeaveModal({
   team,
+  lockToSelf,
   onClose,
   onSaved,
 }: {
   team: TeamMember[];
+  /** Si true, el selector de profesional queda fijo al único miembro de `team`. */
+  lockToSelf?: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -347,7 +371,7 @@ function CreateLeaveModal({
   const [error, setError] = useState("");
 
   const days = startDate && endDate ? daysBetweenInclusive(startDate, endDate) : 0;
-  const willCompensate = days >= 8;
+  const willCompensate = days >= 5;
 
   async function save() {
     setError("");
@@ -383,7 +407,7 @@ function CreateLeaveModal({
           <button onClick={onClose} className="text-neutral-400 text-xl leading-none">✕</button>
         </div>
         <p className="text-xs text-neutral-500 mb-4">
-          Si las vacaciones duran 8+ días, los pacientes RECUPERA y CONSOLIDA de esa persona recibirán automáticamente días extra en su suscripción.
+          Si las vacaciones duran 5+ días, los pacientes RECUPERA y CONSOLIDA del fisio recibirán automáticamente días extra en su suscripción y se descontará la parte proporcional del salario en sus métricas.
         </p>
 
         <div className="space-y-3">
@@ -393,6 +417,7 @@ function CreateLeaveModal({
               className="input text-sm w-full"
               value={professionalId}
               onChange={(e) => setProfessionalId(e.target.value)}
+              disabled={lockToSelf}
             >
               {team.map((m) => (
                 <option key={m.id} value={m.id}>
@@ -445,8 +470,8 @@ function CreateLeaveModal({
             >
               <strong>{days} {days === 1 ? "día" : "días"} fuera.</strong>{" "}
               {willCompensate
-                ? `Se sumarán +${days} días al periodo activo de cada paciente RECUPERA/CONSOLIDA asignado.`
-                : "No habrá compensación a pacientes (mínimo 8 días)."}
+                ? `Se sumarán +${days} días al periodo activo de cada paciente RECUPERA/CONSOLIDA asignado y se descontará la parte proporcional del mes en las métricas de salario.`
+                : "No habrá compensación a pacientes ni descuento de salario (mínimo 5 días)."}
             </div>
           )}
 
