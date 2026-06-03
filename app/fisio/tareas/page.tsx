@@ -57,16 +57,31 @@ export default async function TasksPage() {
     missingTotal: number;
   };
 
+  // Día actual en Madrid (1=L..5=V, 6=S, 7=D). Para la semana actual solo
+  // contamos como "no marcadas" las tareas de días ya pasados; para la
+  // semana anterior cuentan los 5 días enteros.
+  const todayDow = (() => {
+    const fmt = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Madrid", weekday: "short" });
+    const wk = fmt.format(new Date());
+    const map: Record<string, number> = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 };
+    return map[wk] || 1;
+  })();
+
   const audit: AuditEntry[] = [];
   for (const pro of professionals) {
     for (const wk of [monday, prevMonday]) {
+      const isCurrentWeek = wk.getTime() === monday.getTime();
       const taskOfRole = allTasks.filter((t) => t.targetRole === pro.role);
       const doneSet = new Set(
         allCompletions
           .filter((c) => c.professionalId === pro.id && c.weekStartDate.getTime() === wk.getTime())
           .map((c) => c.taskId),
       );
-      const missing = taskOfRole.filter((t) => !doneSet.has(t.id));
+      // Si es la semana actual, solo cuentan los días que YA pasaron
+      // (dayOfWeek < hoy). El día de hoy no marca como "incumplida" todavía.
+      const missing = taskOfRole.filter(
+        (t) => !doneSet.has(t.id) && (!isCurrentWeek || t.dayOfWeek < todayDow),
+      );
       const byDay = new Map<number, string[]>();
       for (const t of missing) {
         const arr = byDay.get(t.dayOfWeek) ?? [];
