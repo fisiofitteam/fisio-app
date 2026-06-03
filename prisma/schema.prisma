@@ -1784,6 +1784,7 @@ model WeeklyTeamTaskCompletion {
 model TeamTaskAdHoc {
   id            String   @id @default(cuid())
   title         String
+  description   String?
   targetRole    String
   kind          String
   dayOfMonth    Int?

@@ -72,6 +72,7 @@ export default async function TasksPage() {
     arr.map((t) => ({
       id: t.id,
       title: t.title,
+      description: t.description ?? null,
       targetRole: t.targetRole,
       kind: t.kind as "monthly" | "monthly_weekday" | "range",
       dayOfMonth: t.dayOfMonth,

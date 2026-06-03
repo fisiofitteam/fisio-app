@@ -7,6 +7,7 @@ import { Plus, X, CalendarRange, Users } from "lucide-react";
 type AdHocTask = {
   id: string;
   title: string;
+  description: string | null;
   targetRole: string;
   kind: "monthly" | "monthly_weekday" | "range";
   dayOfMonth: number | null;
@@ -109,6 +110,11 @@ export function AdHocTasksManager({
                 <div className={`text-sm ${t.active ? "text-neutral-800" : "text-neutral-400 line-through"}`}>
                   {t.title}
                 </div>
+                {t.description && (
+                  <div className="text-[11px] text-neutral-600 mt-0.5 whitespace-pre-wrap line-clamp-3">
+                    {t.description}
+                  </div>
+                )}
                 <div className="text-[11px] text-neutral-500 mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
                   <span>
                     {t.kind === "range" ? "📆 Rango" : "📅 Mensual"} · {fmtSchedule(t)}
@@ -157,6 +163,7 @@ function NewTaskForm({
   onCreated: () => void;
 }) {
   const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
   const [kind, setKind] = useState<"monthly" | "monthly_weekday" | "range">("monthly");
   const [dayOfMonth, setDayOfMonth] = useState("1");
   const [nthWeek, setNthWeek] = useState("1");
@@ -186,6 +193,7 @@ function NewTaskForm({
     setSaving(true);
     const body: any = {
       title: title.trim(),
+      description: description.trim() || null,
       targetRole: role,
       kind,
       assigneeIds: assignToAll ? [] : Array.from(assigneeIds),
@@ -220,6 +228,13 @@ function NewTaskForm({
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Título de la tarea"
           className="text-sm px-2 py-1.5 rounded border border-neutral-300 w-full outline-none focus:border-neutral-500"
+        />
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Descripción / notas (opcional). Útil para pegar formularios, links o instrucciones largas."
+          rows={3}
+          className="text-xs px-2 py-1.5 rounded border border-neutral-300 w-full outline-none focus:border-neutral-500 resize-y"
         />
 
         <div className="flex gap-1 flex-wrap">

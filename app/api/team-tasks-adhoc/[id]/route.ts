@@ -16,6 +16,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (!t) return NextResponse.json({ error: "Título vacío" }, { status: 400 });
     data.title = t;
   }
+  if (b?.description !== undefined) {
+    data.description = typeof b.description === "string" && b.description.trim() ? b.description.trim() : null;
+  }
   if (b?.dayOfMonth !== undefined) {
     const d = Number(b.dayOfMonth);
     if (!Number.isFinite(d) || d < 1 || d > 31) return NextResponse.json({ error: "Día del mes 1-31" }, { status: 400 });

@@ -45,7 +45,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Head Success solo puede crear tareas para Fisios" }, { status: 403 });
   }
 
-  const data: any = { title, targetRole, kind, active: true, createdById: user.id };
+  const description = typeof b?.description === "string" && b.description.trim() ? b.description.trim() : null;
+  const data: any = { title, description, targetRole, kind, active: true, createdById: user.id };
 
   if (kind === "monthly") {
     const d = Number(b?.dayOfMonth);

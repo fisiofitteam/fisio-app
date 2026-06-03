@@ -1826,6 +1826,7 @@ model WeeklyTeamTaskCompletion {
 model TeamTaskAdHoc {
   id            String   @id @default(cuid())
   title         String
+  description   String?                               // notas/instrucciones opcionales
   targetRole    String                                // "fisio" | "head_success"
   kind          String                                // "monthly" | "monthly_weekday" | "range"
   dayOfMonth    Int?

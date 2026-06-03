@@ -59,6 +59,7 @@ export function nthWeekdayOfMonth(year: number, monthIdx: number, dayOfWeek: num
 export type AdHocTaskItem = {
   id: string;
   title: string;
+  description: string | null;
   kind: "monthly" | "monthly_weekday" | "range";
   dayOfMonth: number | null;
   nthWeek: number | null;
@@ -126,16 +127,27 @@ export async function buildAdHocActiveForProfessional(
   });
 
   // Filtrar por vigencia + asignados.
+  // Para mensuales: si la fecha objetivo de ESTE mes era ANTERIOR al día en
+  // que se creó la tarea (en Madrid), no la mostramos este mes — empieza el
+  // mes siguiente (el cron natural). Así no aparece de golpe al crearla.
   const tasks = allTasks.filter((t) => {
     const assignees = parseAssignees(t.assigneesJson);
     if (assignees.length > 0 && !assignees.includes(professionalId)) return false;
+
+    const createdAtDate = todayMadridUtc(t.createdAt); // UTC midnight del día Madrid
+
     if (t.kind === "monthly") {
-      return t.dayOfMonth != null && t.dayOfMonth <= dayOfMonthToday;
+      if (t.dayOfMonth == null) return false;
+      const target = new Date(Date.UTC(year, monthIdx, t.dayOfMonth));
+      if (createdAtDate.getTime() > target.getTime()) return false; // espera al mes siguiente
+      return today.getTime() >= target.getTime();
     }
     if (t.kind === "monthly_weekday") {
       if (t.nthWeek == null || t.dayOfWeek == null) return false;
       const target = nthWeekdayOfMonth(year, monthIdx, t.dayOfWeek, t.nthWeek);
-      return !!target && today.getTime() >= target.getTime();
+      if (!target) return false;
+      if (createdAtDate.getTime() > target.getTime()) return false; // espera al mes siguiente
+      return today.getTime() >= target.getTime();
     }
     if (t.kind === "range") {
       if (!t.startDate || !t.endDate) return false;
@@ -158,7 +170,7 @@ export async function buildAdHocActiveForProfessional(
       const occurrence = monthStart;
       const key = `${t.id}|${occurrence.toISOString()}`;
       return {
-        id: t.id, title: t.title, kind: "monthly",
+        id: t.id, title: t.title, description: t.description ?? null, kind: "monthly",
         dayOfMonth: t.dayOfMonth, nthWeek: null, dayOfWeek: null,
         startDateIso: null, endDateIso: null,
         completed: doneKey.has(key),
@@ -170,7 +182,7 @@ export async function buildAdHocActiveForProfessional(
       const occurrence = monthStart;
       const key = `${t.id}|${occurrence.toISOString()}`;
       return {
-        id: t.id, title: t.title, kind: "monthly_weekday",
+        id: t.id, title: t.title, description: t.description ?? null, kind: "monthly_weekday",
         dayOfMonth: null, nthWeek: t.nthWeek, dayOfWeek: t.dayOfWeek,
         startDateIso: null, endDateIso: null,
         completed: doneKey.has(key),
@@ -183,7 +195,7 @@ export async function buildAdHocActiveForProfessional(
     const occurrence = start;
     const key = `${t.id}|${occurrence.toISOString()}`;
     return {
-      id: t.id, title: t.title, kind: "range",
+      id: t.id, title: t.title, description: t.description ?? null, kind: "range",
       dayOfMonth: null, nthWeek: null, dayOfWeek: null,
       startDateIso: start.toISOString(), endDateIso: end.toISOString(),
       completed: doneKey.has(key),
