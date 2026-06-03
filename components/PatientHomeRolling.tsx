@@ -70,6 +70,7 @@ export function PatientHomeRolling({
   days,
   daysToExpire,
   needsShirtSize,
+  shippingComplete = true,
 }: {
   firstName: string;
   patientId: string;
@@ -84,6 +85,8 @@ export function PatientHomeRolling({
   daysToExpire?: number | null;
   /** true si el paciente aún no ha rellenado su talla de camiseta ADVANCE. */
   needsShirtSize?: boolean;
+  /** false → mostramos banner "Completa tu dirección postal" (mismo de Dark). */
+  shippingComplete?: boolean;
 }) {
   const initial = firstName[0]?.toUpperCase() ?? "?";
 
@@ -173,6 +176,26 @@ export function PatientHomeRolling({
             </div>
           )}
         </header>
+
+        {!shippingComplete && (
+          <Link
+            href={`/paciente/${patientId}/ajustes#direccion`}
+            className="mb-5 rounded-xl px-4 py-3 text-sm flex items-center justify-between gap-3"
+            style={{
+              background: "var(--p-amber-bg)",
+              border: "1px solid var(--p-amber-border)",
+              color: "var(--p-amber-text)",
+            }}
+          >
+            <div className="flex-1 min-w-0">
+              <div className="font-medium mb-0.5">📮 Completa tu dirección postal</div>
+              <div className="text-xs" style={{ color: "var(--p-text-dim)" }}>
+                Faltan datos de contacto básicos en tu ficha.
+              </div>
+            </div>
+            <span className="text-xs font-medium underline flex-shrink-0">Completar</span>
+          </Link>
+        )}
 
         {needsShirtSize && <PatientShirtSizePicker />}
 

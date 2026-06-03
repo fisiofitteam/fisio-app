@@ -217,7 +217,10 @@ export default async function PatientHome({ params }: { params: { id: string } }
         title={headerTitle}
         days={flatDays}
         daysToExpire={daysToExpire}
-        needsShirtSize={patient.programType === "ADVANCE" && !patient.shirtSize}
+        // Pacientes migrados (giftsAlreadySent=true) ya tienen su camiseta
+        // de antes y no deben ver el selector.
+        needsShirtSize={patient.programType === "ADVANCE" && !patient.shirtSize && !patient.giftsAlreadySent}
+        shippingComplete={!!(patient.shippingStreet && patient.shippingNumber && patient.shippingCity && patient.shippingPostalCode)}
       />
     );
   }

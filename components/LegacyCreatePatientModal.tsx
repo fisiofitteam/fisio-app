@@ -104,6 +104,10 @@ export function LegacyCreatePatientModal({
         <div className="rounded-lg p-2 mb-4 text-xs" style={{ background: "#FEF3C7", border: "1px solid #FCD34D", color: "#78350F" }}>
           Solo para migrar pacientes que ya tenemos fuera de la plataforma.
           No se cuenta como alta nueva ni se genera transacción.
+          <br />
+          Se le pedirá la <strong>dirección postal</strong> al paciente, pero no
+          aparecerá en envíos pendientes (camiseta/parches) porque damos por
+          hecho que ya los recibió.
         </div>
 
         {error && <div className="rounded-lg p-2 mb-3 text-xs text-red-700 bg-red-50 border border-red-200">{error}</div>}

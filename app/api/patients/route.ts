@@ -99,7 +99,9 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // 1) Crear paciente
+  // 1) Crear paciente. Los pacientes migrados (legacy=true) ya recibieron
+  // sus regalos fuera de la plataforma → giftsAlreadySent oculta el selector
+  // de talla y los excluye de "Camisetas/Parches pendientes".
   const patient = await prisma.patient.create({
     data: {
       fullName: fullName.trim(),
@@ -114,6 +116,7 @@ export async function POST(req: NextRequest) {
       programType: programType || null,
       programMode: mode,
       rollingProgramId: mode === "rolling" ? rollingProgramId : null,
+      giftsAlreadySent: isLegacy,
     },
   });
 

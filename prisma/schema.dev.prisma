@@ -28,6 +28,10 @@ model Patient {
   patchSentAt              DateTime?
   // Camiseta ADVANCE
   shirtSize                String?
+  // Se marca true al migrar pacientes existentes que ya recibieron sus
+  // regalos. Oculta el selector de talla y los excluye de las listas de
+  // envíos pendientes (camisetas + parches).
+  giftsAlreadySent         Boolean    @default(false)
   shirtSent                Boolean   @default(false)
   shirtSentAt              DateTime?
   shippingAddress          String?    // legacy / texto libre (se mantiene por compat)

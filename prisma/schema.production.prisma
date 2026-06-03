@@ -29,6 +29,11 @@ model Patient {
   // Camiseta ADVANCE: se le pregunta la talla al paciente al entrar en ADVANCE.
   // El equipo (setter / manager) la prepara y envía. shirtSize: "XS"|"S"|"M"|"L"|"XL"|"XXL".
   shirtSize                String?
+  // Si true, el paciente NO ve el selector de talla de camiseta y queda fuera
+  // de las listas de envíos pendientes (camisetas Y parches). Se usa para
+  // pacientes migrados manualmente que ya recibieron sus regalos fuera de la
+  // plataforma. Se marca automáticamente al crear con `legacy: true`.
+  giftsAlreadySent         Boolean    @default(false)
   shirtSent                Boolean   @default(false)
   shirtSentAt              DateTime?
   shippingAddress          String?    // legacy / texto libre (se mantiene por compat)
