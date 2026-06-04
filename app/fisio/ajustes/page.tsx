@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getActiveProfessional } from "@/lib/session";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { LogoutCard } from "@/components/LogoutCard";
 
 export default async function AjustesPage() {
   const user = await getActiveProfessional();
@@ -72,6 +73,12 @@ export default async function AjustesPage() {
             </div>
           </Link>
         )}
+      </div>
+
+      {/* Cerrar sesión — separado al final, con estilo de "destructivo suave".
+          En desktop también está en el sidebar; aquí es el único acceso en móvil. */}
+      <div className="mt-6 pt-4 border-t border-neutral-200">
+        <LogoutCard />
       </div>
     </main>
   );
