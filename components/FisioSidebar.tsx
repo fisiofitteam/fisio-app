@@ -127,42 +127,48 @@ export function FisioSidebar({
 
   return (
     <>
-      {/* Mobile */}
-      <nav className="md:hidden flex gap-1 overflow-x-auto pb-1 -mx-4 px-4">
-        <Link href="/" className="px-3 py-2 text-xs rounded-lg whitespace-nowrap bg-white border border-neutral-200 text-neutral-500">
+      {/* Mobile. La campanita va FUERA del nav con overflow-x-auto porque,
+          si está dentro, el dropdown queda recortado y no se ve al abrirlo. */}
+      <div className="md:hidden flex items-stretch gap-1 -mx-4 px-4">
+        <Link
+          href="/"
+          className="px-3 py-2 text-xs rounded-lg whitespace-nowrap bg-white border border-neutral-200 text-neutral-500 shrink-0 self-center"
+        >
           ← Inicio
         </Link>
         {user && (
-          <div className="px-1 flex items-center">
+          <div className="px-1 flex items-center shrink-0">
             <NotificationsBell />
           </div>
         )}
-        {items.map((it) => {
-          const active = it.match(pathname);
-          const Icon = it.Icon;
-          const badge = badgeFor(it.id);
-          return (
-            <Link
-              key={it.id}
-              href={it.href}
-              className={`px-3 py-2 text-xs rounded-lg whitespace-nowrap flex items-center gap-1.5 relative ${
-                active ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900" : "bg-white border border-neutral-200"
-              }`}
-            >
-              <Icon size={14} strokeWidth={2} />
-              {it.label}
-              {badge !== null && badge > 0 && (
-                <span
-                  className="ml-1 min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-bold flex items-center justify-center"
-                  style={{ background: "#DC2626", color: "#FFFFFF" }}
-                >
-                  {badge > 99 ? "99+" : badge}
-                </span>
-              )}
-            </Link>
-          );
-        })}
-      </nav>
+        <nav className="flex gap-1 overflow-x-auto pb-1 min-w-0 flex-1">
+          {items.map((it) => {
+            const active = it.match(pathname);
+            const Icon = it.Icon;
+            const badge = badgeFor(it.id);
+            return (
+              <Link
+                key={it.id}
+                href={it.href}
+                className={`px-3 py-2 text-xs rounded-lg whitespace-nowrap flex items-center gap-1.5 relative ${
+                  active ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900" : "bg-white border border-neutral-200"
+                }`}
+              >
+                <Icon size={14} strokeWidth={2} />
+                {it.label}
+                {badge !== null && badge > 0 && (
+                  <span
+                    className="ml-1 min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-bold flex items-center justify-center"
+                    style={{ background: "#DC2626", color: "#FFFFFF" }}
+                  >
+                    {badge > 99 ? "99+" : badge}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
 
       {/* Desktop */}
       <aside className="hidden md:block w-48 flex-shrink-0">
