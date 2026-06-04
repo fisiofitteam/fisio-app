@@ -18,6 +18,8 @@ const PUBLIC_PATHS = [
   "/renovar",       // landing pública de renovación (paciente existente)
   "/api/renewal",   // endpoints públicos del flujo de renovación (status, checkout)
   "/api/webhooks",  // webhooks externos (Stripe) — los llama Stripe sin cookie
+  "/privacidad",    // política de privacidad pública (requerida por App Store)
+  "/terminos",     // términos y condiciones públicos
 ];
 
 const STATIC_PREFIXES = ["/_next", "/api/_internal", "/favicon", "/icon-", "/box.jpg", "/manifest.json"];
