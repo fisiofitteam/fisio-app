@@ -55,3 +55,7 @@ assets/icon-foreground.png
 assets/icon-background.png
 assets/splash.png
 assets/splash-dark.png
+
+# Android keystore (CRÍTICO: NUNCA subir a git)
+android/app/fisiofit-release.keystore
+android/key.properties
