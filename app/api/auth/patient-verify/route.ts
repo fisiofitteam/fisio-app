@@ -12,6 +12,24 @@ export async function POST(req: NextRequest) {
 
   const normalized = email.toLowerCase().trim();
 
+  // ─── Modo demo para Apple Review ───
+  // Si email+código coinciden con los configurados en env vars, saltamos el
+  // check de LoginCode y logueamos directamente al paciente con ese email.
+  // Para usuarios normales este bloque no se ejecuta (env vars vacías).
+  const demoEmail = process.env.DEMO_PATIENT_EMAIL?.toLowerCase().trim();
+  const demoCode = process.env.DEMO_PATIENT_CODE?.trim();
+  if (demoEmail && demoCode && normalized === demoEmail && String(code).trim() === demoCode) {
+    const patient = await prisma.patient.findUnique({ where: { email: normalized } });
+    if (!patient) {
+      return NextResponse.json({ error: "Paciente demo no encontrado" }, { status: 500 });
+    }
+    const ua = req.headers.get("user-agent") || undefined;
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || undefined;
+    const token = await createSessionForPatient(patient.id, { userAgent: ua, ipAddress: ip });
+    setSessionCookie(token);
+    return NextResponse.json({ ok: true, patientId: patient.id });
+  }
+
   const record = await prisma.loginCode.findFirst({
     where: {
       email: normalized,

@@ -11,6 +11,18 @@ export async function POST(req: NextRequest) {
   if (!email) return NextResponse.json({ error: "Email requerido" }, { status: 400 });
 
   const normalized = email.toLowerCase().trim();
+
+  // ─── Modo demo para Apple Review ───
+  // Si está configurado DEMO_PATIENT_EMAIL y el lead pide código para ese
+  // email exacto, NO enviamos email ni creamos LoginCode (el reviewer no
+  // tiene buzón). Devolvemos OK para que el cliente avance a la pantalla
+  // de "introducir código" — el reviewer usará el DEMO_PATIENT_CODE fijo
+  // que se documenta en App Store Connect.
+  const demoEmail = process.env.DEMO_PATIENT_EMAIL?.toLowerCase().trim();
+  if (demoEmail && normalized === demoEmail) {
+    return NextResponse.json({ ok: true });
+  }
+
   const patient = await prisma.patient.findUnique({ where: { email: normalized } });
 
   // No revelamos si existe el paciente o no
