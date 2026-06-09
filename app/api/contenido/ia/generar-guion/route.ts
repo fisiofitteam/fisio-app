@@ -41,6 +41,17 @@ export async function POST(req: NextRequest) {
   const scriptTemplateId = body?.scriptTemplateId ? String(body.scriptTemplateId).trim() : null;
   const freeNote = body?.freeNote ? String(body.freeNote).trim() : "";
 
+  // Modo iteración: si el cliente envía la versión anterior + una nueva
+  // instrucción de ajuste, la IA refina sobre esa versión en vez de
+  // empezar de cero.
+  const previousResult =
+    body?.previousResult && typeof body.previousResult === "object"
+      ? body.previousResult
+      : null;
+  const iterationInstruction = body?.iterationInstruction
+    ? String(body.iterationInstruction).trim()
+    : "";
+
   if (!pieceId) return NextResponse.json({ error: "pieceId requerido" }, { status: 400 });
   if (!instructions) return NextResponse.json({ error: "Instrucciones requeridas" }, { status: 400 });
 
@@ -111,6 +122,8 @@ export async function POST(req: NextRequest) {
       hook: hook || undefined,
       freeNote,
       topPieces,
+      previousResult: previousResult || undefined,
+      iterationInstruction: iterationInstruction || undefined,
     });
   } catch (e: any) {
     console.error("[ia/generar-guion] error:", e);

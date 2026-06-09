@@ -88,6 +88,14 @@ export type GenerateInput = {
   hook?: string;
   freeNote?: string;       // "hazlo más corto", "más directo"...
   topPieces: TopPiece[];
+  /** Modo iteración: versión anterior del guion que el CEO quiere ajustar.
+   *  Si está presente, la IA NO reescribe desde cero — mantiene lo bueno
+   *  y aplica solo el iterationInstruction. */
+  previousResult?: GenerateOutput;
+  /** Instrucción de ajuste que el CEO pide sobre previousResult.
+   *  Ej: "hazlo más corto", "menos académico", "cambia el cierre por un
+   *  CTA más directo a DM". */
+  iterationInstruction?: string;
 };
 
 export type GeneratedBlock = {
@@ -226,10 +234,15 @@ function buildUserPrompt(input: GenerateInput): string {
   const hook = input.hook?.trim();
   if (hook) {
     parts.push("");
-    parts.push("HOOK FIJADO POR EL CEO");
-    parts.push(`"${hook}"`);
+    parts.push("HOOK FIJADO POR EL CEO — REGLAS NEGOCIABLES");
+    parts.push(`Texto literal del hook: "${hook}"`);
     parts.push("");
-    parts.push("CRÍTICO: el primer bloque del guion (la apertura) DEBE empezar con este hook TEXTUAL, palabra por palabra, sin reformularlo, sin parafrasearlo, sin cambiar puntuación. Después del hook ya puedes continuar libremente. En hookVariations propón 3 alternativas distintas POR SI el CEO quiere probar otras, pero el guion principal usa el suyo tal cual.");
+    parts.push("REGLAS ESTRICTAS SOBRE EL HOOK:");
+    parts.push(`1. La VOZ / lo que se dice a cámara en el primer bloque del guion DEBE EMPEZAR EXACTAMENTE con esta frase, palabra por palabra, sin reformular, sin parafrasear, sin cambiar puntuación, sin añadir ni quitar palabras.`);
+    parts.push(`2. No la sustituyas por una variación "que suene mejor". Aunque tengas una mejor, NO la uses en el guion principal.`);
+    parts.push(`3. Si el primer bloque incluye anotaciones tipo "Texto en pantalla:", "Voz:", "Cámara:", esas son OK — PERO el contenido del "Voz:" (o lo que se dice a cámara) tiene que empezar literalmente con: "${hook}". Después puedes continuar libremente.`);
+    parts.push(`4. Si el bloque NO usa esa nomenclatura de "Voz:", entonces la PRIMERA línea del content de ese bloque debe ser literalmente: "${hook}".`);
+    parts.push(`5. En hookVariations propón 3 alternativas distintas POR SI el CEO quiere probar otras, pero el guion principal usa el suyo tal cual.`);
   } else {
     parts.push("");
     parts.push("Sin hook fijado — propón uno tú. En hookVariations devuelve 3 alternativas adicionales (puedes incluir el que uses en el guion principal como una de ellas o totalmente distintas).");
@@ -237,8 +250,27 @@ function buildUserPrompt(input: GenerateInput): string {
 
   if (input.freeNote?.trim()) {
     parts.push("");
-    parts.push("NOTA / AJUSTE PEDIDO POR EL CEO");
+    parts.push("NOTA / AJUSTE DE TONO PEDIDO POR EL CEO");
     parts.push(input.freeNote.trim());
+  }
+
+  // ─── Modo iteración: tenemos una versión previa que ajustar ───
+  if (input.previousResult) {
+    parts.push("");
+    parts.push("═══ MODO ITERACIÓN ═══");
+    parts.push("Esta NO es la primera generación. El CEO ya recibió una versión anterior y pide ajustar a partir de ella. NO reescribas el guion desde cero — manténle la idea, la estructura y lo que funcionó. Solo aplica los ajustes pedidos abajo.");
+    parts.push("");
+    parts.push("VERSIÓN ANTERIOR DEL GUION (mantén lo bueno, ajusta lo necesario):");
+    parts.push(JSON.stringify({
+      blocks: input.previousResult.blocks,
+      caption: input.previousResult.caption,
+      hookVariations: input.previousResult.hookVariations,
+    }, null, 2));
+    parts.push("");
+    parts.push("AJUSTE PEDIDO POR EL CEO SOBRE ESA VERSIÓN ANTERIOR:");
+    parts.push(`"${input.iterationInstruction?.trim() || "(sin ajuste específico, refina lo que puedas)"}"`);
+    parts.push("");
+    parts.push("Si el ajuste pedido NO afecta a una sección concreta, déjala IDÉNTICA. Solo cambia lo necesario para cumplir el ajuste.");
   }
 
   parts.push("");

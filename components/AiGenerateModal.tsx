@@ -58,6 +58,8 @@ export function AiGenerateModal({
   const [result, setResult] = useState<GenerateOutput | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pickedHookVariation, setPickedHookVariation] = useState<string | null>(null);
+  /** Caja de "pídeme un ajuste" que aparece en el preview tras generar. */
+  const [iterationInstruction, setIterationInstruction] = useState("");
 
   // Cargar plantillas del formato
   useEffect(() => {
@@ -76,11 +78,17 @@ export function AiGenerateModal({
     };
   }, [format]);
 
-  async function generate() {
+  /**
+   * Llama al endpoint de generación. Si `iterate` es true, manda también la
+   * versión anterior (this.result) y la instrucción de ajuste, para que la
+   * IA refine en vez de generar desde cero.
+   */
+  async function generate(iterate = false) {
     if (!instructions.trim()) {
       setError("Necesitas darle instrucciones para que sepa qué pieza generar.");
       return;
     }
+    if (iterate && (!iterationInstruction.trim() || !result)) return;
     setError(null);
     setStep("loading");
     try {
@@ -93,6 +101,8 @@ export function AiGenerateModal({
           hook: hook.trim() || null,
           scriptTemplateId: scriptTemplateId || null,
           freeNote: freeNote.trim() || null,
+          previousResult: iterate ? result : null,
+          iterationInstruction: iterate ? iterationInstruction.trim() : null,
         }),
       });
       if (!res.ok) {
@@ -102,6 +112,7 @@ export function AiGenerateModal({
       const data = (await res.json()) as GenerateOutput;
       setResult(data);
       setPickedHookVariation(null);
+      setIterationInstruction("");  // limpiamos la caja tras enviar
       setStep("preview");
     } catch (e: any) {
       setError(e?.message || "Error generando guion");
@@ -256,7 +267,7 @@ export function AiGenerateModal({
                   Cancelar
                 </button>
                 <button
-                  onClick={generate}
+                  onClick={() => generate(false)}
                   className="text-sm font-semibold px-4 py-2 rounded-lg"
                   style={{ background: "#0A0A0A", color: "#FAFAFA" }}
                 >
@@ -372,6 +383,42 @@ export function AiGenerateModal({
                   ⚠ Esta pieza ya tenía contenido. Si aplicas, lo sobrescribes.
                 </div>
               )}
+
+              {/* Caja de iteración: pide ajustes sobre el resultado anterior */}
+              <section
+                className="rounded-xl p-3"
+                style={{ background: "#FFFBEB", border: "1px dashed #FCD34D" }}
+              >
+                <label className="text-xs font-semibold block mb-1.5" style={{ color: "#78350F" }}>
+                  🔁 ¿Quieres ajustar el resultado?
+                </label>
+                <textarea
+                  value={iterationInstruction}
+                  onChange={(e) => setIterationInstruction(e.target.value)}
+                  rows={2}
+                  placeholder='Ej. "Hazlo más corto", "menos académico", "cambia el cierre por un CTA más directo a DM con la palabra HOMBRO"…'
+                  className="w-full text-sm p-2.5 rounded-lg outline-none resize-y"
+                  style={{ background: "#FFFFFF", border: "1px solid #FCD34D" }}
+                />
+                <div className="flex justify-end mt-2">
+                  <button
+                    type="button"
+                    onClick={() => generate(true)}
+                    disabled={!iterationInstruction.trim()}
+                    className="text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{
+                      background: "linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)",
+                      color: "#0A0A0A",
+                      border: "none",
+                    }}
+                  >
+                    🔁 Regenerar con este ajuste
+                  </button>
+                </div>
+                <p className="text-[11px] mt-2" style={{ color: "#78350F" }}>
+                  La IA ajustará la versión actual manteniendo lo que funciona. Puedes iterar las veces que necesites antes de aplicar.
+                </p>
+              </section>
 
               <div className="flex justify-between gap-2 pt-2 border-t border-neutral-100 flex-wrap">
                 <button onClick={onClose} className="text-sm text-neutral-500 px-3 py-2">
