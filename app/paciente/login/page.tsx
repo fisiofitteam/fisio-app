@@ -12,7 +12,7 @@ export default async function PatientLoginPage() {
   return (
     <PublicShell
       title="Accede como paciente"
-      subtitle="Te enviamos un código por email. Sin contraseñas."
+      subtitle="Solo para clientes activos del servicio FisioFit Team."
       heroTitle={
         <>
           Tu proceso,

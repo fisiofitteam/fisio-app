@@ -107,14 +107,37 @@ export function PatientLoginForm() {
         <p className="text-[10px] text-center pt-2" style={{ color: "#A3A3A3" }}>
           El código caduca en 10 minutos. Revisa también tu carpeta de spam.
         </p>
+        <p className="text-[10px] text-center pt-1" style={{ color: "#A3A3A3" }}>
+          ¿No recibes el código? Asegúrate de que ese email es el que usaste para
+          contratar tu plan. Si nunca has sido cliente de FisioFit Team, esta app no
+          puede crearte una cuenta — agenda primero tu videoconsulta en
+          fisiofitteam.com/agenda.
+        </p>
       </form>
     );
   }
 
   return (
     <form onSubmit={requestCode} className="space-y-3">
+      {/* Aviso claro: NO es pantalla de registro. Solo clientes activos. */}
+      <div
+        className="rounded-lg p-3 text-xs"
+        style={{ background: "#FEF3C7", border: "1px solid #FCD34D", color: "#78350F" }}
+      >
+        <strong>⚠️ Esta no es una pantalla de registro.</strong> El acceso es solo para
+        atletas que ya tienen un plan activo en FisioFit Team. Si aún no eres cliente,
+        agenda tu videoconsulta gratuita en{" "}
+        <a
+          href="https://fisiofitteam.com/agenda"
+          style={{ color: "#78350F", textDecoration: "underline", fontWeight: 600 }}
+        >
+          fisiofitteam.com/agenda
+        </a>
+        .
+      </div>
+
       <div>
-        <FieldLabel>Tu email</FieldLabel>
+        <FieldLabel>Tu email de cliente</FieldLabel>
         <input
           type="email"
           required
@@ -127,6 +150,8 @@ export function PatientLoginForm() {
         />
         <p className="text-[10px] mt-1.5" style={{ color: "#737373" }}>
           Te enviaremos un código de 6 dígitos para entrar. Sin contraseñas que recordar.
+          <br />
+          Usa el mismo email con el que contrataste tu plan.
         </p>
       </div>
       {error && <p className="text-sm" style={{ color: "#DC2626" }}>{error}</p>}
