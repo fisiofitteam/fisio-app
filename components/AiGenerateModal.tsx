@@ -50,6 +50,7 @@ export function AiGenerateModal({
   }) => void;
 }) {
   const [step, setStep] = useState<"form" | "loading" | "preview" | "error">("form");
+  const [instructions, setInstructions] = useState("");
   const [hook, setHook] = useState(initialHook);
   const [templates, setTemplates] = useState<Template[] | null>(null);
   const [scriptTemplateId, setScriptTemplateId] = useState<string>("");
@@ -76,8 +77,8 @@ export function AiGenerateModal({
   }, [format]);
 
   async function generate() {
-    if (!hook.trim()) {
-      setError("Necesitas un hook para que la IA tenga por dónde empezar.");
+    if (!instructions.trim()) {
+      setError("Necesitas darle instrucciones para que sepa qué pieza generar.");
       return;
     }
     setError(null);
@@ -88,7 +89,8 @@ export function AiGenerateModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           pieceId,
-          hook: hook.trim(),
+          instructions: instructions.trim(),
+          hook: hook.trim() || null,
           scriptTemplateId: scriptTemplateId || null,
           freeNote: freeNote.trim() || null,
         }),
@@ -171,18 +173,35 @@ export function AiGenerateModal({
             <>
               <div>
                 <label className="text-xs font-semibold text-neutral-700 block mb-1.5">
-                  ⚡ Hook <span className="text-red-600">*</span>
+                  🎯 Instrucciones <span className="text-red-600">*</span>
+                </label>
+                <textarea
+                  value={instructions}
+                  onChange={(e) => setInstructions(e.target.value)}
+                  rows={4}
+                  placeholder='Qué quieres que diga esta pieza. Tema, ángulo, mensaje. Ej: "Quiero hablar de por qué la mayoría de fisios tratan mal el dolor de hombro en crossfit. Desmonta el mito de que es sobreentrenamiento, cuenta lo que realmente vemos en consulta (impingement por mala mecánica), y cierra con un test de 10 segundos que puedan hacer ahora mismo."'
+                  className="w-full text-sm p-3 rounded-lg outline-none resize-y"
+                  style={{ background: "#FAFAFA", border: "1px solid #D4D4D4" }}
+                />
+                <p className="text-[11px] text-neutral-500 mt-1">
+                  Lo más importante. Cuanto más concreto, mejor te entiende. Tono, ángulo, qué decir y qué evitar.
+                </p>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-neutral-700 block mb-1.5">
+                  ⚡ Hook (opcional)
                 </label>
                 <textarea
                   value={hook}
                   onChange={(e) => setHook(e.target.value)}
                   rows={2}
-                  placeholder="El gancho con el que arranca la pieza. Una frase corta y potente."
+                  placeholder="Si tienes una frase de apertura clara, escríbela. La IA la usará TEXTUAL al inicio del guion. Si no la tienes, la propondrá ella."
                   className="w-full text-sm p-3 rounded-lg outline-none resize-y"
                   style={{ background: "#FAFAFA", border: "1px solid #D4D4D4" }}
                 />
                 <p className="text-[11px] text-neutral-500 mt-1">
-                  Si te sale flojo, dale igual — la IA te devolverá 3 variaciones mejores.
+                  Si la rellenas, se usa <strong>literal</strong> palabra por palabra. La IA además te propondrá 3 variaciones por si quieres probar.
                 </p>
               </div>
 
@@ -205,13 +224,13 @@ export function AiGenerateModal({
                   ))}
                 </select>
                 <p className="text-[11px] text-neutral-500 mt-1">
-                  Si eliges plantilla, la IA respeta sus bloques. Sin plantilla, ella propone la estructura.
+                  Si eliges plantilla, la IA respeta sus bloques. Sin plantilla, ella propone la estructura libre según tus instrucciones.
                 </p>
               </div>
 
               <div>
                 <label className="text-xs font-semibold text-neutral-700 block mb-1.5">
-                  📝 Nota / ajuste (opcional)
+                  📝 Nota / ajuste de tono (opcional)
                 </label>
                 <textarea
                   value={freeNote}

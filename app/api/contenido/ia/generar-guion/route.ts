@@ -36,12 +36,13 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => ({}));
   const pieceId = String(body?.pieceId || "").trim();
-  const hook = String(body?.hook || "").trim();
+  const instructions = String(body?.instructions || "").trim();
+  const hook = body?.hook ? String(body.hook).trim() : "";
   const scriptTemplateId = body?.scriptTemplateId ? String(body.scriptTemplateId).trim() : null;
   const freeNote = body?.freeNote ? String(body.freeNote).trim() : "";
 
   if (!pieceId) return NextResponse.json({ error: "pieceId requerido" }, { status: 400 });
-  if (!hook) return NextResponse.json({ error: "Hook requerido" }, { status: 400 });
+  if (!instructions) return NextResponse.json({ error: "Instrucciones requeridas" }, { status: 400 });
 
   // ─── Cargar pieza + semana ───
   const piece = await prisma.contentPiece.findUnique({
@@ -106,7 +107,8 @@ export async function POST(req: NextRequest) {
       week,
       piece: pieceCtx,
       template,
-      hook,
+      instructions,
+      hook: hook || undefined,
       freeNote,
       topPieces,
     });

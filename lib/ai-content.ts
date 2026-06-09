@@ -79,7 +79,13 @@ export type GenerateInput = {
   week: WeekContext;
   piece: PieceContext;
   template?: TemplateContext | null;
-  hook: string;
+  /** Instrucciones específicas para esta pieza (obligatorias). Reemplazan al
+   *  hook como guía principal. Cuentan qué quiere el CEO que la pieza diga,
+   *  qué ángulo, qué mensaje, etc. */
+  instructions: string;
+  /** Hook proporcionado. Opcional. Si viene, la IA DEBE usarlo textual en la
+   *  primera línea del guion. Si no viene, la IA propone uno. */
+  hook?: string;
   freeNote?: string;       // "hazlo más corto", "más directo"...
   topPieces: TopPiece[];
 };
@@ -214,8 +220,20 @@ function buildUserPrompt(input: GenerateInput): string {
   }
 
   parts.push("");
-  parts.push("HOOK PROPORCIONADO POR EL CEO");
-  parts.push(`"${input.hook.trim()}"`);
+  parts.push("INSTRUCCIONES PARA ESTA PIEZA (lo más importante — guía principal del guion)");
+  parts.push(input.instructions.trim());
+
+  const hook = input.hook?.trim();
+  if (hook) {
+    parts.push("");
+    parts.push("HOOK FIJADO POR EL CEO");
+    parts.push(`"${hook}"`);
+    parts.push("");
+    parts.push("CRÍTICO: el primer bloque del guion (la apertura) DEBE empezar con este hook TEXTUAL, palabra por palabra, sin reformularlo, sin parafrasearlo, sin cambiar puntuación. Después del hook ya puedes continuar libremente. En hookVariations propón 3 alternativas distintas POR SI el CEO quiere probar otras, pero el guion principal usa el suyo tal cual.");
+  } else {
+    parts.push("");
+    parts.push("Sin hook fijado — propón uno tú. En hookVariations devuelve 3 alternativas adicionales (puedes incluir el que uses en el guion principal como una de ellas o totalmente distintas).");
+  }
 
   if (input.freeNote?.trim()) {
     parts.push("");
@@ -224,7 +242,7 @@ function buildUserPrompt(input: GenerateInput): string {
   }
 
   parts.push("");
-  parts.push("Genera ahora el guion completo en el JSON especificado. Si el hook está flojo, en hookVariations propón 3 alternativas notablemente más fuertes (más concretas, más sorprendentes, más emocionales).");
+  parts.push("Genera ahora el guion completo en el JSON especificado.");
 
   return parts.join("\n");
 }
