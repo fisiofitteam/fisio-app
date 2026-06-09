@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { PROGRAM_TYPES, DIFFICULTIES, PROGRAM_LABELS, DIFFICULTY_LABELS } from "./PatientPills";
 import { RollingAssignmentBlock } from "./RollingAssignmentBlock";
 import { DeletePatientButton } from "./DeletePatientButton";
+import { IssueInvoiceButton } from "./IssueInvoiceButton";
 
 type Patient = {
   id: string;
@@ -22,6 +23,9 @@ type Patient = {
   rollingProgramId: string | null;
   rollingAccessoriesId: string | null;
   rollingTrainingId: string | null;
+  /** Para el botón de facturación: indica si ya tenemos NIF/dirección. */
+  hasTaxId?: boolean;
+  hasFiscalAddress?: boolean;
 };
 
 function daysUntilRenewal(start: string, months: number): number | null {
@@ -241,6 +245,38 @@ export function ClinicalFile({
       )}
 
       <ConvertToCaseBlock patient={patient} />
+
+      {isCeo && (
+        <div className="mt-6 pt-4 border-t border-neutral-100">
+          <div className="flex items-baseline justify-between mb-2">
+            <h3 className="text-sm font-medium">Facturación</h3>
+            <a
+              href="/fisio/finanzas/facturas-pacientes"
+              className="text-xs text-neutral-500 hover:underline"
+            >
+              Ver todas →
+            </a>
+          </div>
+          <p className="text-xs text-neutral-500 mb-3">
+            Emite una factura para este paciente. Quedará en{" "}
+            <strong>Finanzas → Facturas a pacientes</strong> con numeración
+            correlativa anual (FF-YYYY-NNNN).
+          </p>
+          <IssueInvoiceButton
+            patient={{
+              id: patient.id,
+              fullName: patient.fullName,
+              hasTaxId: patient.hasTaxId ?? false,
+              hasFiscalAddress: patient.hasFiscalAddress ?? false,
+            }}
+            suggestedConcept={
+              patient.programType
+                ? `Servicios de fisioterapia · Programa ${patient.programType}`
+                : "Servicios de fisioterapia y rehabilitación"
+            }
+          />
+        </div>
+      )}
 
       {isCeo && (
         <DeletePatientButton patientId={patient.id} fullName={patient.fullName} />

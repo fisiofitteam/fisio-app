@@ -163,6 +163,7 @@ model Patient {
   programPauses   ProgramPause[]
   notifications   PatientNotification[]
   sales           Sale[]
+  invoices        PatientInvoice[]
   communityComments  CommunityComment[]
   communityReactions CommunityReaction[]
   communityFeedPosts CommunityFeedPost[] @relation("FeedPostPatientAuthor")
@@ -810,6 +811,8 @@ model SubscriptionRenewal {
   decidedAt     DateTime @default(now())                 // fecha en la que se registró este periodo
   amountPaid    Float?                                   // importe pagado por este periodo (€)
   notes         String?
+
+  invoices      PatientInvoice[]
 
   @@index([patientId])
   @@index([decidedAt])
@@ -1538,6 +1541,8 @@ model Sale {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  invoices    PatientInvoice[]
+
   @@index([leadId])
   @@index([patientId])
   @@index([status])
@@ -1604,6 +1609,69 @@ model WelcomeMessageConfig {
   content     String
   updatedAt   DateTime @updatedAt
   updatedById String?
+}
+
+// Factura emitida al paciente. Numeración correlativa por año (FF-2026-0001).
+// Los datos del cliente y emisor se guardan como SNAPSHOT (no FK) porque una
+// factura emitida no puede cambiar si luego editas el perfil del paciente o el
+// tuyo. Cumplimiento legal: facturas son inmutables.
+//
+// La numeración se asigna en transacción al crear (FOR UPDATE-ish con retry en
+// caso de carrera, ver lib/patient-invoices.ts).
+model PatientInvoice {
+  id              String    @id @default(cuid())
+
+  // Numeración (asignada al crear, nunca cambia)
+  series          String    @default("FF")
+  year            Int
+  sequence        Int
+  number          String    @unique             // "FF-2026-0001"
+
+  // Fechas
+  issueDate       DateTime                       // fecha de emisión
+
+  // ─── Cliente (snapshot, NO se actualiza si el paciente cambia datos) ───
+  patientId       String?
+  patient         Patient?  @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  clientName      String                         // fullName del paciente
+  clientTaxId     String?                        // contractDNI
+  clientAddress   String?                        // dirección completa formateada
+  clientEmail     String?
+
+  // ─── Emisor (snapshot del Professional CEO al momento de emitir) ───
+  issuerName      String
+  issuerTaxId     String?
+  issuerAddress   String?
+  issuerIban      String?
+
+  // ─── Importe ───
+  concept         String                         // ej. "Servicios de fisioterapia · Programa RECUPERA 4 meses"
+  baseAmount      Float                          // base imponible
+  vatExempt       Boolean   @default(true)       // exenta IVA art. 20 Ley 37/1992
+  vatRate         Float     @default(0)          // 0 si exenta
+  vatAmount       Float     @default(0)
+  irpfRate        Float     @default(0)          // 0 para particulares, % si empresa retiene
+  irpfAmount      Float     @default(0)
+  totalAmount     Float                          // baseAmount + vatAmount - irpfAmount
+
+  // ─── Vinculación opcional al cobro de origen (trazabilidad) ───
+  saleId                String?
+  sale                  Sale?                @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  subscriptionRenewalId String?
+  subscriptionRenewal   SubscriptionRenewal? @relation(fields: [subscriptionRenewalId], references: [id], onDelete: SetNull)
+  transactionId         String?              // si vino de transacción manual
+
+  // ─── Anulación ───
+  cancelledAt        DateTime?                   // si anulada, fecha
+  cancellationReason String?
+
+  createdAt       DateTime  @default(now())
+  createdById     String?                        // CEO que emitió
+
+  @@unique([year, sequence])                     // unicidad fuerte del correlativo
+  @@index([patientId])
+  @@index([year, sequence])
+  @@index([issueDate])
 }
 
 // Brief para la IA de generación de contenido (fila única, editable por CEO).

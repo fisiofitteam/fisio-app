@@ -11,6 +11,13 @@ export default async function PatientFichaTab({ params }: { params: { id: string
   });
   if (!patient) notFound();
 
+  const hasFiscalAddress = !!(
+    patient.shippingStreet &&
+    patient.shippingNumber &&
+    patient.shippingCity &&
+    patient.shippingPostalCode
+  );
+
   return (
     <ClinicalFile
       isManager={user.isManager}
@@ -31,6 +38,8 @@ export default async function PatientFichaTab({ params }: { params: { id: string
         rollingProgramId: patient.rollingProgramId ?? null,
         rollingAccessoriesId: patient.rollingAccessoriesId ?? null,
         rollingTrainingId: patient.rollingTrainingId ?? null,
+        hasTaxId: !!patient.contractDNI,
+        hasFiscalAddress,
       }}
     />
   );

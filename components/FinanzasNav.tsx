@@ -14,7 +14,8 @@ const SECTIONS = [
 
 const FINANZAS_SUBTABS = [
   { href: "/fisio/finanzas", label: "Resumen", match: (p: string) => p === "/fisio/finanzas" },
-  { href: "/fisio/finanzas/facturas", label: "Facturas equipo", match: (p: string) => p.startsWith("/fisio/finanzas/facturas") },
+  { href: "/fisio/finanzas/facturas", label: "Facturas equipo", match: (p: string) => p === "/fisio/finanzas/facturas" || p.startsWith("/fisio/finanzas/facturas/") },
+  { href: "/fisio/finanzas/facturas-pacientes", label: "Facturas a pacientes", match: (p: string) => p.startsWith("/fisio/finanzas/facturas-pacientes") },
 ];
 
 export function FinanzasNav() {
