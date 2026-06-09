@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PROGRAM_TYPES, DIFFICULTIES, PROGRAM_LABELS, DIFFICULTY_LABELS } from "./PatientPills";
 import { RollingAssignmentBlock } from "./RollingAssignmentBlock";
+import { DeletePatientButton } from "./DeletePatientButton";
 
 type Patient = {
   id: string;
@@ -34,7 +35,16 @@ function daysUntilRenewal(start: string, months: number): number | null {
   return Math.round((renewal.getTime() - now.getTime()) / 86400000);
 }
 
-export function ClinicalFile({ patient, isManager }: { patient: Patient; isManager: boolean }) {
+export function ClinicalFile({
+  patient,
+  isManager,
+  isCeo = false,
+}: {
+  patient: Patient;
+  isManager: boolean;
+  /** Si true, muestra la "Zona de peligro" para borrar al paciente. */
+  isCeo?: boolean;
+}) {
   const router = useRouter();
   const [fullName, setFullName] = useState(patient.fullName);
   const [diagnosis, setDiagnosis] = useState(patient.diagnosis);
@@ -231,6 +241,10 @@ export function ClinicalFile({ patient, isManager }: { patient: Patient; isManag
       )}
 
       <ConvertToCaseBlock patient={patient} />
+
+      {isCeo && (
+        <DeletePatientButton patientId={patient.id} fullName={patient.fullName} />
+      )}
     </div>
   );
 }

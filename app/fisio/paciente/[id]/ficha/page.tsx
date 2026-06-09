@@ -14,6 +14,7 @@ export default async function PatientFichaTab({ params }: { params: { id: string
   return (
     <ClinicalFile
       isManager={user.isManager}
+      isCeo={user.role === "ceo"}
       patient={{
         id: patient.id,
         fullName: patient.fullName,
