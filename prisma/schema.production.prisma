@@ -1606,6 +1606,22 @@ model WelcomeMessageConfig {
   updatedById String?
 }
 
+// Brief para la IA de generación de contenido (fila única, editable por CEO).
+// Es el "system prompt" personalizado que define quién eres, cómo hablas y qué
+// quieres / no quieres que la IA produzca. Se inyecta en cada llamada a Opus.
+model AiContentBrief {
+  id              String   @id @default("singleton")
+  brand           String   @default("")   // quiénes sois, valores, posicionamiento
+  voiceTone       String   @default("")   // cómo habláis: tuteo, registro, expresiones
+  dos             String   @default("")   // qué SÍ hacer siempre
+  donts           String   @default("")   // qué NO hacer jamás
+  structureHints  String   @default("")   // patrones de ritmo fuera de las plantillas oficiales
+  goodExamples    String   @default("")   // 2-3 guiones que clavasteis (con notas)
+  badExamples     String   @default("")   // 2-3 ejemplos AI-slop que NO quiere
+  updatedAt       DateTime @updatedAt
+  updatedById     String?
+}
+
 // Reuniones → Sesiones clínicas: tabla viva de casos clínicos que el equipo
 // comenta cada semana. assignedToId es el id del Professional (sin relación FK).
 model ClinicalSessionCase {

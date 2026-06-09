@@ -1591,6 +1591,20 @@ model WelcomeMessageConfig {
   updatedById String?
 }
 
+// Brief para la IA de generación de contenido (singleton, editable por CEO).
+model AiContentBrief {
+  id              String   @id @default("singleton")
+  brand           String   @default("")
+  voiceTone       String   @default("")
+  dos             String   @default("")
+  donts           String   @default("")
+  structureHints  String   @default("")
+  goodExamples    String   @default("")
+  badExamples     String   @default("")
+  updatedAt       DateTime @updatedAt
+  updatedById     String?
+}
+
 // Reuniones → Sesiones clínicas: tabla viva de casos clínicos que el equipo
 // comenta cada semana. assignedToId es el id del Professional (sin relación FK).
 model ClinicalSessionCase {

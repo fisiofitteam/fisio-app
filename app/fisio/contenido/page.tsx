@@ -51,7 +51,7 @@ export default async function ContentPage({
   if (!selectedId) {
     return (
       <main>
-        <ContentNav active="this-week" />
+        <ContentNav active="this-week" role={user.role} />
         <ThisWeekView
           week={null}
           weekList={[]}
@@ -139,7 +139,7 @@ export default async function ContentPage({
 
   return (
     <main>
-      <ContentNav active="this-week" />
+      <ContentNav active="this-week" role={user.role} />
       <ThisWeekView
         week={{
           id: week.id,

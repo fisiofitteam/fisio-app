@@ -45,7 +45,7 @@ export default async function ContentTemplatePage() {
         </p>
       </header>
 
-      <ContentNav active="template" />
+      <ContentNav active="template" role={user.role} />
 
       <WeeklyTemplatesManager initialTemplates={serializedWeekly} canEdit={canEdit} />
 

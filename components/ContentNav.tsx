@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-type Tab = { key: string; label: string; href: string };
+type Tab = { key: string; label: string; href: string; ceoOnly?: boolean };
 
 const TABS: Tab[] = [
   { key: "calendar", label: "📅 Calendario", href: "/fisio/contenido/calendario" },
@@ -11,12 +11,14 @@ const TABS: Tab[] = [
   { key: "template", label: "🧩 Plantillas", href: "/fisio/contenido/plantilla" },
   { key: "metrics", label: "📈 Métricas", href: "/fisio/contenido/metricas" },
   { key: "bank", label: "🗂 Banco recursos", href: "/fisio/contenido/banco" },
+  { key: "brief-ia", label: "✨ Brief IA", href: "/fisio/contenido/brief-ia", ceoOnly: true },
 ];
 
-export function ContentNav({ active }: { active: string }) {
+export function ContentNav({ active, role }: { active: string; role?: string }) {
+  const visibleTabs = TABS.filter((t) => !t.ceoOnly || role === "ceo");
   return (
     <div className="mb-4 flex gap-1 border-b border-neutral-200 overflow-x-auto">
-      {TABS.map((tab) => {
+      {visibleTabs.map((tab) => {
         const isActive = active === tab.key;
         return (
           <Link

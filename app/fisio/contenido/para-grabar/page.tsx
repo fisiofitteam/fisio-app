@@ -57,7 +57,7 @@ export default async function ToRecordPage() {
         </p>
       </header>
 
-      <ContentNav active="to-record" />
+      <ContentNav active="to-record" role={user.role} />
 
       {pieces.length === 0 ? (
         <section className="card text-center py-12">

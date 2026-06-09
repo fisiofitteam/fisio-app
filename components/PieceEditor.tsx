@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PieceInstagramLink } from "@/components/PieceInstagramLink";
+import { AiGenerateModal } from "@/components/AiGenerateModal";
 import {
   DAY_LABELS,
   PIECE_STATUS,
@@ -73,18 +74,22 @@ export function PieceEditor({
   prevId,
   nextId,
   instagram,
+  canUseAI = false,
 }: {
   piece: Piece;
   week: { id: string; centralTheme: string; leadMagnetKeyword: string | null };
   prevId: string | null;
   nextId: string | null;
   instagram?: InstagramProps;
+  /** Si true (CEO) muestra el botón de generación con IA en la cabecera. */
+  canUseAI?: boolean;
 }) {
   const router = useRouter();
   const [piece, setPiece] = useState(initialPiece);
   const [recordingMode, setRecordingMode] = useState(false);
   const [saving, setSaving] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const [aiOpen, setAiOpen] = useState(false);
 
   // Autosave: debounce
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -276,6 +281,21 @@ export function PieceEditor({
               ))}
             </select>
 
+            {canUseAI && (
+              <button
+                onClick={() => setAiOpen(true)}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-90"
+                style={{
+                  background: "linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)",
+                  color: "#0A0A0A",
+                  border: "none",
+                }}
+                title="Generar guion con Claude Opus 4.7 usando tu Brief IA"
+              >
+                ✨ Generar con IA
+              </button>
+            )}
+
             <button
               onClick={() => setRecordingMode(true)}
               className="btn btn-accent text-xs"
@@ -401,6 +421,24 @@ export function PieceEditor({
           </ProductionBlock>
         </aside>
       </div>
+
+      {aiOpen && (
+        <AiGenerateModal
+          pieceId={piece.id}
+          format={piece.format}
+          initialHook={piece.hook ?? ""}
+          existingBlocks={piece.blocks}
+          existingCaption={piece.caption}
+          onClose={() => setAiOpen(false)}
+          onApply={(patch) => {
+            // Aplicamos cada parte con sus respectivos updaters para que
+            // el autosave los gestione igual que cualquier otra edición.
+            if (typeof patch.hook === "string") update("hook", patch.hook);
+            if (Array.isArray(patch.blocks)) updateBlocks(patch.blocks);
+            if (typeof patch.caption === "string") update("caption", patch.caption);
+          }}
+        />
+      )}
     </main>
   );
 }

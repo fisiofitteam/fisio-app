@@ -50,7 +50,7 @@ export default async function CalendarPage({
 
   return (
     <main>
-      <ContentNav active="calendar" />
+      <ContentNav active="calendar" role={user.role} />
       <CalendarView
         view={view}
         month={month}

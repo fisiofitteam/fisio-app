@@ -26,7 +26,7 @@ export default async function BankPage({
 
   return (
     <main>
-      <ContentNav active="bank" />
+      <ContentNav active="bank" role={user.role} />
       <BankView
         activeTab={tab}
         ideas={ideas.map((i) => ({

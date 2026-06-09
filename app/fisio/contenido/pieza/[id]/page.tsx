@@ -107,6 +107,7 @@ export default async function PiecePage({ params }: { params: { id: string } }) 
       }}
       prevId={prevId}
       nextId={nextId}
+      canUseAI={user.role === "ceo"}
     />
   );
 }

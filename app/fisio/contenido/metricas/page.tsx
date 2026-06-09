@@ -257,7 +257,7 @@ export default async function MetricsPage({
 
   return (
     <main>
-      <ContentNav active="metrics" />
+      <ContentNav active="metrics" role={user.role} />
       <MetricsView
         range={range}
         rangeLabel={label}
