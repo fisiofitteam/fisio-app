@@ -60,6 +60,15 @@ export function AiGenerateModal({
   const [pickedHookVariation, setPickedHookVariation] = useState<string | null>(null);
   /** Caja de "pídeme un ajuste" que aparece en el preview tras generar. */
   const [iterationInstruction, setIterationInstruction] = useState("");
+  /** Última iteración aplicada con éxito — la usamos para el botón
+   *  "convertir mi iteración en regla del brief". */
+  const [lastIterationApplied, setLastIterationApplied] = useState("");
+  /** Estado del bloque "enseñar a la IA": qué acción activa, qué nota
+   *  está escribiendo, si está guardando, último mensaje de confirmación. */
+  const [learnAction, setLearnAction] = useState<"good" | "bad" | "rule" | null>(null);
+  const [learnNote, setLearnNote] = useState("");
+  const [learnSaving, setLearnSaving] = useState(false);
+  const [learnSavedMsg, setLearnSavedMsg] = useState<string | null>(null);
 
   // Cargar plantillas del formato
   useEffect(() => {
@@ -112,7 +121,14 @@ export function AiGenerateModal({
       const data = (await res.json()) as GenerateOutput;
       setResult(data);
       setPickedHookVariation(null);
-      setIterationInstruction("");  // limpiamos la caja tras enviar
+      // Si era una iteración exitosa, recordamos cuál fue por si quiere
+      // convertirla en regla del brief; limpiamos la caja para la próxima.
+      if (iterate) setLastIterationApplied(iterationInstruction.trim());
+      setIterationInstruction("");
+      // Reset del bloque de aprendizaje al cambiar de resultado.
+      setLearnAction(null);
+      setLearnNote("");
+      setLearnSavedMsg(null);
       setStep("preview");
     } catch (e: any) {
       setError(e?.message || "Error generando guion");
@@ -146,6 +162,114 @@ export function AiGenerateModal({
       caption: result.caption,
     });
     onClose();
+  }
+
+  // ─── Helpers de "enseñar a la IA" (alimentar el Brief IA) ───
+
+  /**
+   * Formatea el guion generado en texto plano para añadirlo como ejemplo
+   * al brief. Mantiene labels y orden de los bloques. Incluye también el
+   * hook usado y el caption si lo hay.
+   */
+  function formatResultForBrief(): string {
+    if (!result) return "";
+    const lines: string[] = [];
+    const hookUsed = pickedHookVariation || hook.trim();
+    if (hookUsed) lines.push(`Hook: "${hookUsed}"`);
+    result.blocks.forEach((b) => {
+      lines.push("");
+      lines.push(`[${b.label}]`);
+      lines.push(b.content.trim());
+    });
+    if (result.caption?.trim()) {
+      lines.push("");
+      lines.push(`Caption: ${result.caption.trim()}`);
+    }
+    return lines.join("\n");
+  }
+
+  /**
+   * Construye el bloque de texto que se añade al brief según la acción.
+   * Incluye fecha + instrucciones que dieron al modelo + el guion (en buenos
+   * y malos) + la nota explicativa del CEO. Para "rule" sólo añade la
+   * iteración como preferencia general.
+   */
+  function buildLearningContent(
+    action: "good" | "bad" | "rule",
+    note: string
+  ): string {
+    const today = new Date().toLocaleDateString("es-ES", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+
+    if (action === "rule") {
+      const rule = lastIterationApplied.trim();
+      if (!rule) return note.trim();
+      return [
+        `- Preferencia (${today}): ${rule}`,
+        note.trim() ? `  → ${note.trim()}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+    }
+
+    const header =
+      action === "good"
+        ? `EJEMPLO BUENO (validado por CEO el ${today})`
+        : `EJEMPLO MALO (rechazado por CEO el ${today})`;
+    const footer =
+      action === "good"
+        ? `→ Por qué funciona: ${note.trim() || "(sin nota — el CEO no añadió comentario)"}`
+        : `→ Qué chirría: ${note.trim() || "(sin nota — el CEO no añadió comentario)"}`;
+    return [
+      header,
+      "",
+      `Instrucciones que se le pasaron al modelo: ${instructions.trim() || "(no registradas)"}`,
+      "",
+      formatResultForBrief(),
+      "",
+      footer,
+    ].join("\n");
+  }
+
+  async function saveLearning(action: "good" | "bad" | "rule") {
+    if (!result) return;
+    const section =
+      action === "good" ? "goodExamples" : action === "bad" ? "badExamples" : "dos";
+    const content = buildLearningContent(action, learnNote);
+    if (!content.trim()) return;
+
+    setLearnSaving(true);
+    try {
+      const res = await fetch("/api/contenido/brief-ia/append", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ section, content }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error || `HTTP ${res.status}`);
+      }
+      setLearnAction(null);
+      setLearnNote("");
+      setLearnSavedMsg(
+        action === "good"
+          ? "✓ Añadido a tus ejemplos buenos del Brief IA"
+          : action === "bad"
+          ? "✓ Añadido a tus ejemplos a evitar del Brief IA"
+          : "✓ Convertido en preferencia general (sección 'Qué SÍ hago')"
+      );
+      // Si convertimos la iteración en regla, ya no debería volver a
+      // ofrecerse el botón hasta la próxima iteración.
+      if (action === "rule") setLastIterationApplied("");
+      setTimeout(() => setLearnSavedMsg(null), 4000);
+    } catch (e: any) {
+      setLearnSavedMsg(`⚠ Error: ${e?.message || "no se pudo guardar"}`);
+    } finally {
+      setLearnSaving(false);
+    }
   }
 
   const hasExistingBlockContent = existingBlocks.some((b) => b.content.trim());
@@ -383,6 +507,115 @@ export function AiGenerateModal({
                   ⚠ Esta pieza ya tenía contenido. Si aplicas, lo sobrescribes.
                 </div>
               )}
+
+              {/* Bloque "enseñar a la IA": 3 botones que alimentan el Brief IA. */}
+              <section
+                className="rounded-xl p-3"
+                style={{ background: "#F5F3FF", border: "1px solid #DDD6FE" }}
+              >
+                <div className="flex items-baseline justify-between gap-2 mb-2">
+                  <h3 className="text-xs font-semibold" style={{ color: "#5B21B6" }}>
+                    🧠 Enseña a la IA (alimenta tu Brief)
+                  </h3>
+                  {learnSavedMsg && (
+                    <span className="text-[11px] font-medium" style={{ color: "#15803D" }}>
+                      {learnSavedMsg}
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] mb-2" style={{ color: "#6D28D9" }}>
+                  Cada vez que añades un ejemplo o una regla, las siguientes generaciones tienen más contexto. No "entrena" el modelo — afina tu prompt.
+                </p>
+
+                {learnAction === null && (
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setLearnAction("good")}
+                      className="text-xs px-3 py-2 rounded-lg font-medium"
+                      style={{ background: "#FFFFFF", border: "1px solid #A78BFA", color: "#5B21B6" }}
+                    >
+                      ⭐ Está clavadísimo · súmalo a buenos ejemplos
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLearnAction("bad")}
+                      className="text-xs px-3 py-2 rounded-lg font-medium"
+                      style={{ background: "#FFFFFF", border: "1px solid #A78BFA", color: "#5B21B6" }}
+                    >
+                      ❌ No me sirve · súmalo a evitar
+                    </button>
+                    {lastIterationApplied.trim() && (
+                      <button
+                        type="button"
+                        onClick={() => setLearnAction("rule")}
+                        className="text-xs px-3 py-2 rounded-lg font-medium"
+                        style={{ background: "#FFFFFF", border: "1px solid #A78BFA", color: "#5B21B6" }}
+                        title={`Convertir "${lastIterationApplied}" en preferencia general del brief`}
+                      >
+                        📝 Convertir mi último ajuste en regla
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {learnAction !== null && (
+                  <div>
+                    <label
+                      className="text-[11px] font-semibold block mb-1.5"
+                      style={{ color: "#5B21B6" }}
+                    >
+                      {learnAction === "good" && "¿Por qué funciona este guion? Una frase explicándolo."}
+                      {learnAction === "bad" && "¿Qué chirría exactamente? Una frase explicándolo."}
+                      {learnAction === "rule" && (
+                        <>
+                          Convertir el ajuste{" "}
+                          <span className="font-mono italic">"{lastIterationApplied}"</span> en
+                          preferencia general. (Opcional) Comentario extra:
+                        </>
+                      )}
+                    </label>
+                    <textarea
+                      value={learnNote}
+                      onChange={(e) => setLearnNote(e.target.value)}
+                      rows={2}
+                      placeholder={
+                        learnAction === "good"
+                          ? 'Ej. "El ritmo del bloque del porqué conecta muy bien con la analogía del snatch"'
+                          : learnAction === "bad"
+                          ? 'Ej. "El cierre suena cliché, no es mi voz"'
+                          : 'Ej. "Vale para reels en general, no solo este caso"'
+                      }
+                      className="w-full text-xs p-2.5 rounded-lg outline-none resize-y"
+                      style={{ background: "#FFFFFF", border: "1px solid #C4B5FD" }}
+                      autoFocus
+                    />
+                    <div className="flex justify-end gap-2 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLearnAction(null);
+                          setLearnNote("");
+                        }}
+                        className="text-xs px-3 py-1.5"
+                        style={{ color: "#6D28D9" }}
+                        disabled={learnSaving}
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => saveLearning(learnAction!)}
+                        disabled={learnSaving || (learnAction !== "rule" && !learnNote.trim())}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                        style={{ background: "#6D28D9", color: "#FFFFFF", border: "none" }}
+                      >
+                        {learnSaving ? "Guardando…" : "Guardar en mi Brief"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </section>
 
               {/* Caja de iteración: pide ajustes sobre el resultado anterior */}
               <section
