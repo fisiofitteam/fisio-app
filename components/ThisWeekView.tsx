@@ -19,6 +19,7 @@ import {
   GOAL_COLOR_CLASSES,
 } from "@/lib/content-formats";
 import { WeekStrategyPdf } from "@/components/WeekStrategyPdf";
+import { AddPieceModal } from "@/components/AddPieceModal";
 
 type Piece = {
   id: string;
@@ -122,6 +123,7 @@ export function ThisWeekView({
   const [showEdit, setShowEdit] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [showClose, setShowClose] = useState(false);
+  const [showAddPiece, setShowAddPiece] = useState(false);
 
   function gotoWeek(id: string) {
     setShowPicker(false);
@@ -316,8 +318,14 @@ export function ThisWeekView({
         </div>
       </section>
 
-      {/* 7 piezas */}
-      <div className="flex justify-end mb-2">
+      {/* Piezas de la semana */}
+      <div className="flex justify-between items-center mb-2 flex-wrap gap-2">
+        <button
+          onClick={() => setShowAddPiece(true)}
+          className="btn btn-primary text-xs"
+        >
+          ➕ Añadir pieza
+        </button>
         <AutolinkInstagramButton weekId={week.id} />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
@@ -325,6 +333,14 @@ export function ThisWeekView({
           <PieceCard key={p.id} piece={p} weekId={week.id} />
         ))}
       </div>
+
+      {showAddPiece && (
+        <AddPieceModal
+          weekId={week.id}
+          weekLabel={`Semana ${week.weekNumber} · ${week.centralTheme || "Sin tema"}`}
+          onClose={() => setShowAddPiece(false)}
+        />
+      )}
 
       {/* Historias de la semana */}
       <WeekStoriesSection week={week} />

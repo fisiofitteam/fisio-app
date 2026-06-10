@@ -6,6 +6,57 @@ function canAccess(role: string): boolean {
   return role === "ceo" || role === "setter";
 }
 
+/**
+ * POST /api/content/pieces — crear una pieza nueva dentro de una semana.
+ * Hasta ahora solo se podían crear las 7 al crear la semana; este endpoint
+ * permite añadir piezas adicionales (más de una por día, días extra, etc).
+ *
+ * Body:
+ *  - weekId      (string, obligatorio)
+ *  - dayOfWeek   (1-7, obligatorio)
+ *  - format      (string, opcional → vacío)
+ *  - title       (string, opcional)
+ */
+export async function POST(req: NextRequest) {
+  const user = await getActiveProfessional();
+  if (!user || !canAccess(user.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const data = await req.json().catch(() => ({}));
+  const weekId = typeof data?.weekId === "string" ? data.weekId.trim() : "";
+  const dayOfWeek = Number(data?.dayOfWeek);
+  if (!weekId) return NextResponse.json({ error: "weekId requerido" }, { status: 400 });
+  if (!Number.isInteger(dayOfWeek) || dayOfWeek < 1 || dayOfWeek > 7) {
+    return NextResponse.json({ error: "dayOfWeek debe ser 1..7" }, { status: 400 });
+  }
+
+  // Validamos que la semana exista. Aprovechamos para coger leadMagnetKeyword
+  // y prefijar dmKeyword igual que se hace al crear las 7 iniciales.
+  const week = await prisma.contentWeek.findUnique({
+    where: { id: weekId },
+    select: { id: true, leadMagnetKeyword: true },
+  });
+  if (!week) return NextResponse.json({ error: "Semana no encontrada" }, { status: 404 });
+
+  const piece = await prisma.contentPiece.create({
+    data: {
+      weekId: week.id,
+      dayOfWeek,
+      format: typeof data?.format === "string" ? data.format : "",
+      goal: "",
+      goals: "[]",
+      ctaType: "",
+      dmKeyword: week.leadMagnetKeyword ?? null,
+      title: typeof data?.title === "string" && data.title.trim() ? data.title.trim() : null,
+      blocks: "[]",
+      status: "idea",
+    },
+  });
+
+  return NextResponse.json({ ok: true, piece });
+}
+
 export async function PATCH(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user || !canAccess(user.role)) {

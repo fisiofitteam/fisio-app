@@ -18,6 +18,7 @@ import {
   goalLabel,
   GOAL_COLOR_CLASSES,
 } from "@/lib/content-formats";
+import { AddPieceModal } from "@/components/AddPieceModal";
 
 type Piece = {
   id: string;
@@ -241,6 +242,7 @@ function MonthGrid({
   const [eventModal, setEventModal] = useState<{ date: string; event: CalEvent | null } | null>(null);
   const [creatingWeek, setCreatingWeek] = useState(false);
   const [movePieceModal, setMovePieceModal] = useState<{ pieceId: string; pieceTitle: string; currentDate: string } | null>(null);
+  const [addPieceModal, setAddPieceModal] = useState<{ weekId: string; dayOfWeek: number; weekLabel: string } | null>(null);
 
   // Estado local del mes mostrado. Inicial = props (URL). Cambiar localmente
   // permite el auto-avance durante el arrastre sin perder el drag nativo
@@ -464,7 +466,7 @@ function MonthGrid({
                         alert("Error al mover la pieza");
                       }
                     }}
-                    className={`min-h-[120px] p-1.5 border-r border-neutral-100 last:border-r-0 cursor-pointer hover:bg-amber-50/30 transition-colors ${
+                    className={`group min-h-[120px] p-1.5 border-r border-neutral-100 last:border-r-0 cursor-pointer hover:bg-amber-50/30 transition-colors ${
                       isOtherMonth ? "bg-neutral-50/50" : "bg-white"
                     } ${isToday ? "bg-amber-50" : ""}`}
                     title="Click para añadir evento · Arrastra piezas aquí"
@@ -473,6 +475,32 @@ function MonthGrid({
                       <span className={`text-[11px] ${isOtherMonth ? "text-neutral-300" : isToday ? "text-amber-800 font-bold" : "text-neutral-500"}`}>
                         {day.getUTCDate()}
                       </span>
+                      {/* Botón "+ Pieza" visible al hover, solo si el día cae en una semana */}
+                      {(() => {
+                        const target = findWeekForDate(weeks, dateKey);
+                        if (!target) return null;
+                        const wk = weeks.find((w) => w.id === target.weekId);
+                        const weekLabel = wk
+                          ? `Semana ${wk.weekNumber} · ${wk.centralTheme || "Sin tema"}`
+                          : "";
+                        return (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setAddPieceModal({
+                                weekId: target.weekId,
+                                dayOfWeek: target.dayOfWeek,
+                                weekLabel,
+                              });
+                            }}
+                            className="text-[10px] leading-none font-medium text-neutral-400 hover:text-neutral-900 hover:bg-white rounded px-1 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Añadir pieza este día"
+                          >
+                            + pieza
+                          </button>
+                        );
+                      })()}
                     </div>
 
                     {/* Eventos custom */}
@@ -602,6 +630,15 @@ function MonthGrid({
           event={eventModal.event}
           onClose={() => setEventModal(null)}
           onSaved={() => { setEventModal(null); router.refresh(); }}
+        />
+      )}
+
+      {addPieceModal && (
+        <AddPieceModal
+          weekId={addPieceModal.weekId}
+          weekLabel={addPieceModal.weekLabel}
+          lockedDayOfWeek={addPieceModal.dayOfWeek}
+          onClose={() => setAddPieceModal(null)}
         />
       )}
 
