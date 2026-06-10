@@ -47,5 +47,13 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>FisioFit necesita acceso a la cámara para que puedas hacerte una foto de perfil o subir capturas en la comunidad.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>FisioFit necesita acceso a tus fotos para que puedas elegir una foto de perfil o subir imágenes en la comunidad.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>FisioFit puede guardar capturas en tu carrete cuando descargas contenido de la app.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>FisioFit puede usar el micrófono si grabas un vídeo desde la cámara para la comunidad.</string>
 </dict>
 </plist>
