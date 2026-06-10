@@ -110,12 +110,11 @@ export default async function ExportReelsPage({
         title: p.title,
         format: p.format,
         goal: p.goal,
-        hook: p.hook,
         blocks: p.blocks,
         caption: p.caption,
         dmKeyword: p.dmKeyword,
         pubDate: p.pubDate.toISOString(),
-        weekCentralTheme: p.weekCentralTheme,
+        editorNotes: p.editorNotes,
       }))}
     />
   );

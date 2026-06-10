@@ -411,19 +411,44 @@ function AutolinkInstagramButton({ weekId }: { weekId: string }) {
 }
 
 function PieceCard({ piece, weekId }: { piece: Piece; weekId: string }) {
+  const router = useRouter();
   const fmtLabel = formatLabelOnly(piece.format);
   const fmtIcon = formatIcon(piece.format);
   const statusMeta = PIECE_STATUS.find((s) => s.value === piece.status);
   const dayLabel = DAY_LABELS[piece.dayOfWeek] ?? "—";
   const goals = parseGoals(piece.goals);
+  const pieceLabel = piece.title || fmtLabel || piece.format;
 
-  // Estos links irán a Entrega B (todavía no existe la página de pieza individual)
+  async function deletePiece(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm(`¿Borrar la pieza "${pieceLabel}"?\n\nNo se puede deshacer.`)) return;
+    const res = await fetch(`/api/content/pieces/${piece.id}`, { method: "DELETE" });
+    if (res.ok) {
+      router.refresh();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      alert(data?.error || "No se pudo borrar la pieza");
+    }
+  }
+
   return (
     <Link
       href={`/fisio/contenido/pieza/${piece.id}`}
-      className="card hover:border-neutral-400 hover:shadow-sm transition-all block group"
+      className="card hover:border-neutral-400 hover:shadow-sm transition-all block group relative"
     >
-      <div className="mb-2">
+      {/* Botón borrar — visible siempre, discreto */}
+      <button
+        type="button"
+        onClick={deletePiece}
+        className="absolute top-2 right-2 text-neutral-300 hover:text-red-700 hover:bg-red-50 rounded p-1 text-xs leading-none transition-colors opacity-0 group-hover:opacity-100"
+        title="Borrar pieza"
+        aria-label="Borrar pieza"
+      >
+        🗑
+      </button>
+
+      <div className="mb-2 pr-6">
         {/* Fila superior: día (izq) + estado (der), ambos cortos */}
         <div className="flex justify-between items-center gap-2 mb-1">
           <div className="text-[10px] uppercase text-neutral-500 font-medium tracking-wide truncate">
@@ -439,7 +464,7 @@ function PieceCard({ piece, weekId }: { piece: Piece; weekId: string }) {
         {/* Título a todo el ancho de la tarjeta */}
         <div className="font-semibold text-sm break-words">
           <span className="mr-1.5">{fmtIcon}</span>
-          <span>{piece.title || fmtLabel || piece.format}</span>
+          <span>{pieceLabel}</span>
         </div>
 
         {goals.length > 0 && (

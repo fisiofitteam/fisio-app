@@ -8,12 +8,11 @@ type Piece = {
   title: string | null;
   format: string;
   goal: string;
-  hook: string | null;
   blocks: string;          // JSON string
   caption: string | null;
   dmKeyword: string | null;
   pubDate: string;         // ISO
-  weekCentralTheme: string;
+  editorNotes: string | null;
 };
 
 type Block = { id: string; label: string; content: string; order: number };
@@ -118,6 +117,7 @@ export function ExportReelsView({
           <div className="space-y-8">
             {pieces.map((p, idx) => {
               const blocks = parseBlocks(p.blocks);
+              const editorNote = p.editorNotes?.trim();
               return (
                 <section
                   key={p.id}
@@ -129,25 +129,35 @@ export function ExportReelsView({
                         Reel #{idx + 1}
                         {p.title && <span className="text-neutral-500 font-normal"> · {p.title}</span>}
                       </h2>
-                      <span className="text-xs text-neutral-500 capitalize">
+                      <span className="text-base font-bold capitalize" style={{ color: "#0A0A0A" }}>
                         {formatDate(p.pubDate)}
                       </span>
                     </div>
-                    <div className="text-xs text-neutral-500">
-                      Tema semana: <strong className="text-neutral-700">{p.weekCentralTheme}</strong>
-                      {p.dmKeyword && (
-                        <> · Palabra clave DM: <span className="font-mono text-neutral-700">{p.dmKeyword}</span></>
-                      )}
-                    </div>
+                    {p.dmKeyword && (
+                      <div className="text-xs text-neutral-500">
+                        Palabra clave DM: <span className="font-mono text-neutral-700">{p.dmKeyword}</span>
+                      </div>
+                    )}
                   </header>
 
-                  {p.hook?.trim() && (
-                    <div className="mb-3 rounded-lg p-3" style={{ background: "#FFFBEB", border: "1px solid #FCD34D" }}>
-                      <div className="text-[10px] uppercase tracking-wide font-bold mb-1" style={{ color: "#78350F" }}>
-                        ⚡ Hook principal
+                  {/* Nota para el editor: solo si existe contenido en editorNotes.
+                      Va destacada en amarillo justo encima del guion. */}
+                  {editorNote && (
+                    <div
+                      className="mb-3 rounded-lg p-3"
+                      style={{ background: "#FFFBEB", border: "1px solid #FCD34D" }}
+                    >
+                      <div
+                        className="text-[10px] uppercase tracking-wide font-bold mb-1"
+                        style={{ color: "#78350F" }}
+                      >
+                        📌 Para el editor
                       </div>
-                      <p className="text-sm font-medium" style={{ color: "#451A03", letterSpacing: "-0.01em" }}>
-                        {p.hook}
+                      <p
+                        className="text-sm whitespace-pre-wrap leading-relaxed"
+                        style={{ color: "#451A03" }}
+                      >
+                        {editorNote}
                       </p>
                     </div>
                   )}
