@@ -159,6 +159,8 @@ export default async function ContentPage({
           winningHooks: week.winningHooks,
           ideasEmerged: week.ideasEmerged,
           weekStories: week.weekStories,
+          strategyPdfUrl: week.strategyPdfUrl,
+          strategyPdfName: week.strategyPdfName,
           pieces: week.pieces.map((p) => ({
             id: p.id,
             dayOfWeek: p.dayOfWeek,

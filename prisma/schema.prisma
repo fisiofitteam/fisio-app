@@ -900,6 +900,9 @@ model ContentWeek {
   // Historias de la semana: JSON array de 7 strings (índice 0=Lun ... 6=Dom)
   weekStories     String   @default("[]")
 
+  strategyPdfUrl  String?
+  strategyPdfName String?
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   closedAt        DateTime?

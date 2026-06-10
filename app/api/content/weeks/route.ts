@@ -106,6 +106,7 @@ export async function PATCH(req: NextRequest) {
     "centralTheme", "bodyZone", "weekType", "leadMagnetName", "leadMagnetKeyword",
     "commercialTrigger", "previousWeekConnection", "nextWeekSetup",
     "kpiName", "status", "closingNotes", "winningHooks", "ideasEmerged",
+    "strategyPdfUrl", "strategyPdfName",
   ];
   for (const k of passthrough) {
     if (rest[k] !== undefined) update[k] = rest[k] || null;

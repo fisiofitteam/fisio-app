@@ -126,7 +126,15 @@ export function CalendarView({
           <p className="text-xs text-neutral-500 mt-0.5">Vista global de la estrategia</p>
         </div>
 
-        <div className="flex gap-1">
+        <div className="flex gap-1 flex-wrap items-center">
+          <a
+            href={`/fisio/contenido/export-reels?month=${String(year)}-${String(month).padStart(2, "0")}`}
+            className="px-3 py-1.5 text-xs rounded font-medium whitespace-nowrap"
+            style={{ background: "#FAFAFA", border: "1px solid #E5E5E5" }}
+            title="Exportar los guiones de los reels del mes a PDF"
+          >
+            🎬 Exportar reels del mes
+          </a>
           <button
             onClick={() => navigate({ view: "month" })}
             className={`px-3 py-1.5 text-xs rounded ${view === "month" ? "bg-neutral-900 text-white" : "bg-white border border-neutral-200"}`}
@@ -534,6 +542,28 @@ function MonthGrid({
                               title="Mover a otra fecha (cualquier mes)"
                             >
                               ↗
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async (e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if (!confirm(`¿Borrar la pieza "${label}"?\n\nNo se puede deshacer.`)) return;
+                                const res = await fetch(`/api/content/pieces/${dp.piece.id}`, {
+                                  method: "DELETE",
+                                });
+                                if (res.ok) {
+                                  router.refresh();
+                                } else {
+                                  const data = await res.json().catch(() => ({}));
+                                  alert(data?.error || "No se pudo borrar la pieza");
+                                }
+                              }}
+                              draggable={false}
+                              className="absolute bottom-0.5 right-5 text-[10px] leading-none px-1 rounded hover:bg-red-100 hover:text-red-700"
+                              title="Borrar pieza"
+                            >
+                              🗑
                             </button>
                             <div className="flex items-start gap-1 pr-3">
                               <span className="flex-shrink-0">{fmtIcon}</span>

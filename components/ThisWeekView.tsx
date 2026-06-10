@@ -18,6 +18,7 @@ import {
   goalLabel,
   GOAL_COLOR_CLASSES,
 } from "@/lib/content-formats";
+import { WeekStrategyPdf } from "@/components/WeekStrategyPdf";
 
 type Piece = {
   id: string;
@@ -48,6 +49,8 @@ type Week = {
   winningHooks?: string | null;
   ideasEmerged?: string | null;
   weekStories?: string | null;
+  strategyPdfUrl?: string | null;
+  strategyPdfName?: string | null;
   pieces: Piece[];
 };
 
@@ -270,6 +273,13 @@ export function ThisWeekView({
               </button>
             </div>
           </div>
+
+          {/* PDF de estrategia de la semana (subida del CEO desde Vercel Blob) */}
+          <WeekStrategyPdf
+            weekId={week.id}
+            initialUrl={week.strategyPdfUrl ?? null}
+            initialName={week.strategyPdfName ?? null}
+          />
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3 text-sm">
             <div className="bg-neutral-50 rounded-lg p-3">

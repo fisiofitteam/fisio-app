@@ -915,6 +915,10 @@ model ContentWeek {
   // Historias de la semana: JSON array de 7 strings (índice 0=Lun ... 6=Dom)
   weekStories     String   @default("[]")
 
+  // PDF de estrategia/briefing de la semana (Vercel Blob). Solo CEO sube.
+  strategyPdfUrl  String?
+  strategyPdfName String?  // nombre original del fichero, para el link
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   closedAt        DateTime?
