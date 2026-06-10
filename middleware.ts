@@ -20,6 +20,7 @@ const PUBLIC_PATHS = [
   "/api/webhooks",  // webhooks externos (Stripe) — los llama Stripe sin cookie
   "/privacidad",    // política de privacidad pública (requerida por App Store)
   "/terminos",     // términos y condiciones públicos
+  "/eliminar-cuenta", // instrucciones de borrado de cuenta (requerida por Google Play)
 ];
 
 const STATIC_PREFIXES = ["/_next", "/api/_internal", "/favicon", "/icon-", "/box.jpg", "/manifest.json"];
