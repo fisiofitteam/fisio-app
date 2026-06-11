@@ -24,7 +24,9 @@ export function LoginForm({ redirectTo }: { redirectTo?: string }) {
       body: JSON.stringify({ email, password }),
     });
     if (res.ok) {
-      router.push(redirectTo || "/fisio");
+      // El backend puede devolver redirect (p.ej. fallback demo paciente).
+      const data = await res.json().catch(() => ({}));
+      router.push(data?.redirect || redirectTo || "/fisio");
       router.refresh();
     } else {
       const data = await res.json().catch(() => ({}));
