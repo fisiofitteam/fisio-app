@@ -4,6 +4,10 @@ import { useState } from "react";
 import { PaymentLinkModal } from "@/components/PaymentLinkModal";
 import { RescheduleLinkButton } from "@/components/RescheduleLinkButton";
 import { SendCaseFlow, type SendCaseTemplate, type SuccessCaseOption } from "@/components/SendCaseFlow";
+import { SendDirectButton } from "@/components/SendDirectButton";
+import type { TemplateActionType } from "@/lib/resource-roles";
+
+type DirectTemplate = { id: string; name: string; body: string; actionType: TemplateActionType };
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -99,6 +103,8 @@ export function CallsListView({
   fisios,
   counts,
   successCaseTemplates,
+  meetingReminderTemplates,
+  agendaTemplates,
   successCases,
   currentUserCloserIntro,
 }: {
@@ -110,6 +116,8 @@ export function CallsListView({
   fisios: Pro[];
   counts: { scheduled: number; won: number; lost: number; cancelled: number; no_show: number };
   successCaseTemplates: SendCaseTemplate[];
+  meetingReminderTemplates: DirectTemplate[];
+  agendaTemplates: DirectTemplate[];
   successCases: SuccessCaseOption[];
   currentUserCloserIntro: string | null;
 }) {
@@ -217,13 +225,13 @@ export function CallsListView({
       ) : showGrouped ? (
         <div className="space-y-4">
           {today.length > 0 && (
-            <CallsGroup label="Hoy" badge="amber" leads={today} currentUser={currentUser} onClick={setEditing} sendCaseProps={{ successCaseTemplates, successCases, currentUserCloserIntro }} />
+            <CallsGroup label="Hoy" badge="amber" leads={today} currentUser={currentUser} onClick={setEditing} sendCaseProps={{ successCaseTemplates, meetingReminderTemplates, agendaTemplates, successCases, currentUserCloserIntro }} />
           )}
           {thisWeek.length > 0 && (
-            <CallsGroup label="Esta semana" badge="blue" leads={thisWeek} currentUser={currentUser} onClick={setEditing} sendCaseProps={{ successCaseTemplates, successCases, currentUserCloserIntro }} />
+            <CallsGroup label="Esta semana" badge="blue" leads={thisWeek} currentUser={currentUser} onClick={setEditing} sendCaseProps={{ successCaseTemplates, meetingReminderTemplates, agendaTemplates, successCases, currentUserCloserIntro }} />
           )}
           {future.length > 0 && (
-            <CallsGroup label="Próximas" badge="neutral" leads={future} currentUser={currentUser} onClick={setEditing} sendCaseProps={{ successCaseTemplates, successCases, currentUserCloserIntro }} />
+            <CallsGroup label="Próximas" badge="neutral" leads={future} currentUser={currentUser} onClick={setEditing} sendCaseProps={{ successCaseTemplates, meetingReminderTemplates, agendaTemplates, successCases, currentUserCloserIntro }} />
           )}
         </div>
       ) : (
@@ -235,7 +243,7 @@ export function CallsListView({
                 lead={lead}
                 currentUser={currentUser}
                 onClick={() => setEditing(lead)}
-                sendCaseProps={{ successCaseTemplates, successCases, currentUserCloserIntro }}
+                sendCaseProps={{ successCaseTemplates, meetingReminderTemplates, agendaTemplates, successCases, currentUserCloserIntro }}
               />
             ))}
           </div>
@@ -283,6 +291,8 @@ export function CallsListView({
 
 type SendCaseProps = {
   successCaseTemplates: SendCaseTemplate[];
+  meetingReminderTemplates: DirectTemplate[];
+  agendaTemplates: DirectTemplate[];
   successCases: SuccessCaseOption[];
   currentUserCloserIntro: string | null;
 };
@@ -436,6 +446,10 @@ function CallRow({
           {lead.status === "scheduled" && (
             <WorkflowActionButtons lead={lead} currentUser={currentUser} sendCaseProps={sendCaseProps} />
           )}
+
+          {/* Acciones genéricas (compartir agenda) — disponibles siempre que el
+              usuario sea closer/CEO/setter y haya plantillas configuradas. */}
+          <AgendaButtons lead={lead} currentUser={currentUser} sendCaseProps={sendCaseProps} />
 
           {/* Toggle "Agendado por IA" (visible siempre, clicable sin abrir modal) */}
           <AiScheduledToggle lead={lead} />
@@ -607,7 +621,21 @@ function WorkflowActionButtons({
     tomorrowEnd.setHours(23, 59, 59, 999);
     if (callDate >= tomorrow && callDate <= tomorrowEnd) {
       return (
-        <div className="mt-2">
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {sendCaseProps.meetingReminderTemplates.map((t) => (
+            <SendDirectButton
+              key={t.id}
+              template={t}
+              target={{
+                leadName: lead.fullName.split(" ")[0],
+                leadPhone: lead.phone,
+                closerFullName: currentUser.fullName,
+                closerIntro: sendCaseProps.currentUserCloserIntro,
+                callDate: new Date(lead.callScheduledAt),
+                meetingUrl: lead.meetingUrl,
+              }}
+            />
+          ))}
           <button
             onClick={markReminderSent}
             disabled={loading}
@@ -622,6 +650,40 @@ function WorkflowActionButtons({
   }
 
   return null;
+}
+
+// ============================================================================
+// Botones de "Compartir agenda" — siempre disponibles para closer/CEO/setter
+// si hay plantillas con actionType=send_agenda configuradas.
+// ============================================================================
+function AgendaButtons({
+  lead,
+  currentUser,
+  sendCaseProps,
+}: {
+  lead: Lead;
+  currentUser: { id: string; fullName: string; role: string };
+  sendCaseProps: SendCaseProps;
+}) {
+  if (sendCaseProps.agendaTemplates.length === 0) return null;
+  if (!["closer", "ceo", "setter"].includes(currentUser.role)) return null;
+
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {sendCaseProps.agendaTemplates.map((t) => (
+        <SendDirectButton
+          key={t.id}
+          template={t}
+          target={{
+            leadName: lead.fullName.split(" ")[0],
+            leadPhone: lead.phone,
+            closerFullName: currentUser.fullName,
+            closerIntro: sendCaseProps.currentUserCloserIntro,
+          }}
+        />
+      ))}
+    </div>
+  );
 }
 
 // ============================================================================

@@ -25,13 +25,16 @@ export type TemplateActionType = "send_success_case" | "send_agenda" | "send_mee
 
 export const ACTION_TYPE_LABELS: Record<TemplateActionType, string> = {
   send_success_case: "Enviar caso de éxito",
-  send_agenda: "Enviar link de agenda (próximamente)",
-  send_meeting_reminder: "Recordatorio de cita (próximamente)",
+  send_meeting_reminder: "Recordatorio de cita",
+  send_agenda: "Enviar link de agenda",
 };
 
-// Acciones que el usuario puede seleccionar HOY. Las "(próximamente)" quedan en
-// el código pero deshabilitadas en el modal hasta que las implementemos.
-export const ACTION_TYPES_IMPLEMENTED: TemplateActionType[] = ["send_success_case"];
+// Acciones disponibles para seleccionar al crear/editar una plantilla.
+export const ACTION_TYPES_IMPLEMENTED: TemplateActionType[] = [
+  "send_success_case",
+  "send_meeting_reminder",
+  "send_agenda",
+];
 
 /**
  * Deserializa el campo `targetRoles` (JSON string) a un array tipado de roles.

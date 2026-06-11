@@ -99,13 +99,12 @@ export default async function LlamadasVentaPage({
     orderBy: { fullName: "asc" },
   });
 
-  // Plantillas con acción "enviar caso de éxito" disponibles para el usuario,
-  // + casos activos + presentación del usuario. Todo va al view para los
-  // botones de envío rápido en la fila del lead.
+  // Plantillas con acción + casos activos + intro del usuario. Las plantillas
+  // las filtramos por rol (head_success no ve las solo-CEO, etc).
   const [allActionTemplates, successCases, currentUserFull] = await Promise.all([
     prisma.messageTemplate.findMany({
-      where: { actionType: "send_success_case" },
-      select: { id: true, name: true, body: true, targetRoles: true },
+      where: { actionType: { in: ["send_success_case", "send_meeting_reminder", "send_agenda"] } },
+      select: { id: true, name: true, body: true, targetRoles: true, actionType: true },
     }),
     prisma.successCase.findMany({
       where: { active: true },
@@ -118,9 +117,12 @@ export default async function LlamadasVentaPage({
     }),
   ]);
   const userRole = user.role as ResourceRole;
-  const successCaseTemplates = allActionTemplates
+  const visibleActionTemplates = allActionTemplates
     .filter((t) => templateVisibleFor(parseTargetRoles(t.targetRoles), userRole))
-    .map((t) => ({ id: t.id, name: t.name, body: t.body }));
+    .map((t) => ({ id: t.id, name: t.name, body: t.body, actionType: t.actionType! }));
+  const successCaseTemplates = visibleActionTemplates.filter((t) => t.actionType === "send_success_case");
+  const meetingReminderTemplates = visibleActionTemplates.filter((t) => t.actionType === "send_meeting_reminder");
+  const agendaTemplates = visibleActionTemplates.filter((t) => t.actionType === "send_agenda");
 
   return (
     <CallsListView
@@ -164,7 +166,9 @@ export default async function LlamadasVentaPage({
         cancelled: counts[3],
         no_show: counts[4],
       }}
-      successCaseTemplates={successCaseTemplates}
+      successCaseTemplates={successCaseTemplates.map((t) => ({ id: t.id, name: t.name, body: t.body }))}
+      meetingReminderTemplates={meetingReminderTemplates.map((t) => ({ id: t.id, name: t.name, body: t.body, actionType: "send_meeting_reminder" as const }))}
+      agendaTemplates={agendaTemplates.map((t) => ({ id: t.id, name: t.name, body: t.body, actionType: "send_agenda" as const }))}
       successCases={successCases}
       currentUserCloserIntro={currentUserFull?.closerIntro ?? null}
     />

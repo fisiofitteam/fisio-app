@@ -135,6 +135,16 @@ const CASE_VARS: { token: string; desc: string }[] = [
   { token: "{caso.link}", desc: "Link de YouTube del vídeo" },
 ];
 
+const REMINDER_VARS: { token: string; desc: string }[] = [
+  { token: "{cita.fecha}", desc: "Fecha de la llamada (ej. 'mañana, martes 5 de junio')" },
+  { token: "{cita.hora}", desc: "Hora de la llamada (ej. '17:30')" },
+  { token: "{cita.meet}", desc: "URL de Google Meet del lead (si la tiene)" },
+];
+
+const AGENDA_VARS: { token: string; desc: string }[] = [
+  { token: "{agenda.link}", desc: "Link a la agenda (de momento sustituye por '[Enlace agenda]' a falta de configurar)" },
+];
+
 function MessageModal({
   message,
   assignableRoles,
@@ -178,7 +188,11 @@ function MessageModal({
     onSaved();
   }
 
-  const showCaseVars = actionType === "send_success_case";
+  const actionVars =
+    actionType === "send_success_case" ? CASE_VARS :
+    actionType === "send_meeting_reminder" ? REMINDER_VARS :
+    actionType === "send_agenda" ? AGENDA_VARS :
+    [];
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
@@ -258,7 +272,7 @@ function MessageModal({
                 <code className="bg-white px-1 rounded">{v.token}</code> — {v.desc}
               </div>
             ))}
-            {showCaseVars && CASE_VARS.map((v) => (
+            {actionVars.map((v) => (
               <div key={v.token}>
                 <code className="bg-white px-1 rounded">{v.token}</code> — {v.desc}
               </div>
