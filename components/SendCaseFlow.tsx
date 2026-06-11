@@ -53,7 +53,9 @@ export function SendCaseFlow({
     const text = interpolate(template.body, {
       nombre: target.leadName,
       closer: target.closerFullName,
+      fisio: target.closerFullName,
       "closer.intro": target.closerIntro ?? "",
+      "fisio.intro": target.closerIntro ?? "",
       "caso.nombre": c.name,
       "caso.lesion": c.injury,
       "caso.link": c.youtubeUrl,

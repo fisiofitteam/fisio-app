@@ -31,6 +31,13 @@ export default async function MessagesPage({ searchParams }: { searchParams: { r
       })
     : [];
 
+  // closerIntro del usuario logueado para que el botón "Copiar" interpole
+  // {closer}/{fisio} y {closer.intro}/{fisio.intro} con sus datos.
+  const userFull = await prisma.professional.findUnique({
+    where: { id: user.id },
+    select: { closerIntro: true },
+  });
+
   // `targetRoles` es un JSON string en BD; el filtrado por rol se hace en Node
   // porque Prisma no permite query sobre arrays serializados. El coste es
   // despreciable: docenas de plantillas, no miles.
@@ -61,6 +68,8 @@ export default async function MessagesPage({ searchParams }: { searchParams: { r
         canManage={canManage}
         assignableRoles={assignable}
         defaultRoles={role === "all" ? [proRole] : [role]}
+        currentUserFullName={user.fullName}
+        currentUserCloserIntro={userFull?.closerIntro ?? null}
       />
     </div>
   );

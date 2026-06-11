@@ -3,21 +3,39 @@
 // hace `window.open(buildWhatsAppUrl(...))`.
 
 /**
- * Sustituye {variable} y {a.b} por su valor en `vars`. Tokens sin valor se
- * dejan en blanco (no rompen el mensaje) y la línea queda colapsada si era
- * la única ahí — el caller ya escribe el texto pensando en eso.
+ * Sustituye {variable} y {a.b} por su valor en `vars`. Si la key está en `vars`
+ * pero su valor es nulo/vacío, se sustituye por "". Si la key NO está en `vars`,
+ * se mantiene el token literal — útil para interpolar parcialmente (p.ej. al
+ * copiar al portapapeles solo sustituimos las variables del usuario, dejando
+ * {nombre} para que se rellene a mano en WhatsApp).
  *
  * NFC-normaliza el resultado para que los emojis con variation selectors
  * (U+FE0F) lleguen intactos al destino (WhatsApp es especialmente sensible).
  */
 export function interpolate(template: string, vars: Record<string, string | undefined | null>): string {
-  const out = template.replace(/\{([a-zA-Z0-9_.]+)\}/g, (_, key) => {
+  const out = template.replace(/\{([a-zA-Z0-9_.]+)\}/g, (match, key) => {
+    if (!(key in vars)) return match; // token no provisto → lo dejamos literal
     const v = vars[key];
     return v == null ? "" : String(v);
   });
-  // normalize devuelve undefined si no está disponible (entornos antiguos),
-  // por eso el try.
   try { return out.normalize("NFC"); } catch { return out; }
+}
+
+/**
+ * Variables del usuario logueado. Para `{closer}`, `{fisio}` (alias),
+ * `{closer.intro}` y `{fisio.intro}` (alias). Se usan al copiar al portapapeles
+ * en Recursos > Mensajes y como base en los flujos de envío directo.
+ */
+export function varsForCurrentUser(
+  fullName: string,
+  closerIntro: string | null,
+): Record<string, string> {
+  return {
+    closer: fullName,
+    fisio: fullName,
+    "closer.intro": closerIntro ?? "",
+    "fisio.intro": closerIntro ?? "",
+  };
 }
 
 /**

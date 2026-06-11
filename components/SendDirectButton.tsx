@@ -94,7 +94,9 @@ export function SendDirectButton({
     const vars: Record<string, string | undefined | null> = {
       nombre: target.leadName,
       closer: target.closerFullName,
+      fisio: target.closerFullName,
       "closer.intro": target.closerIntro ?? "",
+      "fisio.intro": target.closerIntro ?? "",
     };
 
     if (template.actionType === "send_meeting_reminder" && target.callDate) {

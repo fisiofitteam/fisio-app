@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ACTION_TYPE_LABELS, ACTION_TYPES_IMPLEMENTED, ROLE_LABELS, type ResourceRole, type TemplateActionType } from "@/lib/resource-roles";
+import { interpolate, varsForCurrentUser } from "@/lib/message-render";
 
 type Message = {
   id: string;
@@ -20,11 +21,15 @@ export function MessageTemplatesList({
   canManage,
   assignableRoles,
   defaultRoles,
+  currentUserFullName,
+  currentUserCloserIntro,
 }: {
   messages: Message[];
   canManage: boolean;
   assignableRoles: ResourceRole[];
   defaultRoles: ResourceRole[];
+  currentUserFullName: string;
+  currentUserCloserIntro: string | null;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState<Message | null>(null);
@@ -46,7 +51,10 @@ export function MessageTemplatesList({
   }
 
   function copyToClipboard(body: string, id: string) {
-    navigator.clipboard.writeText(body);
+    // Interpolamos solo las variables del usuario logueado. Las del paciente
+    // (ej. {nombre}) quedan literales para que se sustituyan a mano al pegar.
+    const text = interpolate(body, varsForCurrentUser(currentUserFullName, currentUserCloserIntro));
+    navigator.clipboard.writeText(text);
     setCopied(id);
     setTimeout(() => setCopied(null), 2000);
   }
@@ -124,9 +132,9 @@ export function MessageTemplatesList({
 // Variables disponibles para interpolar en el cuerpo, según el actionType de la
 // plantilla. Mostramos chuletas al editar para que el CEO sepa qué puede usar.
 const BASE_VARS: { token: string; desc: string }[] = [
-  { token: "{nombre}", desc: "Primer nombre del lead o paciente" },
-  { token: "{closer}", desc: "Nombre del usuario que envía el mensaje" },
-  { token: "{closer.intro}", desc: "Presentación corta del usuario (se edita arriba, en 'Presentación del closer')" },
+  { token: "{nombre}", desc: "Primer nombre del lead o paciente. Al pulsar Copiar se queda sin sustituir — lo cambias a mano al pegar." },
+  { token: "{closer}  ó  {fisio}", desc: "Nombre del usuario que envía/copia. Cada miembro del equipo verá el suyo automáticamente." },
+  { token: "{closer.intro}  ó  {fisio.intro}", desc: "Presentación corta del usuario que envía/copia. Se edita arriba, en 'Presentación del closer'." },
 ];
 
 const CASE_VARS: { token: string; desc: string }[] = [

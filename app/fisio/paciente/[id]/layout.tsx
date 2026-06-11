@@ -109,10 +109,6 @@ export default async function PatientLayout({
               patientId={patient.id}
               initialNotes={patient.fisioNotes ?? null}
             />
-            <PatientAccessLinkButton patientId={patient.id} patientName={patient.fullName} />
-            <Link href={`/fisio/paciente/${patient.id}/exportar`} className="btn btn-ghost text-xs" title="Exportar toda la información del paciente en PDF">
-              🖨️ Exportar PDF
-            </Link>
             <GoToPatient />
             <PatientAgendaButton
               templates={patientActionTemplates}
@@ -135,7 +131,21 @@ export default async function PatientLayout({
       </header>
 
       <div className="flex flex-col md:flex-row gap-4">
-        <PatientSidebar patientId={patient.id} hasClinicalCase={!!clinicalCase} />
+        {/* Sidebar + acciones secundarias en la misma columna (link de acceso
+            y exportar PDF antes vivían en el header, lo saturaban). */}
+        <div className="md:w-56 md:flex-shrink-0 space-y-2">
+          <PatientSidebar patientId={patient.id} hasClinicalCase={!!clinicalCase} />
+          <div className="flex flex-col gap-1.5 mt-2 md:mt-3 md:pt-3 md:border-t md:border-neutral-200">
+            <PatientAccessLinkButton patientId={patient.id} patientName={patient.fullName} />
+            <Link
+              href={`/fisio/paciente/${patient.id}/exportar`}
+              className="btn btn-ghost text-xs justify-start"
+              title="Exportar toda la información del paciente en PDF"
+            >
+              🖨️ Exportar PDF
+            </Link>
+          </div>
+        </div>
         <main className="flex-1 min-w-0">{children}</main>
       </div>
     </div>
