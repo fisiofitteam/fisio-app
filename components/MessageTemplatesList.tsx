@@ -2,26 +2,58 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ROLE_LABELS, type ResourceRole } from "./ResourceRoleTabs";
 
 type Message = {
   id: string;
   name: string;
   category: string;
+  targetRole: ResourceRole;
   body: string;
 };
 
 const CATEGORIES = ["Bienvenida", "Seguimiento", "Renovación", "Alta", "Otros"];
+const ROLE_OPTIONS: ResourceRole[] = ["ceo", "head_success", "fisio", "setter", "closer"];
 
-export function MessageTemplatesList({ messages }: { messages: Message[] }) {
+export function MessageTemplatesList({
+  messages,
+  isCeo,
+  defaultRole,
+}: {
+  messages: Message[];
+  isCeo: boolean;
+  defaultRole: ResourceRole;
+}) {
   const router = useRouter();
   const [editing, setEditing] = useState<Message | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
 
-  const byCat: Record<string, Message[]> = {};
-  for (const m of messages) {
-    if (!byCat[m.category]) byCat[m.category] = [];
-    byCat[m.category].push(m);
+  // Cuando el CEO ve "Todos", agrupamos primero por rol y luego por categoría.
+  // Cuando el filtro es un solo rol (CEO viendo un tab concreto, o no-CEO), agrupamos solo por categoría.
+  const showRoleGroup = isCeo && new Set(messages.map((m) => m.targetRole)).size > 1;
+
+  type Group = { key: string; label: string; items: Message[] };
+  const groups: Group[] = [];
+
+  if (showRoleGroup) {
+    const byRole: Record<string, Message[]> = {};
+    for (const m of messages) {
+      (byRole[m.targetRole] ||= []).push(m);
+    }
+    for (const r of ROLE_OPTIONS) {
+      if (byRole[r]?.length) {
+        groups.push({ key: r, label: ROLE_LABELS[r], items: byRole[r] });
+      }
+    }
+  } else {
+    const byCat: Record<string, Message[]> = {};
+    for (const m of messages) {
+      (byCat[m.category] ||= []).push(m);
+    }
+    for (const c of Object.keys(byCat)) {
+      groups.push({ key: c, label: c, items: byCat[c] });
+    }
   }
 
   async function remove(id: string) {
@@ -47,15 +79,28 @@ export function MessageTemplatesList({ messages }: { messages: Message[] }) {
         <p className="text-sm text-neutral-500 text-center py-12">No hay mensajes todavía.</p>
       )}
 
-      {Object.entries(byCat).map(([cat, list]) => (
-        <section key={cat} className="mb-5">
-          <h2 className="text-xs uppercase text-neutral-500 font-medium mb-2">{cat}</h2>
+      {groups.map((g) => (
+        <section key={g.key} className="mb-5">
+          <h2 className="text-xs uppercase text-neutral-500 font-medium mb-2">{g.label}</h2>
           <div className="space-y-2">
-            {list.map((m) => (
+            {g.items.map((m) => (
               <div key={m.id} className="card !p-3">
                 <div className="flex justify-between items-start gap-2">
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm">{m.name}</div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="font-medium text-sm">{m.name}</div>
+                      {/* Cuando agrupamos por rol no repetimos el rol en cada tarjeta; al agrupar por categoría sí lo mostramos. */}
+                      {!showRoleGroup && isCeo && (
+                        <span className="text-[10px] uppercase tracking-wide bg-neutral-100 text-neutral-600 rounded px-1.5 py-0.5">
+                          {ROLE_LABELS[m.targetRole]}
+                        </span>
+                      )}
+                      {showRoleGroup && (
+                        <span className="text-[10px] uppercase tracking-wide bg-neutral-100 text-neutral-600 rounded px-1.5 py-0.5">
+                          {m.category}
+                        </span>
+                      )}
+                    </div>
                     <div className="text-xs text-neutral-600 mt-1 whitespace-pre-wrap">{m.body}</div>
                   </div>
                   <div className="flex flex-col gap-1 flex-shrink-0">
@@ -78,6 +123,8 @@ export function MessageTemplatesList({ messages }: { messages: Message[] }) {
       {(showNew || editing) && (
         <MessageModal
           message={editing}
+          isCeo={isCeo}
+          defaultRole={defaultRole}
           onClose={() => { setShowNew(false); setEditing(null); }}
           onSaved={() => { setShowNew(false); setEditing(null); router.refresh(); }}
         />
@@ -86,9 +133,22 @@ export function MessageTemplatesList({ messages }: { messages: Message[] }) {
   );
 }
 
-function MessageModal({ message, onClose, onSaved }: { message: Message | null; onClose: () => void; onSaved: () => void }) {
+function MessageModal({
+  message,
+  isCeo,
+  defaultRole,
+  onClose,
+  onSaved,
+}: {
+  message: Message | null;
+  isCeo: boolean;
+  defaultRole: ResourceRole;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const [name, setName] = useState(message?.name ?? "");
   const [category, setCategory] = useState(message?.category ?? "Otros");
+  const [targetRole, setTargetRole] = useState<ResourceRole>(message?.targetRole ?? defaultRole);
   const [body, setBody] = useState(message?.body ?? "");
   const [saving, setSaving] = useState(false);
 
@@ -96,7 +156,7 @@ function MessageModal({ message, onClose, onSaved }: { message: Message | null; 
     if (!name.trim() || !body.trim()) return;
     setSaving(true);
     const method = message ? "PATCH" : "POST";
-    const payload = JSON.stringify({ ...(message && { id: message.id }), name, category, body });
+    const payload = JSON.stringify({ ...(message && { id: message.id }), name, category, targetRole, body });
     await fetch("/api/messages", { method, headers: { "Content-Type": "application/json" }, body: payload });
     onSaved();
   }
@@ -109,15 +169,28 @@ function MessageModal({ message, onClose, onSaved }: { message: Message | null; 
           <button onClick={onClose} className="text-neutral-400 text-xl">✕</button>
         </div>
         <div className="space-y-3">
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Nombre</label>
+            <input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+          </div>
           <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs text-neutral-500 block mb-1">Nombre</label>
-              <input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-            </div>
             <div>
               <label className="text-xs text-neutral-500 block mb-1">Categoría</label>
               <select className="input" value={category} onChange={(e) => setCategory(e.target.value)}>
                 {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">
+                Rol {isCeo ? "" : "(solo CEO)"}
+              </label>
+              <select
+                className="input"
+                value={targetRole}
+                onChange={(e) => setTargetRole(e.target.value as ResourceRole)}
+                disabled={!isCeo}
+              >
+                {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
               </select>
             </div>
           </div>

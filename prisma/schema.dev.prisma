@@ -812,6 +812,7 @@ model MessageTemplate {
   id          String   @id @default(cuid())
   name        String                                  // "Bienvenida", "Recordatorio renovación"
   category    String   @default("Otros")              // "Bienvenida", "Seguimiento", "Renovación", "Alta", "Otros"
+  targetRole  String   @default("ceo")                // "ceo" | "head_success" | "fisio" | "setter" | "closer". El CEO ve todas, el resto solo las suyas.
   body        String                                  // contenido del mensaje
   createdAt   DateTime @default(now())
 }
