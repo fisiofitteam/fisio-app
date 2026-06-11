@@ -1,12 +1,9 @@
-import { redirect } from "next/navigation";
 import { getActiveProfessional } from "@/lib/session";
 import { ResourceRoleTabs, resolveActiveRole, ROLE_LABELS, type ResourceRole } from "@/components/ResourceRoleTabs";
 
 export default async function DocumentosPage({ searchParams }: { searchParams: { rol?: string } }) {
-  const pro = await getActiveProfessional();
-  if (!pro) redirect("/login");
-
-  const proRole = pro.role as ResourceRole;
+  const user = (await getActiveProfessional())!;
+  const proRole = user.role as ResourceRole;
   const { role, isCeo } = resolveActiveRole(proRole, searchParams?.rol);
 
   const visible = role === "all" ? "todos los roles" : ROLE_LABELS[role];

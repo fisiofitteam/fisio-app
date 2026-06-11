@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 
 export type ResourceRole = "ceo" | "head_success" | "fisio" | "setter" | "closer";
 
@@ -19,22 +19,19 @@ const ROLE_ORDER: ResourceRole[] = ["ceo", "head_success", "fisio", "setter", "c
  * - CEO: ve los 6 tabs (Todos + cada rol).
  * - Resto: no se muestra (solo verá lo suyo, server-side).
  *
- * El tab activo se guarda en la query string `?rol=...` para que la página
- * (Server Component) pueda leerlo y filtrar.
+ * El tab activo va en la query string `?rol=...` para que la página
+ * (Server Component) pueda leerlo y filtrar. No usamos useSearchParams
+ * para evitar el bail-out de SSG que Next 14 exige envolver en Suspense.
  */
 export function ResourceRoleTabs({ isCeo, currentRole }: { isCeo: boolean; currentRole: ResourceRole | "all" }) {
   const router = useRouter();
   const pathname = usePathname() ?? "";
-  const searchParams = useSearchParams();
 
   if (!isCeo) return null;
 
   function setRole(role: ResourceRole | "all") {
-    const params = new URLSearchParams(searchParams?.toString() ?? "");
-    if (role === "all") params.delete("rol");
-    else params.set("rol", role);
-    const qs = params.toString();
-    router.push(`${pathname}${qs ? `?${qs}` : ""}`);
+    const target = role === "all" ? pathname : `${pathname}?rol=${role}`;
+    router.push(target);
   }
 
   const tabs: { value: ResourceRole | "all"; label: string }[] = [
