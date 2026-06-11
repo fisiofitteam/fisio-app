@@ -124,9 +124,9 @@ export function MessageTemplatesList({
 // Variables disponibles para interpolar en el cuerpo, según el actionType de la
 // plantilla. Mostramos chuletas al editar para que el CEO sepa qué puede usar.
 const BASE_VARS: { token: string; desc: string }[] = [
-  { token: "{nombre}", desc: "Nombre del lead/paciente" },
-  { token: "{closer}", desc: "Nombre del closer logueado" },
-  { token: "{closer.intro}", desc: "Presentación del closer (editable en Equipo)" },
+  { token: "{nombre}", desc: "Primer nombre del lead o paciente" },
+  { token: "{closer}", desc: "Nombre del usuario que envía el mensaje" },
+  { token: "{closer.intro}", desc: "Presentación corta del usuario (se edita arriba, en 'Presentación del closer')" },
 ];
 
 const CASE_VARS: { token: string; desc: string }[] = [

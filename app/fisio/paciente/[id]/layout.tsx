@@ -60,11 +60,19 @@ export default async function PatientLayout({
   // Plantillas de "envío rápido" para el fisio: cualquier MessageTemplate con
   // actionType de tipo directo (agenda, recordatorio cita) visible para su rol.
   // El botón solo aparece si hay alguna.
+  // También cargamos la propia closerIntro del usuario logueado para que
+  // {closer.intro} se interpole correctamente cuando envía desde aquí.
   const userRole = user.role as ResourceRole;
-  const actionTemplatesRaw = await prisma.messageTemplate.findMany({
-    where: { actionType: { in: ["send_agenda", "send_meeting_reminder"] } },
-    select: { id: true, name: true, body: true, targetRoles: true, actionType: true },
-  });
+  const [actionTemplatesRaw, currentUserFull] = await Promise.all([
+    prisma.messageTemplate.findMany({
+      where: { actionType: { in: ["send_agenda", "send_meeting_reminder"] } },
+      select: { id: true, name: true, body: true, targetRoles: true, actionType: true },
+    }),
+    prisma.professional.findUnique({
+      where: { id: user.id },
+      select: { closerIntro: true },
+    }),
+  ]);
   const patientActionTemplates = actionTemplatesRaw
     .filter((t) => templateVisibleFor(parseTargetRoles(t.targetRoles), userRole))
     .map((t) => ({ id: t.id, name: t.name, body: t.body, actionType: t.actionType! as any }));
@@ -111,6 +119,7 @@ export default async function PatientLayout({
               patientName={patient.fullName}
               patientPhone={patient.shippingPhone}
               fisioFullName={user.fullName}
+              fisioIntro={currentUserFull?.closerIntro ?? null}
             />
             <WhatsAppButton url={patient.whatsappGroupUrl} size="md" />
             {patient.subscriptionStartDate && (

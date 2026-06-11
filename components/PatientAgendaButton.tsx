@@ -19,11 +19,13 @@ export function PatientAgendaButton({
   patientName,
   patientPhone,
   fisioFullName,
+  fisioIntro,
 }: {
   templates: Template[];
   patientName: string;
   patientPhone: string | null;
   fisioFullName: string;
+  fisioIntro: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -59,7 +61,7 @@ export function PatientAgendaButton({
                   leadName: patientName.split(" ")[0],
                   leadPhone: patientPhone,
                   closerFullName: fisioFullName,
-                  closerIntro: null,
+                  closerIntro: fisioIntro,
                 }}
                 className="text-left w-full text-xs px-2 py-1.5 rounded hover:bg-neutral-100"
               >
