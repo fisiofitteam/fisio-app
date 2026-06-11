@@ -1,17 +1,18 @@
 import { getActiveProfessional } from "@/lib/session";
 import { ResourceRoleTabs } from "@/components/ResourceRoleTabs";
-import { resolveActiveRole, ROLE_LABELS, type ResourceRole } from "@/lib/resource-roles";
+import { resolveActiveRole, ROLE_LABELS, visibleRolesForUser, type ResourceRole } from "@/lib/resource-roles";
 
 export default async function DocumentosPage({ searchParams }: { searchParams: { rol?: string } }) {
   const user = (await getActiveProfessional())!;
   const proRole = user.role as ResourceRole;
-  const { role, isCeo } = resolveActiveRole(proRole, searchParams?.rol);
+  const { role } = resolveActiveRole(proRole, searchParams?.rol);
+  const allowedRoles = visibleRolesForUser(proRole);
 
   const visible = role === "all" ? "todos los roles" : ROLE_LABELS[role];
 
   return (
     <div>
-      <ResourceRoleTabs isCeo={isCeo} currentRole={role} />
+      <ResourceRoleTabs allowedRoles={allowedRoles} currentRole={role} />
       <div className="card text-center py-16">
         <div className="text-3xl mb-2">📄</div>
         <h2 className="font-medium mb-1">Documentos</h2>

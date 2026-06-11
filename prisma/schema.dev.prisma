@@ -812,7 +812,7 @@ model MessageTemplate {
   id          String   @id @default(cuid())
   name        String                                  // "Bienvenida", "Recordatorio renovación"
   category    String   @default("Otros")              // "Bienvenida", "Seguimiento", "Renovación", "Alta", "Otros"
-  targetRole  String   @default("ceo")                // "ceo" | "head_success" | "fisio" | "setter" | "closer". El CEO ve todas, el resto solo las suyas.
+  targetRoles String   @default("[\"ceo\"]")           // JSON array de roles destinatarios: ["ceo","head_success","fisio","setter","closer"]. Multi-rol: una plantilla puede pertenecer a varios.
   body        String                                  // contenido del mensaje
   createdAt   DateTime @default(now())
 }

@@ -1,21 +1,26 @@
 "use client";
 
 import { useRouter, usePathname } from "next/navigation";
-import { ROLE_LABELS, ROLE_ORDER, type ResourceRole } from "@/lib/resource-roles";
+import { ROLE_LABELS, type ResourceRole } from "@/lib/resource-roles";
 
 /**
  * Tabs de filtro por rol para las sub-secciones de Recursos.
- * - CEO: ve los 6 tabs (Todos + cada rol).
- * - Resto: no se muestra (solo verá lo suyo, server-side).
+ * Recibe los roles disponibles ya filtrados desde el server (CEO ve todos,
+ * head-success ve todos menos "ceo", el resto no llega a renderizar esto).
  *
- * El tab activo va en la query string `?rol=...` para que la página
- * (Server Component) pueda leerlo y filtrar.
+ * El tab activo va en la query string `?rol=...`.
  */
-export function ResourceRoleTabs({ isCeo, currentRole }: { isCeo: boolean; currentRole: ResourceRole | "all" }) {
+export function ResourceRoleTabs({
+  allowedRoles,
+  currentRole,
+}: {
+  allowedRoles: ResourceRole[];
+  currentRole: ResourceRole | "all";
+}) {
   const router = useRouter();
   const pathname = usePathname() ?? "";
 
-  if (!isCeo) return null;
+  if (allowedRoles.length <= 1) return null;
 
   function setRole(role: ResourceRole | "all") {
     const target = role === "all" ? pathname : `${pathname}?rol=${role}`;
@@ -24,7 +29,7 @@ export function ResourceRoleTabs({ isCeo, currentRole }: { isCeo: boolean; curre
 
   const tabs: { value: ResourceRole | "all"; label: string }[] = [
     { value: "all", label: "Todos" },
-    ...ROLE_ORDER.map((r) => ({ value: r, label: ROLE_LABELS[r] })),
+    ...allowedRoles.map((r) => ({ value: r, label: ROLE_LABELS[r] })),
   ];
 
   return (

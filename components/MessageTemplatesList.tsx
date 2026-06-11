@@ -8,53 +8,35 @@ type Message = {
   id: string;
   name: string;
   category: string;
-  targetRole: ResourceRole;
+  targetRoles: ResourceRole[];
   body: string;
 };
 
 const CATEGORIES = ["Bienvenida", "Seguimiento", "Renovación", "Alta", "Otros"];
-const ROLE_OPTIONS: ResourceRole[] = ["ceo", "head_success", "fisio", "setter", "closer"];
 
 export function MessageTemplatesList({
   messages,
-  isCeo,
-  defaultRole,
+  canManage,
+  assignableRoles,
+  defaultRoles,
 }: {
   messages: Message[];
-  isCeo: boolean;
-  defaultRole: ResourceRole;
+  canManage: boolean;
+  assignableRoles: ResourceRole[];
+  defaultRoles: ResourceRole[];
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState<Message | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
 
-  // Cuando el CEO ve "Todos", agrupamos primero por rol y luego por categoría.
-  // Cuando el filtro es un solo rol (CEO viendo un tab concreto, o no-CEO), agrupamos solo por categoría.
-  const showRoleGroup = isCeo && new Set(messages.map((m) => m.targetRole)).size > 1;
-
-  type Group = { key: string; label: string; items: Message[] };
-  const groups: Group[] = [];
-
-  if (showRoleGroup) {
-    const byRole: Record<string, Message[]> = {};
-    for (const m of messages) {
-      (byRole[m.targetRole] ||= []).push(m);
-    }
-    for (const r of ROLE_OPTIONS) {
-      if (byRole[r]?.length) {
-        groups.push({ key: r, label: ROLE_LABELS[r], items: byRole[r] });
-      }
-    }
-  } else {
-    const byCat: Record<string, Message[]> = {};
-    for (const m of messages) {
-      (byCat[m.category] ||= []).push(m);
-    }
-    for (const c of Object.keys(byCat)) {
-      groups.push({ key: c, label: c, items: byCat[c] });
-    }
+  // Agrupamos siempre por categoría. El rol/roles se muestran como badges
+  // dentro de cada tarjeta para quien pueda gestionar.
+  const byCat: Record<string, Message[]> = {};
+  for (const m of messages) {
+    (byCat[m.category] ||= []).push(m);
   }
+  const groups = Object.entries(byCat);
 
   async function remove(id: string) {
     if (!confirm("¿Eliminar este mensaje?")) return;
@@ -72,34 +54,30 @@ export function MessageTemplatesList({
     <div>
       <div className="flex justify-between items-center mb-4">
         <p className="text-sm text-neutral-500">{messages.length} plantilla{messages.length !== 1 && "s"}</p>
-        <button onClick={() => setShowNew(true)} className="btn btn-primary text-xs">+ Nuevo mensaje</button>
+        {canManage && (
+          <button onClick={() => setShowNew(true)} className="btn btn-primary text-xs">+ Nuevo mensaje</button>
+        )}
       </div>
 
       {messages.length === 0 && (
         <p className="text-sm text-neutral-500 text-center py-12">No hay mensajes todavía.</p>
       )}
 
-      {groups.map((g) => (
-        <section key={g.key} className="mb-5">
-          <h2 className="text-xs uppercase text-neutral-500 font-medium mb-2">{g.label}</h2>
+      {groups.map(([cat, list]) => (
+        <section key={cat} className="mb-5">
+          <h2 className="text-xs uppercase text-neutral-500 font-medium mb-2">{cat}</h2>
           <div className="space-y-2">
-            {g.items.map((m) => (
+            {list.map((m) => (
               <div key={m.id} className="card !p-3">
                 <div className="flex justify-between items-start gap-2">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <div className="font-medium text-sm">{m.name}</div>
-                      {/* Cuando agrupamos por rol no repetimos el rol en cada tarjeta; al agrupar por categoría sí lo mostramos. */}
-                      {!showRoleGroup && isCeo && (
-                        <span className="text-[10px] uppercase tracking-wide bg-neutral-100 text-neutral-600 rounded px-1.5 py-0.5">
-                          {ROLE_LABELS[m.targetRole]}
+                      {canManage && m.targetRoles.map((r) => (
+                        <span key={r} className="text-[10px] uppercase tracking-wide bg-neutral-100 text-neutral-600 rounded px-1.5 py-0.5">
+                          {ROLE_LABELS[r]}
                         </span>
-                      )}
-                      {showRoleGroup && (
-                        <span className="text-[10px] uppercase tracking-wide bg-neutral-100 text-neutral-600 rounded px-1.5 py-0.5">
-                          {m.category}
-                        </span>
-                      )}
+                      ))}
                     </div>
                     <div className="text-xs text-neutral-600 mt-1 whitespace-pre-wrap">{m.body}</div>
                   </div>
@@ -110,8 +88,12 @@ export function MessageTemplatesList({
                     >
                       {copied === m.id ? "✓ Copiado" : "Copiar"}
                     </button>
-                    <button onClick={() => setEditing(m)} className="text-xs text-neutral-500">Editar</button>
-                    <button onClick={() => remove(m.id)} className="text-xs text-red-600">Eliminar</button>
+                    {canManage && (
+                      <>
+                        <button onClick={() => setEditing(m)} className="text-xs text-neutral-500">Editar</button>
+                        <button onClick={() => remove(m.id)} className="text-xs text-red-600">Eliminar</button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -123,8 +105,8 @@ export function MessageTemplatesList({
       {(showNew || editing) && (
         <MessageModal
           message={editing}
-          isCeo={isCeo}
-          defaultRole={defaultRole}
+          assignableRoles={assignableRoles}
+          defaultRoles={defaultRoles}
           onClose={() => { setShowNew(false); setEditing(null); }}
           onSaved={() => { setShowNew(false); setEditing(null); router.refresh(); }}
         />
@@ -135,28 +117,35 @@ export function MessageTemplatesList({
 
 function MessageModal({
   message,
-  isCeo,
-  defaultRole,
+  assignableRoles,
+  defaultRoles,
   onClose,
   onSaved,
 }: {
   message: Message | null;
-  isCeo: boolean;
-  defaultRole: ResourceRole;
+  assignableRoles: ResourceRole[];
+  defaultRoles: ResourceRole[];
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [name, setName] = useState(message?.name ?? "");
   const [category, setCategory] = useState(message?.category ?? "Otros");
-  const [targetRole, setTargetRole] = useState<ResourceRole>(message?.targetRole ?? defaultRole);
+  const initialRoles = (message?.targetRoles ?? defaultRoles).filter((r) => assignableRoles.includes(r));
+  const [targetRoles, setTargetRoles] = useState<ResourceRole[]>(
+    initialRoles.length ? initialRoles : (assignableRoles[0] ? [assignableRoles[0]] : []),
+  );
   const [body, setBody] = useState(message?.body ?? "");
   const [saving, setSaving] = useState(false);
 
+  function toggleRole(r: ResourceRole) {
+    setTargetRoles((prev) => prev.includes(r) ? prev.filter((x) => x !== r) : [...prev, r]);
+  }
+
   async function save() {
-    if (!name.trim() || !body.trim()) return;
+    if (!name.trim() || !body.trim() || targetRoles.length === 0) return;
     setSaving(true);
     const method = message ? "PATCH" : "POST";
-    const payload = JSON.stringify({ ...(message && { id: message.id }), name, category, targetRole, body });
+    const payload = JSON.stringify({ ...(message && { id: message.id }), name, category, targetRoles, body });
     await fetch("/api/messages", { method, headers: { "Content-Type": "application/json" }, body: payload });
     onSaved();
   }
@@ -173,26 +162,36 @@ function MessageModal({
             <label className="text-xs text-neutral-500 block mb-1">Nombre</label>
             <input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs text-neutral-500 block mb-1">Categoría</label>
-              <select className="input" value={category} onChange={(e) => setCategory(e.target.value)}>
-                {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-              </select>
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Categoría</label>
+            <select className="input" value={category} onChange={(e) => setCategory(e.target.value)}>
+              {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Roles destinatarios (uno o varios)</label>
+            <div className="flex flex-wrap gap-1.5">
+              {assignableRoles.map((r) => {
+                const checked = targetRoles.includes(r);
+                return (
+                  <button
+                    type="button"
+                    key={r}
+                    onClick={() => toggleRole(r)}
+                    className={`text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${
+                      checked
+                        ? "bg-neutral-900 text-white border-neutral-900"
+                        : "bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-50"
+                    }`}
+                  >
+                    {checked && "✓ "}{ROLE_LABELS[r]}
+                  </button>
+                );
+              })}
             </div>
-            <div>
-              <label className="text-xs text-neutral-500 block mb-1">
-                Rol {isCeo ? "" : "(solo CEO)"}
-              </label>
-              <select
-                className="input"
-                value={targetRole}
-                onChange={(e) => setTargetRole(e.target.value as ResourceRole)}
-                disabled={!isCeo}
-              >
-                {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
-              </select>
-            </div>
+            {targetRoles.length === 0 && (
+              <p className="text-[11px] text-red-600 mt-1">Selecciona al menos un rol.</p>
+            )}
           </div>
           <div>
             <label className="text-xs text-neutral-500 block mb-1">Contenido</label>
@@ -207,7 +206,11 @@ function MessageModal({
           <p className="text-xs text-neutral-400">
             Las variables como {`{nombre}`} se sustituirán manualmente al copiar el mensaje. Más adelante haremos sustitución automática.
           </p>
-          <button onClick={save} disabled={!name.trim() || !body.trim() || saving} className="btn btn-primary w-full">
+          <button
+            onClick={save}
+            disabled={!name.trim() || !body.trim() || targetRoles.length === 0 || saving}
+            className="btn btn-primary w-full"
+          >
             {saving ? "Guardando..." : message ? "Guardar cambios" : "Crear mensaje"}
           </button>
         </div>

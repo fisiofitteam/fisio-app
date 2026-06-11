@@ -1,7 +1,7 @@
 // Tipos + utilidades server-safe para el filtro por rol de la sección Recursos.
-// SIN "use client": para que los Server Components puedan importar
-// `resolveActiveRole` y `ROLE_LABELS` directamente. El tab visual vive en
-// `components/ResourceRoleTabs.tsx` (ese sí es client).
+// SIN "use client": Server Components y Client Components importan de aquí.
+// (Si pones "use client" aquí, los Server Components revientan en runtime con
+// "(0, i.XX) is not a function" al llamar a estas funciones — referencias RSC.)
 
 export type ResourceRole = "ceo" | "head_success" | "fisio" | "setter" | "closer";
 
@@ -16,17 +16,76 @@ export const ROLE_LABELS: Record<ResourceRole, string> = {
 export const ROLE_ORDER: ResourceRole[] = ["ceo", "head_success", "fisio", "setter", "closer"];
 
 /**
- * Lee el rol activo desde searchParams. Para no-CEO siempre devuelve su propio rol.
+ * Deserializa el campo `targetRoles` (JSON string) a un array tipado de roles.
+ * Tolerante a basura: si el JSON está mal, devuelve ["ceo"] por defecto.
+ */
+export function parseTargetRoles(raw: string | null | undefined): ResourceRole[] {
+  if (!raw) return ["ceo"];
+  try {
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return ["ceo"];
+    const filtered = arr.filter((r): r is ResourceRole => typeof r === "string" && (ROLE_ORDER as string[]).includes(r));
+    return filtered.length ? Array.from(new Set(filtered)) : ["ceo"];
+  } catch {
+    return ["ceo"];
+  }
+}
+
+/**
+ * Roles visibles para el usuario actual (qué tabs ve y qué plantillas se le muestran).
+ *  - CEO            → todos
+ *  - head_success   → todos menos "ceo"
+ *  - el resto       → solo el suyo
+ */
+export function visibleRolesForUser(userRole: ResourceRole): ResourceRole[] {
+  if (userRole === "ceo") return ROLE_ORDER;
+  if (userRole === "head_success") return ROLE_ORDER.filter((r) => r !== "ceo");
+  return [userRole];
+}
+
+/**
+ * Roles que el usuario actual puede ASIGNAR al crear/editar una plantilla.
+ *  - CEO            → todos
+ *  - head_success   → todos menos "ceo"
+ *  - el resto       → ninguno (no puede gestionar)
+ */
+export function assignableRolesForUser(userRole: ResourceRole): ResourceRole[] {
+  if (userRole === "ceo") return ROLE_ORDER;
+  if (userRole === "head_success") return ROLE_ORDER.filter((r) => r !== "ceo");
+  return [];
+}
+
+/**
+ * ¿El usuario puede crear/editar/borrar plantillas?
+ * CEO + head_success.
+ */
+export function canManageResources(userRole: ResourceRole): boolean {
+  return userRole === "ceo" || userRole === "head_success";
+}
+
+/**
+ * ¿Esta plantilla es visible para el usuario, dada su lista de roles destino?
+ * Devuelve true si la intersección con visibleRolesForUser(userRole) no es vacía.
+ */
+export function templateVisibleFor(targetRoles: ResourceRole[], userRole: ResourceRole): boolean {
+  const visible = new Set(visibleRolesForUser(userRole));
+  return targetRoles.some((r) => visible.has(r));
+}
+
+/**
+ * Lee el rol activo del tab desde searchParams. Para usuarios que no pueden
+ * filtrar (no son CEO ni head-success), siempre devuelve su propio rol.
  */
 export function resolveActiveRole(
   professionalRole: ResourceRole,
   searchParamsRol: string | string[] | undefined,
-): { role: ResourceRole | "all"; isCeo: boolean } {
-  const isCeo = professionalRole === "ceo";
-  if (!isCeo) return { role: professionalRole, isCeo: false };
+): { role: ResourceRole | "all"; canFilter: boolean } {
+  const canFilter = canManageResources(professionalRole);
+  if (!canFilter) return { role: professionalRole, canFilter: false };
 
+  const allowed = visibleRolesForUser(professionalRole);
   const raw = Array.isArray(searchParamsRol) ? searchParamsRol[0] : searchParamsRol;
-  if (!raw || raw === "all") return { role: "all", isCeo: true };
-  if (ROLE_ORDER.includes(raw as ResourceRole)) return { role: raw as ResourceRole, isCeo: true };
-  return { role: "all", isCeo: true };
+  if (!raw || raw === "all") return { role: "all", canFilter: true };
+  if (allowed.includes(raw as ResourceRole)) return { role: raw as ResourceRole, canFilter: true };
+  return { role: "all", canFilter: true };
 }
