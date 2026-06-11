@@ -26,13 +26,46 @@ type Target = {
 };
 
 /**
- * Formatea fecha + hora en español, pensado para el recordatorio.
- * Devuelve [fechaLegible, horaCorta]. Ejemplo: "martes 5 de junio", "17:30".
+ * Formatea fecha + hora en varios formatos. Cada variante alimenta una
+ * variable {cita.xxx} en la plantilla; el closer/fisio elige cuál usar según
+ * cómo quiera que suene el mensaje.
+ *
+ *  - fecha:        "martes 5 de junio"
+ *  - fecha_corta:  "5/6/2026"
+ *  - dia:          "martes"
+ *  - hora:         "17:30" (24h)
+ *  - hora12:       "5:30 pm"
+ *  - cuando:       "mañana", "hoy", "el martes", o fecha larga si > 7 días.
  */
-function formatCallDate(d: Date): { fecha: string; hora: string } {
+function formatCallDate(d: Date): {
+  fecha: string;
+  fecha_corta: string;
+  dia: string;
+  hora: string;
+  hora12: string;
+  cuando: string;
+} {
   const fecha = d.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
-  const hora = d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
-  return { fecha, hora };
+  const fecha_corta = d.toLocaleDateString("es-ES", { day: "numeric", month: "numeric", year: "numeric" });
+  const dia = d.toLocaleDateString("es-ES", { weekday: "long" });
+  const hora = d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", hour12: false });
+  const hora12 = d.toLocaleTimeString("es-ES", { hour: "numeric", minute: "2-digit", hour12: true })
+    .replace(" ", " ").toLowerCase();
+
+  // Cuándo: relativo a hoy. Trabajamos con días al inicio del día.
+  const start = (x: Date) => { const c = new Date(x); c.setHours(0, 0, 0, 0); return c; };
+  const today = start(new Date());
+  const target = start(d);
+  const diffDays = Math.round((target.getTime() - today.getTime()) / 86400000);
+  let cuando: string;
+  if (diffDays === 0) cuando = "hoy";
+  else if (diffDays === 1) cuando = "mañana";
+  else if (diffDays === -1) cuando = "ayer";
+  else if (diffDays > 1 && diffDays <= 7) cuando = `el ${dia}`;
+  else if (diffDays > 7 && diffDays <= 14) cuando = `el ${dia} que viene`;
+  else cuando = fecha; // lejos en el futuro/pasado: usamos fecha larga directamente
+
+  return { fecha, fecha_corta, dia, hora, hora12, cuando };
 }
 
 /**
@@ -65,9 +98,13 @@ export function SendDirectButton({
     };
 
     if (template.actionType === "send_meeting_reminder" && target.callDate) {
-      const { fecha, hora } = formatCallDate(target.callDate);
-      vars["cita.fecha"] = fecha;
-      vars["cita.hora"] = hora;
+      const f = formatCallDate(target.callDate);
+      vars["cita.fecha"] = f.fecha;
+      vars["cita.fecha_corta"] = f.fecha_corta;
+      vars["cita.dia"] = f.dia;
+      vars["cita.hora"] = f.hora;
+      vars["cita.hora12"] = f.hora12;
+      vars["cita.cuando"] = f.cuando;
       vars["cita.meet"] = target.meetingUrl ?? "";
     }
 

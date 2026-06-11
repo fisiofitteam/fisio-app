@@ -103,7 +103,7 @@ export default async function LlamadasVentaPage({
   // las filtramos por rol (head_success no ve las solo-CEO, etc).
   const [allActionTemplates, successCases, currentUserFull] = await Promise.all([
     prisma.messageTemplate.findMany({
-      where: { actionType: { in: ["send_success_case", "send_meeting_reminder", "send_agenda"] } },
+      where: { actionType: { in: ["send_success_case", "send_meeting_reminder"] } },
       select: { id: true, name: true, body: true, targetRoles: true, actionType: true },
     }),
     prisma.successCase.findMany({
@@ -122,7 +122,6 @@ export default async function LlamadasVentaPage({
     .map((t) => ({ id: t.id, name: t.name, body: t.body, actionType: t.actionType! }));
   const successCaseTemplates = visibleActionTemplates.filter((t) => t.actionType === "send_success_case");
   const meetingReminderTemplates = visibleActionTemplates.filter((t) => t.actionType === "send_meeting_reminder");
-  const agendaTemplates = visibleActionTemplates.filter((t) => t.actionType === "send_agenda");
 
   return (
     <CallsListView
@@ -168,7 +167,6 @@ export default async function LlamadasVentaPage({
       }}
       successCaseTemplates={successCaseTemplates.map((t) => ({ id: t.id, name: t.name, body: t.body }))}
       meetingReminderTemplates={meetingReminderTemplates.map((t) => ({ id: t.id, name: t.name, body: t.body, actionType: "send_meeting_reminder" as const }))}
-      agendaTemplates={agendaTemplates.map((t) => ({ id: t.id, name: t.name, body: t.body, actionType: "send_agenda" as const }))}
       successCases={successCases}
       currentUserCloserIntro={currentUserFull?.closerIntro ?? null}
     />

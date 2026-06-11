@@ -9,8 +9,10 @@ import { GoToPatient } from "@/components/GoToPatient";
 import { LoadReviewIntervalSelector } from "@/components/LoadReviewIntervalSelector";
 import { PatientNotesButton } from "@/components/PatientNotesButton";
 import { PatientAccessLinkButton } from "@/components/PatientAccessLinkButton";
+import { PatientAgendaButton } from "@/components/PatientAgendaButton";
 import { calculateAdherence } from "@/lib/adherence";
 import { getActiveProfessional } from "@/lib/session";
+import { parseTargetRoles, templateVisibleFor, type ResourceRole } from "@/lib/resource-roles";
 
 function monthsConsumed(startDate: Date | null): number {
   if (!startDate) return 0;
@@ -55,6 +57,18 @@ export default async function PatientLayout({
   ]);
   const classroomPct = classroomLessons > 0 ? Math.round((classroomDone / classroomLessons) * 100) : null;
 
+  // Plantillas de "envío rápido" para el fisio: cualquier MessageTemplate con
+  // actionType de tipo directo (agenda, recordatorio cita) visible para su rol.
+  // El botón solo aparece si hay alguna.
+  const userRole = user.role as ResourceRole;
+  const actionTemplatesRaw = await prisma.messageTemplate.findMany({
+    where: { actionType: { in: ["send_agenda", "send_meeting_reminder"] } },
+    select: { id: true, name: true, body: true, targetRoles: true, actionType: true },
+  });
+  const patientActionTemplates = actionTemplatesRaw
+    .filter((t) => templateVisibleFor(parseTargetRoles(t.targetRoles), userRole))
+    .map((t) => ({ id: t.id, name: t.name, body: t.body, actionType: t.actionType! as any }));
+
   return (
     <div>
       <header className="mb-4">
@@ -92,6 +106,12 @@ export default async function PatientLayout({
               🖨️ Exportar PDF
             </Link>
             <GoToPatient />
+            <PatientAgendaButton
+              templates={patientActionTemplates}
+              patientName={patient.fullName}
+              patientPhone={patient.shippingPhone}
+              fisioFullName={user.fullName}
+            />
             <WhatsAppButton url={patient.whatsappGroupUrl} size="md" />
             {patient.subscriptionStartDate && (
               <div className="bg-neutral-50 rounded-xl px-3 py-2">
