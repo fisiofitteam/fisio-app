@@ -1,18 +1,7 @@
 "use client";
 
 import { useRouter, usePathname } from "next/navigation";
-
-export type ResourceRole = "ceo" | "head_success" | "fisio" | "setter" | "closer";
-
-export const ROLE_LABELS: Record<ResourceRole, string> = {
-  ceo: "CEO",
-  head_success: "Head-success",
-  fisio: "Fisios",
-  setter: "Setter",
-  closer: "Closer",
-};
-
-const ROLE_ORDER: ResourceRole[] = ["ceo", "head_success", "fisio", "setter", "closer"];
+import { ROLE_LABELS, ROLE_ORDER, type ResourceRole } from "@/lib/resource-roles";
 
 /**
  * Tabs de filtro por rol para las sub-secciones de Recursos.
@@ -20,8 +9,7 @@ const ROLE_ORDER: ResourceRole[] = ["ceo", "head_success", "fisio", "setter", "c
  * - Resto: no se muestra (solo verá lo suyo, server-side).
  *
  * El tab activo va en la query string `?rol=...` para que la página
- * (Server Component) pueda leerlo y filtrar. No usamos useSearchParams
- * para evitar el bail-out de SSG que Next 14 exige envolver en Suspense.
+ * (Server Component) pueda leerlo y filtrar.
  */
 export function ResourceRoleTabs({ isCeo, currentRole }: { isCeo: boolean; currentRole: ResourceRole | "all" }) {
   const router = useRouter();
@@ -57,20 +45,4 @@ export function ResourceRoleTabs({ isCeo, currentRole }: { isCeo: boolean; curre
       })}
     </nav>
   );
-}
-
-/**
- * Lee el rol activo desde searchParams. Para no-CEO siempre devuelve su propio rol.
- */
-export function resolveActiveRole(
-  professionalRole: ResourceRole,
-  searchParamsRol: string | string[] | undefined,
-): { role: ResourceRole | "all"; isCeo: boolean } {
-  const isCeo = professionalRole === "ceo";
-  if (!isCeo) return { role: professionalRole, isCeo: false };
-
-  const raw = Array.isArray(searchParamsRol) ? searchParamsRol[0] : searchParamsRol;
-  if (!raw || raw === "all") return { role: "all", isCeo: true };
-  if (ROLE_ORDER.includes(raw as ResourceRole)) return { role: raw as ResourceRole, isCeo: true };
-  return { role: "all", isCeo: true };
 }

@@ -1,5 +1,6 @@
 import { getActiveProfessional } from "@/lib/session";
-import { ResourceRoleTabs, resolveActiveRole, ROLE_LABELS, type ResourceRole } from "@/components/ResourceRoleTabs";
+import { ResourceRoleTabs } from "@/components/ResourceRoleTabs";
+import { resolveActiveRole, ROLE_LABELS, type ResourceRole } from "@/lib/resource-roles";
 
 export default async function DocumentosPage({ searchParams }: { searchParams: { rol?: string } }) {
   const user = (await getActiveProfessional())!;

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ROLE_LABELS, type ResourceRole } from "./ResourceRoleTabs";
+import { ROLE_LABELS, type ResourceRole } from "@/lib/resource-roles";
 
 type Message = {
   id: string;
