@@ -16,6 +16,24 @@ export const ROLE_LABELS: Record<ResourceRole, string> = {
 export const ROLE_ORDER: ResourceRole[] = ["ceo", "head_success", "fisio", "setter", "closer"];
 
 /**
+ * Tipos de acción que puede tener una MessageTemplate.
+ *  - null            → plantilla normal: copia al portapapeles
+ *  - send_success_case → muestra selector de SuccessCase, interpola, abre WhatsApp del lead/paciente
+ *  (Reservados, no implementados: send_agenda, send_meeting_reminder)
+ */
+export type TemplateActionType = "send_success_case" | "send_agenda" | "send_meeting_reminder";
+
+export const ACTION_TYPE_LABELS: Record<TemplateActionType, string> = {
+  send_success_case: "Enviar caso de éxito",
+  send_agenda: "Enviar link de agenda (próximamente)",
+  send_meeting_reminder: "Recordatorio de cita (próximamente)",
+};
+
+// Acciones que el usuario puede seleccionar HOY. Las "(próximamente)" quedan en
+// el código pero deshabilitadas en el modal hasta que las implementemos.
+export const ACTION_TYPES_IMPLEMENTED: TemplateActionType[] = ["send_success_case"];
+
+/**
  * Deserializa el campo `targetRoles` (JSON string) a un array tipado de roles.
  * Tolerante a basura: si el JSON está mal, devuelve ["ceo"] por defecto.
  */

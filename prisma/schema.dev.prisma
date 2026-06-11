@@ -188,6 +188,10 @@ model Professional {
   workSchedule   String?   // horario de trabajo (texto libre, visible al equipo)
   vatExempt      Boolean   @default(true)  // exento de IVA (art. 20 Ley 37/1992)
 
+  // Presentación corta que el closer usa al iniciar mensajes a leads/pacientes.
+  // Se sustituye en plantillas con la variable {closer.intro}. Editable por CEO/head-success en /fisio/equipo.
+  closerIntro    String?
+
   // Preferencias de notificación: JSON { [tipo]: boolean }. Tipo ausente = activado.
   notificationPrefs Json?
 
@@ -348,6 +352,7 @@ model Lead {
   decidedAt       DateTime?                                   // cuándo se marcó won/lost/postponed
 
   sales           Sale[]
+  fisioTasks      FisioTask[] @relation("LeadFisioTasks")
 
   @@index([status])
   @@index([callScheduledAt])
@@ -691,6 +696,15 @@ model FisioTask {
   patientId   String?
   patient     Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull)
 
+  // Tarea puede estar asociada a un lead (típico para closer/setter) en vez de un paciente.
+  leadId      String?
+  lead        Lead?    @relation("LeadFisioTasks", fields: [leadId], references: [id], onDelete: SetNull)
+
+  // Plantilla de mensaje asociada a la tarea. Si está, la card muestra "📤 Enviar"
+  // que ejecuta la acción de la plantilla (selector de caso → WhatsApp interpolado).
+  messageTemplateId String?
+  messageTemplate   MessageTemplate? @relation(fields: [messageTemplateId], references: [id], onDelete: SetNull)
+
   source      String   @default("own")               // "own" | "team"
   // El campo assignedBy puede ser texto libre o un ID de Professional (lo decidimos en la UI)
   assignedBy  String?
@@ -814,7 +828,29 @@ model MessageTemplate {
   category    String   @default("Otros")              // "Bienvenida", "Seguimiento", "Renovación", "Alta", "Otros"
   targetRoles String   @default("[\"ceo\"]")           // JSON array de roles destinatarios: ["ceo","head_success","fisio","setter","closer"]. Multi-rol: una plantilla puede pertenecer a varios.
   body        String                                  // contenido del mensaje
+  // Acción asociada al pulsar "Enviar" en una tarea con esta plantilla.
+  // null = plantilla normal (copia al portapapeles). "send_success_case" = pop-up para elegir un SuccessCase y abre WhatsApp con texto interpolado.
+  // Reservados para más adelante: "send_agenda", "send_meeting_reminder".
+  actionType  String?
   createdAt   DateTime @default(now())
+
+  fisioTasks  FisioTask[]
+}
+
+// ============================================================================
+// CASOS DE ÉXITO (biblioteca CEO) — testimonios reales en vídeo de YouTube
+// que el closer comparte con leads en plantillas con actionType="send_success_case".
+// ============================================================================
+
+model SuccessCase {
+  id          String   @id @default(cuid())
+  name        String                                  // "Ana"
+  injury      String                                  // "rotura de supraespinoso"
+  youtubeUrl  String                                  // link del vídeo
+  notes       String?                                 // notas internas para el closer (no van al mensaje)
+  active      Boolean  @default(true)                 // ocultar sin borrar
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 // ============================================================================

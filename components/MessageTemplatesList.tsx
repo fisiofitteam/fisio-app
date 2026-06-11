@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ROLE_LABELS, type ResourceRole } from "@/lib/resource-roles";
+import { ACTION_TYPE_LABELS, ACTION_TYPES_IMPLEMENTED, ROLE_LABELS, type ResourceRole, type TemplateActionType } from "@/lib/resource-roles";
 
 type Message = {
   id: string;
@@ -10,6 +10,7 @@ type Message = {
   category: string;
   targetRoles: ResourceRole[];
   body: string;
+  actionType: TemplateActionType | null;
 };
 
 const CATEGORIES = ["Bienvenida", "Seguimiento", "Renovación", "Alta", "Otros"];
@@ -73,6 +74,11 @@ export function MessageTemplatesList({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <div className="font-medium text-sm">{m.name}</div>
+                      {m.actionType && (
+                        <span className="text-[10px] uppercase tracking-wide bg-amber-100 text-amber-800 rounded px-1.5 py-0.5">
+                          📤 {ACTION_TYPE_LABELS[m.actionType]}
+                        </span>
+                      )}
                       {canManage && m.targetRoles.map((r) => (
                         <span key={r} className="text-[10px] uppercase tracking-wide bg-neutral-100 text-neutral-600 rounded px-1.5 py-0.5">
                           {ROLE_LABELS[r]}
@@ -115,6 +121,20 @@ export function MessageTemplatesList({
   );
 }
 
+// Variables disponibles para interpolar en el cuerpo, según el actionType de la
+// plantilla. Mostramos chuletas al editar para que el CEO sepa qué puede usar.
+const BASE_VARS: { token: string; desc: string }[] = [
+  { token: "{nombre}", desc: "Nombre del lead/paciente" },
+  { token: "{closer}", desc: "Nombre del closer logueado" },
+  { token: "{closer.intro}", desc: "Presentación del closer (editable en Equipo)" },
+];
+
+const CASE_VARS: { token: string; desc: string }[] = [
+  { token: "{caso.nombre}", desc: "Nombre del paciente del caso" },
+  { token: "{caso.lesion}", desc: "Lesión / motivo" },
+  { token: "{caso.link}", desc: "Link de YouTube del vídeo" },
+];
+
 function MessageModal({
   message,
   assignableRoles,
@@ -134,6 +154,7 @@ function MessageModal({
   const [targetRoles, setTargetRoles] = useState<ResourceRole[]>(
     initialRoles.length ? initialRoles : (assignableRoles[0] ? [assignableRoles[0]] : []),
   );
+  const [actionType, setActionType] = useState<TemplateActionType | "">(message?.actionType ?? "");
   const [body, setBody] = useState(message?.body ?? "");
   const [saving, setSaving] = useState(false);
 
@@ -145,10 +166,19 @@ function MessageModal({
     if (!name.trim() || !body.trim() || targetRoles.length === 0) return;
     setSaving(true);
     const method = message ? "PATCH" : "POST";
-    const payload = JSON.stringify({ ...(message && { id: message.id }), name, category, targetRoles, body });
+    const payload = JSON.stringify({
+      ...(message && { id: message.id }),
+      name,
+      category,
+      targetRoles,
+      body,
+      actionType: actionType || null,
+    });
     await fetch("/api/messages", { method, headers: { "Content-Type": "application/json" }, body: payload });
     onSaved();
   }
+
+  const showCaseVars = actionType === "send_success_case";
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
@@ -194,18 +224,46 @@ function MessageModal({
             )}
           </div>
           <div>
+            <label className="text-xs text-neutral-500 block mb-1">
+              Acción al pulsar "Enviar" desde una tarea
+            </label>
+            <select
+              className="input"
+              value={actionType}
+              onChange={(e) => setActionType(e.target.value as TemplateActionType | "")}
+            >
+              <option value="">Ninguna (copia al portapapeles)</option>
+              {ACTION_TYPES_IMPLEMENTED.map((a) => (
+                <option key={a} value={a}>{ACTION_TYPE_LABELS[a]}</option>
+              ))}
+            </select>
+            <p className="text-[11px] text-neutral-400 mt-1">
+              Si eliges una acción, la plantilla se usa desde tareas y abre WhatsApp con el texto interpolado.
+            </p>
+          </div>
+          <div>
             <label className="text-xs text-neutral-500 block mb-1">Contenido</label>
             <textarea
               className="input"
               rows={6}
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              placeholder="Puedes usar variables como {nombre} o {dias_renovacion} que rellenarás manualmente al usar el mensaje."
+              placeholder="Escribe el mensaje y usa las variables de abajo donde toque."
             />
           </div>
-          <p className="text-xs text-neutral-400">
-            Las variables como {`{nombre}`} se sustituirán manualmente al copiar el mensaje. Más adelante haremos sustitución automática.
-          </p>
+          <div className="bg-neutral-50 rounded-lg p-2.5 text-[11px] text-neutral-600 space-y-1">
+            <div className="font-medium text-neutral-700 mb-1">Variables disponibles:</div>
+            {BASE_VARS.map((v) => (
+              <div key={v.token}>
+                <code className="bg-white px-1 rounded">{v.token}</code> — {v.desc}
+              </div>
+            ))}
+            {showCaseVars && CASE_VARS.map((v) => (
+              <div key={v.token}>
+                <code className="bg-white px-1 rounded">{v.token}</code> — {v.desc}
+              </div>
+            ))}
+          </div>
           <button
             onClick={save}
             disabled={!name.trim() || !body.trim() || targetRoles.length === 0 || saving}

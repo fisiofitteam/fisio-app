@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 import { CallsListView } from "@/components/CallsListView";
 import { FollowUpView } from "@/components/FollowUpView";
+import { parseTargetRoles, templateVisibleFor, type ResourceRole } from "@/lib/resource-roles";
 
 export default async function LlamadasVentaPage({
   searchParams,
@@ -98,6 +99,29 @@ export default async function LlamadasVentaPage({
     orderBy: { fullName: "asc" },
   });
 
+  // Plantillas con acción "enviar caso de éxito" disponibles para el usuario,
+  // + casos activos + presentación del usuario. Todo va al view para los
+  // botones de envío rápido en la fila del lead.
+  const [allActionTemplates, successCases, currentUserFull] = await Promise.all([
+    prisma.messageTemplate.findMany({
+      where: { actionType: "send_success_case" },
+      select: { id: true, name: true, body: true, targetRoles: true },
+    }),
+    prisma.successCase.findMany({
+      where: { active: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, injury: true, youtubeUrl: true },
+    }),
+    prisma.professional.findUnique({
+      where: { id: user.id },
+      select: { closerIntro: true },
+    }),
+  ]);
+  const userRole = user.role as ResourceRole;
+  const successCaseTemplates = allActionTemplates
+    .filter((t) => templateVisibleFor(parseTargetRoles(t.targetRoles), userRole))
+    .map((t) => ({ id: t.id, name: t.name, body: t.body }));
+
   return (
     <CallsListView
       activeStatus={status}
@@ -140,6 +164,9 @@ export default async function LlamadasVentaPage({
         cancelled: counts[3],
         no_show: counts[4],
       }}
+      successCaseTemplates={successCaseTemplates}
+      successCases={successCases}
+      currentUserCloserIntro={currentUserFull?.closerIntro ?? null}
     />
   );
 }

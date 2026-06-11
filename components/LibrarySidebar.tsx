@@ -74,12 +74,19 @@ const CATALOGO_SECTION = {
   icon: "🏋️",
   desc: "Bloques y ejercicios del control de cargas",
 };
+// Casos de éxito que el closer envía a leads (CEO + Head Success).
+const CASOS_EXITO_SECTION = {
+  id: "casos-exito",
+  label: "Casos de éxito",
+  icon: "🏆",
+  desc: "Testimonios reales para enviar a leads",
+};
 
 export function LibrarySidebar({ showOnboarding = false, showCatalog = false }: { showOnboarding?: boolean; showCatalog?: boolean }) {
   const pathname = usePathname() ?? "";
   const sections = [
     ...SECTIONS,
-    ...(showCatalog ? [CATALOGO_SECTION] : []),
+    ...(showCatalog ? [CATALOGO_SECTION, CASOS_EXITO_SECTION] : []),
     ...(showOnboarding ? [METRICAS_SECTION, ONBOARDING_SECTION, LANDINGS_SECTION, MENSAJES_SECTION] : []),
   ];
 

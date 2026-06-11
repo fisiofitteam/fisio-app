@@ -32,6 +32,7 @@ export default async function MessagesPage({ searchParams }: { searchParams: { r
     category: m.category,
     targetRoles: parseTargetRoles(m.targetRoles),
     body: m.body,
+    actionType: (m.actionType ?? null) as any,
   }));
 
   const visible = all.filter((m) => {

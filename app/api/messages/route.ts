@@ -2,13 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 import {
+  ACTION_TYPES_IMPLEMENTED,
   assignableRolesForUser,
   canManageResources,
   parseTargetRoles,
   type ResourceRole,
   ROLE_ORDER,
   templateVisibleFor,
+  type TemplateActionType,
 } from "@/lib/resource-roles";
+
+function normalizeActionType(value: unknown): TemplateActionType | null {
+  if (typeof value !== "string" || !value) return null;
+  return (ACTION_TYPES_IMPLEMENTED as readonly string[]).includes(value) ? (value as TemplateActionType) : null;
+}
 
 /**
  * Normaliza un array entrante de roles a JSON string válido, filtrando los
@@ -35,7 +42,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const userRole = user.role as ResourceRole;
-  const { name, category, body, targetRoles } = await req.json();
+  const { name, category, body, targetRoles, actionType } = await req.json();
 
   const rolesJson = buildTargetRolesJson(targetRoles, userRole)
     ?? JSON.stringify([userRole]); // fallback: el propio rol del autor
@@ -46,6 +53,7 @@ export async function POST(req: NextRequest) {
       category: category || "Otros",
       body,
       targetRoles: rolesJson,
+      actionType: normalizeActionType(actionType),
     },
   });
   return NextResponse.json(m);
@@ -57,7 +65,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const userRole = user.role as ResourceRole;
-  const { id, name, category, body, targetRoles } = await req.json();
+  const { id, name, category, body, targetRoles, actionType } = await req.json();
 
   // Verificar que el usuario tiene acceso a esta plantilla (head_success no
   // puede editar plantillas exclusivas de CEO).
@@ -81,6 +89,7 @@ export async function PATCH(req: NextRequest) {
       ...(category !== undefined && { category }),
       ...(body !== undefined && { body }),
       ...(rolesJson !== undefined && { targetRoles: rolesJson }),
+      ...(actionType !== undefined && { actionType: normalizeActionType(actionType) }),
     },
   });
   return NextResponse.json(m);

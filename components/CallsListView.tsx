@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { PaymentLinkModal } from "@/components/PaymentLinkModal";
 import { RescheduleLinkButton } from "@/components/RescheduleLinkButton";
+import { SendCaseFlow, type SendCaseTemplate, type SuccessCaseOption } from "@/components/SendCaseFlow";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -97,6 +98,9 @@ export function CallsListView({
   leads,
   fisios,
   counts,
+  successCaseTemplates,
+  successCases,
+  currentUserCloserIntro,
 }: {
   activeStatus: string;
   activeCloserId: string;
@@ -105,6 +109,9 @@ export function CallsListView({
   leads: Lead[];
   fisios: Pro[];
   counts: { scheduled: number; won: number; lost: number; cancelled: number; no_show: number };
+  successCaseTemplates: SendCaseTemplate[];
+  successCases: SuccessCaseOption[];
+  currentUserCloserIntro: string | null;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState<Lead | null>(null);
@@ -210,20 +217,26 @@ export function CallsListView({
       ) : showGrouped ? (
         <div className="space-y-4">
           {today.length > 0 && (
-            <CallsGroup label="Hoy" badge="amber" leads={today} currentUser={currentUser} onClick={setEditing} />
+            <CallsGroup label="Hoy" badge="amber" leads={today} currentUser={currentUser} onClick={setEditing} sendCaseProps={{ successCaseTemplates, successCases, currentUserCloserIntro }} />
           )}
           {thisWeek.length > 0 && (
-            <CallsGroup label="Esta semana" badge="blue" leads={thisWeek} currentUser={currentUser} onClick={setEditing} />
+            <CallsGroup label="Esta semana" badge="blue" leads={thisWeek} currentUser={currentUser} onClick={setEditing} sendCaseProps={{ successCaseTemplates, successCases, currentUserCloserIntro }} />
           )}
           {future.length > 0 && (
-            <CallsGroup label="Próximas" badge="neutral" leads={future} currentUser={currentUser} onClick={setEditing} />
+            <CallsGroup label="Próximas" badge="neutral" leads={future} currentUser={currentUser} onClick={setEditing} sendCaseProps={{ successCaseTemplates, successCases, currentUserCloserIntro }} />
           )}
         </div>
       ) : (
         <section className="card">
           <div className="divide-y divide-neutral-100">
             {leads.map((lead) => (
-              <CallRow key={lead.id} lead={lead} currentUser={currentUser} onClick={() => setEditing(lead)} />
+              <CallRow
+                key={lead.id}
+                lead={lead}
+                currentUser={currentUser}
+                onClick={() => setEditing(lead)}
+                sendCaseProps={{ successCaseTemplates, successCases, currentUserCloserIntro }}
+              />
             ))}
           </div>
         </section>
@@ -268,18 +281,26 @@ export function CallsListView({
   );
 }
 
+type SendCaseProps = {
+  successCaseTemplates: SendCaseTemplate[];
+  successCases: SuccessCaseOption[];
+  currentUserCloserIntro: string | null;
+};
+
 function CallsGroup({
   label,
   badge,
   leads,
   currentUser,
   onClick,
+  sendCaseProps,
 }: {
   label: string;
   badge: "amber" | "blue" | "neutral";
   leads: Lead[];
   currentUser: { id: string; fullName: string; role: string };
   onClick: (lead: Lead) => void;
+  sendCaseProps: SendCaseProps;
 }) {
   const badgeClass =
     badge === "amber" ? "bg-amber-100 text-amber-800 border-amber-200"
@@ -295,7 +316,7 @@ function CallsGroup({
       </div>
       <div className="divide-y divide-neutral-100">
         {leads.map((lead) => (
-          <CallRow key={lead.id} lead={lead} currentUser={currentUser} onClick={() => onClick(lead)} />
+          <CallRow key={lead.id} lead={lead} currentUser={currentUser} onClick={() => onClick(lead)} sendCaseProps={sendCaseProps} />
         ))}
       </div>
     </section>
@@ -306,10 +327,12 @@ function CallRow({
   lead,
   currentUser,
   onClick,
+  sendCaseProps,
 }: {
   lead: Lead;
   currentUser: { id: string; fullName: string; role: string };
   onClick: () => void;
+  sendCaseProps: SendCaseProps;
 }) {
   return (
     <button onClick={onClick} className="w-full text-left py-3 px-2 -mx-2 hover:bg-neutral-50 rounded transition-colors">
@@ -411,7 +434,7 @@ function CallRow({
 
           {/* Botones de acción rápida de workflow (no abren el modal, son inline) */}
           {lead.status === "scheduled" && (
-            <WorkflowActionButtons lead={lead} currentUser={currentUser} />
+            <WorkflowActionButtons lead={lead} currentUser={currentUser} sendCaseProps={sendCaseProps} />
           )}
 
           {/* Toggle "Agendado por IA" (visible siempre, clicable sin abrir modal) */}
@@ -466,11 +489,14 @@ function AiScheduledToggle({ lead }: { lead: Lead }) {
 function WorkflowActionButtons({
   lead,
   currentUser,
+  sendCaseProps,
 }: {
   lead: Lead;
   currentUser: { id: string; fullName: string; role: string };
+  sendCaseProps: SendCaseProps;
 }) {
   const [loading, setLoading] = useState(false);
+  const [sendingTemplate, setSendingTemplate] = useState<SendCaseTemplate | null>(null);
 
   async function markSetterNotified(e: React.MouseEvent) {
     e.stopPropagation();
@@ -516,7 +542,10 @@ function WorkflowActionButtons({
     );
   }
 
-  // Closer asignado: ve "Caso enviado" cuando ya está avisado pero no contactado
+  // Closer asignado: ve "Caso enviado" cuando ya está avisado pero no contactado.
+  // Junto al checkbox de marcar como completado, añadimos un botón "📤 Enviar"
+  // por cada plantilla con actionType=send_success_case que abre el selector
+  // de caso y manda al WhatsApp del lead.
   if (
     (currentUser.role === "closer" || currentUser.role === "ceo") &&
     lead.closer?.id === currentUser.id &&
@@ -524,16 +553,42 @@ function WorkflowActionButtons({
     !lead.closerContactedAt
   ) {
     return (
-      <div className="mt-2">
-        <button
-          onClick={markCloserContacted}
-          disabled={loading}
-          className="text-xs font-medium px-2.5 py-1 rounded-md"
-          style={{ background: "#0A0A0A", color: "#FAFAFA" }}
-        >
-          ✓ Caso de éxito enviado
-        </button>
-      </div>
+      <>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {sendCaseProps.successCaseTemplates.map((t) => (
+            <button
+              key={t.id}
+              onClick={(e) => { e.stopPropagation(); setSendingTemplate(t); }}
+              className="text-xs font-medium px-2.5 py-1 rounded-md border border-neutral-200 bg-white hover:bg-neutral-50"
+              title={`Abre WhatsApp de ${lead.fullName} con esta plantilla`}
+            >
+              📤 {t.name}
+            </button>
+          ))}
+          <button
+            onClick={markCloserContacted}
+            disabled={loading}
+            className="text-xs font-medium px-2.5 py-1 rounded-md"
+            style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+          >
+            ✓ Caso de éxito enviado
+          </button>
+        </div>
+        {sendingTemplate && (
+          <SendCaseFlow
+            open={true}
+            onClose={() => setSendingTemplate(null)}
+            template={sendingTemplate}
+            target={{
+              leadName: lead.fullName.split(" ")[0],
+              leadPhone: lead.phone,
+              closerFullName: currentUser.fullName,
+              closerIntro: sendCaseProps.currentUserCloserIntro,
+            }}
+            cases={sendCaseProps.successCases}
+          />
+        )}
+      </>
     );
   }
 
