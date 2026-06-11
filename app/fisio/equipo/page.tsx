@@ -24,7 +24,7 @@ export default async function EquipoPage({
     select: {
       id: true, fullName: true, email: true, role: true, active: true,
       passwordHash: true, passwordResetToken: true, passwordResetExpires: true,
-      lastLoginAt: true, workSchedule: true, closerIntro: true,
+      lastLoginAt: true, workSchedule: true,
     },
   });
 
@@ -39,7 +39,6 @@ export default async function EquipoPage({
     pendingInvite: !p.passwordHash && !!p.passwordResetToken && !!p.passwordResetExpires && p.passwordResetExpires > now,
     lastLoginAt: p.lastLoginAt?.toISOString() ?? null,
     workSchedule: p.workSchedule,
-    closerIntro: p.closerIntro,
   }));
 
   // Vacaciones próximas y pasadas (3 meses atrás y 6 adelante)

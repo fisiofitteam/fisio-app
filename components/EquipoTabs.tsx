@@ -15,7 +15,6 @@ type TeamMember = {
   pendingInvite: boolean;
   lastLoginAt: string | null;
   workSchedule: string | null;
-  closerIntro: string | null;
 };
 
 type Leave = {
@@ -124,10 +123,7 @@ export function EquipoTabs({
       </div>
 
       {activeTab === "miembros" && isManager && (
-        <>
-          <InviteView team={team} canEditCompensation={currentUserRole === "ceo"} />
-          <CloserIntrosBlock team={team.filter((m) => m.active)} />
-        </>
+        <InviteView team={team} canEditCompensation={currentUserRole === "ceo"} />
       )}
 
       {activeTab === "llamadas" && canSeeClosingShifts && (
@@ -1033,88 +1029,3 @@ const ROLE_LABEL_SCHED: Record<string, string> = {
   setter: "Setter",
 };
 
-/**
- * Bloque solo visible en la tab "Miembros" (managers): presentación corta de
- * cada profesional. Se usa como variable {closer.intro} al interpolar plantillas
- * en /api/messages → WhatsApp.
- */
-function CloserIntrosBlock({ team }: { team: TeamMember[] }) {
-  return (
-    <section className="card mt-4">
-      <div className="mb-3">
-        <h2 className="font-medium text-sm">👋 Presentación para mensajes</h2>
-        <p className="text-xs text-neutral-500 mt-0.5">
-          Una frase corta que va dentro del mensaje al lead/paciente cuando la plantilla incluye{" "}
-          <code className="text-[11px] bg-neutral-100 px-1 rounded">{`{closer.intro}`}</code>. Déjalo en blanco si no aplica.
-        </p>
-      </div>
-      <div className="divide-y divide-neutral-100">
-        {team.length === 0 && (
-          <p className="text-xs text-neutral-400 italic py-4 text-center">Sin miembros activos.</p>
-        )}
-        {team.map((m) => (
-          <CloserIntroRow key={m.id} member={m} />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function CloserIntroRow({ member }: { member: TeamMember }) {
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(member.closerIntro ?? "");
-  const [saving, setSaving] = useState(false);
-  const router = useRouter();
-
-  async function save() {
-    setSaving(true);
-    await fetch("/api/team/closer-intro", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ professionalId: member.id, closerIntro: value }),
-    });
-    setSaving(false);
-    setEditing(false);
-    router.refresh();
-  }
-
-  return (
-    <div className="py-3 flex items-start justify-between gap-3 flex-wrap">
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium">{member.fullName}</div>
-        <div className="text-[11px] text-neutral-400 capitalize">{ROLE_LABEL_SCHED[member.role] ?? member.role}</div>
-      </div>
-      <div className="flex-1 min-w-[280px]">
-        {editing ? (
-          <div className="flex items-start gap-2">
-            <textarea
-              className="input text-sm flex-1"
-              rows={3}
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              placeholder="Ej: Soy Pedro, del equipo de FisioFit. Llevo 7 años ayudando a deportistas con lesiones de hombro."
-              autoFocus
-            />
-            <div className="flex flex-col gap-1">
-              <button onClick={save} disabled={saving} className="btn btn-primary text-xs">
-                {saving ? "..." : "Guardar"}
-              </button>
-              <button onClick={() => { setValue(member.closerIntro ?? ""); setEditing(false); }} className="text-xs text-neutral-500">
-                Cancelar
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2">
-            <div className="text-sm text-neutral-700 whitespace-pre-line flex-1">
-              {member.closerIntro || <span className="italic text-neutral-400">Sin presentación</span>}
-            </div>
-            <button onClick={() => setEditing(true)} className="text-xs text-neutral-500 hover:text-neutral-900 flex-shrink-0">
-              ✏️ Editar
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
