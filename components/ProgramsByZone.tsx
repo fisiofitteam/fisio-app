@@ -193,11 +193,17 @@ function ProgramActionsModal({ program, onClose }: { program: Program; onClose: 
 
   async function remove() {
     const warning = program.assignmentsCount > 0
-      ? `Este programa está asignado a ${program.assignmentsCount} paciente${program.assignmentsCount !== 1 ? "s" : ""}. Las sesiones ya creadas mantendrán su contenido (tienen snapshot propio) pero perderás la plantilla.\n\n¿Eliminar "${program.name}"?`
+      ? `Este programa está asignado a ${program.assignmentsCount} paciente${program.assignmentsCount !== 1 ? "s" : ""}. Se desasignará a esos pacientes y la plantilla se perderá. Las sesiones ya completadas conservan su snapshot pero las sesiones futuras de ese programa desaparecerán.\n\n¿Eliminar "${program.name}"?`
       : `¿Eliminar "${program.name}"? Esta acción no se puede deshacer.`;
     if (!confirm(warning)) return;
     setDeleting(true);
-    await fetch(`/api/programs?id=${program.id}`, { method: "DELETE" });
+    const res = await fetch(`/api/programs?id=${program.id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(`No se ha podido eliminar el programa.\n\n${data?.error ?? "Error inesperado"}`);
+      setDeleting(false);
+      return;
+    }
     onClose();
     router.refresh();
   }

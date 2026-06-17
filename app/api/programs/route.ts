@@ -145,6 +145,25 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "missing id" }, { status: 400 });
-  await prisma.program.delete({ where: { id } });
+
+  // Las weeks (y bajo ellas days/tasks/contenido) cascadean al borrar Program.
+  // Las ProgramAssignment NO cascadean (relación sin onDelete), así que un
+  // delete directo falla con FK constraint cuando el programa está asignado a
+  // algún paciente. Las quitamos en transacción — esto a su vez cascadea las
+  // ProgramSession (sí tienen onDelete: Cascade desde Assignment), pero las
+  // sesiones ya completadas conservan su tasksSnapshot, así que el histórico
+  // visible del paciente no se rompe en lo que viven en otros sitios.
+  try {
+    await prisma.$transaction([
+      prisma.programAssignment.deleteMany({ where: { programId: id } }),
+      prisma.program.delete({ where: { id } }),
+    ]);
+  } catch (err: any) {
+    console.error("[DELETE /api/programs] fallo borrando programa", id, err);
+    return NextResponse.json(
+      { error: err?.message ?? "No se pudo eliminar el programa" },
+      { status: 500 },
+    );
+  }
   return NextResponse.json({ ok: true });
 }
