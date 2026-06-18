@@ -871,6 +871,74 @@ model SuccessCase {
 }
 
 // ============================================================================
+// TUTORIALES / FORMACIÓN INTERNA DEL EQUIPO (estilo Skool)
+// Estructura de 3 niveles: Module > Section > Lesson. Las lecciones pueden
+// llevar adjuntos arbitrarios (PDFs, imágenes, links).
+// ============================================================================
+
+model TrainingModule {
+  id          String   @id @default(cuid())
+  title       String                                  // "Onboarding de fisios"
+  description String?
+  coverUrl    String?                                 // imagen de portada
+  order       Int      @default(0)
+  published   Boolean  @default(true)                 // si false, oculto del listado
+  // JSON array de roles destinatarios: ["ceo","head_success","fisio","setter","closer"].
+  // Multi-rol: un módulo puede ser visible para varios roles.
+  targetRoles String   @default("[\"ceo\"]")
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  sections TrainingSection[]
+
+  @@index([order])
+}
+
+model TrainingSection {
+  id        String   @id @default(cuid())
+  moduleId  String
+  module    TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  title     String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lessons TrainingLesson[]
+
+  @@index([moduleId, order])
+}
+
+model TrainingLesson {
+  id          String   @id @default(cuid())
+  sectionId   String
+  section     TrainingSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  videoUrl    String?                                 // YouTube/Vimeo opcional
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  attachments TrainingLessonAttachment[]
+
+  @@index([sectionId, order])
+}
+
+model TrainingLessonAttachment {
+  id        String   @id @default(cuid())
+  lessonId  String
+  lesson    TrainingLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  kind      String                                   // "pdf" | "link" | "image"
+  url       String                                   // URL al recurso (Vercel Blob para PDFs/imgs, link externo para "link")
+  name      String                                   // nombre visible "Guía de adaptaciones.pdf"
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([lessonId, order])
+}
+
+// ============================================================================
 // CHAT DE EQUIPO (estilo Slack: canales públicos, privados y DMs 1-a-1)
 // ============================================================================
 

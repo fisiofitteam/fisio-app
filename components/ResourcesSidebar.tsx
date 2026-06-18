@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 
 const SECTIONS = [
   { id: "mensajes", label: "Mensajes prefijados", icon: "💬", desc: "Plantillas para pacientes" },
-  { id: "formacion", label: "Formación", icon: "📚", desc: "Próximamente" },
+  { id: "tutoriales", label: "Tutoriales", icon: "🎓", desc: "Formación interna del equipo" },
   { id: "documentos", label: "Documentos", icon: "📄", desc: "Próximamente" },
 ];
 

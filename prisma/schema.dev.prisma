@@ -856,6 +856,70 @@ model SuccessCase {
 }
 
 // ============================================================================
+// TUTORIALES / FORMACIÓN INTERNA DEL EQUIPO (estilo Skool)
+// ============================================================================
+
+model TrainingModule {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  coverUrl    String?
+  order       Int      @default(0)
+  published   Boolean  @default(true)
+  targetRoles String   @default("[\"ceo\"]")
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  sections TrainingSection[]
+
+  @@index([order])
+}
+
+model TrainingSection {
+  id        String   @id @default(cuid())
+  moduleId  String
+  module    TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  title     String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lessons TrainingLesson[]
+
+  @@index([moduleId, order])
+}
+
+model TrainingLesson {
+  id          String   @id @default(cuid())
+  sectionId   String
+  section     TrainingSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  videoUrl    String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  attachments TrainingLessonAttachment[]
+
+  @@index([sectionId, order])
+}
+
+model TrainingLessonAttachment {
+  id        String   @id @default(cuid())
+  lessonId  String
+  lesson    TrainingLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  kind      String
+  url       String
+  name      String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([lessonId, order])
+}
+
+// ============================================================================
 // CHAT DE EQUIPO (estilo Slack: canales públicos, privados y DMs 1-a-1)
 // ============================================================================
 
