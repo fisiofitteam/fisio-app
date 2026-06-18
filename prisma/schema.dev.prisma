@@ -213,6 +213,8 @@ model Professional {
   communityFeedReactions CommunityReaction[] @relation("FeedReactionAuthor")
   weeklyTeamTaskCompletions WeeklyTeamTaskCompletion[] @relation("WeeklyTeamTaskCompletions")
   teamTaskAdHocCompletions  TeamTaskAdHocCompletion[]  @relation("TeamTaskAdHocCompletions")
+  chatMemberships           ChatMember[]
+  chatMessages              ChatMessage[]              @relation("ChatMessageAuthor")
 }
 
 // Condiciones laborales / compensación de un profesional (1:1). Solo CEO edita.
@@ -851,6 +853,58 @@ model SuccessCase {
   active      Boolean  @default(true)                 // ocultar sin borrar
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// ============================================================================
+// CHAT DE EQUIPO (estilo Slack: canales públicos, privados y DMs 1-a-1)
+// ============================================================================
+
+model ChatChannel {
+  id          String   @id @default(cuid())
+  kind        String
+  name        String?
+  description String?
+  emoji       String?
+  createdAt   DateTime @default(now())
+  createdById String?
+  archivedAt  DateTime?
+
+  members  ChatMember[]
+  messages ChatMessage[]
+
+  @@index([kind])
+}
+
+model ChatMember {
+  id             String   @id @default(cuid())
+  channelId      String
+  channel        ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  professionalId String
+  professional   Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  joinedAt       DateTime @default(now())
+  lastReadAt     DateTime?
+
+  @@unique([channelId, professionalId])
+  @@index([professionalId])
+}
+
+model ChatMessage {
+  id          String   @id @default(cuid())
+  channelId   String
+  channel     ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  authorId    String?
+  author      Professional? @relation("ChatMessageAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  authorName  String
+
+  body        String
+  mentions    String   @default("[]")
+
+  createdAt   DateTime @default(now())
+  editedAt    DateTime?
+  deletedAt   DateTime?
+
+  @@index([channelId, createdAt])
 }
 
 // ============================================================================

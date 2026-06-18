@@ -17,6 +17,7 @@ export const NOTIFICATION_TYPES: NotificationTypeDef[] = [
   { value: "sale_payment_failed", label: "Pago fallido", description: "Un cobro de Stripe ha fallado.", roles: ["head_success"] },
   { value: "sale_refunded", label: "Reembolso", description: "Se ha reembolsado una venta.", roles: ["head_success"] },
   { value: "program_ending", label: "Programa a punto de terminar", description: "Un paciente termina un programa en menos de una semana.", roles: ["fisio", "head_success"] },
+  { value: "chat_mention", label: "Mención en el chat", description: "Te avisamos cuando alguien te menciona con @ en un canal o DM.", roles: ["ceo", "head_success", "fisio", "setter", "closer"] },
 ];
 
 // Tipos visibles (con toggle) para un rol concreto.

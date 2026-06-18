@@ -37,6 +37,8 @@ const TYPE_BADGE: Record<string, { label: string; bg: string; color: string }> =
   patient_new_unassigned: { label: "PACIENTE", bg: "#DCFCE7", color: "#166534" },
   sale_payment_failed: { label: "PAGO", bg: "#FEE2E2", color: "#991B1B" },
   sale_refunded: { label: "REEMBOLSO", bg: "#FEE2E2", color: "#991B1B" },
+  chat_mention: { label: "MENCIÓN", bg: "#FEF3C7", color: "#78350F" },
+  lead_rescheduled: { label: "RE-AGENDA", bg: "#DBEAFE", color: "#1E40AF" },
 };
 
 export function NotificationsBell() {

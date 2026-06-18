@@ -225,6 +225,8 @@ model Professional {
   communityFeedReactions CommunityReaction[] @relation("FeedReactionAuthor")
   weeklyTeamTaskCompletions WeeklyTeamTaskCompletion[] @relation("WeeklyTeamTaskCompletions")
   teamTaskAdHocCompletions  TeamTaskAdHocCompletion[]  @relation("TeamTaskAdHocCompletions")
+  chatMemberships           ChatMember[]
+  chatMessages              ChatMessage[]              @relation("ChatMessageAuthor")
 }
 
 // Condiciones laborales / compensación de un profesional (1:1). Solo CEO edita.
@@ -866,6 +868,74 @@ model SuccessCase {
   active      Boolean  @default(true)                 // ocultar sin borrar
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// ============================================================================
+// CHAT DE EQUIPO (estilo Slack: canales públicos, privados y DMs 1-a-1)
+// ============================================================================
+
+model ChatChannel {
+  id          String   @id @default(cuid())
+  // "public"  → cualquiera del equipo lo ve y postea (membership automática).
+  // "private" → solo invitados (registrados en ChatMember).
+  // "dm"      → conversación 1-a-1; siempre 2 ChatMember, name=null.
+  kind        String
+  // Para public/private: nombre del canal ("#general"). Null en DMs.
+  name        String?
+  // Para public/private: tema / propósito visible en el header.
+  description String?
+  // Emoji decorativo opcional ("💬", "🩺", "📈"...). UI usa "💬" si null.
+  emoji       String?
+  createdAt   DateTime @default(now())
+  // Quién lo creó (para auditoría). Nullable porque si lo borramos no rompe.
+  createdById String?
+  // Archivado: oculto del listado pero historial accesible si alguien lo abre directo.
+  archivedAt  DateTime?
+
+  members  ChatMember[]
+  messages ChatMessage[]
+
+  @@index([kind])
+}
+
+model ChatMember {
+  id             String   @id @default(cuid())
+  channelId      String
+  channel        ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  professionalId String
+  professional   Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  // Cuándo se unió (informativo).
+  joinedAt       DateTime @default(now())
+  // Para badge de no leídos: timestamp del último mensaje que el usuario ha visto.
+  // Null = nunca lo ha abierto, todo aparece como no leído.
+  lastReadAt     DateTime?
+
+  @@unique([channelId, professionalId])
+  @@index([professionalId])
+}
+
+model ChatMessage {
+  id          String   @id @default(cuid())
+  channelId   String
+  channel     ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  // Autor: nullable porque si se borra el profesional, conservamos el mensaje
+  // con el snapshot del nombre. Snapshot de fullName para no perderlo.
+  authorId    String?
+  author      Professional? @relation("ChatMessageAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  authorName  String
+
+  body        String
+  // JSON array de professionalIds mencionados con @ (resueltos en el server).
+  // Se usa para crear TeamNotifications a cada mencionado.
+  mentions    String   @default("[]")
+
+  createdAt   DateTime @default(now())
+  editedAt    DateTime?
+  // Soft-delete: el mensaje aparece como "Mensaje eliminado" para no romper hilo.
+  deletedAt   DateTime?
+
+  @@index([channelId, createdAt])
 }
 
 // ============================================================================
