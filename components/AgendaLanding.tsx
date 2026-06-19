@@ -189,6 +189,19 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
     setSubmitting(true);
     setError("");
     try {
+      // Capturamos los UTMs del query string para atribución de marketing.
+      // La landing puede recibir tráfico desde anuncios y ahí guardamos en
+      // qué campaña/anuncio se generó el lead.
+      const utms = (() => {
+        if (typeof window === "undefined") return {};
+        const p = new URLSearchParams(window.location.search);
+        return {
+          utmCampaign: p.get("utm_campaign") || undefined,
+          utmSource: p.get("utm_source") || undefined,
+          utmMedium: p.get("utm_medium") || undefined,
+          utmContent: p.get("utm_content") || undefined,
+        };
+      })();
       const res = await fetch("/api/agenda/book", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -203,6 +216,7 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
           impactoCrossfit: impactoCrossfit.trim(),
           startISO: selectedSlot.startISO,
           endISO: selectedSlot.endISO,
+          ...utms,
         }),
       });
       const data = await res.json();

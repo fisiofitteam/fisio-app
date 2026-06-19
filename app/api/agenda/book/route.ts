@@ -26,6 +26,11 @@ type BookBody = {
   impactoCrossfit: string;
   startISO: string; // ISO del slot elegido
   endISO: string;
+  // Atribución de marketing: la landing los toma del query string ?utm_*=...
+  utmCampaign?: string;
+  utmSource?: string;
+  utmMedium?: string;
+  utmContent?: string;
 };
 
 export async function POST(req: NextRequest) {
@@ -162,6 +167,11 @@ export async function POST(req: NextRequest) {
       googleEventId: calendarEvent.id,
       closerId: closerId || undefined,
       aiSummary: `Reservado desde landing. Motivo: ${body.motivo.trim().slice(0, 200)}`,
+      // Atribución a anuncios (si la URL traía utms)
+      adUtmCampaign: typeof body.utmCampaign === "string" && body.utmCampaign.trim() ? body.utmCampaign.trim().slice(0, 100) : null,
+      adUtmSource: typeof body.utmSource === "string" && body.utmSource.trim() ? body.utmSource.trim().slice(0, 50) : null,
+      adUtmMedium: typeof body.utmMedium === "string" && body.utmMedium.trim() ? body.utmMedium.trim().slice(0, 50) : null,
+      adUtmContent: typeof body.utmContent === "string" && body.utmContent.trim() ? body.utmContent.trim().slice(0, 100) : null,
     },
   });
 

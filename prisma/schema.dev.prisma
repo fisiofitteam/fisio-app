@@ -349,6 +349,11 @@ model Lead {
   // Cuándo el closer marcó "recordatorio enviado" (paso 3 hecho, día antes de la cita)
   reminderSentAt      DateTime?
 
+  adUtmCampaign   String?
+  adUtmSource     String?
+  adUtmMedium     String?
+  adUtmContent    String?
+
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   decidedAt       DateTime?                                   // cuándo se marcó won/lost/postponed
@@ -360,6 +365,7 @@ model Lead {
   @@index([callScheduledAt])
   @@index([closerId])
   @@index([inFollowUp])
+  @@index([adUtmCampaign])
 }
 
 model ClinicalProfile {
@@ -2085,6 +2091,105 @@ model AdCampaignTag {
   campaignId String   @unique
   bucket     String                                  // "follow" | "conversion"
   updatedAt  DateTime @updatedAt
+}
+
+// ============================================================================
+// ANUNCIOS DE PAGO (gestión completa: Campaign → AdSet → Ad)
+// ============================================================================
+
+model AdCampaign {
+  id              String   @id @default(cuid())
+  name            String
+  objective       String   @default("conversions")
+  status          String   @default("idea")
+  metaCampaignId  String?
+  startDate       DateTime?
+  endDate         DateTime?
+  dailyBudget     Float?
+  totalBudget     Float?
+  notes           String?
+  createdById     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  adSets          AdSet[]
+
+  @@index([status])
+  @@index([metaCampaignId])
+}
+
+model AdSet {
+  id              String   @id @default(cuid())
+  campaignId      String
+  campaign        AdCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  name            String
+  audienceJSON    String   @default("{}")
+  placementJSON   String   @default("[]")
+  metaAdsetId     String?
+  startDate       DateTime?
+  endDate         DateTime?
+  dailyBudget     Float?
+  status          String   @default("idea")
+  notes           String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  ads             Ad[]
+
+  @@index([campaignId])
+  @@index([status])
+  @@index([metaAdsetId])
+}
+
+model Ad {
+  id              String   @id @default(cuid())
+  adsetId         String
+  adset           AdSet @relation(fields: [adsetId], references: [id], onDelete: Cascade)
+
+  name            String
+  format          String   @default("video")
+
+  hook            String?
+  script          String?
+  cta             String?
+  ctaUrl          String?
+  finalFileUrl    String?
+  editorNotes     String?
+
+  recordingLocation String?
+  recordingOutfit   String?
+  recordingMaterial String?
+  consentSigned     Boolean @default(false)
+
+  status          String   @default("idea")
+  metaAdId        String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([adsetId])
+  @@index([status])
+  @@index([metaAdId])
+}
+
+model AdHook {
+  id          String   @id @default(cuid())
+  text        String
+  notes       String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model AdAudience {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 // Plantillas de workout guardadas en la Biblioteca. Reutilizables al crear un

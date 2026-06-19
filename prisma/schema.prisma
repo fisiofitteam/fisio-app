@@ -364,6 +364,14 @@ model Lead {
   // Cuándo el closer marcó "recordatorio enviado" (paso 3 hecho, día antes de la cita)
   reminderSentAt      DateTime?
 
+  // ─── Atribución de marketing (UTMs capturados en la landing pública) ───
+  // Cuando un lead llega vía un anuncio, la landing parsea utm_* del query
+  // string y los guarda aquí. Permite cruzar Lead → AdCampaign/Ad para ROAS.
+  adUtmCampaign   String?                                     // ej. "hombro_q3_2026"
+  adUtmSource     String?                                     // ej. "meta" | "google" | "tiktok"
+  adUtmMedium     String?                                     // ej. "paid_social"
+  adUtmContent    String?                                     // ej. ad ID o nombre interno del anuncio
+
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   decidedAt       DateTime?                                   // cuándo se marcó won/lost/postponed
@@ -375,6 +383,7 @@ model Lead {
   @@index([callScheduledAt])
   @@index([closerId])
   @@index([inFollowUp])
+  @@index([adUtmCampaign])
 }
 
 model ClinicalProfile {
@@ -2168,6 +2177,123 @@ model AdCampaignTag {
   campaignId String   @unique
   bucket     String                                  // "follow" | "conversion"
   updatedAt  DateTime @updatedAt
+}
+
+// ============================================================================
+// ANUNCIOS DE PAGO (gestión completa: Campaign → AdSet → Ad)
+// Espejo de la estructura de Meta Ads Manager. Solo CEO gestiona.
+// AdCampaignTag (más arriba) seguirá funcionando como clasificación rápida de
+// las campañas devueltas por la Graph API; AdCampaign es la entidad propia que
+// el equipo edita aquí dentro y se enlaza opcionalmente con su campaña en Meta
+// vía metaCampaignId. Lo mismo para AdSet y Ad.
+// ============================================================================
+
+model AdCampaign {
+  id              String   @id @default(cuid())
+  name            String                                    // "Hombro Q3 2026"
+  // Objetivo de la campaña, alineado con los objetivos de Meta:
+  // "traffic" | "conversions" | "leads" | "engagement" | "awareness" | "video_views"
+  objective       String   @default("conversions")
+  // Estado global de la campaña en NUESTRO sistema (puede divergir del de
+  // Meta hasta que sincronicemos). Workflow:
+  // "idea" | "active" | "paused" | "finished"
+  status          String   @default("idea")
+  metaCampaignId  String?                                   // ID en Meta cuando esté creada allí
+  startDate       DateTime?
+  endDate         DateTime?
+  dailyBudget     Float?                                    // EUR
+  totalBudget     Float?
+  notes           String?                                   // notas internas para el equipo
+  createdById     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  adSets          AdSet[]
+
+  @@index([status])
+  @@index([metaCampaignId])
+}
+
+model AdSet {
+  id              String   @id @default(cuid())
+  campaignId      String
+  campaign        AdCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  name            String                                    // "Hombros 25-45 ES"
+  // Criterios libres de audiencia en JSON: edad, intereses, ubicación, lookalike, etc.
+  audienceJSON    String   @default("{}")
+  // Placements: ["feed_ig","reels_ig","stories_ig","feed_fb",...]
+  placementJSON   String   @default("[]")
+  metaAdsetId     String?
+  startDate       DateTime?
+  endDate         DateTime?
+  dailyBudget     Float?                                    // EUR
+  status          String   @default("idea")                 // mismo workflow que AdCampaign
+  notes           String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  ads             Ad[]
+
+  @@index([campaignId])
+  @@index([status])
+  @@index([metaAdsetId])
+}
+
+model Ad {
+  id              String   @id @default(cuid())
+  adsetId         String
+  adset           AdSet @relation(fields: [adsetId], references: [id], onDelete: Cascade)
+
+  name            String                                    // "Hombro Reel Ana 30s"
+  format          String   @default("video")                // "video" | "image" | "carousel" | "story"
+
+  // Creatividad — equivalentes a ContentPiece pero específicos de pago
+  hook            String?
+  script          String?                                   // copy/guion completo
+  cta             String?                                   // texto del CTA ("Reserva videoconsulta")
+  ctaUrl          String?                                   // URL del CTA (donde pegamos UTMs antes de subir a Meta)
+  finalFileUrl    String?                                   // vídeo/imagen final
+  editorNotes     String?
+
+  // Producción (igual que en ContentPiece)
+  recordingLocation String?
+  recordingOutfit   String?
+  recordingMaterial String?
+  consentSigned     Boolean @default(false)
+
+  // Estado de workflow completo:
+  // "idea" | "brief" | "recording" | "editing" | "scheduled" | "active" | "paused" | "finished"
+  status          String   @default("idea")
+  metaAdId        String?                                   // se rellena cuando se publica en Meta
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([adsetId])
+  @@index([status])
+  @@index([metaAdId])
+}
+
+// Banco específico para ads. Separado del de Contenido orgánico — los hooks y
+// audiencias suelen ser distintos.
+model AdHook {
+  id          String   @id @default(cuid())
+  text        String                                        // "¿Te cuesta dormir del lado del hombro?"
+  notes       String?                                       // contexto o resultado conocido
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model AdAudience {
+  id          String   @id @default(cuid())
+  name        String                                        // "Crossfit hombro 30-45 ES"
+  description String                                        // criterios libres en texto
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 // Plantillas de workout guardadas en la Biblioteca. Reutilizables al crear un

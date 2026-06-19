@@ -26,6 +26,7 @@ import {
   Gauge,
   Zap,
   MessageSquare,
+  Megaphone,
   LucideIcon,
 } from "lucide-react";
 
@@ -44,6 +45,7 @@ const LLAMADAS_VENTA: Item = { id: "llamadas-venta", label: "Llamadas", Icon: Ph
 const FOLLOWUP: Item = { id: "followup", label: "Follow-up", Icon: Repeat, href: "/fisio/followup", match: (p) => p.startsWith("/fisio/followup") };
 const REGALOS: Item = { id: "regalos", label: "Regalos", Icon: Gift, href: "/fisio/regalos", match: (p) => p.startsWith("/fisio/regalos") || p.startsWith("/fisio/parches") };
 const CONTENIDO: Item = { id: "contenido", label: "Contenido", Icon: Sparkles, href: "/fisio/contenido/calendario", match: (p) => p.startsWith("/fisio/contenido") };
+const ANUNCIOS: Item = { id: "anuncios", label: "Anuncios", Icon: Megaphone, href: "/fisio/anuncios", match: (p) => p.startsWith("/fisio/anuncios") };
 const BIBLIOTECA: Item = { id: "biblioteca", label: "Biblioteca", Icon: BookOpen, href: "/fisio/biblioteca", match: (p) => p.startsWith("/fisio/biblioteca") };
 const REUNIONES: Item = { id: "reuniones", label: "Reuniones", Icon: Stethoscope, href: "/fisio/reuniones", match: (p) => p.startsWith("/fisio/reuniones") };
 const CALENDARIO: Item = { id: "calendario", label: "Calendario", Icon: CalendarDays, href: "/fisio/calendario", match: (p) => p.startsWith("/fisio/calendario") };
@@ -59,7 +61,7 @@ const AJUSTES: Item = { id: "ajustes", label: "Ajustes", Icon: Settings, href: "
 
 function itemsForRole(role: string): Item[] {
   if (role === "ceo") {
-    return [PANEL, PACIENTES, ADVANCE, LLAMADAS_VENTA, CONTENIDO, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, RECURSOS, FINANZAS, EQUIPO, CHAT, AJUSTES];
+    return [PANEL, PACIENTES, ADVANCE, LLAMADAS_VENTA, CONTENIDO, ANUNCIOS, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, RECURSOS, FINANZAS, EQUIPO, CHAT, AJUSTES];
   }
   if (role === "head_success") {
     return [PANEL, PACIENTES, ADVANCE, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, CHAT, AJUSTES];

@@ -207,6 +207,29 @@ export async function getAdsInsights(opts: {
   });
 }
 
+// Estado actual de todas las campañas / adsets / ads de la cuenta. Devuelve
+// un mapa id → effective_status. Usado para sincronizar nuestro status local.
+export async function getAllEntityStatuses(
+  entity: "campaigns" | "adsets" | "ads",
+): Promise<Map<string, string>> {
+  const { adAccountId } = metaConfig();
+  if (!adAccountId) throw new Error("Falta META_AD_ACCOUNT_ID");
+  const acct = adAccountId.startsWith("act_") ? adAccountId : `act_${adAccountId}`;
+  const result = new Map<string, string>();
+  let next: string | null = `${acct}/${entity}?fields=id,effective_status&limit=200`;
+  let safety = 10; // paginación máxima
+  while (next && safety-- > 0) {
+    const res = await fetch(`${GRAPH}/${next}${next.includes("?") ? "&" : "?"}access_token=${metaConfig().token}`, { cache: "no-store" });
+    const data = await res.json();
+    if (!res.ok || data?.error) throw new Error(data?.error?.message || "Error sync Meta");
+    for (const item of data?.data ?? []) {
+      if (item?.id) result.set(item.id, String(item.effective_status ?? "UNKNOWN"));
+    }
+    next = data?.paging?.next?.replace(`${GRAPH}/`, "") ?? null;
+  }
+  return result;
+}
+
 // Gasto total en anuncios en un rango de fechas (YYYY-MM-DD).
 export async function getAdSpend(since: string, until: string): Promise<number> {
   const { adAccountId } = metaConfig();
