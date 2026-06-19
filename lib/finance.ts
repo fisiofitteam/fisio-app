@@ -1,6 +1,6 @@
 import { prisma } from "./prisma";
 
-export type Period = "month" | "quarter" | "year";
+export type Period = "day" | "week" | "month" | "quarter" | "year";
 
 /**
  * Rango de un mes concreto en formato "YYYY-MM" (p. ej. "2025-03").
@@ -25,6 +25,29 @@ export function getPeriodRange(period: Period): { start: Date; end: Date; label:
   const year = now.getFullYear();
   const month = now.getMonth();
 
+  if (period === "day") {
+    // "Día" = AYER completo (00:00–23:59). Usamos ayer porque hoy aún no
+    // ha terminado y Meta puede devolver datos incompletos.
+    const start = new Date(now);
+    start.setDate(start.getDate() - 1);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setHours(23, 59, 59, 999);
+    const label = start.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
+    return { start, end, label };
+  }
+
+  if (period === "week") {
+    // "Semana" = últimos 7 días terminados ayer (no incluye hoy).
+    const end = new Date(now);
+    end.setDate(end.getDate() - 1);
+    end.setHours(23, 59, 59, 999);
+    const start = new Date(end);
+    start.setDate(start.getDate() - 6);
+    start.setHours(0, 0, 0, 0);
+    return { start, end, label: "últimos 7 días" };
+  }
+
   if (period === "month") {
     const start = new Date(year, month, 1, 0, 0, 0);
     const end = new Date(year, month + 1, 0, 23, 59, 59);
@@ -45,6 +68,50 @@ export function getPeriodRange(period: Period): { start: Date; end: Date; label:
   const end = new Date(year, 11, 31, 23, 59, 59);
   const label = String(year);
   return { start, end, label };
+}
+
+/**
+ * Devuelve el periodo INMEDIATAMENTE anterior al actual, de la misma duración.
+ * Útil para comparar tendencia (ej.: ayer vs anteayer; esta semana vs la pasada).
+ */
+export function getPreviousPeriodRange(period: Period): { start: Date; end: Date; label: string } {
+  const current = getPeriodRange(period);
+  const durationMs = current.end.getTime() - current.start.getTime();
+
+  if (period === "day") {
+    const start = new Date(current.start);
+    start.setDate(start.getDate() - 1);
+    const end = new Date(current.end);
+    end.setDate(end.getDate() - 1);
+    return { start, end, label: start.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" }) };
+  }
+  if (period === "week") {
+    const end = new Date(current.start);
+    end.setMilliseconds(-1);
+    const start = new Date(end.getTime() - durationMs);
+    return { start, end, label: "7 días anteriores" };
+  }
+  if (period === "month") {
+    const start = new Date(current.start);
+    start.setMonth(start.getMonth() - 1);
+    const end = new Date(current.start);
+    end.setMilliseconds(-1);
+    return { start, end, label: start.toLocaleDateString("es-ES", { month: "long", year: "numeric" }) };
+  }
+  if (period === "quarter") {
+    const start = new Date(current.start);
+    start.setMonth(start.getMonth() - 3);
+    const end = new Date(current.start);
+    end.setMilliseconds(-1);
+    const q = Math.floor(start.getMonth() / 3);
+    return { start, end, label: `Q${q + 1} ${start.getFullYear()}` };
+  }
+  // year
+  const start = new Date(current.start);
+  start.setFullYear(start.getFullYear() - 1);
+  const end = new Date(current.start);
+  end.setMilliseconds(-1);
+  return { start, end, label: String(start.getFullYear()) };
 }
 
 export type FinanceSummary = {

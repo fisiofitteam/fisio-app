@@ -53,6 +53,8 @@ const ACTION_ICON: Record<string, string> = {
 };
 
 const PERIODS = [
+  { value: "day", label: "Día" },
+  { value: "week", label: "Semana" },
   { value: "month", label: "Mes" },
   { value: "quarter", label: "Trimestre" },
   { value: "year", label: "Año" },
@@ -65,7 +67,7 @@ function entityLink(r: Recommendation): string {
 
 export function OptimizerView({ initial }: { initial: Run | null }) {
   const [run, setRun] = useState<Run | null>(initial);
-  const [period, setPeriod] = useState<string>(initial?.period ?? "month");
+  const [period, setPeriod] = useState<string>(initial?.period ?? "day");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
