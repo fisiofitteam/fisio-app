@@ -239,7 +239,10 @@ function buildSeries(
   return { dates, spend: spendArr, cpf, roas };
 }
 
-/** Mini gráfico de línea SVG. skipZero: ignora días con valor 0 para el rango. */
+/**
+ * Gráfico de línea SVG con ejes X (fechas) e Y (valores) visibles.
+ * skipZero: ignora días con valor 0 para el rango y los huecos en la línea.
+ */
 function SparkLine({
   label,
   color,
@@ -259,23 +262,36 @@ function SparkLine({
   summaryValue: string;
   skipZero?: boolean;
 }) {
-  const W = 600;
-  const H = 60;
-  const PAD = 4;
+  // Layout del gráfico.
+  const W = 800;
+  const H = 220;
+  const PAD_LEFT = 56;
+  const PAD_RIGHT = 12;
+  const PAD_TOP = 12;
+  const PAD_BOTTOM = 28;
+  const chartW = W - PAD_LEFT - PAD_RIGHT;
+  const chartH = H - PAD_TOP - PAD_BOTTOM;
 
   const nonZero = skipZero ? values.filter((v) => v > 0) : values;
-  const minV = nonZero.length > 0 ? Math.min(...nonZero) : 0;
-  const maxV = nonZero.length > 0 ? Math.max(...nonZero) : 1;
-  const range = (maxV - minV) || 1;
+  const minRaw = nonZero.length > 0 ? Math.min(...nonZero) : 0;
+  const maxRaw = nonZero.length > 0 ? Math.max(...nonZero) : 1;
+
+  // Padding del rango para que la línea respire arriba/abajo.
+  const span = Math.max(maxRaw - minRaw, 1);
+  const minV = Math.max(0, minRaw - span * 0.1);
+  const maxV = maxRaw + span * 0.1;
+  const range = maxV - minV || 1;
 
   const x = (i: number) =>
-    values.length === 1 ? W / 2 : PAD + (i / (values.length - 1)) * (W - 2 * PAD);
+    values.length === 1
+      ? PAD_LEFT + chartW / 2
+      : PAD_LEFT + (i / Math.max(values.length - 1, 1)) * chartW;
   const y = (v: number): number | null => {
     if (skipZero && v === 0) return null;
-    return H - PAD - ((v - minV) / range) * (H - 2 * PAD);
+    return PAD_TOP + chartH - ((v - minV) / range) * chartH;
   };
 
-  // Construimos paths separados saltando huecos.
+  // Path con huecos (segments).
   const segments: string[] = [];
   let cur = "";
   for (let i = 0; i < values.length; i++) {
@@ -288,6 +304,23 @@ function SparkLine({
   }
   if (cur) segments.push(cur);
 
+  // Ticks Y: 5 niveles.
+  const yTicks = 5;
+  const yTickValues: number[] = [];
+  for (let i = 0; i <= yTicks; i++) {
+    yTickValues.push(minV + (range * i) / yTicks);
+  }
+
+  // Ticks X: 5 fechas espaciadas.
+  const xTickCount = Math.min(6, dates.length);
+  const xTickIdxs: number[] = [];
+  if (dates.length > 0) {
+    for (let i = 0; i < xTickCount; i++) {
+      const idx = Math.round((i / Math.max(xTickCount - 1, 1)) * (dates.length - 1));
+      if (!xTickIdxs.includes(idx)) xTickIdxs.push(idx);
+    }
+  }
+
   return (
     <div>
       <div className="flex justify-between items-center mb-1">
@@ -299,24 +332,73 @@ function SparkLine({
           {summaryLabel}: <span className="font-medium text-neutral-900">{summaryValue}</span>
         </span>
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-14">
-        {segments.map((path, i) => (
-          <path key={i} d={path} fill="none" stroke={color} strokeWidth="1.8" />
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-44">
+        {/* Gridlines + Y labels */}
+        {yTickValues.map((tv, i) => {
+          const py = PAD_TOP + chartH - ((tv - minV) / range) * chartH;
+          return (
+            <g key={`y-${i}`}>
+              <line
+                x1={PAD_LEFT}
+                x2={W - PAD_RIGHT}
+                y1={py}
+                y2={py}
+                stroke="#E5E5E5"
+                strokeWidth={1}
+                strokeDasharray={i === 0 ? "" : "3 3"}
+              />
+              <text
+                x={PAD_LEFT - 6}
+                y={py + 3}
+                textAnchor="end"
+                fontSize="10"
+                fill="#737373"
+              >
+                {format(tv)}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* X ticks (fechas) */}
+        {xTickIdxs.map((idx) => (
+          <g key={`x-${idx}`}>
+            <line
+              x1={x(idx)}
+              x2={x(idx)}
+              y1={PAD_TOP + chartH}
+              y2={PAD_TOP + chartH + 4}
+              stroke="#A3A3A3"
+              strokeWidth={1}
+            />
+            <text
+              x={x(idx)}
+              y={PAD_TOP + chartH + 16}
+              textAnchor="middle"
+              fontSize="10"
+              fill="#737373"
+            >
+              {formatShort(dates[idx])}
+            </text>
+          </g>
         ))}
+
+        {/* Línea principal */}
+        {segments.map((path, i) => (
+          <path key={`line-${i}`} d={path} fill="none" stroke={color} strokeWidth="2" />
+        ))}
+
+        {/* Puntos con tooltip */}
         {values.map((v, i) => {
           const yi = y(v);
           if (yi === null) return null;
           return (
-            <circle key={i} cx={x(i)} cy={yi} r="2" fill={color}>
+            <circle key={`pt-${i}`} cx={x(i)} cy={yi} r="2.5" fill={color}>
               <title>{`${dates[i]}: ${format(v)}`}</title>
             </circle>
           );
         })}
       </svg>
-      <div className="flex justify-between text-[10px] text-neutral-400 mt-1">
-        <span>{formatShort(dates[0])}</span>
-        <span>{formatShort(dates[dates.length - 1])}</span>
-      </div>
     </div>
   );
 }
