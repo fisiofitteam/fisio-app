@@ -8,6 +8,7 @@ const TABS = [
   { id: "brief-ia", label: "🤖 Brief IA", href: "/fisio/anuncios/brief-ia", desc: "Genera guiones de anuncio con IA" },
   { id: "banco", label: "🏦 Banco", href: "/fisio/anuncios/banco", desc: "Hooks y audiencias guardadas" },
   { id: "metricas", label: "📊 Métricas", href: "/fisio/anuncios/metricas", desc: "Insights de Meta + ROAS real" },
+  { id: "optimizador", label: "🧠 Optimizador IA", href: "/fisio/anuncios/optimizador", desc: "Recomendaciones de Claude para ahorrar y escalar" },
 ];
 
 export function AdsSubnav() {
