@@ -47,53 +47,31 @@ export async function getNewFollowers(days = 30): Promise<number> {
 
 /**
  * Devuelve los nuevos seguidores día a día en los últimos N días.
- * Cada item: { date: "YYYY-MM-DD", value: número de nuevos seguidores }.
+ * Cada item: { date: "YYYY-MM-DD", value: número de nuevos seguidores ese día }.
  *
- * En Meta API v22 la métrica `follower_count` sigue existiendo pero a veces
- * requiere `metric_type=total_value`. Probamos las dos variantes.
+ * NOTA: Meta API limita follower_count con period=day a un rango máximo de
+ * 30 días. Si se pide más, devuelve error → el caller debe usar safe() para
+ * tolerarlo. Los últimos 5-6 días suelen venir a 0 (delay de consolidación).
  */
 export async function getDailyNewFollowers(days = 30): Promise<Array<{ date: string; value: number }>> {
   const { igUserId } = metaConfig();
   if (!igUserId) throw new Error("Falta META_IG_USER_ID");
-  const since = Math.floor((Date.now() - days * 86400000) / 1000);
+  // Cap a 30 días por la limitación del endpoint.
+  const cappedDays = Math.min(days, 30);
+  const since = Math.floor((Date.now() - cappedDays * 86400000) / 1000);
   const until = Math.floor(Date.now() / 1000);
 
-  // Intento 1: legacy con period=day
-  try {
-    const d = await graphGet(`${igUserId}/insights`, {
-      metric: "follower_count",
-      period: "day",
-      since: String(since),
-      until: String(until),
-    });
-    const values: any[] = d?.data?.[0]?.values ?? [];
-    if (values.length > 0) {
-      return values.map((v) => ({
-        date: (v.end_time ?? "").slice(0, 10),
-        value: Number(v.value) || 0,
-      }));
-    }
-  } catch {
-    // probamos siguiente
-  }
-
-  // Intento 2: time_series (formato nuevo)
-  try {
-    const d = await graphGet(`${igUserId}/insights`, {
-      metric: "follower_count",
-      metric_type: "time_series",
-      period: "day",
-      since: String(since),
-      until: String(until),
-    });
-    const values: any[] = d?.data?.[0]?.values ?? [];
-    return values.map((v) => ({
-      date: (v.end_time ?? "").slice(0, 10),
-      value: Number(v.value) || 0,
-    }));
-  } catch {
-    return [];
-  }
+  const d = await graphGet(`${igUserId}/insights`, {
+    metric: "follower_count",
+    period: "day",
+    since: String(since),
+    until: String(until),
+  });
+  const values: any[] = d?.data?.[0]?.values ?? [];
+  return values.map((v) => ({
+    date: (v.end_time ?? "").slice(0, 10),
+    value: Number(v.value) || 0,
+  }));
 }
 
 // Publicaciones recientes con sus métricas.
