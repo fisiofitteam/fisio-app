@@ -8,7 +8,7 @@ export type AttributionRow = {
   utmCampaign: string;            // el slug que viaja en utm_campaign
   leadsCount: number;             // leads atribuidos en el periodo
   wonCount: number;               // que se convirtieron en cliente (status=won)
-  revenue: number;                // euros facturados (Sale.amount sumado)
+  revenue: number;                // euros facturados (Sale.amountCents sumado y convertido a euros)
 };
 
 /**
@@ -16,12 +16,13 @@ export type AttributionRow = {
  * utm_campaign y suma ventas / revenue cruzando con Sale.
  *
  * Los Leads sin utm_campaign quedan fuera (orgánicos / referidos / manuales).
+ * Sale.amountCents está en céntimos: dividimos por 100 al sumar.
+ * Sólo contamos sales con status "paid" (no pending/failed/refunded/expired).
  */
 export async function getAttributionByCampaign(
   start: Date,
   end: Date,
 ): Promise<AttributionRow[]> {
-  // Traemos los leads atribuidos del periodo, junto con sus sales.
   const leads = await prisma.lead.findMany({
     where: {
       adUtmCampaign: { not: null },
@@ -31,7 +32,7 @@ export async function getAttributionByCampaign(
       id: true,
       status: true,
       adUtmCampaign: true,
-      sales: { select: { amount: true } },
+      sales: { select: { amountCents: true, status: true } },
     },
   });
 
@@ -45,7 +46,9 @@ export async function getAttributionByCampaign(
     row.leadsCount += 1;
     if (l.status === "won") {
       row.wonCount += 1;
-      for (const s of l.sales) row.revenue += s.amount || 0;
+      for (const s of l.sales) {
+        if (s.status === "paid") row.revenue += (s.amountCents || 0) / 100;
+      }
     }
   }
   return Array.from(acc.values()).sort((a, b) => b.revenue - a.revenue);
