@@ -41,18 +41,59 @@ export async function getInstagramAccount(): Promise<{ username: string; followe
 
 // Nuevos seguidores en los últimos N días (suma del insight diario follower_count).
 export async function getNewFollowers(days = 30): Promise<number> {
+  const daily = await getDailyNewFollowers(days);
+  return daily.reduce((a, v) => a + v.value, 0);
+}
+
+/**
+ * Devuelve los nuevos seguidores día a día en los últimos N días.
+ * Cada item: { date: "YYYY-MM-DD", value: número de nuevos seguidores }.
+ *
+ * En Meta API v22 la métrica `follower_count` sigue existiendo pero a veces
+ * requiere `metric_type=total_value`. Probamos las dos variantes.
+ */
+export async function getDailyNewFollowers(days = 30): Promise<Array<{ date: string; value: number }>> {
   const { igUserId } = metaConfig();
   if (!igUserId) throw new Error("Falta META_IG_USER_ID");
   const since = Math.floor((Date.now() - days * 86400000) / 1000);
   const until = Math.floor(Date.now() / 1000);
-  const d = await graphGet(`${igUserId}/insights`, {
-    metric: "follower_count",
-    period: "day",
-    since: String(since),
-    until: String(until),
-  });
-  const values: { value: number }[] = d?.data?.[0]?.values ?? [];
-  return values.reduce((a, v) => a + (v.value || 0), 0);
+
+  // Intento 1: legacy con period=day
+  try {
+    const d = await graphGet(`${igUserId}/insights`, {
+      metric: "follower_count",
+      period: "day",
+      since: String(since),
+      until: String(until),
+    });
+    const values: any[] = d?.data?.[0]?.values ?? [];
+    if (values.length > 0) {
+      return values.map((v) => ({
+        date: (v.end_time ?? "").slice(0, 10),
+        value: Number(v.value) || 0,
+      }));
+    }
+  } catch {
+    // probamos siguiente
+  }
+
+  // Intento 2: time_series (formato nuevo)
+  try {
+    const d = await graphGet(`${igUserId}/insights`, {
+      metric: "follower_count",
+      metric_type: "time_series",
+      period: "day",
+      since: String(since),
+      until: String(until),
+    });
+    const values: any[] = d?.data?.[0]?.values ?? [];
+    return values.map((v) => ({
+      date: (v.end_time ?? "").slice(0, 10),
+      value: Number(v.value) || 0,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 // Publicaciones recientes con sus métricas.

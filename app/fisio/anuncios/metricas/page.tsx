@@ -5,7 +5,9 @@ import {
   getDailySpend,
   getInstagramAccount,
   getNewFollowers,
+  getDailyNewFollowers,
 } from "@/lib/meta";
+import { getTotalRevenue, getDailyRevenue } from "@/lib/business-revenue";
 import { AdsSummaryPanel } from "@/components/AdsSummaryPanel";
 
 export const dynamic = "force-dynamic";
@@ -28,15 +30,10 @@ export default async function MetricasPage({ searchParams }: { searchParams: { p
     );
   }
 
-  // Tolerante a fallos: si Meta devuelve error en algún campo, lo absorbemos.
   const safe = async <T,>(p: Promise<T>): Promise<T | null> => p.catch(() => null);
-
   const days = daysBetween(start, end);
-
-  // Para nuevos seguidores del periodo ANTERIOR, usamos el truco de pedir el
-  // total acumulado de `days + daysPrev` días y restarle los `days` del actual.
-  // La API de Meta no permite rango arbitrario; sólo "últimos N días".
   const daysPrev = daysBetween(prev.start, prev.end);
+
   const [
     spendCurrent,
     spendPrev,
@@ -44,6 +41,10 @@ export default async function MetricasPage({ searchParams }: { searchParams: { p
     igAccount,
     newFollowers,
     cumulativeForPrev,
+    dailyFollowers,
+    revenueCurrent,
+    revenuePrev,
+    dailyRevenue,
   ] = await Promise.all([
     safe(getAdSpend(ymd(start), ymd(end))),
     safe(getAdSpend(ymd(prev.start), ymd(prev.end))),
@@ -51,6 +52,10 @@ export default async function MetricasPage({ searchParams }: { searchParams: { p
     safe(getInstagramAccount()),
     safe(getNewFollowers(days)),
     safe(getNewFollowers(days + daysPrev)),
+    safe(getDailyNewFollowers(days)),
+    safe(getTotalRevenue(start, end)),
+    safe(getTotalRevenue(prev.start, prev.end)),
+    safe(getDailyRevenue(start, end)),
   ]);
 
   const newFollowersPrev =
@@ -69,7 +74,11 @@ export default async function MetricasPage({ searchParams }: { searchParams: { p
       newFollowersPrev={newFollowersPrev ?? 0}
       followersTotal={igAccount?.followersCount ?? 0}
       igUsername={igAccount?.username ?? null}
+      revenue={revenueCurrent ?? 0}
+      revenuePrev={revenuePrev ?? 0}
       dailySpend={dailySpend ?? []}
+      dailyFollowers={dailyFollowers ?? []}
+      dailyRevenue={dailyRevenue ?? []}
     />
   );
 }

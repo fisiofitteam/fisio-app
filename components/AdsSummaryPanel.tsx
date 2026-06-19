@@ -1,8 +1,11 @@
 "use client";
 
+import { useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
 
-type DailyPoint = { date: string; spend: number };
+type DailySpend = { date: string; spend: number };
+type DailyFollowers = { date: string; value: number };
+type DailyRevenue = { date: string; revenue: number };
 
 const PERIODS = [
   { value: "day", label: "Día" },
@@ -13,7 +16,8 @@ const PERIODS = [
 ];
 
 const eur = (n: number) => `${Math.round(n).toLocaleString("es-ES")} €`;
-const eurDecimal = (n: number) => `${(Math.round(n * 100) / 100).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+const eurDecimal = (n: number) =>
+  `${(Math.round(n * 100) / 100).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
 const intl = (n: number) => Math.round(n).toLocaleString("es-ES");
 
 function diffPct(curr: number, prev: number): { value: number; label: string; positive: boolean } | null {
@@ -37,7 +41,11 @@ export function AdsSummaryPanel({
   newFollowersPrev,
   followersTotal,
   igUsername,
+  revenue,
+  revenuePrev,
   dailySpend,
+  dailyFollowers,
+  dailyRevenue,
 }: {
   period: string;
   periodLabel: string;
@@ -48,7 +56,11 @@ export function AdsSummaryPanel({
   newFollowersPrev: number;
   followersTotal: number;
   igUsername: string | null;
-  dailySpend: DailyPoint[];
+  revenue: number;
+  revenuePrev: number;
+  dailySpend: DailySpend[];
+  dailyFollowers: DailyFollowers[];
+  dailyRevenue: DailyRevenue[];
 }) {
   const router = useRouter();
   const pathname = usePathname() ?? "/fisio/anuncios/metricas";
@@ -60,9 +72,10 @@ export function AdsSummaryPanel({
     router.push(`${pathname}${qs ? `?${qs}` : ""}`);
   }
 
-  // Coste por seguidor: gasto del periodo / nuevos seguidores del periodo.
   const costPerFollower = newFollowers > 0 ? spend / newFollowers : null;
   const costPerFollowerPrev = newFollowersPrev > 0 ? spendPrev / newFollowersPrev : null;
+  const roas = spend > 0 ? revenue / spend : null;
+  const roasPrev = spendPrev > 0 ? revenuePrev / spendPrev : null;
 
   const trendSpend = diffPct(spend, spendPrev);
   const trendNewFollowers = diffPct(newFollowers, newFollowersPrev);
@@ -70,6 +83,12 @@ export function AdsSummaryPanel({
     costPerFollower !== null && costPerFollowerPrev !== null
       ? diffPct(costPerFollower, costPerFollowerPrev)
       : null;
+  const trendRoas = roas !== null && roasPrev !== null ? diffPct(roas, roasPrev) : null;
+
+  const series = useMemo(
+    () => buildSeries(dailySpend, dailyFollowers, dailyRevenue),
+    [dailySpend, dailyFollowers, dailyRevenue],
+  );
 
   return (
     <div>
@@ -92,14 +111,20 @@ export function AdsSummaryPanel({
         </div>
       </div>
 
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-4">
+      <section className="grid grid-cols-2 lg:grid-cols-5 gap-2 mb-4">
         <Kpi label="Gasto" value={eur(spend)} trend={trendSpend} trendInvert />
         <Kpi label="Nuevos seguidores" value={intl(newFollowers)} trend={trendNewFollowers} />
         <Kpi
-          label="Coste por seguidor"
+          label="Coste / seguidor"
           value={costPerFollower !== null ? eurDecimal(costPerFollower) : "—"}
           trend={trendCpf}
           trendInvert
+        />
+        <Kpi
+          label="ROAS negocio"
+          value={roas !== null ? `${(Math.round(roas * 100) / 100).toLocaleString("es-ES")}×` : "—"}
+          trend={trendRoas}
+          sublabel="Ingresos / Gasto ads"
         />
         <Kpi
           label="Total seguidores"
@@ -109,16 +134,45 @@ export function AdsSummaryPanel({
       </section>
 
       <section className="card">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-medium text-sm">📈 Evolución diaria del gasto</h3>
-          <span className="text-[10px] text-neutral-400">{dailySpend.length} días</span>
-        </div>
-        {dailySpend.length === 0 ? (
-          <p className="text-xs text-neutral-400 italic text-center py-8">
-            Sin gasto en este periodo.
-          </p>
+        <h3 className="font-medium text-sm mb-3">📈 Evolución diaria</h3>
+        {series.dates.length === 0 ? (
+          <p className="text-xs text-neutral-400 italic text-center py-8">Sin datos en este periodo.</p>
         ) : (
-          <DailyChart data={dailySpend} />
+          <div className="space-y-4">
+            <SparkLine
+              label="Gasto en ads"
+              color="#0A0A0A"
+              dates={series.dates}
+              values={series.spend}
+              format={(v) => eurDecimal(v)}
+              summaryLabel="Total"
+              summaryValue={eur(spend)}
+            />
+            <SparkLine
+              label="Coste por seguidor"
+              color="#7C3AED"
+              dates={series.dates}
+              values={series.cpf}
+              format={(v) => eurDecimal(v)}
+              summaryLabel="Medio"
+              summaryValue={costPerFollower !== null ? eurDecimal(costPerFollower) : "—"}
+              skipZero
+            />
+            <SparkLine
+              label="ROAS del negocio"
+              color="#059669"
+              dates={series.dates}
+              values={series.roas}
+              format={(v) => `${(Math.round(v * 100) / 100).toLocaleString("es-ES")}×`}
+              summaryLabel="Medio"
+              summaryValue={
+                roas !== null
+                  ? `${(Math.round(roas * 100) / 100).toLocaleString("es-ES")}×`
+                  : "—"
+              }
+              skipZero
+            />
+          </div>
         )}
       </section>
     </div>
@@ -138,9 +192,6 @@ function Kpi({
   trend?: { value: number; label: string; positive: boolean } | null;
   trendInvert?: boolean;
 }) {
-  // trendInvert: cuando subir es MALO (gasto, coste por seg). En esos casos,
-  // "positive" (subió) lo pintamos rojo. Cuando no invierte (seguidores),
-  // "positive" lo pintamos verde.
   const goodTrend = trend ? (trendInvert ? !trend.positive : trend.positive) : false;
   return (
     <div className="card !p-3">
@@ -158,36 +209,113 @@ function Kpi({
   );
 }
 
-function DailyChart({ data }: { data: DailyPoint[] }) {
-  const maxSpend = Math.max(...data.map((d) => d.spend), 0);
-  if (maxSpend === 0) {
-    return <p className="text-xs text-neutral-400 italic text-center py-8">Sin gasto en estos días.</p>;
+/** Une las tres series diarias en un calendario común. */
+function buildSeries(
+  spend: DailySpend[],
+  followers: DailyFollowers[],
+  revenue: DailyRevenue[],
+): { dates: string[]; spend: number[]; cpf: number[]; roas: number[] } {
+  const all = new Set<string>();
+  spend.forEach((d) => all.add(d.date));
+  followers.forEach((d) => all.add(d.date));
+  revenue.forEach((d) => all.add(d.date));
+  const dates = Array.from(all).sort();
+
+  const spendMap = new Map(spend.map((d) => [d.date, d.spend]));
+  const followersMap = new Map(followers.map((d) => [d.date, d.value]));
+  const revenueMap = new Map(revenue.map((d) => [d.date, d.revenue]));
+
+  const spendArr = dates.map((d) => spendMap.get(d) ?? 0);
+  const cpf = dates.map((d) => {
+    const s = spendMap.get(d) ?? 0;
+    const f = followersMap.get(d) ?? 0;
+    return f > 0 ? s / f : 0;
+  });
+  const roas = dates.map((d) => {
+    const s = spendMap.get(d) ?? 0;
+    const r = revenueMap.get(d) ?? 0;
+    return s > 0 ? r / s : 0;
+  });
+  return { dates, spend: spendArr, cpf, roas };
+}
+
+/** Mini gráfico de línea SVG. skipZero: ignora días con valor 0 para el rango. */
+function SparkLine({
+  label,
+  color,
+  dates,
+  values,
+  format,
+  summaryLabel,
+  summaryValue,
+  skipZero = false,
+}: {
+  label: string;
+  color: string;
+  dates: string[];
+  values: number[];
+  format: (v: number) => string;
+  summaryLabel: string;
+  summaryValue: string;
+  skipZero?: boolean;
+}) {
+  const W = 600;
+  const H = 60;
+  const PAD = 4;
+
+  const nonZero = skipZero ? values.filter((v) => v > 0) : values;
+  const minV = nonZero.length > 0 ? Math.min(...nonZero) : 0;
+  const maxV = nonZero.length > 0 ? Math.max(...nonZero) : 1;
+  const range = (maxV - minV) || 1;
+
+  const x = (i: number) =>
+    values.length === 1 ? W / 2 : PAD + (i / (values.length - 1)) * (W - 2 * PAD);
+  const y = (v: number): number | null => {
+    if (skipZero && v === 0) return null;
+    return H - PAD - ((v - minV) / range) * (H - 2 * PAD);
+  };
+
+  // Construimos paths separados saltando huecos.
+  const segments: string[] = [];
+  let cur = "";
+  for (let i = 0; i < values.length; i++) {
+    const yi = y(values[i]);
+    if (yi === null) {
+      if (cur) { segments.push(cur); cur = ""; }
+      continue;
+    }
+    cur += `${cur ? "L" : "M"} ${x(i).toFixed(1)} ${yi.toFixed(1)} `;
   }
-  // Render como barras CSS sencillas (sin SVG): fila por día con barra horizontal.
-  // Para periodos largos compactamos a un grid en formato bar chart vertical.
+  if (cur) segments.push(cur);
+
   return (
-    <div className="space-y-1">
-      <div className="flex items-end gap-0.5 h-32">
-        {data.map((d) => {
-          const h = Math.max(2, Math.round((d.spend / maxSpend) * 120));
+    <div>
+      <div className="flex justify-between items-center mb-1">
+        <span className="text-xs font-medium text-neutral-700 flex items-center gap-1.5">
+          <span className="w-3 h-0.5 inline-block" style={{ background: color }} />
+          {label}
+        </span>
+        <span className="text-[11px] text-neutral-500">
+          {summaryLabel}: <span className="font-medium text-neutral-900">{summaryValue}</span>
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-14">
+        {segments.map((path, i) => (
+          <path key={i} d={path} fill="none" stroke={color} strokeWidth="1.8" />
+        ))}
+        {values.map((v, i) => {
+          const yi = y(v);
+          if (yi === null) return null;
           return (
-            <div
-              key={d.date}
-              className="flex-1 flex flex-col items-center justify-end group relative"
-              title={`${d.date}: ${eurDecimal(d.spend)}`}
-            >
-              <div
-                className="w-full bg-neutral-800 rounded-t group-hover:bg-emerald-600 transition-colors"
-                style={{ height: `${h}px` }}
-              />
-            </div>
+            <circle key={i} cx={x(i)} cy={yi} r="2" fill={color}>
+              <title>{`${dates[i]}: ${format(v)}`}</title>
+            </circle>
           );
         })}
-      </div>
-      <div className="flex justify-between text-[10px] text-neutral-400 px-0.5">
-        <span>{formatShort(data[0]?.date)}</span>
-        <span>Máx día: {eurDecimal(maxSpend)}</span>
-        <span>{formatShort(data[data.length - 1]?.date)}</span>
+      </svg>
+      <div className="flex justify-between text-[10px] text-neutral-400 mt-1">
+        <span>{formatShort(dates[0])}</span>
+        <span>{formatShort(dates[dates.length - 1])}</span>
       </div>
     </div>
   );
@@ -196,7 +324,10 @@ function DailyChart({ data }: { data: DailyPoint[] }) {
 function formatShort(iso: string | undefined): string {
   if (!iso) return "";
   try {
-    return new Date(iso + "T00:00:00").toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+    return new Date(iso + "T00:00:00").toLocaleDateString("es-ES", {
+      day: "numeric",
+      month: "short",
+    });
   } catch {
     return iso;
   }
