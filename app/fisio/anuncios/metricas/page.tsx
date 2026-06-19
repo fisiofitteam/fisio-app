@@ -1,99 +1,75 @@
-import { prisma } from "@/lib/prisma";
-import { getPeriodRange, type Period } from "@/lib/finance";
-import { metaConfigured, getAdsInsights } from "@/lib/meta";
-import { getAttributionByCampaign, computeRoas, computeCac } from "@/lib/ads-roas";
-import { AdsMetricsPanel } from "@/components/AdsMetricsPanel";
-import { utmSlug } from "@/lib/ads";
+import { getPeriodRange, getPreviousPeriodRange, type Period } from "@/lib/finance";
+import {
+  metaConfigured,
+  getAdSpend,
+  getDailySpend,
+  getInstagramAccount,
+  getNewFollowers,
+} from "@/lib/meta";
+import { AdsSummaryPanel } from "@/components/AdsSummaryPanel";
 
 export const dynamic = "force-dynamic";
 const ymd = (d: Date) => d.toISOString().slice(0, 10);
+const daysBetween = (a: Date, b: Date) =>
+  Math.max(1, Math.round((b.getTime() - a.getTime()) / 86400000) + 1);
 
 export default async function MetricasPage({ searchParams }: { searchParams: { period?: string } }) {
-  const period: Period = (["month", "quarter", "year"].includes(searchParams.period ?? "")
+  const period: Period = (["day", "week", "month", "quarter", "year"].includes(searchParams.period ?? "")
     ? (searchParams.period as Period)
     : "month");
   const { start, end, label } = getPeriodRange(period);
+  const prev = getPreviousPeriodRange(period);
 
   if (!metaConfigured()) {
     return (
       <div className="card text-sm text-neutral-600">
-        Meta no está conectado. Configura la integración en <strong>Ajustes → Integraciones → Meta</strong> y vuelve aquí para ver insights.
+        Meta no está conectado. Configura las env vars de Meta en Vercel y vuelve aquí.
       </div>
     );
   }
 
-  // 1) Insights Meta por campaña
-  let campaignsMeta: any[] = [];
-  let error: string | null = null;
-  try {
-    campaignsMeta = await getAdsInsights({ level: "campaign", since: ymd(start), until: ymd(end) });
-  } catch (e: any) {
-    error = e.message;
-  }
+  // Tolerante a fallos: si Meta devuelve error en algún campo, lo absorbemos.
+  const safe = async <T,>(p: Promise<T>): Promise<T | null> => p.catch(() => null);
 
-  // 2) Campañas locales del sistema (para enlazar Meta → nuestra ficha)
-  const localCampaigns = await prisma.adCampaign.findMany({
-    select: { id: true, name: true, metaCampaignId: true },
-  });
-  const byMetaId = new Map<string, { id: string; name: string }>();
-  const byUtmSlug = new Map<string, { id: string; name: string }>();
-  for (const c of localCampaigns) {
-    if (c.metaCampaignId) byMetaId.set(c.metaCampaignId, { id: c.id, name: c.name });
-    byUtmSlug.set(utmSlug(c.name), { id: c.id, name: c.name });
-  }
+  const days = daysBetween(start, end);
 
-  // 3) Atribución desde leads (utm_campaign)
-  const attribution = await getAttributionByCampaign(start, end);
-  const attrByUtm = new Map(attribution.map((a) => [a.utmCampaign, a]));
+  // Para nuevos seguidores del periodo ANTERIOR, usamos el truco de pedir el
+  // total acumulado de `days + daysPrev` días y restarle los `days` del actual.
+  // La API de Meta no permite rango arbitrario; sólo "últimos N días".
+  const daysPrev = daysBetween(prev.start, prev.end);
+  const [
+    spendCurrent,
+    spendPrev,
+    dailySpend,
+    igAccount,
+    newFollowers,
+    cumulativeForPrev,
+  ] = await Promise.all([
+    safe(getAdSpend(ymd(start), ymd(end))),
+    safe(getAdSpend(ymd(prev.start), ymd(prev.end))),
+    safe(getDailySpend(ymd(start), ymd(end))),
+    safe(getInstagramAccount()),
+    safe(getNewFollowers(days)),
+    safe(getNewFollowers(days + daysPrev)),
+  ]);
 
-  // 4) Construimos la tabla por campaña Meta enriquecida
-  const rows = campaignsMeta.map((m: any) => {
-    const local = byMetaId.get(m.id);
-    // Intentar atribución por: (a) si la campaña Meta tiene id local, usar utm de su nombre local; (b) si no, intentar con el slug del nombre Meta.
-    const utmKey = local ? utmSlug(local.name) : utmSlug(m.name);
-    const attr = attrByUtm.get(utmKey);
-    const revenue = attr?.revenue ?? 0;
-    return {
-      metaId: m.id as string,
-      name: m.name as string,
-      localId: local?.id ?? null,
-      spend: m.spend as number,
-      reach: m.reach as number,
-      impressions: m.impressions as number,
-      clicks: m.clicks as number,
-      ctr: m.ctr as number,
-      cpc: m.cpc as number,
-      results: m.results as number,
-      costPerResult: m.costPerResult as number | null,
-      leadsAttr: attr?.leadsCount ?? 0,
-      wonAttr: attr?.wonCount ?? 0,
-      revenueAttr: revenue,
-      roasReal: computeRoas(m.spend, revenue),
-      cacReal: computeCac(m.spend, attr?.wonCount ?? 0),
-    };
-  });
-
-  // 5) Totales globales
-  const totals = rows.reduce(
-    (acc, r) => ({
-      spend: acc.spend + r.spend,
-      impressions: acc.impressions + r.impressions,
-      reach: acc.reach + r.reach,
-      clicks: acc.clicks + r.clicks,
-      leads: acc.leads + r.leadsAttr,
-      won: acc.won + r.wonAttr,
-      revenue: acc.revenue + r.revenueAttr,
-    }),
-    { spend: 0, impressions: 0, reach: 0, clicks: 0, leads: 0, won: 0, revenue: 0 },
-  );
+  const newFollowersPrev =
+    cumulativeForPrev !== null && newFollowers !== null
+      ? Math.max(0, cumulativeForPrev - newFollowers)
+      : null;
 
   return (
-    <AdsMetricsPanel
+    <AdsSummaryPanel
       period={period}
       periodLabel={label}
-      rows={rows}
-      totals={totals}
-      error={error}
+      previousLabel={prev.label}
+      spend={spendCurrent ?? 0}
+      spendPrev={spendPrev ?? 0}
+      newFollowers={newFollowers ?? 0}
+      newFollowersPrev={newFollowersPrev ?? 0}
+      followersTotal={igAccount?.followersCount ?? 0}
+      igUsername={igAccount?.username ?? null}
+      dailySpend={dailySpend ?? []}
     />
   );
 }

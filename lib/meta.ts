@@ -207,6 +207,26 @@ export async function getAdsInsights(opts: {
   });
 }
 
+/**
+ * Gasto día a día en el rango dado. Devuelve array { date: "YYYY-MM-DD", spend }
+ * ordenado por fecha asc. Útil para mini gráficos de evolución.
+ */
+export async function getDailySpend(since: string, until: string): Promise<Array<{ date: string; spend: number }>> {
+  const { adAccountId } = metaConfig();
+  if (!adAccountId) throw new Error("Falta META_AD_ACCOUNT_ID");
+  const acct = adAccountId.startsWith("act_") ? adAccountId : `act_${adAccountId}`;
+  const d = await graphGet(`${acct}/insights`, {
+    fields: "spend,date_start",
+    time_range: JSON.stringify({ since, until }),
+    time_increment: "1",
+    limit: "500",
+  });
+  const items: any[] = d?.data ?? [];
+  return items
+    .map((r) => ({ date: String(r.date_start), spend: r.spend ? Math.round(Number(r.spend) * 100) / 100 : 0 }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
 // Estado actual de todas las campañas / adsets / ads de la cuenta. Devuelve
 // un mapa id → effective_status. Usado para sincronizar nuestro status local.
 export async function getAllEntityStatuses(
