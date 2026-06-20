@@ -2192,17 +2192,6 @@ model AdAudience {
   updatedAt   DateTime @updatedAt
 }
 
-model AdOptimizerRun {
-  id              String   @id @default(cuid())
-  period          String
-  summary         String
-  recommendations String
-  createdById     String?
-  createdAt       DateTime @default(now())
-
-  @@index([createdAt])
-}
-
 // Plantillas de workout guardadas en la Biblioteca. Reutilizables al crear un
 // workout dentro del calendario de un paciente.
 model WorkoutTemplate {

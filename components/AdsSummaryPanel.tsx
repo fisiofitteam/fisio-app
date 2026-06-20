@@ -121,10 +121,10 @@ export function AdsSummaryPanel({
           trendInvert
         />
         <Kpi
-          label="ROAS negocio"
+          label="ROAS nuevas altas"
           value={roas !== null ? `${(Math.round(roas * 100) / 100).toLocaleString("es-ES")}×` : "—"}
           trend={trendRoas}
-          sublabel="Ingresos / Gasto ads"
+          sublabel="Ingresos nuevas altas / Gasto ads"
         />
         <Kpi
           label="Total seguidores"
@@ -159,7 +159,7 @@ export function AdsSummaryPanel({
               skipZero
             />
             <SparkLine
-              label="ROAS del negocio"
+              label="ROAS nuevas altas"
               color="#059669"
               dates={series.dates}
               values={series.roas}

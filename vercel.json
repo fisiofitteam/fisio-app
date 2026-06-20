@@ -2,11 +2,5 @@
   "buildCommand": "npm run build:prod",
   "installCommand": "npm install --include=dev",
   "framework": "nextjs",
-  "regions": ["fra1"],
-  "crons": [
-    {
-      "path": "/api/cron/ads-daily-report",
-      "schedule": "0 7 * * *"
-    }
-  ]
+  "regions": ["fra1"]
 }

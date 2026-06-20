@@ -5,10 +5,9 @@ import { usePathname } from "next/navigation";
 
 const TABS = [
   { id: "metricas", label: "📊 Resumen", href: "/fisio/anuncios/metricas", desc: "Gasto, nuevos seguidores y coste por seguidor" },
-  { id: "campanas", label: "🗂️ Planificación", href: "/fisio/anuncios/campanas", desc: "Campañas → AdSets → Anuncios (organización interna)" },
+  { id: "campanas", label: "🗂️ Planificación", href: "/fisio/anuncios/campanas", desc: "Campañas y sus anuncios con estado" },
   { id: "brief-ia", label: "🤖 Guiones IA", href: "/fisio/anuncios/brief-ia", desc: "Genera guiones de anuncio con IA" },
   { id: "banco", label: "🏦 Banco", href: "/fisio/anuncios/banco", desc: "Hooks y audiencias guardadas" },
-  { id: "optimizador", label: "🧠 Optimizador IA", href: "/fisio/anuncios/optimizador", desc: "Recomendaciones de Claude" },
 ];
 
 export function AdsSubnav() {

@@ -2296,20 +2296,6 @@ model AdAudience {
   updatedAt   DateTime @updatedAt
 }
 
-// Análisis IA del rendimiento de los anuncios. Guardamos el último run para
-// que abrir la pestaña no dispare otra llamada cara a Claude; el usuario pulsa
-// "Reanalizar" cuando quiera refrescar.
-model AdOptimizerRun {
-  id              String   @id @default(cuid())
-  period          String                                    // "month" | "quarter" | "year"
-  summary         String                                    // resumen general
-  recommendations String                                    // JSON: array de { priority, entity, entityId, entityName, action, actionLabel, reason, suggestedNext? }
-  createdById     String?
-  createdAt       DateTime @default(now())
-
-  @@index([createdAt])
-}
-
 // Plantillas de workout guardadas en la Biblioteca. Reutilizables al crear un
 // workout dentro del calendario de un paciente.
 model WorkoutTemplate {
