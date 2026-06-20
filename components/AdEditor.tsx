@@ -22,11 +22,6 @@ type AdState = {
   cta: string | null;
   ctaUrl: string | null;
   finalFileUrl: string | null;
-  editorNotes: string | null;
-  recordingLocation: string | null;
-  recordingOutfit: string | null;
-  recordingMaterial: string | null;
-  consentSigned: boolean;
   metaAdId: string | null;
 };
 
@@ -43,7 +38,11 @@ export function AdEditor({
   const [saving, setSaving] = useState(false);
   const debouncerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Autosave debounced (1s sin tocar nada → PATCH).
+  // Modal IA
+  const [aiOpen, setAiOpen] = useState(false);
+  // Modo grabación
+  const [recordingMode, setRecordingMode] = useState(false);
+
   function update<K extends keyof AdState>(key: K, value: AdState[K]) {
     setAd((prev) => ({ ...prev, [key]: value }));
     if (debouncerRef.current) clearTimeout(debouncerRef.current);
@@ -65,11 +64,6 @@ export function AdEditor({
         cta: state.cta ?? "",
         ctaUrl: state.ctaUrl ?? "",
         finalFileUrl: state.finalFileUrl ?? "",
-        editorNotes: state.editorNotes ?? "",
-        recordingLocation: state.recordingLocation ?? "",
-        recordingOutfit: state.recordingOutfit ?? "",
-        recordingMaterial: state.recordingMaterial ?? "",
-        consentSigned: state.consentSigned,
         metaAdId: state.metaAdId ?? "",
       }),
     });
@@ -77,18 +71,43 @@ export function AdEditor({
     setSavedAt(new Date());
   }
 
-  // Cleanup timer al desmontar
   useEffect(() => () => { if (debouncerRef.current) clearTimeout(debouncerRef.current); }, []);
 
   async function remove() {
     if (!confirm("¿Eliminar este anuncio?")) return;
     await fetch(`/api/ads/ads?id=${ad.id}`, { method: "DELETE" });
-    router.push(`/fisio/anuncios/campanas`);
+    router.push(`/fisio/anuncios/campanas/${breadcrumb.campaignId}`);
+  }
+
+  /** Aplica el resultado de la IA a los campos del editor. */
+  async function applyAi(result: { hook?: string; script?: string; cta?: string; ctaUrlSuggestion?: string }) {
+    const next: AdState = {
+      ...ad,
+      hook: result.hook ?? ad.hook,
+      script: result.script ?? ad.script,
+      cta: result.cta ?? ad.cta,
+      ctaUrl: ad.ctaUrl || result.ctaUrlSuggestion || "",
+    };
+    setAd(next);
+    setAiOpen(false);
+    await persist(next);
+  }
+
+  // ─── Modo grabación: pantalla minimalista con el guion en grande ───
+  if (recordingMode) {
+    return (
+      <RecordingMode
+        title={ad.name}
+        hook={ad.hook ?? ""}
+        script={ad.script ?? ""}
+        onExit={() => setRecordingMode(false)}
+      />
+    );
   }
 
   return (
     <div>
-      <Link href="/fisio/anuncios/campanas" className="text-xs text-neutral-500 hover:text-neutral-900">
+      <Link href={`/fisio/anuncios/campanas/${breadcrumb.campaignId}`} className="text-xs text-neutral-500 hover:text-neutral-900">
         ← Volver a campañas
       </Link>
       <div className="mt-2 mb-3">
@@ -125,6 +144,24 @@ export function AdEditor({
         <span className="text-[10px] text-neutral-400">
           {saving ? "Guardando…" : savedAt ? `Guardado ${savedAt.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}` : ""}
         </span>
+
+        <button
+          onClick={() => setAiOpen(true)}
+          className="text-xs font-semibold px-3 py-1.5 rounded-lg hover:opacity-90"
+          style={{ background: "linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)", color: "#0A0A0A" }}
+          title="Generar guion con Claude Opus 4.7 usando tu Brief IA"
+        >
+          ✨ Generar con IA
+        </button>
+
+        <button
+          onClick={() => setRecordingMode(true)}
+          className="btn btn-accent text-xs"
+          title="Modo grabación: tipografía grande, solo el guion"
+        >
+          🎬 Modo grabación
+        </button>
+
         <button onClick={remove} className="text-xs text-red-600">Eliminar</button>
       </div>
 
@@ -143,7 +180,7 @@ export function AdEditor({
             <label className="text-xs text-neutral-500 block mb-1">📝 Guion / Copy</label>
             <textarea
               className="input"
-              rows={10}
+              rows={12}
               value={ad.script ?? ""}
               onChange={(e) => update("script", e.target.value)}
               placeholder="Guion completo del anuncio (texto del vídeo + caption + estructura)"
@@ -195,36 +232,181 @@ export function AdEditor({
               placeholder="234567890123456"
             />
             <p className="text-[11px] text-neutral-400 mt-1">
-              Pega el ID del anuncio en Meta cuando lo publiques. Habilita sincronización de estado y métricas.
+              Pega el ID del anuncio en Meta cuando lo publiques. Habilita sync de estado y métricas.
             </p>
           </div>
         </aside>
+      </div>
 
-        <section className="card lg:col-span-2 space-y-3">
-          <h3 className="font-medium text-sm">🎥 Producción</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-            <div>
-              <label className="text-xs text-neutral-500 block mb-1">Ubicación</label>
-              <input className="input" value={ad.recordingLocation ?? ""} onChange={(e) => update("recordingLocation", e.target.value)} />
-            </div>
-            <div>
-              <label className="text-xs text-neutral-500 block mb-1">Vestuario</label>
-              <input className="input" value={ad.recordingOutfit ?? ""} onChange={(e) => update("recordingOutfit", e.target.value)} />
-            </div>
-            <div>
-              <label className="text-xs text-neutral-500 block mb-1">Material</label>
-              <input className="input" value={ad.recordingMaterial ?? ""} onChange={(e) => update("recordingMaterial", e.target.value)} />
-            </div>
+      {aiOpen && (
+        <AiGenerateModal
+          adId={ad.id}
+          currentHook={ad.hook ?? ""}
+          onClose={() => setAiOpen(false)}
+          onApply={applyAi}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Pantalla minimalista para grabar mirando al móvil. */
+function RecordingMode({
+  title,
+  hook,
+  script,
+  onExit,
+}: {
+  title: string;
+  hook: string;
+  script: string;
+  onExit: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 bg-neutral-900 text-white z-50 overflow-y-auto">
+      <header className="sticky top-0 bg-neutral-900 border-b border-neutral-800 px-4 py-3 flex items-center gap-3">
+        <button onClick={onExit} className="text-sm text-neutral-300 hover:text-white">
+          ← Salir
+        </button>
+        <span className="text-sm text-neutral-400 truncate flex-1">{title}</span>
+      </header>
+      <div className="max-w-3xl mx-auto px-6 py-10">
+        {hook && (
+          <div className="mb-10">
+            <div className="text-xs uppercase text-amber-400 mb-2 tracking-wide">Hook</div>
+            <p className="text-3xl md:text-4xl font-semibold leading-snug">"{hook}"</p>
           </div>
-          <label className="flex items-center gap-2 text-xs">
-            <input type="checkbox" checked={ad.consentSigned} onChange={(e) => update("consentSigned", e.target.checked)} />
-            Consentimiento firmado (cesión de imagen)
-          </label>
+        )}
+        {script ? (
           <div>
-            <label className="text-xs text-neutral-500 block mb-1">📓 Notas para el editor</label>
-            <textarea className="input" rows={4} value={ad.editorNotes ?? ""} onChange={(e) => update("editorNotes", e.target.value)} />
+            <div className="text-xs uppercase text-neutral-400 mb-2 tracking-wide">Guion</div>
+            <pre className="text-2xl md:text-3xl leading-relaxed whitespace-pre-wrap font-sans">{script}</pre>
           </div>
-        </section>
+        ) : (
+          <p className="text-neutral-500 italic text-center mt-20">Aún no hay guion. Sal del modo grabación y rellénalo.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Modal con input para parámetros + llamada a la IA + preview del resultado. */
+function AiGenerateModal({
+  adId,
+  currentHook,
+  onClose,
+  onApply,
+}: {
+  adId: string;
+  currentHook: string;
+  onClose: () => void;
+  onApply: (r: { hook?: string; script?: string; cta?: string; ctaUrlSuggestion?: string }) => Promise<void>;
+}) {
+  const [hookSeed, setHookSeed] = useState(currentHook);
+  const [durationSec, setDurationSec] = useState(30);
+  const [freeContext, setFreeContext] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function generate() {
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const r = await fetch("/api/ads/ads/generate-script", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ adId, hookSeed, durationSec, freeContext }),
+      });
+      const data = await r.json();
+      if (!r.ok) setError(data?.error ?? "No se ha podido generar");
+      else setResult(data);
+    } catch (e: any) {
+      setError(e.message ?? "Error de red");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl max-w-2xl w-full p-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-medium">✨ Generar guion con IA</h3>
+          <button onClick={onClose} className="text-neutral-400 text-xl">✕</button>
+        </div>
+
+        <p className="text-xs text-neutral-500 mb-3">
+          Claude Opus 4.7 usará tu <a href="/fisio/anuncios/brief-ia" className="underline">Brief IA de anuncios</a> + los datos de la campaña/anuncio para generar un guion.
+        </p>
+
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Hook semilla (opcional)</label>
+            <input className="input" value={hookSeed} onChange={(e) => setHookSeed(e.target.value)} placeholder="Una frase o idea de partida" />
+          </div>
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Duración aprox (segundos)</label>
+            <input type="number" className="input" value={durationSec} onChange={(e) => setDurationSec(Number(e.target.value) || 30)} min={5} max={120} />
+          </div>
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Contexto libre (opcional)</label>
+            <textarea className="input" rows={3} value={freeContext} onChange={(e) => setFreeContext(e.target.value)} placeholder="Datos extra: oferta, dolor concreto, audiencia, etc." />
+          </div>
+
+          <button onClick={generate} disabled={loading} className="btn btn-primary w-full">
+            {loading ? "Generando con Claude Opus…" : "✨ Generar"}
+          </button>
+        </div>
+
+        {error && <p className="text-sm text-red-700 mt-3">{error}</p>}
+
+        {result && !result._parseError && (
+          <div className="mt-4 space-y-3 text-sm">
+            {result.hook && (
+              <div>
+                <h4 className="text-xs uppercase text-neutral-500 font-medium mb-1">🎣 Hook</h4>
+                <p className="bg-amber-50 p-2 rounded">{result.hook}</p>
+              </div>
+            )}
+            {result.script && (
+              <div>
+                <h4 className="text-xs uppercase text-neutral-500 font-medium mb-1">📝 Guion</h4>
+                <pre className="whitespace-pre-wrap text-sm bg-neutral-50 p-2 rounded">{result.script}</pre>
+              </div>
+            )}
+            {result.cta && (
+              <div>
+                <h4 className="text-xs uppercase text-neutral-500 font-medium mb-1">📣 CTA</h4>
+                <p className="bg-neutral-50 p-2 rounded">{result.cta}</p>
+              </div>
+            )}
+            {result.alternativeHooks && result.alternativeHooks.length > 0 && (
+              <div>
+                <h4 className="text-xs uppercase text-neutral-500 font-medium mb-1">🧪 Hooks alternativos</h4>
+                <ul className="space-y-1 text-xs">
+                  {result.alternativeHooks.map((h: string, i: number) => (
+                    <li key={i} className="bg-neutral-50 p-2 rounded">{h}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <button
+              onClick={() => onApply(result)}
+              className="btn btn-primary w-full mt-3"
+            >
+              ✅ Aplicar al anuncio
+            </button>
+          </div>
+        )}
+
+        {result?._parseError && (
+          <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded text-xs">
+            La IA no devolvió JSON limpio. Texto crudo:
+            <pre className="mt-2 whitespace-pre-wrap">{result.raw}</pre>
+          </div>
+        )}
       </div>
     </div>
   );

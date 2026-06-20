@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -26,11 +26,13 @@ model Patient {
   // Parche de bienvenida (regalo del setter al iniciar el programa)
   patchSent                Boolean   @default(false)
   patchSentAt              DateTime?
-  // Camiseta ADVANCE
+  // Camiseta ADVANCE: se le pregunta la talla al paciente al entrar en ADVANCE.
+  // El equipo (setter / manager) la prepara y envía. shirtSize: "XS"|"S"|"M"|"L"|"XL"|"XXL".
   shirtSize                String?
-  // Se marca true al migrar pacientes existentes que ya recibieron sus
-  // regalos. Oculta el selector de talla y los excluye de las listas de
-  // envíos pendientes (camisetas + parches).
+  // Si true, el paciente NO ve el selector de talla de camiseta y queda fuera
+  // de las listas de envíos pendientes (camisetas Y parches). Se usa para
+  // pacientes migrados manualmente que ya recibieron sus regalos fuera de la
+  // plataforma. Se marca automáticamente al crear con `legacy: true`.
   giftsAlreadySent         Boolean    @default(false)
   shirtSent                Boolean   @default(false)
   shirtSentAt              DateTime?
@@ -44,7 +46,9 @@ model Patient {
   shippingProvince         String?    // provincia
   shippingPostalCode       String?    // código postal
   shippingPhone            String?
-  // País del paciente (se copia desde Lead.country al convertir).
+  // País del paciente. Se copia desde Lead.country al convertir. Se usa
+  // para filtrar envíos físicos (parches/camisetas) a solo España por
+  // logística. Null = legacy, se asume España.
   country                  String?
 
   // Tipo de programa contratado y dificultad percibida (etiquetas visibles)
@@ -77,17 +81,25 @@ model Patient {
   assignedProfessionalId String?
   assignedProfessional   Professional? @relation("PatientAssignedTo", fields: [assignedProfessionalId], references: [id])
 
-  // Revisión de cargas (cada X semanas).
+  // Revisión de cargas: cada cuántas semanas el fisio quiere revisar el control
+  // de cargas del paciente. Se ajusta desde la cabecera del paciente.
+  // loadReviewLastAt = última vez que se marcó como revisado; si null se usa
+  // startedAt como referencia para la primera revisión.
   loadReviewIntervalWeeks Int      @default(4)
   loadReviewLastAt        DateTime?
 
-  // Notas internas del fisio sobre el paciente.
+  // Notas internas del fisio sobre el paciente. Texto libre, editable desde
+  // el botón "Notas" en la cabecera de la ficha. Solo visible al equipo.
   fisioNotes              String?
 
-  // Notas de la "Llamada Anamnesis".
+  // Notas de la "Llamada Anamnesis" (videollamada de valoración inicial con el
+  // fisio). Texto libre, editable desde la pestaña Formularios del paciente.
   anamnesisCallNotes      String?
 
-  // Magic link de acceso 1-clic (sin código). Caducidad larga (365 días).
+  // Magic link de acceso 1-clic. Niki lo copia desde la ficha del paciente y
+  // lo manda por WhatsApp; el paciente lo pulsa y entra a la app sin código
+  // ni contraseña. Token con caducidad larga (365 días). Reutilizable mientras
+  // siga vigente; regenerable si hay sospecha de fuga.
   accessToken             String?   @unique
   accessTokenExpiresAt    DateTime?
 
@@ -337,9 +349,12 @@ model Lead {
   bookedAt        DateTime?                                  // momento exacto en que se hizo la reserva pública
 
   // ─── Re-agenda autoservicio ───
+  // El equipo comercial puede generar un enlace público para que el lead se
+  // cambie de hueco sin pasar por ellos. Se genera bajo demanda y se reutiliza
+  // (no rota), solo se anula al borrar el lead.
   rescheduleToken     String?   @unique
-  rescheduleTokenAt   DateTime?
-  rescheduledAt       DateTime?
+  rescheduleTokenAt   DateTime?                              // momento en que se generó el token (auditor.)
+  rescheduledAt       DateTime?                              // última vez que el lead se reagendó por enlace
 
   // ─── Etapas comerciales (workflow setter → closer) ───
   // Cuándo el setter marcó "avisado" (paso 1 hecho)
@@ -349,10 +364,13 @@ model Lead {
   // Cuándo el closer marcó "recordatorio enviado" (paso 3 hecho, día antes de la cita)
   reminderSentAt      DateTime?
 
-  adUtmCampaign   String?
-  adUtmSource     String?
-  adUtmMedium     String?
-  adUtmContent    String?
+  // ─── Atribución de marketing (UTMs capturados en la landing pública) ───
+  // Cuando un lead llega vía un anuncio, la landing parsea utm_* del query
+  // string y los guarda aquí. Permite cruzar Lead → AdCampaign/Ad para ROAS.
+  adUtmCampaign   String?                                     // ej. "hombro_q3_2026"
+  adUtmSource     String?                                     // ej. "meta" | "google" | "tiktok"
+  adUtmMedium     String?                                     // ej. "paid_social"
+  adUtmContent    String?                                     // ej. ad ID o nombre interno del anuncio
 
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -863,15 +881,19 @@ model SuccessCase {
 
 // ============================================================================
 // TUTORIALES / FORMACIÓN INTERNA DEL EQUIPO (estilo Skool)
+// Estructura de 3 niveles: Module > Section > Lesson. Las lecciones pueden
+// llevar adjuntos arbitrarios (PDFs, imágenes, links).
 // ============================================================================
 
 model TrainingModule {
   id          String   @id @default(cuid())
-  title       String
+  title       String                                  // "Onboarding de fisios"
   description String?
-  coverUrl    String?
+  coverUrl    String?                                 // imagen de portada
   order       Int      @default(0)
-  published   Boolean  @default(true)
+  published   Boolean  @default(true)                 // si false, oculto del listado
+  // JSON array de roles destinatarios: ["ceo","head_success","fisio","setter","closer"].
+  // Multi-rol: un módulo puede ser visible para varios roles.
   targetRoles String   @default("[\"ceo\"]")
   createdById String?
   createdAt   DateTime @default(now())
@@ -902,7 +924,7 @@ model TrainingLesson {
   section     TrainingSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   title       String
   description String?
-  videoUrl    String?
+  videoUrl    String?                                 // YouTube/Vimeo opcional
   order       Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -916,9 +938,9 @@ model TrainingLessonAttachment {
   id        String   @id @default(cuid())
   lessonId  String
   lesson    TrainingLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-  kind      String
-  url       String
-  name      String
+  kind      String                                   // "pdf" | "link" | "image"
+  url       String                                   // URL al recurso (Vercel Blob para PDFs/imgs, link externo para "link")
+  name      String                                   // nombre visible "Guía de adaptaciones.pdf"
   order     Int      @default(0)
   createdAt DateTime @default(now())
 
@@ -931,12 +953,20 @@ model TrainingLessonAttachment {
 
 model ChatChannel {
   id          String   @id @default(cuid())
+  // "public"  → cualquiera del equipo lo ve y postea (membership automática).
+  // "private" → solo invitados (registrados en ChatMember).
+  // "dm"      → conversación 1-a-1; siempre 2 ChatMember, name=null.
   kind        String
+  // Para public/private: nombre del canal ("#general"). Null en DMs.
   name        String?
+  // Para public/private: tema / propósito visible en el header.
   description String?
+  // Emoji decorativo opcional ("💬", "🩺", "📈"...). UI usa "💬" si null.
   emoji       String?
   createdAt   DateTime @default(now())
+  // Quién lo creó (para auditoría). Nullable porque si lo borramos no rompe.
   createdById String?
+  // Archivado: oculto del listado pero historial accesible si alguien lo abre directo.
   archivedAt  DateTime?
 
   members  ChatMember[]
@@ -951,7 +981,10 @@ model ChatMember {
   channel        ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
   professionalId String
   professional   Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  // Cuándo se unió (informativo).
   joinedAt       DateTime @default(now())
+  // Para badge de no leídos: timestamp del último mensaje que el usuario ha visto.
+  // Null = nunca lo ha abierto, todo aparece como no leído.
   lastReadAt     DateTime?
 
   @@unique([channelId, professionalId])
@@ -963,15 +996,20 @@ model ChatMessage {
   channelId   String
   channel     ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
+  // Autor: nullable porque si se borra el profesional, conservamos el mensaje
+  // con el snapshot del nombre. Snapshot de fullName para no perderlo.
   authorId    String?
   author      Professional? @relation("ChatMessageAuthor", fields: [authorId], references: [id], onDelete: SetNull)
   authorName  String
 
   body        String
+  // JSON array de professionalIds mencionados con @ (resueltos en el server).
+  // Se usa para crear TeamNotifications a cada mencionado.
   mentions    String   @default("[]")
 
   createdAt   DateTime @default(now())
   editedAt    DateTime?
+  // Soft-delete: el mensaje aparece como "Mensaje eliminado" para no romper hilo.
   deletedAt   DateTime?
 
   @@index([channelId, createdAt])
@@ -1061,8 +1099,9 @@ model ContentWeek {
   // Historias de la semana: JSON array de 7 strings (índice 0=Lun ... 6=Dom)
   weekStories     String   @default("[]")
 
+  // PDF de estrategia/briefing de la semana (Vercel Blob). Solo CEO sube.
   strategyPdfUrl  String?
-  strategyPdfName String?
+  strategyPdfName String?  // nombre original del fichero, para el link
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -1440,8 +1479,8 @@ model GoogleCalendarConnection {
   connectedById   String?
 
   // Tokens encriptados (formato: "iv:authTag:ciphertext" en hex)
-  accessTokenEnc  String
-  refreshTokenEnc String?
+  accessTokenEnc  String   @db.Text
+  refreshTokenEnc String?  @db.Text
 
   // Cuándo expira el access token (típicamente 1 hora desde la emisión)
   tokenExpiresAt  DateTime
@@ -1761,59 +1800,91 @@ model WelcomeMessageConfig {
 }
 
 // Factura emitida al paciente. Numeración correlativa por año (FF-2026-0001).
-// Datos de cliente y emisor en SNAPSHOT (no FK) — facturas inmutables.
+// Los datos del cliente y emisor se guardan como SNAPSHOT (no FK) porque una
+// factura emitida no puede cambiar si luego editas el perfil del paciente o el
+// tuyo. Cumplimiento legal: facturas son inmutables.
+//
+// La numeración se asigna en transacción al crear (FOR UPDATE-ish con retry en
+// caso de carrera, ver lib/patient-invoices.ts).
 model PatientInvoice {
   id              String    @id @default(cuid())
 
+  // Numeración (asignada al crear, nunca cambia)
   series          String    @default("FF")
   year            Int
   sequence        Int
   number          String    @unique             // "FF-2026-0001"
 
-  issueDate       DateTime
+  // Fechas
+  issueDate       DateTime                       // fecha de emisión
 
+  // ─── Cliente (snapshot, NO se actualiza si el paciente cambia datos) ───
   patientId       String?
   patient         Patient?  @relation(fields: [patientId], references: [id], onDelete: SetNull)
-  clientName      String
-  clientTaxId     String?
-  clientAddress   String?
+  clientName      String                         // fullName del paciente
+  clientTaxId     String?                        // contractDNI
+  clientAddress   String?                        // dirección completa formateada
   clientEmail     String?
 
+  // ─── Emisor (snapshot del Professional CEO al momento de emitir) ───
   issuerName      String
   issuerTaxId     String?
   issuerAddress   String?
   issuerIban      String?
 
-  concept         String
-  baseAmount      Float
-  vatExempt       Boolean   @default(true)
-  vatRate         Float     @default(0)
+  // ─── Importe ───
+  concept         String                         // ej. "Servicios de fisioterapia · Programa RECUPERA 4 meses"
+  baseAmount      Float                          // base imponible
+  vatExempt       Boolean   @default(true)       // exenta IVA art. 20 Ley 37/1992
+  vatRate         Float     @default(0)          // 0 si exenta
   vatAmount       Float     @default(0)
-  irpfRate        Float     @default(0)
+  irpfRate        Float     @default(0)          // 0 para particulares, % si empresa retiene
   irpfAmount      Float     @default(0)
-  totalAmount     Float
+  totalAmount     Float                          // baseAmount + vatAmount - irpfAmount
 
+  // ─── Vinculación opcional al cobro de origen (trazabilidad) ───
   saleId                String?
   sale                  Sale?                @relation(fields: [saleId], references: [id], onDelete: SetNull)
   subscriptionRenewalId String?
   subscriptionRenewal   SubscriptionRenewal? @relation(fields: [subscriptionRenewalId], references: [id], onDelete: SetNull)
-  transactionId         String?
+  transactionId         String?              // si vino de transacción manual
 
-  cancelledAt        DateTime?
+  // ─── Anulación ───
+  cancelledAt        DateTime?                   // si anulada, fecha
   cancellationReason String?
 
   createdAt       DateTime  @default(now())
-  createdById     String?
+  createdById     String?                        // CEO que emitió
 
-  @@unique([year, sequence])
+  @@unique([year, sequence])                     // unicidad fuerte del correlativo
   @@index([patientId])
   @@index([year, sequence])
   @@index([issueDate])
 }
 
-// Brief para la IA de generación de contenido (singleton, editable por CEO).
+// Brief para la IA de generación de contenido (fila única, editable por CEO).
+// Es el "system prompt" personalizado que define quién eres, cómo hablas y qué
+// quieres / no quieres que la IA produzca. Se inyecta en cada llamada a Opus.
 model AiContentBrief {
   id              String   @id @default("singleton")
+  brand           String   @default("")   // quiénes sois, valores, posicionamiento
+  voiceTone       String   @default("")   // cómo habláis: tuteo, registro, expresiones
+  dos             String   @default("")   // qué SÍ hacer siempre
+  donts           String   @default("")   // qué NO hacer jamás
+  structureHints  String   @default("")   // patrones de ritmo fuera de las plantillas oficiales
+  goodExamples    String   @default("")   // 2-3 guiones que clavasteis (con notas)
+  badExamples     String   @default("")   // 2-3 ejemplos AI-slop que NO quiere
+  updatedAt       DateTime @updatedAt
+  updatedById     String?
+}
+
+// Brief IA específico para Anuncios de pago. Mismo modelo que AiContentBrief
+// pero separado porque la voz / la estructura de un Reel orgánico no es la
+// misma que la de un Ad de Meta. El campo `systemPrompt` permite pegar
+// directamente el system prompt completo de la Skill de Claude del usuario.
+model AiAdsBrief {
+  id              String   @id @default("singleton")
+  systemPrompt    String   @default("")   // OPCIONAL: pega aquí el prompt completo de tu Skill de Claude para usar exactamente esa configuración. Si está vacío, se usan los campos de abajo.
   brand           String   @default("")
   voiceTone       String   @default("")
   dos             String   @default("")
@@ -1996,16 +2067,29 @@ model CommunityLessonProgress {
   @@index([patientId])
 }
 
-// Tareas semanales del equipo (mismo patrón que prod).
+// ============================================================================
+// TAREAS SEMANALES DEL EQUIPO (panel principal de fisios y head_success)
+// ============================================================================
+// El CEO configura tareas recurrentes que aparecen cada semana en el panel
+// principal de los fisios y del head_success. Cada tarea va asignada a un día
+// y un rol. Las completaciones se trackean por semana → cada lunes 00:00
+// Madrid las tareas vuelven a aparecer "pendientes" (sin reset real en BD: la
+// vista filtra por weekStartDate). Historial completo para auditoría del CEO.
+//
+// targetRole: "fisio" | "head_success" (singular por ahora).
+// dayOfWeek:  1..5 (L..V).
+// ============================================================================
+
 model WeeklyTeamTask {
   id          String   @id @default(cuid())
-  title       String
-  dayOfWeek   Int
-  targetRole  String
+  title       String                              // "Pasar feedback", "Soporte", ...
+  dayOfWeek   Int                                 // 1=L, 2=M, 3=X, 4=J, 5=V
+  targetRole  String                              // "fisio" | "head_success"
   order       Int      @default(0)
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
   completions WeeklyTeamTaskCompletion[]
 
   @@index([targetRole, dayOfWeek, order])
@@ -2017,6 +2101,8 @@ model WeeklyTeamTaskCompletion {
   task           WeeklyTeamTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
   professionalId String
   professional   Professional   @relation("WeeklyTeamTaskCompletions", fields: [professionalId], references: [id], onDelete: Cascade)
+  // Lunes 00:00 UTC de la semana Madrid en la que se marcó (misma técnica que
+  // weekStartDate() de lib/program-pauses).
   weekStartDate  DateTime
   completedAt    DateTime @default(now())
 
@@ -2024,15 +2110,31 @@ model WeeklyTeamTaskCompletion {
   @@index([weekStartDate, professionalId])
 }
 
+// Tareas puntuales: cadencia mensual (día X de cada mes) o rango libre de
+// fechas. Se crean desde /fisio/tareas (CEO + head_success). Aparecen en el
+// panel "Tareas" del rol destinatario.
+//
+// kind:
+//   "monthly" → dayOfMonth (1..31). Cada mes es una instancia; se considera
+//               completada para ese mes si hay TeamTaskAdHocCompletion con
+//               occurrenceDate = primer día del mes UTC.
+//   "range"   → startDate, endDate (inclusivos). Una sola instancia, vigente
+//               mientras hoy esté dentro del rango. occurrenceDate = startDate.
+// kind:
+//   "monthly"         → dayOfMonth (1..31). Cada mes una instancia.
+//   "monthly_weekday" → nthWeek (1..4 ó -1=último) + dayOfWeek (1=L..7=D).
+//                       Ej. 1er lunes / 3er viernes / último jueves.
+//   "range"           → startDate, endDate (inclusivos).
+// assigneesJson: JSON array de Professional.id; "[]" = todos los del role.
 model TeamTaskAdHoc {
   id            String   @id @default(cuid())
   title         String
-  description   String?
-  targetRole    String
-  kind          String
+  description   String?                               // notas/instrucciones opcionales
+  targetRole    String                                // "fisio" | "head_success"
+  kind          String                                // "monthly" | "monthly_weekday" | "range"
   dayOfMonth    Int?
-  nthWeek       Int?
-  dayOfWeek     Int?
+  nthWeek       Int?                                  // 1..4 ó -1
+  dayOfWeek     Int?                                  // 1=L..7=D
   startDate     DateTime?
   endDate       DateTime?
   assigneesJson String   @default("[]")
@@ -2040,6 +2142,7 @@ model TeamTaskAdHoc {
   createdById   String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
   completions   TeamTaskAdHocCompletion[]
 
   @@index([targetRole, active])
@@ -2051,6 +2154,7 @@ model TeamTaskAdHocCompletion {
   task           TeamTaskAdHoc @relation(fields: [taskId], references: [id], onDelete: Cascade)
   professionalId String
   professional   Professional   @relation("TeamTaskAdHocCompletions", fields: [professionalId], references: [id], onDelete: Cascade)
+  // Para monthly: primer día del mes (UTC). Para range: startDate de la tarea.
   occurrenceDate DateTime
   completedAt    DateTime @default(now())
 
@@ -2095,19 +2199,29 @@ model AdCampaignTag {
 
 // ============================================================================
 // ANUNCIOS DE PAGO (gestión completa: Campaign → AdSet → Ad)
+// Espejo de la estructura de Meta Ads Manager. Solo CEO gestiona.
+// AdCampaignTag (más arriba) seguirá funcionando como clasificación rápida de
+// las campañas devueltas por la Graph API; AdCampaign es la entidad propia que
+// el equipo edita aquí dentro y se enlaza opcionalmente con su campaña en Meta
+// vía metaCampaignId. Lo mismo para AdSet y Ad.
 // ============================================================================
 
 model AdCampaign {
   id              String   @id @default(cuid())
-  name            String
+  name            String                                    // "Hombro Q3 2026"
+  // Objetivo de la campaña, alineado con los objetivos de Meta:
+  // "traffic" | "conversions" | "leads" | "engagement" | "awareness" | "video_views"
   objective       String   @default("conversions")
+  // Estado global de la campaña en NUESTRO sistema (puede divergir del de
+  // Meta hasta que sincronicemos). Workflow:
+  // "idea" | "active" | "paused" | "finished"
   status          String   @default("idea")
-  metaCampaignId  String?
+  metaCampaignId  String?                                   // ID en Meta cuando esté creada allí
   startDate       DateTime?
   endDate         DateTime?
-  dailyBudget     Float?
+  dailyBudget     Float?                                    // EUR
   totalBudget     Float?
-  notes           String?
+  notes           String?                                   // notas internas para el equipo
   createdById     String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -2123,14 +2237,16 @@ model AdSet {
   campaignId      String
   campaign        AdCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
-  name            String
+  name            String                                    // "Hombros 25-45 ES"
+  // Criterios libres de audiencia en JSON: edad, intereses, ubicación, lookalike, etc.
   audienceJSON    String   @default("{}")
+  // Placements: ["feed_ig","reels_ig","stories_ig","feed_fb",...]
   placementJSON   String   @default("[]")
   metaAdsetId     String?
   startDate       DateTime?
   endDate         DateTime?
-  dailyBudget     Float?
-  status          String   @default("idea")
+  dailyBudget     Float?                                    // EUR
+  status          String   @default("idea")                 // mismo workflow que AdCampaign
   notes           String?
 
   createdAt       DateTime @default(now())
@@ -2148,23 +2264,27 @@ model Ad {
   adsetId         String
   adset           AdSet @relation(fields: [adsetId], references: [id], onDelete: Cascade)
 
-  name            String
-  format          String   @default("video")
+  name            String                                    // "Hombro Reel Ana 30s"
+  format          String   @default("video")                // "video" | "image" | "carousel" | "story"
 
+  // Creatividad — equivalentes a ContentPiece pero específicos de pago
   hook            String?
-  script          String?
-  cta             String?
-  ctaUrl          String?
-  finalFileUrl    String?
+  script          String?                                   // copy/guion completo
+  cta             String?                                   // texto del CTA ("Reserva videoconsulta")
+  ctaUrl          String?                                   // URL del CTA (donde pegamos UTMs antes de subir a Meta)
+  finalFileUrl    String?                                   // vídeo/imagen final
   editorNotes     String?
 
+  // Producción (igual que en ContentPiece)
   recordingLocation String?
   recordingOutfit   String?
   recordingMaterial String?
   consentSigned     Boolean @default(false)
 
+  // Estado de workflow completo:
+  // "idea" | "brief" | "recording" | "editing" | "scheduled" | "active" | "paused" | "finished"
   status          String   @default("idea")
-  metaAdId        String?
+  metaAdId        String?                                   // se rellena cuando se publica en Meta
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -2174,10 +2294,12 @@ model Ad {
   @@index([metaAdId])
 }
 
+// Banco específico para ads. Separado del de Contenido orgánico — los hooks y
+// audiencias suelen ser distintos.
 model AdHook {
   id          String   @id @default(cuid())
-  text        String
-  notes       String?
+  text        String                                        // "¿Te cuesta dormir del lado del hombro?"
+  notes       String?                                       // contexto o resultado conocido
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -2185,8 +2307,8 @@ model AdHook {
 
 model AdAudience {
   id          String   @id @default(cuid())
-  name        String
-  description String
+  name        String                                        // "Crossfit hombro 30-45 ES"
+  description String                                        // criterios libres en texto
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -2207,13 +2329,14 @@ model WorkoutTemplate {
 }
 
 // PRs (récords personales) del paciente — exclusivo del panel ADVANCE rolling.
+// El paciente los gestiona desde su app (autoeditar).
 model PatientPR {
   id          String   @id @default(cuid())
   patientId   String
   patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  name        String
-  value       String
-  unit        String?
+  name        String                                  // "Snatch", "Fran", "Back Squat", "Murph"...
+  value       String                                  // "100 kg", "3:21", "12 rounds"
+  unit        String?                                 // opcional ("kg", "tiempo", "reps")
   recordedAt  DateTime @default(now())
   notes       String?
   createdAt   DateTime @default(now())
@@ -2221,17 +2344,19 @@ model PatientPR {
   @@index([patientId, recordedAt])
 }
 
-// Log diario del paciente — los ADVANCE rolling registran tras entrenar.
-// 3 valores 0-10: fatiga, rpe, sleep. Una entrada por paciente/día (upsert
-// por recordedDate = UTC midnight del día Madrid).
+// Log diario del paciente — los ADVANCE rolling registran cómo les fue tras
+// entrenar. 3 valores 0-10: fatiga (subjetiva al inicio), rpe (esfuerzo
+// percibido de la sesión), sleep (calidad del sueño la noche anterior).
+// Una entrada por paciente/día (upsert por recordedDate = UTC midnight del
+// día calendario Madrid).
 model PatientDailyLog {
   id           String   @id @default(cuid())
   patientId    String
   patient      Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  recordedDate DateTime
-  fatigue      Int
-  rpe          Int
-  sleep        Int
+  recordedDate DateTime                                 // UTC midnight del día Madrid
+  fatigue      Int                                       // 0..10
+  rpe          Int                                       // 0..10
+  sleep        Int                                       // 0..10
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -2239,14 +2364,16 @@ model PatientDailyLog {
   @@index([patientId, recordedDate])
 }
 
-// Reto mensual — un reto global por mes con leaderboard.
+// Reto mensual — un reto global por mes, configurable por el coach. Cada paciente
+// ADVANCE rolling envía su resultado y se construye un leaderboard.
 model MonthlyChallenge {
   id          String   @id @default(cuid())
   year        Int
-  month       Int
-  title       String
-  description String?
-  metric      String   @default("score")
+  month       Int                                     // 0..11
+  title       String                                  // "Fran sub-4"
+  description String?                                 // descripción / reglas
+  // Unidad para ordenar el leaderboard: "time" (menor mejor) o "kg/reps/score" (mayor mejor)
+  metric      String   @default("score")              // "time" | "score"
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -2255,14 +2382,15 @@ model MonthlyChallenge {
   @@unique([year, month])
 }
 
+// Resultado de un paciente en un reto mensual.
 model MonthlyChallengeResult {
   id          String   @id @default(cuid())
   challengeId String
   challenge   MonthlyChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
   patientId   String
   patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  value       String
-  unit        String?
+  value       String                                  // "3:42" o "127" — texto libre, parseable según metric
+  unit        String?                                 // opcional, ej "kg"
   notes       String?
   recordedAt  DateTime @default(now())
   createdAt   DateTime @default(now())
@@ -2272,18 +2400,31 @@ model MonthlyChallengeResult {
   @@index([challengeId])
 }
 
+// ============================================================================
+// REUNIONES DEL EQUIPO (Reuniones)
+// ============================================================================
+// 4 pestañas en /fisio/reuniones. 3 categorías van por este modelo
+// (la 4ª pestaña 'Sesiones clínicas' sigue usando ClinicalSessionCase):
+//   "head_success" — acceso: CEO + head_success (prep CEO+head_success).
+//   "comercial"    — acceso: CEO + setter + closer (prep CEO+setter).
+//   "other"        — acceso: attendeesIds + CEO + head_success + setter.
+//                    Prep: CEO + head_success + setter.
+//
+// Cada reunión tiene dos campos de texto largos: preparation (notas previas,
+// solo managers) y summary (resumen, visible a todos los con acceso).
+// ============================================================================
 model TeamMeeting {
   id           String   @id @default(cuid())
-  category     String
+  category     String                                  // "head_success" | "comercial" | "other"
   title        String
   scheduledAt  DateTime?
-  preparation  String?
-  summary      String?
-  status       String   @default("upcoming")
+  preparation  String?                                 // texto largo, solo managers
+  summary      String?                                 // texto largo, visible al equipo de esa categoría
+  status       String   @default("upcoming")           // "upcoming" | "done" | "cancelled"
   createdById  String?
-  attendeeIds  String   @default("[]")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  attendeeIds  String   @default("[]")                 // JSON array de Professional.id (solo "other")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([category, scheduledAt])
 }

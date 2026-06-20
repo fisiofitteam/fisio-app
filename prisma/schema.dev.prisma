@@ -1825,6 +1825,20 @@ model AiContentBrief {
   updatedById     String?
 }
 
+model AiAdsBrief {
+  id              String   @id @default("singleton")
+  systemPrompt    String   @default("")
+  brand           String   @default("")
+  voiceTone       String   @default("")
+  dos             String   @default("")
+  donts           String   @default("")
+  structureHints  String   @default("")
+  goodExamples    String   @default("")
+  badExamples     String   @default("")
+  updatedAt       DateTime @updatedAt
+  updatedById     String?
+}
+
 // Reuniones → Sesiones clínicas: tabla viva de casos clínicos que el equipo
 // comenta cada semana. assignedToId es el id del Professional (sin relación FK).
 model ClinicalSessionCase {

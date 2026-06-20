@@ -1878,6 +1878,24 @@ model AiContentBrief {
   updatedById     String?
 }
 
+// Brief IA específico para Anuncios de pago. Mismo modelo que AiContentBrief
+// pero separado porque la voz / la estructura de un Reel orgánico no es la
+// misma que la de un Ad de Meta. El campo `systemPrompt` permite pegar
+// directamente el system prompt completo de la Skill de Claude del usuario.
+model AiAdsBrief {
+  id              String   @id @default("singleton")
+  systemPrompt    String   @default("")   // OPCIONAL: pega aquí el prompt completo de tu Skill de Claude para usar exactamente esa configuración. Si está vacío, se usan los campos de abajo.
+  brand           String   @default("")
+  voiceTone       String   @default("")
+  dos             String   @default("")
+  donts           String   @default("")
+  structureHints  String   @default("")
+  goodExamples    String   @default("")
+  badExamples     String   @default("")
+  updatedAt       DateTime @updatedAt
+  updatedById     String?
+}
+
 // Reuniones → Sesiones clínicas: tabla viva de casos clínicos que el equipo
 // comenta cada semana. assignedToId es el id del Professional (sin relación FK).
 model ClinicalSessionCase {

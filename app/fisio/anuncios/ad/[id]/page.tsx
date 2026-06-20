@@ -31,11 +31,6 @@ export default async function AdEditorPage({ params }: { params: { id: string } 
         cta: ad.cta,
         ctaUrl: ad.ctaUrl,
         finalFileUrl: ad.finalFileUrl,
-        editorNotes: ad.editorNotes,
-        recordingLocation: ad.recordingLocation,
-        recordingOutfit: ad.recordingOutfit,
-        recordingMaterial: ad.recordingMaterial,
-        consentSigned: ad.consentSigned,
         metaAdId: ad.metaAdId,
       }}
       breadcrumb={{
