@@ -1,12 +1,17 @@
 /**
  * POST /api/ads/ads/generate-script
  *
- * Genera un guion estructurado (hook + script + cta) para un anuncio concreto.
- * Usa el AiAdsBrief (system prompt completo si está, si no los campos
- * estructurados) y los datos del propio Ad (formato, hook seed, contexto libre).
+ * Genera un guion estructurado para un anuncio, en el mismo formato que el
+ * generador de Contenido (blocks + hookVariations) + CTA + ctaUrlSuggestion.
  *
- * Body: { adId, hookSeed?, durationSec?, freeContext? }
- * Devuelve: { hook, script, cta, ctaUrlSuggestion?, alternativeHooks: string[] }
+ * Soporta iteración: si se manda `previousResult` y `iterationInstruction`,
+ * la IA refina la versión anterior en lugar de generar de cero.
+ *
+ * Body:
+ *   { adId, instructions, hook?, freeNote?, previousResult?, iterationInstruction? }
+ *
+ * Devuelve:
+ *   { blocks: [{label, content}], hookVariations: string[], cta, ctaUrlSuggestion }
  */
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
@@ -45,43 +50,75 @@ export async function POST(req: NextRequest) {
   if (!ad) return NextResponse.json({ error: "Ad no encontrado" }, { status: 404 });
 
   const brief = await getAiAdsBrief();
-  const system = buildAdsSystemPrompt(brief);
+  const baseSystem = buildAdsSystemPrompt(brief);
 
-  const hookSeed = String(data?.hookSeed ?? ad.hook ?? "").trim();
-  const durationSec = Number(data?.durationSec ?? 30) || 30;
-  const freeContext = String(data?.freeContext ?? "").trim();
+  // Añadimos las reglas estructurales del output al system para no contaminar
+  // el system custom del usuario con detalles del JSON esperado.
+  const system = `${baseSystem}
+
+REGLAS DEL OUTPUT (importantes, siempre se cumplen):
+- Devuelve SOLO un objeto JSON válido, sin markdown ni texto antes/después.
+- "blocks" es un array de bloques del guion. Cada bloque: { "label": "...", "content": "..." }. Mínimo 3 bloques (Hook, Desarrollo, Cierre/CTA) y máximo 6.
+- Si el usuario te da hook literal en el input, úsalo TAL CUAL como contenido del primer bloque "Hook" (sin reformularlo).
+- "hookVariations" son 3-4 hooks alternativos potentes para A/B testear (cortos, < 80 caracteres).
+- "cta" es el texto del CTA del anuncio (1 frase corta).
+- "ctaUrlSuggestion" es la URL sugerida (típicamente https://fisiofitteam.com/agenda con UTMs como utm_source=meta&utm_campaign=...).
+
+Estructura JSON exacta:
+{
+  "blocks": [{ "label": "Hook", "content": "..." }, { "label": "Desarrollo", "content": "..." }, ...],
+  "hookVariations": ["...", "...", "..."],
+  "cta": "...",
+  "ctaUrlSuggestion": "https://..."
+}`;
+
+  const instructions = String(data?.instructions ?? "").trim();
+  const hookSeed = String(data?.hook ?? ad.hook ?? "").trim();
+  const freeNote = String(data?.freeNote ?? "").trim();
+  const previousResult = data?.previousResult ?? null;
+  const iterationInstruction = String(data?.iterationInstruction ?? "").trim();
+
+  if (!instructions && !iterationInstruction) {
+    return NextResponse.json({ error: "Necesitas darle instrucciones" }, { status: 400 });
+  }
 
   const campaign = ad.adset.campaign;
   const objLabel = OBJECTIVE_LABELS[campaign.objective as AdObjective] ?? campaign.objective;
   const formatLabel = AD_FORMAT_LABELS[ad.format as AdFormat] ?? ad.format;
 
-  const userPrompt = `Genera un guion de anuncio con estos parámetros:
+  let userPrompt: string;
+  if (previousResult && iterationInstruction) {
+    userPrompt = `Refina la generación anterior según este ajuste:
+
+AJUSTE A APLICAR: ${iterationInstruction}
+
+RESULTADO ANTERIOR:
+${JSON.stringify(previousResult, null, 2)}
+
+CONTEXTO ORIGINAL:
+- Campaña: ${campaign.name} (objetivo: ${objLabel})
+- Anuncio: ${ad.name} (formato: ${formatLabel})
+${hookSeed ? `- Hook seed original: ${hookSeed}` : ""}
+${instructions ? `- Instrucciones originales: ${instructions}` : ""}
+
+Devuelve el JSON refinado conservando lo que funcionaba.`;
+  } else {
+    userPrompt = `Genera un guion de anuncio con estos parámetros:
 
 CAMPAÑA: ${campaign.name}
 OBJETIVO DE LA CAMPAÑA: ${objLabel}
 FORMATO DEL ANUNCIO: ${formatLabel}
 NOMBRE DEL ANUNCIO: ${ad.name}
-DURACIÓN APROX: ${durationSec}s
-${hookSeed ? `HOOK SEED (inspiración): ${hookSeed}` : ""}
-${freeContext ? `CONTEXTO LIBRE: ${freeContext}` : ""}
 ${campaign.notes ? `NOTAS DE LA CAMPAÑA: ${campaign.notes}` : ""}
 
-REGLAS DEL OUTPUT (importante):
-- Devuelve SOLO un objeto JSON válido, sin envoltura markdown ni texto antes/después.
-- "hook" engancha en los primeros 3 segundos.
-- "script" es el guion completo en formato conversacional, con cortes/timestamps si ayuda.
-- "cta" es la llamada a la acción corta.
-- "ctaUrlSuggestion" es la URL sugerida (típicamente https://fisiofitteam.com/agenda con UTM).
-- "alternativeHooks" son 3-4 hooks alternativos para A/B testear.
+INSTRUCCIONES DEL USUARIO:
+${instructions}
 
-Estructura JSON esperada:
-{
-  "hook": "...",
-  "script": "...",
-  "cta": "...",
-  "ctaUrlSuggestion": "https://fisiofitteam.com/agenda",
-  "alternativeHooks": ["...", "...", "..."]
-}`;
+${hookSeed ? `HOOK QUE EL USUARIO QUIERE USAR LITERAL (úsalo como bloque Hook tal cual): "${hookSeed}"` : ""}
+${freeNote ? `NOTA / AJUSTE DE TONO: ${freeNote}` : ""}
+
+Devuelve el JSON con la estructura indicada.`;
+  }
 
   try {
     const resp = await client().messages.create({
@@ -96,7 +133,7 @@ Estructura JSON esperada:
     try {
       parsed = JSON.parse(cleaned);
     } catch {
-      return NextResponse.json({ raw: text, _parseError: true });
+      return NextResponse.json({ raw: text, _parseError: true }, { status: 500 });
     }
     return NextResponse.json(parsed);
   } catch (e: any) {

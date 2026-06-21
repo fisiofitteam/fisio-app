@@ -11,6 +11,7 @@ import {
   type AdFormat,
   type AdStatus,
 } from "@/lib/ads";
+import { AdsAiGenerateModal } from "@/components/AdsAiGenerateModal";
 
 type AdState = {
   id: string;
@@ -79,19 +80,6 @@ export function AdEditor({
     router.push(`/fisio/anuncios/campanas/${breadcrumb.campaignId}`);
   }
 
-  /** Aplica el resultado de la IA a los campos del editor. */
-  async function applyAi(result: { hook?: string; script?: string; cta?: string; ctaUrlSuggestion?: string }) {
-    const next: AdState = {
-      ...ad,
-      hook: result.hook ?? ad.hook,
-      script: result.script ?? ad.script,
-      cta: result.cta ?? ad.cta,
-      ctaUrl: ad.ctaUrl || result.ctaUrlSuggestion || "",
-    };
-    setAd(next);
-    setAiOpen(false);
-    await persist(next);
-  }
 
   // ─── Modo grabación: pantalla minimalista con el guion en grande ───
   if (recordingMode) {
@@ -239,11 +227,18 @@ export function AdEditor({
       </div>
 
       {aiOpen && (
-        <AiGenerateModal
+        <AdsAiGenerateModal
           adId={ad.id}
-          currentHook={ad.hook ?? ""}
+          initialHook={ad.hook ?? ""}
+          existingScript={ad.script ?? ""}
+          existingCta={ad.cta ?? ""}
+          existingCtaUrl={ad.ctaUrl ?? ""}
           onClose={() => setAiOpen(false)}
-          onApply={applyAi}
+          onApply={(patch) => {
+            const next = { ...ad, ...patch } as AdState;
+            setAd(next);
+            persist(next);
+          }}
         />
       )}
     </div>
@@ -290,124 +285,3 @@ function RecordingMode({
   );
 }
 
-/** Modal con input para parámetros + llamada a la IA + preview del resultado. */
-function AiGenerateModal({
-  adId,
-  currentHook,
-  onClose,
-  onApply,
-}: {
-  adId: string;
-  currentHook: string;
-  onClose: () => void;
-  onApply: (r: { hook?: string; script?: string; cta?: string; ctaUrlSuggestion?: string }) => Promise<void>;
-}) {
-  const [hookSeed, setHookSeed] = useState(currentHook);
-  const [durationSec, setDurationSec] = useState(30);
-  const [freeContext, setFreeContext] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<any>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  async function generate() {
-    setLoading(true);
-    setError(null);
-    setResult(null);
-    try {
-      const r = await fetch("/api/ads/ads/generate-script", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ adId, hookSeed, durationSec, freeContext }),
-      });
-      const data = await r.json();
-      if (!r.ok) setError(data?.error ?? "No se ha podido generar");
-      else setResult(data);
-    } catch (e: any) {
-      setError(e.message ?? "Error de red");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl max-w-2xl w-full p-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex justify-between items-center mb-3">
-          <h3 className="font-medium">✨ Generar guion con IA</h3>
-          <button onClick={onClose} className="text-neutral-400 text-xl">✕</button>
-        </div>
-
-        <p className="text-xs text-neutral-500 mb-3">
-          Claude Opus 4.7 usará tu <a href="/fisio/anuncios/brief-ia" className="underline">Brief IA de anuncios</a> + los datos de la campaña/anuncio para generar un guion.
-        </p>
-
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs text-neutral-500 block mb-1">Hook semilla (opcional)</label>
-            <input className="input" value={hookSeed} onChange={(e) => setHookSeed(e.target.value)} placeholder="Una frase o idea de partida" />
-          </div>
-          <div>
-            <label className="text-xs text-neutral-500 block mb-1">Duración aprox (segundos)</label>
-            <input type="number" className="input" value={durationSec} onChange={(e) => setDurationSec(Number(e.target.value) || 30)} min={5} max={120} />
-          </div>
-          <div>
-            <label className="text-xs text-neutral-500 block mb-1">Contexto libre (opcional)</label>
-            <textarea className="input" rows={3} value={freeContext} onChange={(e) => setFreeContext(e.target.value)} placeholder="Datos extra: oferta, dolor concreto, audiencia, etc." />
-          </div>
-
-          <button onClick={generate} disabled={loading} className="btn btn-primary w-full">
-            {loading ? "Generando con Claude Opus…" : "✨ Generar"}
-          </button>
-        </div>
-
-        {error && <p className="text-sm text-red-700 mt-3">{error}</p>}
-
-        {result && !result._parseError && (
-          <div className="mt-4 space-y-3 text-sm">
-            {result.hook && (
-              <div>
-                <h4 className="text-xs uppercase text-neutral-500 font-medium mb-1">🎣 Hook</h4>
-                <p className="bg-amber-50 p-2 rounded">{result.hook}</p>
-              </div>
-            )}
-            {result.script && (
-              <div>
-                <h4 className="text-xs uppercase text-neutral-500 font-medium mb-1">📝 Guion</h4>
-                <pre className="whitespace-pre-wrap text-sm bg-neutral-50 p-2 rounded">{result.script}</pre>
-              </div>
-            )}
-            {result.cta && (
-              <div>
-                <h4 className="text-xs uppercase text-neutral-500 font-medium mb-1">📣 CTA</h4>
-                <p className="bg-neutral-50 p-2 rounded">{result.cta}</p>
-              </div>
-            )}
-            {result.alternativeHooks && result.alternativeHooks.length > 0 && (
-              <div>
-                <h4 className="text-xs uppercase text-neutral-500 font-medium mb-1">🧪 Hooks alternativos</h4>
-                <ul className="space-y-1 text-xs">
-                  {result.alternativeHooks.map((h: string, i: number) => (
-                    <li key={i} className="bg-neutral-50 p-2 rounded">{h}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            <button
-              onClick={() => onApply(result)}
-              className="btn btn-primary w-full mt-3"
-            >
-              ✅ Aplicar al anuncio
-            </button>
-          </div>
-        )}
-
-        {result?._parseError && (
-          <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded text-xs">
-            La IA no devolvió JSON limpio. Texto crudo:
-            <pre className="mt-2 whitespace-pre-wrap">{result.raw}</pre>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
