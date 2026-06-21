@@ -760,6 +760,104 @@ model FisioTask {
 }
 
 // ============================================================================
+// SISTEMA PERSONAL DEL CEO
+// Foco del mes + tareas privadas con prioridad/fecha/etiquetas/recurrencia
+// + subtareas + cuaderno diario. Todo filtrado por professionalId del CEO.
+// No comparte BD con WeeklyTeamTask ni TeamTaskAdHoc (esas son del equipo).
+// ============================================================================
+
+// Foco mensual del CEO. Una fila por (professionalId, year, month).
+// Es texto libre de 1-3 frases que aparece en el panel y se renueva
+// cada mes pulsando "definir foco del mes".
+model CeoFocus {
+  id              String   @id @default(cuid())
+  professionalId  String
+  year            Int
+  month           Int                                       // 1-12
+  content         String                                    // 1-3 frases
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([professionalId, year, month])
+  @@index([professionalId])
+}
+
+// Etiqueta editable por el propio CEO (nombre + color hex).
+model CeoTaskTag {
+  id              String   @id @default(cuid())
+  professionalId  String
+  name            String                                    // "Negocio", "Personal", "Marketing"
+  color           String                                    // hex "#F59E0B"
+  order           Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  tasks           CeoTaskTagOnTask[]
+
+  @@index([professionalId])
+}
+
+// Tarea privada del CEO.
+model CeoTask {
+  id              String   @id @default(cuid())
+  professionalId  String
+  title           String
+  description     String?
+  priority        String   @default("medium")               // "low" | "medium" | "high"
+  dueDate         DateTime?
+  completedAt     DateTime?
+  // Recurrencia: al completar, el server crea otra tarea con dueDate calculada.
+  recurrenceType  String   @default("none")                 // "none" | "daily" | "weekly" | "monthly"
+  recurrenceDay   Int?                                      // si weekly: 1-7; si monthly: 1-31
+  parentTaskId    String?                                   // si nació de una tarea recurrente, su padre
+  order           Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  subtasks        CeoSubtask[]
+  tags            CeoTaskTagOnTask[]
+
+  @@index([professionalId, completedAt])
+  @@index([dueDate])
+}
+
+// Subtarea (checklist dentro de una tarea).
+model CeoSubtask {
+  id              String   @id @default(cuid())
+  taskId          String
+  task            CeoTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  title           String
+  completedAt     DateTime?
+  order           Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  @@index([taskId])
+}
+
+// Pivot N:M CeoTask <-> CeoTaskTag.
+model CeoTaskTagOnTask {
+  taskId  String
+  task    CeoTask    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  tagId   String
+  tag     CeoTaskTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, tagId])
+  @@index([tagId])
+}
+
+// Cuaderno del día: una entrada de notas libres por día y profesional.
+model CeoJournalEntry {
+  id              String   @id @default(cuid())
+  professionalId  String
+  date            DateTime                                  // 00:00 del día (UTC)
+  content         String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([professionalId, date])
+  @@index([professionalId, date])
+}
+
+// ============================================================================
 // LLAMADAS PROGRAMADAS CON PACIENTES
 // ============================================================================
 

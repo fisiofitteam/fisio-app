@@ -742,6 +742,92 @@ model FisioTask {
 }
 
 // ============================================================================
+// SISTEMA PERSONAL DEL CEO
+// ============================================================================
+
+model CeoFocus {
+  id              String   @id @default(cuid())
+  professionalId  String
+  year            Int
+  month           Int
+  content         String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([professionalId, year, month])
+  @@index([professionalId])
+}
+
+model CeoTaskTag {
+  id              String   @id @default(cuid())
+  professionalId  String
+  name            String
+  color           String
+  order           Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  tasks           CeoTaskTagOnTask[]
+
+  @@index([professionalId])
+}
+
+model CeoTask {
+  id              String   @id @default(cuid())
+  professionalId  String
+  title           String
+  description     String?
+  priority        String   @default("medium")
+  dueDate         DateTime?
+  completedAt     DateTime?
+  recurrenceType  String   @default("none")
+  recurrenceDay   Int?
+  parentTaskId    String?
+  order           Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  subtasks        CeoSubtask[]
+  tags            CeoTaskTagOnTask[]
+
+  @@index([professionalId, completedAt])
+  @@index([dueDate])
+}
+
+model CeoSubtask {
+  id              String   @id @default(cuid())
+  taskId          String
+  task            CeoTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  title           String
+  completedAt     DateTime?
+  order           Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  @@index([taskId])
+}
+
+model CeoTaskTagOnTask {
+  taskId  String
+  task    CeoTask    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  tagId   String
+  tag     CeoTaskTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, tagId])
+  @@index([tagId])
+}
+
+model CeoJournalEntry {
+  id              String   @id @default(cuid())
+  professionalId  String
+  date            DateTime
+  content         String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([professionalId, date])
+  @@index([professionalId, date])
+}
+
+// ============================================================================
 // LLAMADAS PROGRAMADAS CON PACIENTES
 // ============================================================================
 

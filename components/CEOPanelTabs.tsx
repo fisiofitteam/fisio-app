@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { CeoPersonalView } from "@/components/CeoPersonalView";
 
 type FinanceResumen = {
   income: number;
@@ -25,21 +26,25 @@ export function CEOPanelTabs({
   teamBlock,
   salesBlock,
   finance,
+  userFullName,
 }: {
   teamBlock: React.ReactNode;
   salesBlock: React.ReactNode;
   finance: FinanceResumen;
+  userFullName: string;
 }) {
-  const [tab, setTab] = useState<"team" | "sales" | "finance">("sales");
+  const [tab, setTab] = useState<"mi-ceo" | "team" | "sales" | "finance">("mi-ceo");
 
   return (
     <>
       <div className="mb-4 flex gap-1 border-b border-neutral-200 overflow-x-auto">
+        <TabButton active={tab === "mi-ceo"} onClick={() => setTab("mi-ceo")} label="🎯 Mi CEO" />
         <TabButton active={tab === "sales"} onClick={() => setTab("sales")} label="📈 Métricas de venta" />
         <TabButton active={tab === "team"} onClick={() => setTab("team")} label="📊 Métricas equipo" />
         <TabButton active={tab === "finance"} onClick={() => setTab("finance")} label="💰 Finanzas" />
       </div>
 
+      {tab === "mi-ceo" && <CeoPersonalView userFullName={userFullName} />}
       {tab === "sales" && salesBlock}
       {tab === "team" && teamBlock}
 

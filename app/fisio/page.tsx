@@ -297,6 +297,7 @@ export default async function FisioPanelPage({
           teamBlock={teamBlock}
           salesBlock={salesBlock}
           finance={{ ...financeSummary, periodLabel: label }}
+          userFullName={user.fullName}
         />
       </main>
     );
