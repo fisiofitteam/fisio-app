@@ -164,13 +164,40 @@ export function CeoPersonalView({ userFullName }: { userFullName: string }) {
     loadAll();
   }
 
-  // ─── Agrupación de pendientes por fecha ───
+  // ─── Filtros de tareas ───
+  const [filterPriorities, setFilterPriorities] = useState<CeoTaskPriority[]>([]);
+  const [filterTagIds, setFilterTagIds] = useState<string[]>([]);
+
+  function togglePriority(p: CeoTaskPriority) {
+    setFilterPriorities((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
+  }
+  function toggleTagFilter(id: string) {
+    setFilterTagIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+  function clearFilters() {
+    setFilterPriorities([]);
+    setFilterTagIds([]);
+  }
+  const anyFilterActive = filterPriorities.length > 0 || filterTagIds.length > 0;
+
+  const filteredPending = useMemo(() => {
+    return pending.filter((t) => {
+      if (filterPriorities.length > 0 && !filterPriorities.includes(t.priority)) return false;
+      if (filterTagIds.length > 0) {
+        const taskTagIds = new Set(t.tags.map((tg) => tg.id));
+        if (!filterTagIds.some((id) => taskTagIds.has(id))) return false;
+      }
+      return true;
+    });
+  }, [pending, filterPriorities, filterTagIds]);
+
+  // ─── Agrupación de pendientes (filtradas) por fecha ───
   type Group = "overdue" | "today" | "week" | "month" | "later" | "noDate";
   const grouped = useMemo(() => {
     const result: Record<Group, TaskItem[]> = {
       overdue: [], today: [], week: [], month: [], later: [], noDate: [],
     };
-    for (const t of pending) {
+    for (const t of filteredPending) {
       result[classifyDueDate(t.dueDate)].push(t);
     }
     // Dentro de cada grupo: prioridad > fecha asc > orden creación
@@ -186,7 +213,7 @@ export function CeoPersonalView({ userFullName }: { userFullName: string }) {
       });
     }
     return result;
-  }, [pending]);
+  }, [filteredPending]);
 
   // Modales
   const [editingTask, setEditingTask] = useState<TaskItem | null>(null);
@@ -209,7 +236,8 @@ export function CeoPersonalView({ userFullName }: { userFullName: string }) {
           <div>
             <h2 className="font-medium text-sm">✅ Mis tareas</h2>
             <p className="text-[11px] text-neutral-500 mt-0.5">
-              Privadas, agrupadas por fecha. {pending.length} pendiente{pending.length !== 1 && "s"}.
+              Privadas, agrupadas por fecha. {pending.length} pendiente{pending.length !== 1 && "s"}
+              {anyFilterActive && <span> · {filteredPending.length} tras filtros</span>}.
             </p>
           </div>
           <div className="flex gap-2">
@@ -222,11 +250,62 @@ export function CeoPersonalView({ userFullName }: { userFullName: string }) {
           </div>
         </header>
 
+        {/* Chips de filtro: prioridad + etiquetas */}
+        {(pending.length > 0 || tags.length > 0) && (
+          <div className="flex flex-wrap gap-1.5 mb-3 items-center">
+            <span className="text-[10px] uppercase tracking-wide text-neutral-400 mr-1">Filtrar:</span>
+            {PRIORITY_ORDER.map((p) => {
+              const active = filterPriorities.includes(p);
+              return (
+                <button
+                  key={p}
+                  onClick={() => togglePriority(p)}
+                  className={`text-[11px] px-2 py-0.5 rounded-full border ${
+                    active ? PRIORITY_COLOR[p] + " border-current" : "bg-white border-neutral-200 text-neutral-500"
+                  }`}
+                >
+                  {active && "✓ "}{PRIORITY_LABELS[p]}
+                </button>
+              );
+            })}
+            {tags.length > 0 && <span className="text-neutral-300">·</span>}
+            {tags.map((tg) => {
+              const active = filterTagIds.includes(tg.id);
+              return (
+                <button
+                  key={tg.id}
+                  onClick={() => toggleTagFilter(tg.id)}
+                  className="text-[11px] px-2 py-0.5 rounded-full border"
+                  style={{
+                    background: active ? tg.color : "white",
+                    borderColor: tg.color,
+                    color: active ? "white" : tg.color,
+                  }}
+                >
+                  {active && "✓ "}{tg.name}
+                </button>
+              );
+            })}
+            {anyFilterActive && (
+              <button
+                onClick={clearFilters}
+                className="text-[11px] text-neutral-500 underline ml-1"
+              >
+                limpiar
+              </button>
+            )}
+          </div>
+        )}
+
         {!loaded ? (
           <p className="text-xs text-neutral-400 italic text-center py-6">Cargando…</p>
         ) : pending.length === 0 ? (
           <p className="text-xs text-neutral-400 italic text-center py-8">
             🎉 Sin tareas pendientes. Pulsa + Nueva tarea para añadir.
+          </p>
+        ) : filteredPending.length === 0 ? (
+          <p className="text-xs text-neutral-400 italic text-center py-8">
+            Sin tareas que coincidan con los filtros activos.
           </p>
         ) : (
           <div className="space-y-3">
@@ -381,13 +460,32 @@ function JournalBlock({
 }: {
   date: string; content: string; onDateChange: (d: string) => void; onContentChange: (v: string) => void;
 }) {
+  const [showHistory, setShowHistory] = useState(false);
+  const [history, setHistory] = useState<Array<{ id: string; date: string; content: string }> | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function loadHistory() {
+    setLoading(true);
+    const r = await fetch("/api/ceo/journal?range=30", { cache: "no-store" });
+    if (r.ok) {
+      const data = await r.json();
+      setHistory(data.entries ?? []);
+    }
+    setLoading(false);
+  }
+
+  function toggleHistory() {
+    if (!showHistory && history === null) loadHistory();
+    setShowHistory((v) => !v);
+  }
+
   return (
     <section className="card">
       <header className="flex justify-between items-center mb-2 flex-wrap gap-2">
         <div>
           <h2 className="font-medium text-sm">📝 Cuaderno del día</h2>
           <p className="text-[11px] text-neutral-500 mt-0.5">
-            Notas libres del día. Una entrada por día.
+            Notas libres del día. Una entrada por día. Se autoguarda.
           </p>
         </div>
         <input
@@ -404,6 +502,46 @@ function JournalBlock({
         onChange={(e) => onContentChange(e.target.value)}
         placeholder="Lo que pasó hoy, lo que aprendiste, lo que te pesa, lo que quieres recordar mañana…"
       />
+
+      <div className="mt-3 pt-3 border-t border-neutral-100">
+        <button
+          onClick={toggleHistory}
+          className="text-xs text-neutral-600 hover:text-neutral-900 flex items-center gap-1"
+        >
+          <span>{showHistory ? "▼" : "▶"}</span>
+          <span>📚 Historial · últimos 30 días</span>
+        </button>
+
+        {showHistory && (
+          <div className="mt-2">
+            {loading && <p className="text-xs text-neutral-400 italic">Cargando…</p>}
+            {!loading && history && history.length === 0 && (
+              <p className="text-xs text-neutral-400 italic">Aún no tienes entradas guardadas.</p>
+            )}
+            {!loading && history && history.length > 0 && (
+              <div className="space-y-1.5 max-h-[260px] overflow-y-auto">
+                {history.map((e) => {
+                  const day = new Date(e.date).toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
+                  const preview = (e.content || "").trim().split("\n")[0]?.slice(0, 120) || "(vacía)";
+                  const isCurrent = e.date.slice(0, 10) === date;
+                  return (
+                    <button
+                      key={e.id}
+                      onClick={() => onDateChange(e.date.slice(0, 10))}
+                      className={`block w-full text-left p-2 rounded border ${isCurrent ? "bg-neutral-900 text-white border-neutral-900" : "bg-white border-neutral-200 hover:border-neutral-400"}`}
+                    >
+                      <div className={`text-[11px] uppercase tracking-wide ${isCurrent ? "text-neutral-300" : "text-neutral-500"}`}>
+                        {day}{isCurrent && " · viendo ahora"}
+                      </div>
+                      <div className={`text-xs mt-0.5 truncate ${isCurrent ? "text-neutral-100" : "text-neutral-700"}`}>{preview}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </section>
   );
 }
