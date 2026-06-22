@@ -525,14 +525,14 @@ function parseWeekStories(raw: string | null | undefined): string[] {
 
 // Tipos de story por día (deben coincidir con lib/week-stories-structure.ts).
 // Lo copiamos aquí para mostrar el badge sin tener que pedir al server.
-const STORY_DAY_TYPES: Record<number, { type: string; purpose: string }> = {
-  1: { type: "Pregunta abierta", purpose: "Sembrar el tema y activar respuestas" },
-  2: { type: "Mito que rompemos", purpose: "Romper creencia común" },
-  3: { type: "Caso real", purpose: "Prueba social" },
-  4: { type: "Tip de 1 minuto", purpose: "Valor accionable" },
-  5: { type: "Behind the scenes", purpose: "Humanizar" },
-  6: { type: "Interacción", purpose: "Activar respuestas en finde" },
-  7: { type: "Recap + cierre", purpose: "Cerrar y preparar la próxima" },
+const STORY_DAY_TYPES: Record<number, { type: string; purpose: string; format: string }> = {
+  1: { type: "Pregunta abierta", purpose: "Sembrar el tema y activar respuestas", format: "🖼️ Imagen + sticker" },
+  2: { type: "Mito que rompemos", purpose: "Romper creencia común", format: "🎥 Vídeo selfie" },
+  3: { type: "Caso real", purpose: "Prueba social", format: "🎬 Mixto" },
+  4: { type: "Tip de 1 minuto", purpose: "Valor accionable", format: "🎥 Vídeo" },
+  5: { type: "Behind the scenes", purpose: "Humanizar", format: "🎥 Vídeos casuales" },
+  6: { type: "Interacción", purpose: "Activar respuestas en finde", format: "🖼️ Imagen + sticker" },
+  7: { type: "Recap + cierre", purpose: "Cerrar y preparar la próxima", format: "🎬 Mixto" },
 };
 
 function WeekStoriesSection({ week }: { week: Week }) {
@@ -635,7 +635,7 @@ function WeekStoriesSection({ week }: { week: Week }) {
           return (
             <div key={dow} className="card">
               <div className="flex justify-between items-start mb-1.5 gap-2">
-                <div>
+                <div className="min-w-0">
                   <div className="text-[10px] uppercase text-neutral-500 font-medium tracking-wide">
                     {DAY_LABELS[dow]}
                   </div>
@@ -644,6 +644,9 @@ function WeekStoriesSection({ week }: { week: Week }) {
                       {meta.type}
                       <span className="text-neutral-400 font-normal"> · {meta.purpose}</span>
                     </div>
+                  )}
+                  {meta && (
+                    <div className="text-[10px] text-neutral-500 mt-0.5">{meta.format}</div>
                   )}
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
@@ -667,12 +670,15 @@ function WeekStoriesSection({ week }: { week: Week }) {
                 </div>
               </div>
               <textarea
-                className="w-full bg-transparent border-0 outline-none text-sm resize-none min-h-[64px]"
-                rows={Math.max(3, Math.min(12, (val.match(/\n/g)?.length ?? 0) + 2))}
+                className="w-full text-sm resize-y min-h-[80px] rounded-md border border-neutral-200 bg-white px-2 py-1.5 outline-none focus:border-neutral-500 focus:ring-1 focus:ring-neutral-300 hover:border-neutral-300 leading-snug font-mono"
+                rows={Math.max(4, Math.min(16, (val.match(/\n/g)?.length ?? 0) + 2))}
                 value={val}
                 onChange={(e) => setDay(idx, e.target.value)}
-                placeholder={meta ? `Ej: ${meta.type.toLowerCase()} (pulsa ✨ Generar para que la IA escriba el guion siguiendo la estructura).` : ""}
+                placeholder={meta ? `Pulsa ✨ Generar y luego edita libremente (se autoguarda).` : ""}
               />
+              <div className="text-[10px] text-neutral-400 mt-1">
+                ✏️ Editable: tocas cualquier línea y se guarda automáticamente.
+              </div>
             </div>
           );
         })}

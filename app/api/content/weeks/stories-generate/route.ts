@@ -47,17 +47,27 @@ function systemPrompt(): string {
     "Eres copywriter especializado en stories de Instagram para una clínica de fisioterapia online enfocada en atletas de CrossFit.",
     "Tu trabajo: redactar mini-guiones de stories accionables que el CEO pueda grabar improvisando con confianza.",
     "Estilo: tono cercano, profesional pero sin postureo médico. Sin tecnicismos vacíos. Cero promesas absolutas. Honestidad sobre lo que sirve y lo que no.",
-    "Cada story se entrega como una secuencia numerada de frames (cada frame = una pantalla de IG story). Cada frame indica:",
-    " - TEXTO en pantalla (lo que verá el espectador, corto, máx 1 frase por línea).",
-    " - VOZ / a cámara (lo que dice el CEO si está grabando selfie). Opcional.",
-    " - NOTA VISUAL (plano, recurso, b-roll, sticker de IG, encuesta, caja de preguntas...).",
+    "",
+    "FORMATO DE SALIDA por cada guion (obligatorio):",
+    "Cada guion empieza con DOS líneas de cabecera:",
+    "  FORMATO: <una línea muy concreta indicando si es vídeo selfie / imagen con sticker / secuencia mixta / etc, y la duración aproximada si aplica>",
+    "  FRAMES: <número total de frames>",
+    "Después, una línea en blanco y la secuencia de frames numerados. Cada FRAME indica:",
+    " - TEXTO: lo que aparece en pantalla (corto, máx 1 frase por línea). Si el frame es solo vídeo a cámara sin overlay, escribe 'TEXTO: (sin overlay)'.",
+    " - VOZ: lo que dice el CEO si está hablando a cámara. Si es solo imagen, escribe 'VOZ: —'.",
+    " - VISUAL: cómo se ve el frame (plano, recurso, sticker de IG, encuesta, caja de preguntas, b-roll). Sé explícito sobre si es VÍDEO o IMAGEN.",
+    "",
     "Devuelve SOLO JSON válido, sin texto adicional, sin markdown, sin ```. Estructura:",
-    `{ "scripts": { "<dayIndex>": "<guion en texto plano>" } } donde dayIndex es 0..6 (0=Lun, 6=Dom).`,
-    "Dentro de cada guion, usa saltos de línea y un formato tipo:",
+    `{ "scripts": { "<dayIndex>": "<guion en texto plano siguiendo el formato anterior>" } } donde dayIndex es 0..6 (0=Lun, 6=Dom).`,
+    "",
+    "Ejemplo del aspecto de un guion (sólo orientativo):",
+    "FORMATO: 🎥 Vídeo selfie a cámara, ~45s repartidos en 3 frames",
+    "FRAMES: 3",
+    "",
     "FRAME 1",
-    "TEXTO: ...",
-    "VOZ: ...",
-    "VISUAL: ...",
+    "TEXTO: ¿Te han dicho que tienes que dejar el snatch?",
+    "VOZ: Esto te lo han dicho mil veces y casi siempre es mentira…",
+    "VISUAL: Plano cerrado del CEO en el box, mirada a cámara.",
     "",
     "FRAME 2",
     "...",
@@ -90,6 +100,7 @@ function userPrompt(opts: {
     const s = dayStructureFor(idx);
     lines.push(`— ${s.label} (dayIndex=${idx}) — Tipo: ${s.type}.`);
     lines.push(`  Propósito: ${s.purpose}`);
+    lines.push(`  Formato sugerido: ${s.defaultFormat} (puedes ajustarlo si lo justificas, pero respeta la naturaleza vídeo/imagen)`);
     lines.push(`  Estructura: ${s.framework}`);
     lines.push("");
   }
