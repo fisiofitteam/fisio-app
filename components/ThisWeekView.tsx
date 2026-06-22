@@ -435,6 +435,49 @@ function PieceCard({ piece, weekId }: { piece: Piece; weekId: string }) {
   const goals = parseGoals(piece.goals);
   const pieceLabel = piece.title || fmtLabel || piece.format;
 
+  const [dayMenuOpen, setDayMenuOpen] = useState(false);
+  const [savingDay, setSavingDay] = useState(false);
+  const dayMenuRef = useRef<HTMLDivElement | null>(null);
+
+  // Cerrar el menú al clicar fuera
+  useEffect(() => {
+    if (!dayMenuOpen) return;
+    function onDoc(e: MouseEvent) {
+      if (!dayMenuRef.current?.contains(e.target as Node)) setDayMenuOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [dayMenuOpen]);
+
+  async function changeDay(e: React.MouseEvent, newDay: number) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (newDay === piece.dayOfWeek) { setDayMenuOpen(false); return; }
+    setSavingDay(true);
+    try {
+      const r = await fetch("/api/content/pieces", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: piece.id, dayOfWeek: newDay }),
+      });
+      if (!r.ok) {
+        const data = await r.json().catch(() => ({}));
+        alert(data?.error || "No se pudo cambiar el día");
+      } else {
+        router.refresh();
+      }
+    } finally {
+      setSavingDay(false);
+      setDayMenuOpen(false);
+    }
+  }
+
+  function toggleDayMenu(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDayMenuOpen((v) => !v);
+  }
+
   async function deletePiece(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
@@ -465,10 +508,39 @@ function PieceCard({ piece, weekId }: { piece: Piece; weekId: string }) {
       </button>
 
       <div className="mb-2 pr-6">
-        {/* Fila superior: día (izq) + estado (der), ambos cortos */}
+        {/* Fila superior: día (izq, editable) + estado (der), ambos cortos */}
         <div className="flex justify-between items-center gap-2 mb-1">
-          <div className="text-[10px] uppercase text-neutral-500 font-medium tracking-wide truncate">
-            {dayLabel}
+          <div className="relative" ref={dayMenuRef}>
+            <button
+              type="button"
+              onClick={toggleDayMenu}
+              disabled={savingDay}
+              className="text-[10px] uppercase text-neutral-500 hover:text-neutral-900 font-medium tracking-wide truncate inline-flex items-center gap-1 hover:bg-neutral-100 rounded px-1 -mx-1 py-0.5 transition-colors disabled:opacity-50"
+              title="Cambiar día de publicación"
+            >
+              <span>{savingDay ? "Guardando…" : dayLabel}</span>
+              <span className="text-neutral-400 text-[8px]">▾</span>
+            </button>
+            {dayMenuOpen && (
+              <div
+                className="absolute z-20 mt-1 left-0 bg-white border border-neutral-200 rounded-md shadow-md py-1 min-w-[120px]"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+              >
+                {[1, 2, 3, 4, 5, 6, 7].map((d) => {
+                  const isCurrent = d === piece.dayOfWeek;
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={(e) => changeDay(e, d)}
+                      className={`w-full text-left px-3 py-1.5 text-xs hover:bg-neutral-100 ${isCurrent ? "font-semibold text-neutral-900" : "text-neutral-700"}`}
+                    >
+                      {isCurrent && "✓ "}{DAY_LABELS[d]}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
           {statusMeta && (
             <span className={`text-[10px] uppercase font-medium px-2 py-0.5 rounded-full border ${STATUS_COLORS[statusMeta.color]} whitespace-nowrap flex-shrink-0`}>
