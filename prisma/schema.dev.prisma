@@ -779,6 +779,10 @@ model CeoTask {
   priority        String   @default("medium")
   dueDate         DateTime?
   completedAt     DateTime?
+  status          String   @default("pending")
+  waitingOnId     String?
+  weeklyGoalId    String?
+  lastTouchedAt   DateTime @default(now())
   recurrenceType  String   @default("none")
   recurrenceDay   Int?
   parentTaskId    String?
@@ -791,6 +795,9 @@ model CeoTask {
 
   @@index([professionalId, completedAt])
   @@index([dueDate])
+  @@index([waitingOnId])
+  @@index([weeklyGoalId])
+  @@index([lastTouchedAt])
 }
 
 model CeoSubtask {
@@ -841,11 +848,50 @@ model CeoQuickAgendaItem {
   content         String
   order           Int      @default(0)
   important       Boolean  @default(false)
+  weeklyGoalId    String?
   completedAt     DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   @@index([professionalId, date])
+  @@index([weeklyGoalId])
+}
+
+model CeoWeeklyGoal {
+  id                 String   @id @default(cuid())
+  professionalId     String
+  isoYear            Int
+  isoWeek            Int
+  title              String   @default("")
+  order              Int      @default(0)
+  completedAt        DateTime?
+  carriedFromGoalId  String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([professionalId, isoYear, isoWeek, order])
+  @@index([professionalId, isoYear, isoWeek])
+}
+
+model CeoInboxItem {
+  id              String   @id @default(cuid())
+  professionalId  String
+  content         String
+  processedAt     DateTime?
+  convertedTaskId String?
+  createdAt       DateTime @default(now())
+
+  @@index([professionalId, processedAt])
+}
+
+model CeoPreferences {
+  id                   String   @id @default(cuid())
+  professionalId       String   @unique
+  weeklyPlanDayOfWeek  Int      @default(1)
+  cooldownDays         Int      @default(14)
+  lastDayCloseAt       DateTime?
+  lastWeeklyPlanAt     DateTime?
+  updatedAt            DateTime @updatedAt
 }
 
 // ============================================================================

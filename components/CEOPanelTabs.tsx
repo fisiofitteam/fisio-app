@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { CeoPersonalView } from "@/components/CeoPersonalView";
+import { CeoInboxQuickCapture } from "@/components/CeoInboxQuickCapture";
 
 type FinanceResumen = {
   income: number;
@@ -37,6 +38,9 @@ export function CEOPanelTabs({
 
   return (
     <>
+      {/* Captura de inbox global del CEO: botón flotante + atajo Shift+I */}
+      <CeoInboxQuickCapture enabled={true} />
+
       <div className="mb-4 flex gap-1 border-b border-neutral-200 overflow-x-auto">
         <TabButton active={tab === "mi-ceo"} onClick={() => setTab("mi-ceo")} label="🎯 Mi CEO" />
         <TabButton active={tab === "sales"} onClick={() => setTab("sales")} label="📈 Métricas de venta" />

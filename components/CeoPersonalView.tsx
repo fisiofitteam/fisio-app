@@ -7,9 +7,14 @@ import {
   PRIORITY_COLOR,
   PRIORITY_ORDER,
   RECURRENCE_LABELS,
+  TASK_STATUS_LABELS,
+  TASK_STATUS_COLOR,
+  TASK_STATUS_ICON,
   type CeoTaskPriority,
   type CeoRecurrence,
+  type CeoTaskStatus,
 } from "@/lib/ceo-personal";
+import { DayCloseWizard, WeeklyPlanWizard } from "@/components/CeoReviewWizards";
 
 type Tag = { id: string; name: string; color: string };
 
@@ -28,9 +33,15 @@ type TaskItem = {
   completedAt: string | null;
   recurrenceType: CeoRecurrence;
   recurrenceDay: number | null;
+  status: CeoTaskStatus;
+  waitingOnId: string | null;
+  weeklyGoalId: string | null;
+  lastTouchedAt: string | null;
   subtasks: SubtaskItem[];
   tags: Tag[];
 };
+
+type TeamMember = { id: string; fullName: string; role: string };
 
 const DEFAULT_TAG_COLORS = [
   "#F59E0B", "#10B981", "#3B82F6", "#8B5CF6", "#EC4899",
@@ -71,13 +82,15 @@ export function CeoPersonalView({ userFullName }: { userFullName: string }) {
   const [focusContent, setFocusContent] = useState("");
   const [focusYear, setFocusYear] = useState(new Date().getFullYear());
   const [focusMonth, setFocusMonth] = useState(new Date().getMonth() + 1);
+  const [team, setTeam] = useState<TeamMember[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   const loadAll = useCallback(async () => {
-    const [tRes, tagRes, fRes] = await Promise.all([
+    const [tRes, tagRes, fRes, teamRes] = await Promise.all([
       fetch("/api/ceo/tasks", { cache: "no-store" }),
       fetch("/api/ceo/tags", { cache: "no-store" }),
       fetch("/api/ceo/focus", { cache: "no-store" }),
+      fetch("/api/team/list", { cache: "no-store" }),
     ]);
     if (tRes.ok) {
       const data = await tRes.json();
@@ -93,6 +106,10 @@ export function CeoPersonalView({ userFullName }: { userFullName: string }) {
       setFocusContent(data.focus?.content ?? "");
       setFocusYear(data.year);
       setFocusMonth(data.month);
+    }
+    if (teamRes.ok) {
+      const data = await teamRes.json();
+      setTeam((data.team ?? []) as TeamMember[]);
     }
     setLoaded(true);
   }, []);
@@ -131,9 +148,19 @@ export function CeoPersonalView({ userFullName }: { userFullName: string }) {
     loadAll();
   }
 
+  async function onTaskStatusChange(t: TaskItem, status: CeoTaskStatus, waitingOnId: string | null = null) {
+    await fetch("/api/ceo/tasks", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: t.id, status, waitingOnId }),
+    });
+    loadAll();
+  }
+
   // ─── Filtros de tareas ───
   const [filterPriorities, setFilterPriorities] = useState<CeoTaskPriority[]>([]);
   const [filterTagIds, setFilterTagIds] = useState<string[]>([]);
+  const [filterWaitingOnId, setFilterWaitingOnId] = useState<string | null>(null);
 
   function togglePriority(p: CeoTaskPriority) {
     setFilterPriorities((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
@@ -144,19 +171,24 @@ export function CeoPersonalView({ userFullName }: { userFullName: string }) {
   function clearFilters() {
     setFilterPriorities([]);
     setFilterTagIds([]);
+    setFilterWaitingOnId(null);
   }
-  const anyFilterActive = filterPriorities.length > 0 || filterTagIds.length > 0;
+  const anyFilterActive = filterPriorities.length > 0 || filterTagIds.length > 0 || filterWaitingOnId !== null;
 
   const filteredPending = useMemo(() => {
     return pending.filter((t) => {
       if (filterPriorities.length > 0 && !filterPriorities.includes(t.priority)) return false;
+      if (filterWaitingOnId !== null) {
+        if (t.status !== "waiting") return false;
+        if (t.waitingOnId !== filterWaitingOnId) return false;
+      }
       if (filterTagIds.length > 0) {
         const taskTagIds = new Set(t.tags.map((tg) => tg.id));
         if (!filterTagIds.some((id) => taskTagIds.has(id))) return false;
       }
       return true;
     });
-  }, [pending, filterPriorities, filterTagIds]);
+  }, [pending, filterPriorities, filterTagIds, filterWaitingOnId]);
 
   // ─── Agrupación de pendientes (filtradas) por fecha ───
   type Group = "overdue" | "today" | "week" | "month" | "later" | "noDate";
@@ -196,6 +228,20 @@ export function CeoPersonalView({ userFullName }: { userFullName: string }) {
         content={focusContent}
         onChange={onFocusChange}
       />
+
+      {/* 1b. Objetivos de esta semana — puente entre foco y día */}
+      <WeeklyGoalsBlock />
+
+      {/* 1c. Las 3 dianas — protagonistas del día */}
+      <BigDartsBlock importantSource={pending} />
+
+      {/* 1d. Inbox — captura sin fricción */}
+      <InboxBlock />
+
+      {/* 1e. Revisión guiada (acceso) + Cosas que se enfrían */}
+      <ReviewBar />
+      <ColdTasksBlock onRefresh={loadAll} />
+
 
       {/* 2 + 3. Tareas (izquierda) + Agenda del día (derecha) al mismo nivel, simétricos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
@@ -255,6 +301,34 @@ export function CeoPersonalView({ userFullName }: { userFullName: string }) {
                 </button>
               );
             })}
+            {/* Filtro: esperando de */}
+            {(() => {
+              const waitingTasks = pending.filter((t) => t.status === "waiting" && t.waitingOnId);
+              const peopleSet = new Set(waitingTasks.map((t) => t.waitingOnId!));
+              const peopleWithCounts = team
+                .filter((m) => peopleSet.has(m.id))
+                .map((m) => ({ ...m, count: waitingTasks.filter((t) => t.waitingOnId === m.id).length }));
+              if (peopleWithCounts.length === 0) return null;
+              return (
+                <>
+                  <span className="text-neutral-300">·</span>
+                  <span className="text-[10px] uppercase tracking-wide text-neutral-400 mr-0.5">⏳ Esperando de:</span>
+                  {peopleWithCounts.map((p) => {
+                    const active = filterWaitingOnId === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => setFilterWaitingOnId(active ? null : p.id)}
+                        className={`text-[11px] px-2 py-0.5 rounded-full border ${active ? "bg-purple-100 text-purple-800 border-purple-300" : "bg-white border-neutral-200 text-neutral-600"}`}
+                        title={`${p.count} tarea${p.count > 1 ? "s" : ""} esperando de ${p.fullName}`}
+                      >
+                        {active && "✓ "}{p.fullName.split(" ")[0]} ({p.count})
+                      </button>
+                    );
+                  })}
+                </>
+              );
+            })()}
             {anyFilterActive && (
               <button
                 onClick={clearFilters}
@@ -286,6 +360,8 @@ export function CeoPersonalView({ userFullName }: { userFullName: string }) {
                 onToggle={toggleComplete}
                 onEdit={setEditingTask}
                 onDelete={deleteTask}
+                onStatusChange={onTaskStatusChange}
+                team={team}
               />
             )}
             {grouped.today.length > 0 && (
@@ -296,6 +372,8 @@ export function CeoPersonalView({ userFullName }: { userFullName: string }) {
                 onToggle={toggleComplete}
                 onEdit={setEditingTask}
                 onDelete={deleteTask}
+                onStatusChange={onTaskStatusChange}
+                team={team}
               />
             )}
             {grouped.week.length > 0 && (
@@ -306,6 +384,8 @@ export function CeoPersonalView({ userFullName }: { userFullName: string }) {
                 onToggle={toggleComplete}
                 onEdit={setEditingTask}
                 onDelete={deleteTask}
+                onStatusChange={onTaskStatusChange}
+                team={team}
               />
             )}
             {grouped.month.length > 0 && (
@@ -316,6 +396,8 @@ export function CeoPersonalView({ userFullName }: { userFullName: string }) {
                 onToggle={toggleComplete}
                 onEdit={setEditingTask}
                 onDelete={deleteTask}
+                onStatusChange={onTaskStatusChange}
+                team={team}
               />
             )}
             {grouped.later.length > 0 && (
@@ -326,6 +408,8 @@ export function CeoPersonalView({ userFullName }: { userFullName: string }) {
                 onToggle={toggleComplete}
                 onEdit={setEditingTask}
                 onDelete={deleteTask}
+                onStatusChange={onTaskStatusChange}
+                team={team}
               />
             )}
             {grouped.noDate.length > 0 && (
@@ -336,6 +420,8 @@ export function CeoPersonalView({ userFullName }: { userFullName: string }) {
                 onToggle={toggleComplete}
                 onEdit={setEditingTask}
                 onDelete={deleteTask}
+                onStatusChange={onTaskStatusChange}
+                team={team}
               />
             )}
           </div>
@@ -348,7 +434,7 @@ export function CeoPersonalView({ userFullName }: { userFullName: string }) {
             </h3>
             <div className="space-y-1 opacity-60">
               {recentlyDone.slice(0, 5).map((t) => (
-                <TaskRow key={t.id} task={t} onToggle={toggleComplete} onEdit={setEditingTask} onDelete={deleteTask} />
+                <TaskRow key={t.id} task={t} onToggle={toggleComplete} onEdit={setEditingTask} onDelete={deleteTask} onStatusChange={onTaskStatusChange} team={team} />
               ))}
             </div>
           </div>
@@ -391,6 +477,10 @@ function normalizeTasks(raw: any[]): TaskItem[] {
     completedAt: r.completedAt ?? null,
     recurrenceType: (r.recurrenceType ?? "none") as CeoRecurrence,
     recurrenceDay: r.recurrenceDay ?? null,
+    status: (r.status ?? "pending") as CeoTaskStatus,
+    waitingOnId: r.waitingOnId ?? null,
+    weeklyGoalId: r.weeklyGoalId ?? null,
+    lastTouchedAt: r.lastTouchedAt ?? null,
     subtasks: (r.subtasks ?? []).map((s: any) => ({
       id: s.id, title: s.title, completedAt: s.completedAt ?? null,
     })),
@@ -419,6 +509,137 @@ function FocusBlock({
         onChange={(e) => onChange(e.target.value)}
         placeholder="Ej.: Subir 10k seguidores en IG. Cerrar el equipo de fisios. Dejar lista la campaña ads Q3."
       />
+    </section>
+  );
+}
+
+/**
+ * WeeklyGoalsBlock — 3 objetivos de la semana ISO actual.
+ * Autoguardado igual que FocusBlock (debounce 1s sobre todo el array).
+ * Carry-over (arrastrar de la semana anterior) se hace en la Planificación
+ * Semanal (commit 5), no aquí.
+ */
+type WeeklyGoal = {
+  id: string;
+  isoYear: number;
+  isoWeek: number;
+  order: number;
+  title: string;
+  completedAt: string | null;
+  carriedFromGoalId: string | null;
+};
+
+function WeeklyGoalsBlock() {
+  const [goals, setGoals] = useState<WeeklyGoal[]>([]);
+  const [drafts, setDrafts] = useState<string[]>(Array(3).fill(""));
+  const [meta, setMeta] = useState<{ isoYear: number; isoWeek: number } | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
+  const debouncer = useRef<NodeJS.Timeout | null>(null);
+
+  const load = useCallback(async () => {
+    const r = await fetch("/api/ceo/weekly-goals", { cache: "no-store" });
+    if (r.ok) {
+      const data = await r.json();
+      const list = (data.goals ?? []) as WeeklyGoal[];
+      list.sort((a, b) => a.order - b.order);
+      setGoals(list);
+      const next = Array(3).fill("");
+      list.slice(0, 3).forEach((g) => { next[g.order] = g.title; });
+      setDrafts(next);
+      setMeta({ isoYear: data.isoYear, isoWeek: data.isoWeek });
+    }
+    setLoaded(true);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  function scheduleSave(nextDrafts: string[]) {
+    if (!meta) return;
+    if (debouncer.current) clearTimeout(debouncer.current);
+    debouncer.current = setTimeout(async () => {
+      const r = await fetch("/api/ceo/weekly-goals", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          isoYear: meta.isoYear,
+          isoWeek: meta.isoWeek,
+          goals: nextDrafts.map((title, order) => ({ order, title })),
+        }),
+      });
+      if (r.ok) {
+        setSavedAt(new Date());
+        const data = await r.json();
+        const list = (data.goals ?? []) as WeeklyGoal[];
+        list.sort((a, b) => a.order - b.order);
+        setGoals(list);
+      }
+    }, 1000);
+  }
+  useEffect(() => () => { if (debouncer.current) clearTimeout(debouncer.current); }, []);
+
+  function updateDraft(i: number, v: string) {
+    const next = [...drafts];
+    next[i] = v;
+    setDrafts(next);
+    scheduleSave(next);
+  }
+
+  async function toggleDone(i: number) {
+    const g = goals[i];
+    if (!g) return;
+    const completedAt = g.completedAt ? null : new Date().toISOString();
+    const r = await fetch("/api/ceo/weekly-goals", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: g.id, completedAt }),
+    });
+    if (r.ok) load();
+  }
+
+  return (
+    <section className="card border-blue-200 bg-blue-50/40">
+      <header className="flex justify-between items-center mb-2 flex-wrap gap-2">
+        <div>
+          <h2 className="font-medium text-sm">📅 Objetivos de esta semana</h2>
+          <p className="text-[11px] text-neutral-500 mt-0.5">
+            Máx 3. Puente entre el foco del mes y tu día a día. {meta && <span>Semana ISO {meta.isoWeek}/{meta.isoYear}.</span>} Se autoguarda.
+          </p>
+        </div>
+        {savedAt && (
+          <span className="text-[10px] text-neutral-400">Guardado · {savedAt.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</span>
+        )}
+      </header>
+      <div className="space-y-1.5">
+        {[0, 1, 2].map((i) => {
+          const g = goals[i];
+          const done = !!g?.completedAt;
+          return (
+            <div key={i} className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => toggleDone(i)}
+                disabled={!g || !drafts[i]?.trim()}
+                className={`w-4 h-4 rounded border flex-shrink-0 ${done ? "bg-emerald-600 border-emerald-600" : "border-neutral-300"} ${g && drafts[i]?.trim() ? "cursor-pointer" : "cursor-default opacity-40"}`}
+                title={g ? (done ? "Marcar como pendiente" : "Marcar como cumplido") : ""}
+              >
+                {done && <span className="block text-white text-[10px] leading-none -mt-0.5">✓</span>}
+              </button>
+              <span className="text-xs text-neutral-500 w-5">{i + 1}.</span>
+              <input
+                type="text"
+                className={`flex-1 text-sm border-0 border-b border-neutral-200 focus:border-neutral-500 outline-none bg-transparent py-1 ${done ? "line-through text-neutral-400" : ""}`}
+                value={drafts[i] ?? ""}
+                onChange={(e) => updateDraft(i, e.target.value)}
+                placeholder={loaded ? `Objetivo ${i + 1} de esta semana…` : ""}
+              />
+              {g?.carriedFromGoalId && (
+                <span className="text-[10px] text-neutral-400 italic" title="Arrastrado de la semana pasada">↩</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </section>
   );
 }
@@ -483,16 +704,257 @@ function NotesBlock() {
  * - 3 slots ⌖ "importantes": auto-rellenan con tareas (CeoTask) cuyo dueDate=hoy.
  * - 7 slots normales: editables inline, persisten como CeoQuickAgendaItem (today).
  */
-type AgendaItem = { id: string; content: string; completedAt: string | null; order: number; important: boolean };
+type InboxItem = { id: string; content: string; createdAt: string; processedAt: string | null };
 
-function AgendaBlock({ importantSource }: { importantSource: TaskItem[] }) {
-  const [items, setItems] = useState<AgendaItem[]>([]);
-  const [importantItems, setImportantItems] = useState<AgendaItem[]>([]);
-  const [drafts, setDrafts] = useState<string[]>(Array(7).fill(""));
-  const [importantDrafts, setImportantDrafts] = useState<string[]>(Array(3).fill(""));
+/**
+ * InboxBlock — bandeja del CEO. Contador de pendientes + lista compacta.
+ * El modal de captura grande vive en CeoInboxQuickCapture (botón flotante + Shift+I).
+ * Para procesar a tareas, eso vendrá en el commit 5 (revisión guiada).
+ */
+function InboxBlock() {
+  const [items, setItems] = useState<InboxItem[]>([]);
+  const [open, setOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
-  // Tareas con dueDate = hoy → sugerencia para las 3 importantes (vía placeholder)
+  const load = useCallback(async () => {
+    const r = await fetch("/api/ceo/inbox", { cache: "no-store" });
+    if (r.ok) {
+      const data = await r.json();
+      setItems((data.items ?? []) as InboxItem[]);
+    }
+    setLoaded(true);
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  // Refresca cuando la captura rápida añade algo (evento global)
+  useEffect(() => {
+    function on() { load(); }
+    window.addEventListener("ceo-inbox:changed", on);
+    return () => window.removeEventListener("ceo-inbox:changed", on);
+  }, [load]);
+
+  async function deleteItem(id: string) {
+    if (!confirm("¿Borrar esta entrada del inbox?")) return;
+    await fetch(`/api/ceo/inbox?id=${id}`, { method: "DELETE" });
+    load();
+  }
+
+  const count = items.length;
+
+  return (
+    <section className="card">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex justify-between items-center gap-2"
+      >
+        <div className="flex items-center gap-2">
+          <h2 className="font-medium text-sm">📥 Inbox</h2>
+          <span className={`text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full ${count > 0 ? "bg-amber-100 text-amber-800" : "bg-neutral-100 text-neutral-500"}`}>
+            {loaded ? `${count} sin procesar` : "…"}
+          </span>
+        </div>
+        <span className="text-xs text-neutral-400">{open ? "▼" : "▶"}</span>
+      </button>
+      <p className="text-[11px] text-neutral-500 mt-1 text-left">
+        Captura rápida con el botón flotante 📥 o con <kbd className="border rounded px-1 text-[10px]">Shift+I</kbd>. Lo clasificas luego en la planificación semanal.
+      </p>
+
+      {open && (
+        <div className="mt-3 border-t border-neutral-100 pt-2">
+          {count === 0 ? (
+            <p className="text-xs text-neutral-400 italic">Inbox vacío. Buen sitio para estar 🎉</p>
+          ) : (
+            <ul className="space-y-1 max-h-[280px] overflow-y-auto">
+              {items.map((it) => (
+                <li key={it.id} className="flex items-start gap-2 text-xs py-1 px-1 hover:bg-neutral-50 rounded">
+                  <span className="text-neutral-300 mt-0.5">·</span>
+                  <span className="flex-1 whitespace-pre-wrap leading-snug">{it.content}</span>
+                  <button
+                    onClick={() => deleteItem(it.id)}
+                    className="text-neutral-300 hover:text-red-600 text-[11px]"
+                    title="Borrar"
+                  >
+                    ✕
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/**
+ * ReviewBar — botones para abrir los wizards de cierre del día y planificación
+ * semanal. Banner discreto si llevas X días sin cierre o sin planificación.
+ */
+function ReviewBar() {
+  const [openDay, setOpenDay] = useState(false);
+  const [openWeek, setOpenWeek] = useState(false);
+  const [prefs, setPrefs] = useState<{
+    lastDayCloseAt: string | null;
+    lastWeeklyPlanAt: string | null;
+    weeklyPlanDayOfWeek: number;
+  } | null>(null);
+
+  const load = useCallback(async () => {
+    const r = await fetch("/api/ceo/preferences", { cache: "no-store" });
+    if (r.ok) {
+      const data = await r.json();
+      setPrefs({
+        lastDayCloseAt: data.prefs?.lastDayCloseAt ?? null,
+        lastWeeklyPlanAt: data.prefs?.lastWeeklyPlanAt ?? null,
+        weeklyPlanDayOfWeek: data.prefs?.weeklyPlanDayOfWeek ?? 1,
+      });
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    function on() { load(); }
+    window.addEventListener("ceo-review:done", on);
+    return () => window.removeEventListener("ceo-review:done", on);
+  }, [load]);
+
+  // Banner cierre del día: tras las 19:00 hora local y sin lastDayCloseAt hoy
+  const now = new Date();
+  const hour = now.getHours();
+  const closedTodayYmd = prefs?.lastDayCloseAt ? prefs.lastDayCloseAt.slice(0, 10) : null;
+  const todayYmdStr = now.toISOString().slice(0, 10);
+  const suggestDayClose = hour >= 19 && closedTodayYmd !== todayYmdStr;
+
+  // Banner planificación semanal: si hoy es el día configurado y no se hizo
+  // entre el lunes de esta semana ISO y hoy
+  const dowIso = now.getDay() === 0 ? 7 : now.getDay();
+  let suggestWeeklyPlan = false;
+  if (prefs && dowIso === prefs.weeklyPlanDayOfWeek) {
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - (dowIso - 1));
+    monday.setHours(0, 0, 0, 0);
+    const last = prefs.lastWeeklyPlanAt ? new Date(prefs.lastWeeklyPlanAt) : null;
+    suggestWeeklyPlan = !last || last < monday;
+  }
+
+  return (
+    <>
+      {suggestWeeklyPlan && (
+        <div className="card bg-emerald-50 border-emerald-200 flex items-center justify-between gap-3">
+          <span className="text-xs text-emerald-800">📅 Toca planificación semanal. ¿Te lleva 5 minutos?</span>
+          <button onClick={() => setOpenWeek(true)} className="text-xs btn btn-primary px-3 py-1">Empezar</button>
+        </div>
+      )}
+      {suggestDayClose && (
+        <div className="card bg-indigo-50 border-indigo-200 flex items-center justify-between gap-3">
+          <span className="text-xs text-indigo-800">🌙 ¿Cerramos el día? 30 segundos.</span>
+          <button onClick={() => setOpenDay(true)} className="text-xs btn btn-primary px-3 py-1">Cerrar el día</button>
+        </div>
+      )}
+
+      <section className="card">
+        <header className="mb-2 flex justify-between items-center gap-2 flex-wrap">
+          <div>
+            <h2 className="font-medium text-sm">🧭 Revisión guiada</h2>
+            <p className="text-[11px] text-neutral-500 mt-0.5">
+              Cierre del día (30s) y planificación de la semana (5min).
+            </p>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <button onClick={() => setOpenDay(true)} className="text-xs btn btn-ghost border border-neutral-300 px-3 py-1.5">🌙 Cierre del día</button>
+            <button onClick={() => setOpenWeek(true)} className="text-xs btn btn-ghost border border-neutral-300 px-3 py-1.5">📅 Planificación semanal</button>
+          </div>
+        </header>
+      </section>
+
+      {openDay && <DayCloseWizard onClose={() => setOpenDay(false)} />}
+      {openWeek && <WeeklyPlanWizard onClose={() => setOpenWeek(false)} />}
+    </>
+  );
+}
+
+/**
+ * ColdTasksBlock — tareas pendientes que llevan > cooldownDays sin tocarse.
+ * Permite acciones rápidas: hacer ahora (in_progress), matar (delete), delegar
+ * (waiting + selector persona equipo — se abre el modal de edición del task).
+ */
+function ColdTasksBlock({ onRefresh }: { onRefresh: () => void }) {
+  const [tasks, setTasks] = useState<Array<{ id: string; title: string; lastTouchedAt: string }>>([]);
+  const [cooldownDays, setCooldownDays] = useState(14);
+  const [open, setOpen] = useState(false);
+
+  const load = useCallback(async () => {
+    const r = await fetch("/api/ceo/cold-tasks", { cache: "no-store" });
+    if (r.ok) {
+      const data = await r.json();
+      setTasks((data.tasks ?? []).map((t: any) => ({ id: t.id, title: t.title, lastTouchedAt: t.lastTouchedAt })));
+      setCooldownDays(data.cooldownDays ?? 14);
+    }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  async function markInProgress(id: string) {
+    await fetch("/api/ceo/tasks", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, status: "in_progress" }),
+    });
+    load(); onRefresh();
+  }
+  async function killIt(id: string) {
+    if (!confirm("¿Borrar esta tarea? Acción definitiva.")) return;
+    await fetch(`/api/ceo/tasks?id=${id}`, { method: "DELETE" });
+    load(); onRefresh();
+  }
+
+  if (tasks.length === 0) return null;
+  return (
+    <section className="card border-orange-200 bg-orange-50/40">
+      <button onClick={() => setOpen((v) => !v)} className="w-full flex justify-between items-center">
+        <div>
+          <h2 className="font-medium text-sm text-left">❄️ Cosas que se enfrían</h2>
+          <p className="text-[11px] text-neutral-500 mt-0.5 text-left">
+            {tasks.length} tarea{tasks.length > 1 && "s"} sin tocar en más de {cooldownDays} días. Decide: hacer, matar o delegar.
+          </p>
+        </div>
+        <span className="text-xs text-neutral-400">{open ? "▼" : "▶"}</span>
+      </button>
+      {open && (
+        <div className="mt-3 border-t border-neutral-100 pt-2 space-y-1">
+          {tasks.map((t) => {
+            const days = Math.floor((Date.now() - new Date(t.lastTouchedAt).getTime()) / 86400000);
+            return (
+              <div key={t.id} className="flex items-center gap-2 p-2 border border-neutral-200 rounded bg-white">
+                <span className="text-xs flex-1 truncate">{t.title}</span>
+                <span className="text-[10px] text-neutral-500 whitespace-nowrap">{days}d sin tocar</span>
+                <button onClick={() => markInProgress(t.id)} className="text-[11px] text-blue-700 hover:underline whitespace-nowrap">▶ En curso</button>
+                <button onClick={() => killIt(t.id)} className="text-[11px] text-red-700 hover:underline whitespace-nowrap">✕ Matar</button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+type AgendaItem = { id: string; content: string; completedAt: string | null; order: number; important: boolean; weeklyGoalId?: string | null };
+
+/**
+ * BigDartsBlock — las 3 dianas del día, grandes y a tope del panel.
+ * Persiste como CeoQuickAgendaItem(important=true).
+ * Cada diana puede vincularse a un CeoWeeklyGoal del actual ISO-week.
+ */
+function BigDartsBlock({ importantSource }: { importantSource: TaskItem[] }) {
+  const [importantItems, setImportantItems] = useState<AgendaItem[]>([]);
+  const [importantDrafts, setImportantDrafts] = useState<string[]>(Array(3).fill(""));
+  const [weeklyGoals, setWeeklyGoals] = useState<WeeklyGoal[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [linkMenuOpen, setLinkMenuOpen] = useState<number | null>(null);
+  const linkMenuRef = useRef<HTMLDivElement | null>(null);
+
+  // Tareas con dueDate = hoy → sugerencia para las 3 importantes (placeholder)
   const todayYmdStr = todayYmd();
   const todayTasks = useMemo(() => {
     return importantSource
@@ -501,33 +963,44 @@ function AgendaBlock({ importantSource }: { importantSource: TaskItem[] }) {
   }, [importantSource, todayYmdStr]);
 
   const loadItems = useCallback(async () => {
-    const r = await fetch("/api/ceo/agenda", { cache: "no-store" });
-    if (r.ok) {
-      const data = await r.json();
-      setItems(((data.items ?? []) as AgendaItem[]).slice().sort((a, b) => a.order - b.order));
+    const [aRes, gRes] = await Promise.all([
+      fetch("/api/ceo/agenda", { cache: "no-store" }),
+      fetch("/api/ceo/weekly-goals", { cache: "no-store" }),
+    ]);
+    if (aRes.ok) {
+      const data = await aRes.json();
       setImportantItems(((data.importantItems ?? []) as AgendaItem[]).slice().sort((a, b) => a.order - b.order));
+    }
+    if (gRes.ok) {
+      const data = await gRes.json();
+      const list = (data.goals ?? []) as WeeklyGoal[];
+      list.sort((a, b) => a.order - b.order);
+      setWeeklyGoals(list);
     }
     setLoaded(true);
   }, []);
 
   useEffect(() => { loadItems(); }, [loadItems]);
 
-  // Sincroniza drafts con items existentes
-  useEffect(() => {
-    const next = Array(7).fill("");
-    items.slice(0, 7).forEach((it, i) => { next[i] = it.content; });
-    setDrafts(next);
-  }, [items]);
   useEffect(() => {
     const next = Array(3).fill("");
     importantItems.slice(0, 3).forEach((it, i) => { next[i] = it.content; });
     setImportantDrafts(next);
   }, [importantItems]);
 
-  async function saveSlot(index: number, value: string, important: boolean) {
-    const list = important ? importantItems : items;
+  // Cerrar menú al clicar fuera
+  useEffect(() => {
+    if (linkMenuOpen === null) return;
+    function onDoc(e: MouseEvent) {
+      if (!linkMenuRef.current?.contains(e.target as Node)) setLinkMenuOpen(null);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [linkMenuOpen]);
+
+  async function saveSlot(index: number, value: string) {
     const trimmed = value.trim();
-    const existing = list[index];
+    const existing = importantItems[index];
     if (existing) {
       if (trimmed === existing.content) return;
       if (!trimmed) {
@@ -543,15 +1016,184 @@ function AgendaBlock({ importantSource }: { importantSource: TaskItem[] }) {
       await fetch("/api/ceo/agenda", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: trimmed, order: index, important }),
+        body: JSON.stringify({ content: trimmed, order: index, important: true }),
       });
     }
     loadItems();
   }
 
-  async function toggleDone(index: number, important: boolean) {
-    const list = important ? importantItems : items;
-    const it = list[index];
+  async function toggleDone(index: number) {
+    const it = importantItems[index];
+    if (!it) return;
+    await fetch("/api/ceo/agenda", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: it.id, completedAt: it.completedAt ? null : new Date().toISOString() }),
+    });
+    loadItems();
+  }
+
+  async function linkToGoal(index: number, goalId: string | null) {
+    const it = importantItems[index];
+    if (!it) {
+      setLinkMenuOpen(null);
+      return;
+    }
+    await fetch("/api/ceo/agenda", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: it.id, weeklyGoalId: goalId }),
+    });
+    setLinkMenuOpen(null);
+    loadItems();
+  }
+
+  function updateDraft(i: number, v: string) {
+    setImportantDrafts((prev) => { const n = [...prev]; n[i] = v; return n; });
+  }
+
+  const goalsWithText = weeklyGoals.filter((g) => g.title?.trim());
+
+  return (
+    <section className="card border-neutral-300 bg-white">
+      <header className="mb-3">
+        <h2 className="text-base font-semibold flex items-center gap-2">🎯 Las 3 dianas de hoy</h2>
+        <p className="text-[11px] text-neutral-500 mt-0.5">
+          Lo único que tiene que pasar hoy. Se autocompletan con tareas de hoy; puedes editarlas.
+        </p>
+      </header>
+      <div className="space-y-2">
+        {[0, 1, 2].map((i) => {
+          const it = importantItems[i];
+          const done = !!it?.completedAt;
+          const suggested = todayTasks[i]?.title ?? "";
+          const linkedGoal = it?.weeklyGoalId ? weeklyGoals.find((g) => g.id === it.weeklyGoalId) : null;
+          const showMenu = linkMenuOpen === i;
+          return (
+            <div key={`big-imp-${i}`} className="flex items-start gap-3">
+              <button
+                type="button"
+                onClick={() => toggleDone(i)}
+                disabled={!it}
+                className={`mt-0.5 w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${done ? "bg-emerald-600 border-emerald-600" : "border-neutral-300 hover:border-neutral-500"} ${it ? "cursor-pointer" : "cursor-default opacity-40"}`}
+                title={it ? (done ? "Marcar como pendiente" : "Cumplida ✓") : ""}
+              >
+                {done && <span className="text-white text-sm leading-none">✓</span>}
+              </button>
+              <div className="flex-1 min-w-0">
+                <input
+                  type="text"
+                  className={`w-full text-base font-medium border-0 border-b border-neutral-200 focus:border-neutral-700 outline-none bg-transparent py-1.5 ${done ? "line-through text-neutral-400" : "text-neutral-900"}`}
+                  value={importantDrafts[i] ?? ""}
+                  onChange={(e) => updateDraft(i, e.target.value)}
+                  onBlur={(e) => saveSlot(i, e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); }
+                  }}
+                  placeholder={loaded ? (suggested ? `${suggested}` : `Diana ${i + 1} — ¿qué vas a hacer hoy sin falta?`) : ""}
+                />
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  <div className="relative" ref={showMenu ? linkMenuRef : null}>
+                    <button
+                      type="button"
+                      onClick={() => setLinkMenuOpen(showMenu ? null : i)}
+                      disabled={!it || goalsWithText.length === 0}
+                      className="text-[11px] text-neutral-500 hover:text-neutral-900 disabled:opacity-40 inline-flex items-center gap-1"
+                      title={goalsWithText.length === 0 ? "Define primero los objetivos de la semana" : "Vincular a un objetivo de la semana"}
+                    >
+                      {linkedGoal ? (
+                        <span className="px-1.5 py-0.5 bg-blue-50 text-blue-800 rounded border border-blue-200">
+                          🔗 {linkedGoal.title.slice(0, 40)}{linkedGoal.title.length > 40 && "…"}
+                        </span>
+                      ) : (
+                        <span className="text-neutral-400 hover:text-neutral-700">🔗 Vincular a objetivo de la semana</span>
+                      )}
+                    </button>
+                    {showMenu && (
+                      <div className="absolute z-20 mt-1 left-0 bg-white border border-neutral-200 rounded-md shadow-md py-1 min-w-[260px]">
+                        {linkedGoal && (
+                          <button
+                            type="button"
+                            onClick={() => linkToGoal(i, null)}
+                            className="w-full text-left px-3 py-1.5 text-xs text-red-700 hover:bg-red-50"
+                          >
+                            ✕ Quitar vínculo
+                          </button>
+                        )}
+                        {goalsWithText.map((g) => (
+                          <button
+                            key={g.id}
+                            type="button"
+                            onClick={() => linkToGoal(i, g.id)}
+                            className={`w-full text-left px-3 py-1.5 text-xs hover:bg-neutral-100 ${linkedGoal?.id === g.id ? "font-semibold" : ""}`}
+                          >
+                            {linkedGoal?.id === g.id && "✓ "}{g.title}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * AgendaBlock — las 7 cosas rápidas del día (sin las 3 dianas, que ahora viven arriba).
+ */
+function AgendaBlock({ importantSource: _importantSource }: { importantSource: TaskItem[] }) {
+  const [items, setItems] = useState<AgendaItem[]>([]);
+  const [drafts, setDrafts] = useState<string[]>(Array(7).fill(""));
+  const [loaded, setLoaded] = useState(false);
+
+  const loadItems = useCallback(async () => {
+    const r = await fetch("/api/ceo/agenda", { cache: "no-store" });
+    if (r.ok) {
+      const data = await r.json();
+      setItems(((data.items ?? []) as AgendaItem[]).slice().sort((a, b) => a.order - b.order));
+    }
+    setLoaded(true);
+  }, []);
+
+  useEffect(() => { loadItems(); }, [loadItems]);
+
+  useEffect(() => {
+    const next = Array(7).fill("");
+    items.slice(0, 7).forEach((it, i) => { next[i] = it.content; });
+    setDrafts(next);
+  }, [items]);
+
+  async function saveSlot(index: number, value: string) {
+    const trimmed = value.trim();
+    const existing = items[index];
+    if (existing) {
+      if (trimmed === existing.content) return;
+      if (!trimmed) {
+        await fetch(`/api/ceo/agenda?id=${existing.id}`, { method: "DELETE" });
+      } else {
+        await fetch("/api/ceo/agenda", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: existing.id, content: trimmed }),
+        });
+      }
+    } else if (trimmed) {
+      await fetch("/api/ceo/agenda", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: trimmed, order: index, important: false }),
+      });
+    }
+    loadItems();
+  }
+
+  async function toggleDone(index: number) {
+    const it = items[index];
     if (!it) return;
     await fetch("/api/ceo/agenda", {
       method: "PATCH",
@@ -564,31 +1206,24 @@ function AgendaBlock({ importantSource }: { importantSource: TaskItem[] }) {
   function updateDraft(i: number, v: string) {
     setDrafts((prev) => { const n = [...prev]; n[i] = v; return n; });
   }
-  function updateImportantDraft(i: number, v: string) {
-    setImportantDrafts((prev) => { const n = [...prev]; n[i] = v; return n; });
-  }
 
   return (
     <section className="card">
       <header className="mb-2">
-        <h2 className="font-medium text-sm">📌 Agenda del día</h2>
+        <h2 className="font-medium text-sm">📌 Cosas rápidas del día</h2>
         <p className="text-[11px] text-neutral-500 mt-0.5">
-          3 dianas (auto, tareas de hoy) + 7 rápidas escribibles.
+          7 huecos para apuntar al vuelo (recados, ideas sueltas, llamadas).
         </p>
       </header>
-
-      {/* Importantes — editables con sugerencia (tareas de hoy) como placeholder */}
-      <div className="space-y-1 mb-3">
-        {[0, 1, 2].map((i) => {
-          const it = importantItems[i];
+      <div className="space-y-1">
+        {[0, 1, 2, 3, 4, 5, 6].map((i) => {
+          const it = items[i];
           const done = !!it?.completedAt;
-          const suggested = todayTasks[i]?.title ?? "";
           return (
-            <div key={`imp-${i}`} className="flex items-center gap-2">
-              <span className="text-xs flex-shrink-0">🎯</span>
+            <div key={`quick-${i}`} className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => it && toggleDone(i, true)}
+                onClick={() => it && toggleDone(i)}
                 disabled={!it}
                 className={`w-3.5 h-3.5 rounded border flex-shrink-0 ${done ? "bg-neutral-900 border-neutral-900" : "border-neutral-300"} ${it ? "cursor-pointer" : "cursor-default opacity-40"}`}
                 title={it ? (done ? "Marcar como pendiente" : "Marcar como hecha") : ""}
@@ -598,73 +1233,41 @@ function AgendaBlock({ importantSource }: { importantSource: TaskItem[] }) {
               <input
                 type="text"
                 className={`flex-1 text-xs border-0 border-b border-neutral-100 focus:border-neutral-400 outline-none bg-transparent py-1 ${done ? "line-through text-neutral-400" : ""}`}
-                value={importantDrafts[i] ?? ""}
-                onChange={(e) => updateImportantDraft(i, e.target.value)}
-                onBlur={(e) => saveSlot(i, e.target.value, true)}
+                value={drafts[i] ?? ""}
+                onChange={(e) => updateDraft(i, e.target.value)}
+                onBlur={(e) => saveSlot(i, e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); }
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    (e.target as HTMLInputElement).blur();
+                  }
                 }}
-                placeholder={loaded ? (suggested ? `${suggested} (de tareas de hoy)` : `Importante ${i + 1}`) : ""}
+                placeholder={loaded ? `· línea ${i + 1}` : ""}
               />
             </div>
           );
         })}
-      </div>
-
-      <div className="border-t border-neutral-100 pt-2">
-        <h3 className="text-[10px] uppercase tracking-wide text-neutral-400 mb-1.5">Cosas rápidas</h3>
-        <div className="space-y-1">
-          {[0, 1, 2, 3, 4, 5, 6].map((i) => {
-            const it = items[i];
-            const done = !!it?.completedAt;
-            return (
-              <div key={`quick-${i}`} className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => it && toggleDone(i, false)}
-                  disabled={!it}
-                  className={`w-3.5 h-3.5 rounded border flex-shrink-0 ${done ? "bg-neutral-900 border-neutral-900" : "border-neutral-300"} ${it ? "cursor-pointer" : "cursor-default opacity-40"}`}
-                  title={it ? (done ? "Marcar como pendiente" : "Marcar como hecha") : ""}
-                >
-                  {done && <span className="block text-white text-[9px] leading-none -mt-0.5">✓</span>}
-                </button>
-                <input
-                  type="text"
-                  className={`flex-1 text-xs border-0 border-b border-neutral-100 focus:border-neutral-400 outline-none bg-transparent py-1 ${done ? "line-through text-neutral-400" : ""}`}
-                  value={drafts[i] ?? ""}
-                  onChange={(e) => updateDraft(i, e.target.value)}
-                  onBlur={(e) => saveSlot(i, e.target.value, false)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      (e.target as HTMLInputElement).blur();
-                    }
-                  }}
-                  placeholder={loaded ? `· línea ${i + 1}` : ""}
-                />
-              </div>
-            );
-          })}
-        </div>
       </div>
     </section>
   );
 }
 
 function TaskSection({
-  title, titleColor, tasks, onToggle, onEdit, onDelete,
+  title, titleColor, tasks, onToggle, onEdit, onDelete, onStatusChange, team,
 }: {
   title: string; titleColor: string; tasks: TaskItem[];
   onToggle: (t: TaskItem) => void;
   onEdit: (t: TaskItem) => void;
   onDelete: (id: string) => void;
+  onStatusChange: (t: TaskItem, status: CeoTaskStatus, waitingOnId?: string | null) => void;
+  team: TeamMember[];
 }) {
   return (
     <div>
       <h3 className={`text-[11px] uppercase tracking-wide font-medium mb-1.5 ${titleColor}`}>{title}</h3>
       <div className="space-y-1">
         {tasks.map((t) => (
-          <TaskRow key={t.id} task={t} onToggle={onToggle} onEdit={onEdit} onDelete={onDelete} />
+          <TaskRow key={t.id} task={t} onToggle={onToggle} onEdit={onEdit} onDelete={onDelete} onStatusChange={onStatusChange} team={team} />
         ))}
       </div>
     </div>
@@ -672,16 +1275,53 @@ function TaskSection({
 }
 
 function TaskRow({
-  task, onToggle, onEdit, onDelete,
+  task, onToggle, onEdit, onDelete, onStatusChange, team,
 }: {
   task: TaskItem;
   onToggle: (t: TaskItem) => void;
   onEdit: (t: TaskItem) => void;
   onDelete: (id: string) => void;
+  onStatusChange: (t: TaskItem, status: CeoTaskStatus, waitingOnId?: string | null) => void;
+  team: TeamMember[];
 }) {
   const completed = !!task.completedAt;
   const subtotal = task.subtasks.length;
   const subdone = task.subtasks.filter((s) => s.completedAt).length;
+  const status: CeoTaskStatus = task.status ?? (completed ? "done" : "pending");
+  const waitingOn = task.waitingOnId ? team.find((m) => m.id === task.waitingOnId) : null;
+
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const [waitingMenuOpen, setWaitingMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!statusMenuOpen && !waitingMenuOpen) return;
+    function onDoc(e: MouseEvent) {
+      if (!menuRef.current?.contains(e.target as Node)) {
+        setStatusMenuOpen(false);
+        setWaitingMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [statusMenuOpen, waitingMenuOpen]);
+
+  function pickStatus(e: React.MouseEvent, s: CeoTaskStatus) {
+    e.stopPropagation();
+    if (s === "waiting") {
+      setStatusMenuOpen(false);
+      setWaitingMenuOpen(true);
+      return;
+    }
+    onStatusChange(task, s, null);
+    setStatusMenuOpen(false);
+  }
+
+  function pickWaitingPerson(e: React.MouseEvent, personId: string) {
+    e.stopPropagation();
+    onStatusChange(task, "waiting", personId);
+    setWaitingMenuOpen(false);
+  }
 
   return (
     <div className="flex items-start gap-2 p-2 rounded hover:bg-neutral-50 group">
@@ -697,6 +1337,55 @@ function TaskRow({
           {task.title}
         </div>
         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+          {/* Pill de estado — clic abre menú inline */}
+          <span
+            className="relative inline-block"
+            onClick={(e) => { e.stopPropagation(); }}
+            ref={menuRef}
+          >
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setStatusMenuOpen((v) => !v); setWaitingMenuOpen(false); }}
+              className={`text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 ${TASK_STATUS_COLOR[status]} hover:opacity-80`}
+              title="Cambiar estado"
+            >
+              {TASK_STATUS_ICON[status]} {TASK_STATUS_LABELS[status]}
+              {status === "waiting" && waitingOn && <span className="normal-case ml-1">· {waitingOn.fullName.split(" ")[0]}</span>}
+            </button>
+            {statusMenuOpen && (
+              <div className="absolute z-30 mt-1 left-0 bg-white border border-neutral-200 rounded-md shadow-md py-1 min-w-[140px]">
+                {(["pending", "in_progress", "waiting", "done"] as CeoTaskStatus[]).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={(e) => pickStatus(e, s)}
+                    className={`w-full text-left px-3 py-1.5 text-xs hover:bg-neutral-100 ${s === status ? "font-semibold" : ""}`}
+                  >
+                    {s === status && "✓ "}{TASK_STATUS_ICON[s]} {TASK_STATUS_LABELS[s]}
+                  </button>
+                ))}
+              </div>
+            )}
+            {waitingMenuOpen && (
+              <div className="absolute z-30 mt-1 left-0 bg-white border border-neutral-200 rounded-md shadow-md py-1 min-w-[200px] max-h-[260px] overflow-y-auto">
+                <div className="text-[10px] uppercase tracking-wide text-neutral-400 px-3 py-1">¿Esperando a quién?</div>
+                {team.length === 0 ? (
+                  <div className="text-xs text-neutral-400 italic px-3 py-1.5">Sin equipo activo</div>
+                ) : (
+                  team.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={(e) => pickWaitingPerson(e, m.id)}
+                      className="w-full text-left px-3 py-1.5 text-xs hover:bg-neutral-100"
+                    >
+                      {m.fullName} <span className="text-neutral-400">· {m.role}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </span>
           <span className={`text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 ${PRIORITY_COLOR[task.priority]}`}>
             {PRIORITY_LABELS[task.priority]}
           </span>

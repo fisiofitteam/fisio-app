@@ -805,6 +805,14 @@ model CeoTask {
   priority        String   @default("medium")               // "low" | "medium" | "high"
   dueDate         DateTime?
   completedAt     DateTime?
+  // Estado de workflow más fino que completed/no:
+  //  "pending" | "in_progress" | "waiting" | "done"
+  // status="done" siempre va acompañado de completedAt (mismo evento, doble registro).
+  status          String   @default("pending")
+  waitingOnId     String?                                   // Professional.id si status="waiting"
+  weeklyGoalId    String?                                   // FK opcional → CeoWeeklyGoal
+  // Se toca en cada PATCH; alimenta el aviso de "cosas que se enfrían".
+  lastTouchedAt   DateTime @default(now())
   // Recurrencia: al completar, el server crea otra tarea con dueDate calculada.
   recurrenceType  String   @default("none")                 // "none" | "daily" | "weekly" | "monthly"
   recurrenceDay   Int?                                      // si weekly: 1-7; si monthly: 1-31
@@ -818,6 +826,9 @@ model CeoTask {
 
   @@index([professionalId, completedAt])
   @@index([dueDate])
+  @@index([waitingOnId])
+  @@index([weeklyGoalId])
+  @@index([lastTouchedAt])
 }
 
 // Subtarea (checklist dentro de una tarea).
@@ -878,11 +889,63 @@ model CeoQuickAgendaItem {
   content         String
   order           Int      @default(0)
   important       Boolean  @default(false)                  // true = slot 🎯 (3 superiores); false = 7 rápidas
+  weeklyGoalId    String?                                   // opcional: vincula la diana a un objetivo de la semana
   completedAt     DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   @@index([professionalId, date])
+  @@index([weeklyGoalId])
+}
+
+// ----------------------------------------------------------------------------
+// Objetivos de la semana del CEO. Máx 3 por semana ISO (order=0,1,2).
+// Sirven como puente entre el foco del mes y las dianas/tareas diarias.
+// Una tarea/diana puede apuntar a un weeklyGoalId.
+// ----------------------------------------------------------------------------
+model CeoWeeklyGoal {
+  id                 String   @id @default(cuid())
+  professionalId     String
+  isoYear            Int
+  isoWeek            Int                                    // 1-53
+  title              String   @default("")
+  order              Int      @default(0)                   // 0, 1, 2
+  completedAt        DateTime?
+  carriedFromGoalId  String?                                // si lo arrastraste de la semana anterior
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([professionalId, isoYear, isoWeek, order])
+  @@index([professionalId, isoYear, isoWeek])
+}
+
+// ----------------------------------------------------------------------------
+// Inbox de captura sin fricción: solo texto, sin campos obligatorios.
+// Después se procesa en la planificación semanal y se convierte en CeoTask.
+// ----------------------------------------------------------------------------
+model CeoInboxItem {
+  id              String   @id @default(cuid())
+  professionalId  String
+  content         String
+  processedAt     DateTime?                                 // null = sin procesar
+  convertedTaskId String?                                   // si se convirtió en CeoTask
+  createdAt       DateTime @default(now())
+
+  @@index([professionalId, processedAt])
+}
+
+// ----------------------------------------------------------------------------
+// Preferencias personales del CEO para el sistema de revisión guiada.
+// Singleton por profesional.
+// ----------------------------------------------------------------------------
+model CeoPreferences {
+  id                   String   @id @default(cuid())
+  professionalId       String   @unique
+  weeklyPlanDayOfWeek  Int      @default(1)                 // 1=Lun ... 7=Dom
+  cooldownDays         Int      @default(14)                // "se enfrían" tras N días sin tocar
+  lastDayCloseAt       DateTime?                            // última vez que cerraste el día
+  lastWeeklyPlanAt     DateTime?                            // última vez que planificaste semana
+  updatedAt            DateTime @updatedAt
 }
 
 // ============================================================================

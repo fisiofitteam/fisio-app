@@ -72,6 +72,7 @@ export async function POST(req: NextRequest) {
       dueDate: data?.dueDate ? new Date(data.dueDate) : null,
       recurrenceType: typeof data?.recurrenceType === "string" ? data.recurrenceType : "none",
       recurrenceDay: data?.recurrenceDay != null ? Number(data.recurrenceDay) : null,
+      weeklyGoalId: typeof data?.weeklyGoalId === "string" && data.weeklyGoalId ? data.weeklyGoalId : null,
       order: (last?.order ?? 0) + 1,
       ...(tagIds.length > 0 && {
         tags: { create: tagIds.map((id) => ({ tagId: id })) },
@@ -109,6 +110,26 @@ export async function PATCH(req: NextRequest) {
   if (data.recurrenceDay !== undefined) update.recurrenceDay = data.recurrenceDay != null ? Number(data.recurrenceDay) : null;
   if (data.order !== undefined && Number.isFinite(Number(data.order))) update.order = Number(data.order);
   if (data.completedAt !== undefined) update.completedAt = data.completedAt ? new Date(data.completedAt) : null;
+  // Workflow extendido
+  if (data.status !== undefined) {
+    const s = String(data.status);
+    update.status = ["pending", "in_progress", "waiting", "done"].includes(s) ? s : "pending";
+    // Mantener completedAt en sincronía con status="done":
+    if (update.status === "done" && !existing.completedAt && update.completedAt === undefined) {
+      update.completedAt = new Date();
+    } else if (update.status !== "done" && update.completedAt === undefined) {
+      update.completedAt = null;
+    }
+    // Si pasamos a otro estado distinto de waiting, limpiamos waitingOnId salvo
+    // que venga explícito en el body.
+    if (update.status !== "waiting" && data.waitingOnId === undefined) {
+      update.waitingOnId = null;
+    }
+  }
+  if (data.waitingOnId !== undefined) update.waitingOnId = data.waitingOnId ? String(data.waitingOnId) : null;
+  if (data.weeklyGoalId !== undefined) update.weeklyGoalId = data.weeklyGoalId ? String(data.weeklyGoalId) : null;
+  // Siempre que algo cambia: lastTouchedAt actualizado para alimentar "se enfrían".
+  update.lastTouchedAt = new Date();
 
   // Recurrencia: al MARCAR como completada (transición null → not null) y si
   // recurre, creamos automáticamente el clon con la siguiente fecha objetivo.

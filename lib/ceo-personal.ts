@@ -1,4 +1,5 @@
 // Helpers server-safe del sistema personal del CEO. Sin "use client".
+import { isoWeekFromDate } from "./content-templates";
 
 export type CeoTaskPriority = "low" | "medium" | "high";
 export type CeoRecurrence = "none" | "daily" | "weekly" | "monthly";
@@ -71,3 +72,46 @@ export function startOfDayUtc(d: Date = new Date()): Date {
 export function currentYearMonth(d: Date = new Date()): { year: number; month: number } {
   return { year: d.getFullYear(), month: d.getMonth() + 1 };
 }
+
+// ─── Semana ISO actual y anterior, para los objetivos semanales ────────────
+
+export function currentIsoWeek(d: Date = new Date()): { isoYear: number; isoWeek: number } {
+  const { year, weekNumber } = isoWeekFromDate(d);
+  return { isoYear: year, isoWeek: weekNumber };
+}
+
+/** Semana ISO anterior (para arrastrar objetivos no cumplidos). */
+export function previousIsoWeek(isoYear: number, isoWeek: number): { isoYear: number; isoWeek: number } {
+  if (isoWeek > 1) return { isoYear, isoWeek: isoWeek - 1 };
+  // Semana 53 del año anterior si la tuvo, si no 52. Como heurística sencilla:
+  // tomamos un jueves de mediados del año anterior y vemos su semana ISO máx.
+  // Simplificación: probamos con 53 y 52.
+  const probe = new Date(Date.UTC(isoYear - 1, 11, 28)); // 28 dic ⇒ siempre cae en la última semana ISO del año
+  const prev = isoWeekFromDate(probe);
+  return { isoYear: prev.year, isoWeek: prev.weekNumber };
+}
+
+// ─── Estados de tarea ──────────────────────────────────────────────────────
+
+export type CeoTaskStatus = "pending" | "in_progress" | "waiting" | "done";
+
+export const TASK_STATUS_LABELS: Record<CeoTaskStatus, string> = {
+  pending: "Pendiente",
+  in_progress: "En curso",
+  waiting: "Esperando",
+  done: "Hecho",
+};
+
+export const TASK_STATUS_COLOR: Record<CeoTaskStatus, string> = {
+  pending: "bg-neutral-100 text-neutral-700",
+  in_progress: "bg-blue-100 text-blue-700",
+  waiting: "bg-purple-100 text-purple-700",
+  done: "bg-emerald-100 text-emerald-700",
+};
+
+export const TASK_STATUS_ICON: Record<CeoTaskStatus, string> = {
+  pending: "○",
+  in_progress: "🟢",
+  waiting: "⏳",
+  done: "✓",
+};

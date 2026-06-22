@@ -52,8 +52,9 @@ export async function POST(req: NextRequest) {
     });
     order = (last?.order ?? 0) + 1;
   }
+  const weeklyGoalId = typeof data?.weeklyGoalId === "string" && data.weeklyGoalId ? data.weeklyGoalId : null;
   const created = await prisma.ceoQuickAgendaItem.create({
-    data: { professionalId: user.id, date, content, order, important },
+    data: { professionalId: user.id, date, content, order, important, weeklyGoalId },
   });
   return NextResponse.json({ id: created.id });
 }
@@ -72,6 +73,7 @@ export async function PATCH(req: NextRequest) {
   if (data.content !== undefined) update.content = String(data.content);
   if (data.completedAt !== undefined) update.completedAt = data.completedAt ? new Date(data.completedAt) : null;
   if (data.order !== undefined && Number.isFinite(Number(data.order))) update.order = Number(data.order);
+  if (data.weeklyGoalId !== undefined) update.weeklyGoalId = data.weeklyGoalId ? String(data.weeklyGoalId) : null;
 
   await prisma.ceoQuickAgendaItem.update({ where: { id }, data: update });
   return NextResponse.json({ ok: true });
