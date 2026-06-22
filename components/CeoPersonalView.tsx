@@ -71,16 +71,13 @@ export function CeoPersonalView({ userFullName }: { userFullName: string }) {
   const [focusContent, setFocusContent] = useState("");
   const [focusYear, setFocusYear] = useState(new Date().getFullYear());
   const [focusMonth, setFocusMonth] = useState(new Date().getMonth() + 1);
-  const [journalContent, setJournalContent] = useState("");
-  const [journalDate, setJournalDate] = useState(todayYmd());
   const [loaded, setLoaded] = useState(false);
 
   const loadAll = useCallback(async () => {
-    const [tRes, tagRes, fRes, jRes] = await Promise.all([
+    const [tRes, tagRes, fRes] = await Promise.all([
       fetch("/api/ceo/tasks", { cache: "no-store" }),
       fetch("/api/ceo/tags", { cache: "no-store" }),
       fetch("/api/ceo/focus", { cache: "no-store" }),
-      fetch("/api/ceo/journal", { cache: "no-store" }),
     ]);
     if (tRes.ok) {
       const data = await tRes.json();
@@ -96,11 +93,6 @@ export function CeoPersonalView({ userFullName }: { userFullName: string }) {
       setFocusContent(data.focus?.content ?? "");
       setFocusYear(data.year);
       setFocusMonth(data.month);
-    }
-    if (jRes.ok) {
-      const data = await jRes.json();
-      setJournalContent(data.entry?.content ?? "");
-      setJournalDate(data.date?.slice(0, 10) ?? todayYmd());
     }
     setLoaded(true);
   }, []);
@@ -121,31 +113,6 @@ export function CeoPersonalView({ userFullName }: { userFullName: string }) {
     }, 1000);
   }
   useEffect(() => () => { if (focusDebouncer.current) clearTimeout(focusDebouncer.current); }, []);
-
-  // ─── Bloque cuaderno del día ───
-  const journalDebouncer = useRef<NodeJS.Timeout | null>(null);
-  function onJournalChange(v: string) {
-    setJournalContent(v);
-    if (journalDebouncer.current) clearTimeout(journalDebouncer.current);
-    journalDebouncer.current = setTimeout(async () => {
-      await fetch("/api/ceo/journal", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: journalDate, content: v }),
-      });
-    }, 1000);
-  }
-  useEffect(() => () => { if (journalDebouncer.current) clearTimeout(journalDebouncer.current); }, []);
-
-  async function changeJournalDate(date: string) {
-    setJournalDate(date);
-    setJournalContent("");
-    const r = await fetch(`/api/ceo/journal?date=${date}`, { cache: "no-store" });
-    if (r.ok) {
-      const data = await r.json();
-      setJournalContent(data.entry?.content ?? "");
-    }
-  }
 
   // ─── Tareas: helpers ───
   async function toggleComplete(t: TaskItem) {
@@ -230,8 +197,10 @@ export function CeoPersonalView({ userFullName }: { userFullName: string }) {
         onChange={onFocusChange}
       />
 
-      {/* 2. Tareas */}
-      <section className="card">
+      {/* 2 + 3. Tareas (izquierda) + Agenda del día (derecha) al mismo nivel */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+      <section className="card lg:col-span-2">
         <header className="flex justify-between items-center mb-3 flex-wrap gap-2">
           <div>
             <h2 className="font-medium text-sm">✅ Mis tareas</h2>
@@ -386,13 +355,12 @@ export function CeoPersonalView({ userFullName }: { userFullName: string }) {
         )}
       </section>
 
-      {/* 3. Cuaderno del día */}
-      <JournalBlock
-        date={journalDate}
-        content={journalContent}
-        onDateChange={changeJournalDate}
-        onContentChange={onJournalChange}
-      />
+      <AgendaBlock importantSource={pending} />
+
+      </div>
+
+      {/* 4. Notas persistentes */}
+      <NotesBlock />
 
       {(showNewTask || editingTask) && (
         <TaskModal
@@ -455,92 +423,203 @@ function FocusBlock({
   );
 }
 
-function JournalBlock({
-  date, content, onDateChange, onContentChange,
-}: {
-  date: string; content: string; onDateChange: (d: string) => void; onContentChange: (v: string) => void;
-}) {
-  const [showHistory, setShowHistory] = useState(false);
-  const [history, setHistory] = useState<Array<{ id: string; date: string; content: string }> | null>(null);
-  const [loading, setLoading] = useState(false);
+function NotesBlock() {
+  const [content, setContent] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
+  const debouncer = useRef<NodeJS.Timeout | null>(null);
 
-  async function loadHistory() {
-    setLoading(true);
-    const r = await fetch("/api/ceo/journal?range=30", { cache: "no-store" });
-    if (r.ok) {
-      const data = await r.json();
-      setHistory(data.entries ?? []);
-    }
-    setLoading(false);
-  }
+  useEffect(() => {
+    (async () => {
+      const r = await fetch("/api/ceo/notes", { cache: "no-store" });
+      if (r.ok) {
+        const data = await r.json();
+        setContent(data.content ?? "");
+      }
+      setLoaded(true);
+    })();
+  }, []);
 
-  function toggleHistory() {
-    if (!showHistory && history === null) loadHistory();
-    setShowHistory((v) => !v);
+  function onChange(v: string) {
+    setContent(v);
+    if (debouncer.current) clearTimeout(debouncer.current);
+    debouncer.current = setTimeout(async () => {
+      const r = await fetch("/api/ceo/notes", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: v }),
+      });
+      if (r.ok) setSavedAt(new Date());
+    }, 1000);
   }
+  useEffect(() => () => { if (debouncer.current) clearTimeout(debouncer.current); }, []);
 
   return (
     <section className="card">
       <header className="flex justify-between items-center mb-2 flex-wrap gap-2">
         <div>
-          <h2 className="font-medium text-sm">📝 Cuaderno del día</h2>
+          <h2 className="font-medium text-sm">📝 Notas</h2>
           <p className="text-[11px] text-neutral-500 mt-0.5">
-            Notas libres del día. Una entrada por día. Se autoguarda.
+            Tu bloc personal siempre visible. Apunta, borra y reescribe libremente.
           </p>
         </div>
-        <input
-          type="date"
-          className="input text-xs !w-auto"
-          value={date}
-          onChange={(e) => onDateChange(e.target.value)}
-        />
+        {savedAt && (
+          <span className="text-[10px] text-neutral-400">Guardado · {savedAt.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</span>
+        )}
       </header>
       <textarea
         className="input"
-        rows={6}
+        rows={8}
         value={content}
-        onChange={(e) => onContentChange(e.target.value)}
-        placeholder="Lo que pasó hoy, lo que aprendiste, lo que te pesa, lo que quieres recordar mañana…"
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={loaded ? "Lo que quieras tener delante: ideas sueltas, recordatorios, anotaciones del día…" : "Cargando…"}
       />
+    </section>
+  );
+}
 
-      <div className="mt-3 pt-3 border-t border-neutral-100">
-        <button
-          onClick={toggleHistory}
-          className="text-xs text-neutral-600 hover:text-neutral-900 flex items-center gap-1"
-        >
-          <span>{showHistory ? "▼" : "▶"}</span>
-          <span>📚 Historial · últimos 30 días</span>
-        </button>
+/**
+ * AgendaBlock — agenda rápida del día.
+ * - 3 slots ⌖ "importantes": auto-rellenan con tareas (CeoTask) cuyo dueDate=hoy.
+ * - 7 slots normales: editables inline, persisten como CeoQuickAgendaItem (today).
+ */
+function AgendaBlock({ importantSource }: { importantSource: TaskItem[] }) {
+  const [items, setItems] = useState<Array<{ id: string; content: string; completedAt: string | null; order: number }>>([]);
+  const [drafts, setDrafts] = useState<string[]>(Array(7).fill(""));
+  const [loaded, setLoaded] = useState(false);
 
-        {showHistory && (
-          <div className="mt-2">
-            {loading && <p className="text-xs text-neutral-400 italic">Cargando…</p>}
-            {!loading && history && history.length === 0 && (
-              <p className="text-xs text-neutral-400 italic">Aún no tienes entradas guardadas.</p>
-            )}
-            {!loading && history && history.length > 0 && (
-              <div className="space-y-1.5 max-h-[260px] overflow-y-auto">
-                {history.map((e) => {
-                  const day = new Date(e.date).toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
-                  const preview = (e.content || "").trim().split("\n")[0]?.slice(0, 120) || "(vacía)";
-                  const isCurrent = e.date.slice(0, 10) === date;
-                  return (
-                    <button
-                      key={e.id}
-                      onClick={() => onDateChange(e.date.slice(0, 10))}
-                      className={`block w-full text-left p-2 rounded border ${isCurrent ? "bg-neutral-900 text-white border-neutral-900" : "bg-white border-neutral-200 hover:border-neutral-400"}`}
-                    >
-                      <div className={`text-[11px] uppercase tracking-wide ${isCurrent ? "text-neutral-300" : "text-neutral-500"}`}>
-                        {day}{isCurrent && " · viendo ahora"}
-                      </div>
-                      <div className={`text-xs mt-0.5 truncate ${isCurrent ? "text-neutral-100" : "text-neutral-700"}`}>{preview}</div>
-                    </button>
-                  );
-                })}
+  // Importantes: tareas con dueDate = hoy (clasificación reusada del componente)
+  const todayYmdStr = todayYmd();
+  const important = useMemo(() => {
+    return importantSource
+      .filter((t) => t.dueDate?.slice(0, 10) === todayYmdStr)
+      .slice(0, 3);
+  }, [importantSource, todayYmdStr]);
+
+  const loadItems = useCallback(async () => {
+    const r = await fetch("/api/ceo/agenda", { cache: "no-store" });
+    if (r.ok) {
+      const data = await r.json();
+      const ordered = (data.items ?? []).slice().sort((a: any, b: any) => a.order - b.order);
+      setItems(ordered);
+    }
+    setLoaded(true);
+  }, []);
+
+  useEffect(() => { loadItems(); }, [loadItems]);
+
+  // Sincroniza drafts con items existentes
+  useEffect(() => {
+    const next = Array(7).fill("");
+    items.slice(0, 7).forEach((it, i) => { next[i] = it.content; });
+    setDrafts(next);
+  }, [items]);
+
+  async function saveSlot(index: number, value: string) {
+    const trimmed = value.trim();
+    const existing = items[index];
+    if (existing) {
+      if (trimmed === existing.content) return;
+      if (!trimmed) {
+        await fetch(`/api/ceo/agenda?id=${existing.id}`, { method: "DELETE" });
+      } else {
+        await fetch("/api/ceo/agenda", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: existing.id, content: trimmed }),
+        });
+      }
+    } else if (trimmed) {
+      await fetch("/api/ceo/agenda", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: trimmed, order: index }),
+      });
+    }
+    loadItems();
+  }
+
+  async function toggleDone(index: number) {
+    const it = items[index];
+    if (!it) return;
+    await fetch("/api/ceo/agenda", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: it.id, completedAt: it.completedAt ? null : new Date().toISOString() }),
+    });
+    loadItems();
+  }
+
+  function updateDraft(i: number, v: string) {
+    setDrafts((prev) => { const n = [...prev]; n[i] = v; return n; });
+  }
+
+  return (
+    <section className="card lg:col-span-1">
+      <header className="mb-2">
+        <h2 className="font-medium text-sm">📌 Agenda del día</h2>
+        <p className="text-[11px] text-neutral-500 mt-0.5">
+          3 dianas (auto, tareas de hoy) + 7 rápidas escribibles.
+        </p>
+      </header>
+
+      {/* Importantes */}
+      <div className="space-y-1.5 mb-3">
+        {[0, 1, 2].map((i) => {
+          const t = important[i];
+          return (
+            <div key={`imp-${i}`} className="flex items-start gap-2 text-xs">
+              <span className="mt-0.5">🎯</span>
+              {t ? (
+                <span className="flex-1 leading-snug">
+                  <span className={`${PRIORITY_COLOR[t.priority]} text-[10px] font-medium uppercase mr-1`}>
+                    {PRIORITY_LABELS[t.priority]}
+                  </span>
+                  {t.title}
+                </span>
+              ) : (
+                <span className="flex-1 text-neutral-300 italic">Sin tarea importante para hoy</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="border-t border-neutral-100 pt-2">
+        <h3 className="text-[10px] uppercase tracking-wide text-neutral-400 mb-1.5">Cosas rápidas</h3>
+        <div className="space-y-1">
+          {[0, 1, 2, 3, 4, 5, 6].map((i) => {
+            const it = items[i];
+            const done = !!it?.completedAt;
+            return (
+              <div key={`quick-${i}`} className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => it && toggleDone(i)}
+                  disabled={!it}
+                  className={`w-3.5 h-3.5 rounded border flex-shrink-0 ${done ? "bg-neutral-900 border-neutral-900" : "border-neutral-300"} ${it ? "cursor-pointer" : "cursor-default opacity-40"}`}
+                  title={it ? (done ? "Marcar como pendiente" : "Marcar como hecha") : ""}
+                >
+                  {done && <span className="block text-white text-[9px] leading-none -mt-0.5">✓</span>}
+                </button>
+                <input
+                  type="text"
+                  className={`flex-1 text-xs border-0 border-b border-neutral-100 focus:border-neutral-400 outline-none bg-transparent py-1 ${done ? "line-through text-neutral-400" : ""}`}
+                  value={drafts[i] ?? ""}
+                  onChange={(e) => updateDraft(i, e.target.value)}
+                  onBlur={(e) => saveSlot(i, e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      (e.target as HTMLInputElement).blur();
+                    }
+                  }}
+                  placeholder={loaded ? `· línea ${i + 1}` : ""}
+                />
               </div>
-            )}
-          </div>
-        )}
+            );
+          })}
+        </div>
       </div>
     </section>
   );

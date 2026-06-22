@@ -844,16 +844,43 @@ model CeoTaskTagOnTask {
   @@index([tagId])
 }
 
-// Cuaderno del día: una entrada de notas libres por día y profesional.
+// Cuaderno del día (legacy v1): una entrada por día. Sustituido por CeoNotes
+// (singleton sin fecha). Lo mantenemos por compat de datos viejos.
 model CeoJournalEntry {
   id              String   @id @default(cuid())
   professionalId  String
-  date            DateTime                                  // 00:00 del día (UTC)
+  date            DateTime
   content         String
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   @@unique([professionalId, date])
+  @@index([professionalId, date])
+}
+
+// Notas persistentes del CEO: una sola caja por profesional, sin fecha.
+// "Escribe lo que quieras, borra lo que quieras, siempre visible."
+model CeoNotes {
+  id              String   @id @default(cuid())
+  professionalId  String   @unique
+  content         String   @default("")
+  updatedAt       DateTime @updatedAt
+}
+
+// Agenda del día: ítems rápidos creados desde el panel del CEO. Cada uno
+// asociado a un día. La UI los pinta como los 7 "normales" del bloque
+// agenda; los 3 "importantes" salen automáticamente de CeoTask con
+// dueDate = ese día.
+model CeoQuickAgendaItem {
+  id              String   @id @default(cuid())
+  professionalId  String
+  date            DateTime                                  // 00:00 del día (UTC)
+  content         String
+  order           Int      @default(0)
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
   @@index([professionalId, date])
 }
 

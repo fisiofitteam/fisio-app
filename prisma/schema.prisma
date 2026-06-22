@@ -827,6 +827,26 @@ model CeoJournalEntry {
   @@index([professionalId, date])
 }
 
+model CeoNotes {
+  id              String   @id @default(cuid())
+  professionalId  String   @unique
+  content         String   @default("")
+  updatedAt       DateTime @updatedAt
+}
+
+model CeoQuickAgendaItem {
+  id              String   @id @default(cuid())
+  professionalId  String
+  date            DateTime
+  content         String
+  order           Int      @default(0)
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([professionalId, date])
+}
+
 // ============================================================================
 // LLAMADAS PROGRAMADAS CON PACIENTES
 // ============================================================================
