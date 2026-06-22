@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const TABS = [
   { id: "metricas", label: "📊 Resumen", href: "/fisio/anuncios/metricas", desc: "Gasto, nuevos seguidores y coste por seguidor" },
   { id: "campanas", label: "🗂️ Planificación", href: "/fisio/anuncios/campanas", desc: "Campañas y sus anuncios con estado" },
+  { id: "para-grabar", label: "🎬 Pendientes de grabación", href: "/fisio/anuncios/para-grabar", desc: "Todos los anuncios en estado 'Grabación', agrupados por campaña. Para llevarte al box." },
   { id: "brief-ia", label: "🤖 Brief IA", href: "/fisio/anuncios/brief-ia", desc: "Configura cómo la IA genera guiones (Skill / brief). Se usa desde el editor de cada anuncio." },
 ];
 
