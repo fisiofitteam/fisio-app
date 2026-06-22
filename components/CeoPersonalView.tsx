@@ -14,7 +14,7 @@ import {
   type CeoRecurrence,
   type CeoTaskStatus,
 } from "@/lib/ceo-personal";
-import { DayCloseWizard, WeeklyPlanWizard } from "@/components/CeoReviewWizards";
+import { DayCloseWizard } from "@/components/CeoReviewWizards";
 
 type Tag = { id: string; name: string; color: string };
 
@@ -235,10 +235,7 @@ export function CeoPersonalView({ userFullName }: { userFullName: string }) {
       {/* 1c. Las 3 dianas — protagonistas del día */}
       <BigDartsBlock importantSource={pending} />
 
-      {/* 1d. Inbox — captura sin fricción */}
-      <InboxBlock />
-
-      {/* 1e. Revisión guiada (acceso) + Cosas que se enfrían */}
+      {/* 1d. Revisión guiada (acceso) + Cosas que se enfrían */}
       <ReviewBar />
       <ColdTasksBlock onRefresh={loadAll} />
 
@@ -704,111 +701,19 @@ function NotesBlock() {
  * - 3 slots ⌖ "importantes": auto-rellenan con tareas (CeoTask) cuyo dueDate=hoy.
  * - 7 slots normales: editables inline, persisten como CeoQuickAgendaItem (today).
  */
-type InboxItem = { id: string; content: string; createdAt: string; processedAt: string | null };
-
 /**
- * InboxBlock — bandeja del CEO. Contador de pendientes + lista compacta.
- * El modal de captura grande vive en CeoInboxQuickCapture (botón flotante + Shift+I).
- * Para procesar a tareas, eso vendrá en el commit 5 (revisión guiada).
- */
-function InboxBlock() {
-  const [items, setItems] = useState<InboxItem[]>([]);
-  const [open, setOpen] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-
-  const load = useCallback(async () => {
-    const r = await fetch("/api/ceo/inbox", { cache: "no-store" });
-    if (r.ok) {
-      const data = await r.json();
-      setItems((data.items ?? []) as InboxItem[]);
-    }
-    setLoaded(true);
-  }, []);
-  useEffect(() => { load(); }, [load]);
-
-  // Refresca cuando la captura rápida añade algo (evento global)
-  useEffect(() => {
-    function on() { load(); }
-    window.addEventListener("ceo-inbox:changed", on);
-    return () => window.removeEventListener("ceo-inbox:changed", on);
-  }, [load]);
-
-  async function deleteItem(id: string) {
-    if (!confirm("¿Borrar esta entrada del inbox?")) return;
-    await fetch(`/api/ceo/inbox?id=${id}`, { method: "DELETE" });
-    load();
-  }
-
-  const count = items.length;
-
-  return (
-    <section className="card">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex justify-between items-center gap-2"
-      >
-        <div className="flex items-center gap-2">
-          <h2 className="font-medium text-sm">📥 Inbox</h2>
-          <span className={`text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full ${count > 0 ? "bg-amber-100 text-amber-800" : "bg-neutral-100 text-neutral-500"}`}>
-            {loaded ? `${count} sin procesar` : "…"}
-          </span>
-        </div>
-        <span className="text-xs text-neutral-400">{open ? "▼" : "▶"}</span>
-      </button>
-      <p className="text-[11px] text-neutral-500 mt-1 text-left">
-        Captura rápida con el botón flotante 📥 o con <kbd className="border rounded px-1 text-[10px]">Shift+I</kbd>. Lo clasificas luego en la planificación semanal.
-      </p>
-
-      {open && (
-        <div className="mt-3 border-t border-neutral-100 pt-2">
-          {count === 0 ? (
-            <p className="text-xs text-neutral-400 italic">Inbox vacío. Buen sitio para estar 🎉</p>
-          ) : (
-            <ul className="space-y-1 max-h-[280px] overflow-y-auto">
-              {items.map((it) => (
-                <li key={it.id} className="flex items-start gap-2 text-xs py-1 px-1 hover:bg-neutral-50 rounded">
-                  <span className="text-neutral-300 mt-0.5">·</span>
-                  <span className="flex-1 whitespace-pre-wrap leading-snug">{it.content}</span>
-                  <button
-                    onClick={() => deleteItem(it.id)}
-                    className="text-neutral-300 hover:text-red-600 text-[11px]"
-                    title="Borrar"
-                  >
-                    ✕
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-    </section>
-  );
-}
-
-/**
- * ReviewBar — botones para abrir los wizards de cierre del día y planificación
- * semanal. Banner discreto si llevas X días sin cierre o sin planificación.
+ * ReviewBar — botón para abrir el wizard de cierre del día.
+ * Banner discreto tras las 19:00 si aún no se ha cerrado hoy.
  */
 function ReviewBar() {
   const [openDay, setOpenDay] = useState(false);
-  const [openWeek, setOpenWeek] = useState(false);
-  const [prefs, setPrefs] = useState<{
-    lastDayCloseAt: string | null;
-    lastWeeklyPlanAt: string | null;
-    weeklyPlanDayOfWeek: number;
-  } | null>(null);
+  const [prefs, setPrefs] = useState<{ lastDayCloseAt: string | null } | null>(null);
 
   const load = useCallback(async () => {
     const r = await fetch("/api/ceo/preferences", { cache: "no-store" });
     if (r.ok) {
       const data = await r.json();
-      setPrefs({
-        lastDayCloseAt: data.prefs?.lastDayCloseAt ?? null,
-        lastWeeklyPlanAt: data.prefs?.lastWeeklyPlanAt ?? null,
-        weeklyPlanDayOfWeek: data.prefs?.weeklyPlanDayOfWeek ?? 1,
-      });
+      setPrefs({ lastDayCloseAt: data.prefs?.lastDayCloseAt ?? null });
     }
   }, []);
 
@@ -826,26 +731,8 @@ function ReviewBar() {
   const todayYmdStr = now.toISOString().slice(0, 10);
   const suggestDayClose = hour >= 19 && closedTodayYmd !== todayYmdStr;
 
-  // Banner planificación semanal: si hoy es el día configurado y no se hizo
-  // entre el lunes de esta semana ISO y hoy
-  const dowIso = now.getDay() === 0 ? 7 : now.getDay();
-  let suggestWeeklyPlan = false;
-  if (prefs && dowIso === prefs.weeklyPlanDayOfWeek) {
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - (dowIso - 1));
-    monday.setHours(0, 0, 0, 0);
-    const last = prefs.lastWeeklyPlanAt ? new Date(prefs.lastWeeklyPlanAt) : null;
-    suggestWeeklyPlan = !last || last < monday;
-  }
-
   return (
     <>
-      {suggestWeeklyPlan && (
-        <div className="card bg-emerald-50 border-emerald-200 flex items-center justify-between gap-3">
-          <span className="text-xs text-emerald-800">📅 Toca planificación semanal. ¿Te lleva 5 minutos?</span>
-          <button onClick={() => setOpenWeek(true)} className="text-xs btn btn-primary px-3 py-1">Empezar</button>
-        </div>
-      )}
       {suggestDayClose && (
         <div className="card bg-indigo-50 border-indigo-200 flex items-center justify-between gap-3">
           <span className="text-xs text-indigo-800">🌙 ¿Cerramos el día? 30 segundos.</span>
@@ -856,20 +743,16 @@ function ReviewBar() {
       <section className="card">
         <header className="mb-2 flex justify-between items-center gap-2 flex-wrap">
           <div>
-            <h2 className="font-medium text-sm">🧭 Revisión guiada</h2>
+            <h2 className="font-medium text-sm">🌙 Cierre del día</h2>
             <p className="text-[11px] text-neutral-500 mt-0.5">
-              Cierre del día (30s) y planificación de la semana (5min).
+              Repasa las 3 dianas y deja una nota rápida. 30 segundos.
             </p>
           </div>
-          <div className="flex gap-2 flex-wrap">
-            <button onClick={() => setOpenDay(true)} className="text-xs btn btn-ghost border border-neutral-300 px-3 py-1.5">🌙 Cierre del día</button>
-            <button onClick={() => setOpenWeek(true)} className="text-xs btn btn-ghost border border-neutral-300 px-3 py-1.5">📅 Planificación semanal</button>
-          </div>
+          <button onClick={() => setOpenDay(true)} className="text-xs btn btn-ghost border border-neutral-300 px-3 py-1.5">🌙 Cerrar el día</button>
         </header>
       </section>
 
       {openDay && <DayCloseWizard onClose={() => setOpenDay(false)} />}
-      {openWeek && <WeeklyPlanWizard onClose={() => setOpenWeek(false)} />}
     </>
   );
 }
