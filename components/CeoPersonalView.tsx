@@ -197,10 +197,10 @@ export function CeoPersonalView({ userFullName }: { userFullName: string }) {
         onChange={onFocusChange}
       />
 
-      {/* 2 + 3. Tareas (izquierda) + Agenda del día (derecha) al mismo nivel */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* 2 + 3. Tareas (izquierda) + Agenda del día (derecha) al mismo nivel, simétricos */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
 
-      <section className="card lg:col-span-2">
+      <section className="card">
         <header className="flex justify-between items-center mb-3 flex-wrap gap-2">
           <div>
             <h2 className="font-medium text-sm">✅ Mis tareas</h2>
@@ -555,7 +555,7 @@ function AgendaBlock({ importantSource }: { importantSource: TaskItem[] }) {
   }
 
   return (
-    <section className="card lg:col-span-1">
+    <section className="card">
       <header className="mb-2">
         <h2 className="font-medium text-sm">📌 Agenda del día</h2>
         <p className="text-[11px] text-neutral-500 mt-0.5">
