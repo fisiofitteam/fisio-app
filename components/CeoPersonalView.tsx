@@ -483,14 +483,18 @@ function NotesBlock() {
  * - 3 slots ⌖ "importantes": auto-rellenan con tareas (CeoTask) cuyo dueDate=hoy.
  * - 7 slots normales: editables inline, persisten como CeoQuickAgendaItem (today).
  */
+type AgendaItem = { id: string; content: string; completedAt: string | null; order: number; important: boolean };
+
 function AgendaBlock({ importantSource }: { importantSource: TaskItem[] }) {
-  const [items, setItems] = useState<Array<{ id: string; content: string; completedAt: string | null; order: number }>>([]);
+  const [items, setItems] = useState<AgendaItem[]>([]);
+  const [importantItems, setImportantItems] = useState<AgendaItem[]>([]);
   const [drafts, setDrafts] = useState<string[]>(Array(7).fill(""));
+  const [importantDrafts, setImportantDrafts] = useState<string[]>(Array(3).fill(""));
   const [loaded, setLoaded] = useState(false);
 
-  // Importantes: tareas con dueDate = hoy (clasificación reusada del componente)
+  // Tareas con dueDate = hoy → sugerencia para las 3 importantes (vía placeholder)
   const todayYmdStr = todayYmd();
-  const important = useMemo(() => {
+  const todayTasks = useMemo(() => {
     return importantSource
       .filter((t) => t.dueDate?.slice(0, 10) === todayYmdStr)
       .slice(0, 3);
@@ -500,8 +504,8 @@ function AgendaBlock({ importantSource }: { importantSource: TaskItem[] }) {
     const r = await fetch("/api/ceo/agenda", { cache: "no-store" });
     if (r.ok) {
       const data = await r.json();
-      const ordered = (data.items ?? []).slice().sort((a: any, b: any) => a.order - b.order);
-      setItems(ordered);
+      setItems(((data.items ?? []) as AgendaItem[]).slice().sort((a, b) => a.order - b.order));
+      setImportantItems(((data.importantItems ?? []) as AgendaItem[]).slice().sort((a, b) => a.order - b.order));
     }
     setLoaded(true);
   }, []);
@@ -514,10 +518,16 @@ function AgendaBlock({ importantSource }: { importantSource: TaskItem[] }) {
     items.slice(0, 7).forEach((it, i) => { next[i] = it.content; });
     setDrafts(next);
   }, [items]);
+  useEffect(() => {
+    const next = Array(3).fill("");
+    importantItems.slice(0, 3).forEach((it, i) => { next[i] = it.content; });
+    setImportantDrafts(next);
+  }, [importantItems]);
 
-  async function saveSlot(index: number, value: string) {
+  async function saveSlot(index: number, value: string, important: boolean) {
+    const list = important ? importantItems : items;
     const trimmed = value.trim();
-    const existing = items[index];
+    const existing = list[index];
     if (existing) {
       if (trimmed === existing.content) return;
       if (!trimmed) {
@@ -533,14 +543,15 @@ function AgendaBlock({ importantSource }: { importantSource: TaskItem[] }) {
       await fetch("/api/ceo/agenda", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: trimmed, order: index }),
+        body: JSON.stringify({ content: trimmed, order: index, important }),
       });
     }
     loadItems();
   }
 
-  async function toggleDone(index: number) {
-    const it = items[index];
+  async function toggleDone(index: number, important: boolean) {
+    const list = important ? importantItems : items;
+    const it = list[index];
     if (!it) return;
     await fetch("/api/ceo/agenda", {
       method: "PATCH",
@@ -553,6 +564,9 @@ function AgendaBlock({ importantSource }: { importantSource: TaskItem[] }) {
   function updateDraft(i: number, v: string) {
     setDrafts((prev) => { const n = [...prev]; n[i] = v; return n; });
   }
+  function updateImportantDraft(i: number, v: string) {
+    setImportantDrafts((prev) => { const n = [...prev]; n[i] = v; return n; });
+  }
 
   return (
     <section className="card">
@@ -563,23 +577,35 @@ function AgendaBlock({ importantSource }: { importantSource: TaskItem[] }) {
         </p>
       </header>
 
-      {/* Importantes */}
-      <div className="space-y-1.5 mb-3">
+      {/* Importantes — editables con sugerencia (tareas de hoy) como placeholder */}
+      <div className="space-y-1 mb-3">
         {[0, 1, 2].map((i) => {
-          const t = important[i];
+          const it = importantItems[i];
+          const done = !!it?.completedAt;
+          const suggested = todayTasks[i]?.title ?? "";
           return (
-            <div key={`imp-${i}`} className="flex items-start gap-2 text-xs">
-              <span className="mt-0.5">🎯</span>
-              {t ? (
-                <span className="flex-1 leading-snug">
-                  <span className={`${PRIORITY_COLOR[t.priority]} text-[10px] font-medium uppercase mr-1`}>
-                    {PRIORITY_LABELS[t.priority]}
-                  </span>
-                  {t.title}
-                </span>
-              ) : (
-                <span className="flex-1 text-neutral-300 italic">Sin tarea importante para hoy</span>
-              )}
+            <div key={`imp-${i}`} className="flex items-center gap-2">
+              <span className="text-xs flex-shrink-0">🎯</span>
+              <button
+                type="button"
+                onClick={() => it && toggleDone(i, true)}
+                disabled={!it}
+                className={`w-3.5 h-3.5 rounded border flex-shrink-0 ${done ? "bg-neutral-900 border-neutral-900" : "border-neutral-300"} ${it ? "cursor-pointer" : "cursor-default opacity-40"}`}
+                title={it ? (done ? "Marcar como pendiente" : "Marcar como hecha") : ""}
+              >
+                {done && <span className="block text-white text-[9px] leading-none -mt-0.5">✓</span>}
+              </button>
+              <input
+                type="text"
+                className={`flex-1 text-xs border-0 border-b border-neutral-100 focus:border-neutral-400 outline-none bg-transparent py-1 ${done ? "line-through text-neutral-400" : ""}`}
+                value={importantDrafts[i] ?? ""}
+                onChange={(e) => updateImportantDraft(i, e.target.value)}
+                onBlur={(e) => saveSlot(i, e.target.value, true)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); }
+                }}
+                placeholder={loaded ? (suggested ? `${suggested} (de tareas de hoy)` : `Importante ${i + 1}`) : ""}
+              />
             </div>
           );
         })}
@@ -595,7 +621,7 @@ function AgendaBlock({ importantSource }: { importantSource: TaskItem[] }) {
               <div key={`quick-${i}`} className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => it && toggleDone(i)}
+                  onClick={() => it && toggleDone(i, false)}
                   disabled={!it}
                   className={`w-3.5 h-3.5 rounded border flex-shrink-0 ${done ? "bg-neutral-900 border-neutral-900" : "border-neutral-300"} ${it ? "cursor-pointer" : "cursor-default opacity-40"}`}
                   title={it ? (done ? "Marcar como pendiente" : "Marcar como hecha") : ""}
@@ -607,7 +633,7 @@ function AgendaBlock({ importantSource }: { importantSource: TaskItem[] }) {
                   className={`flex-1 text-xs border-0 border-b border-neutral-100 focus:border-neutral-400 outline-none bg-transparent py-1 ${done ? "line-through text-neutral-400" : ""}`}
                   value={drafts[i] ?? ""}
                   onChange={(e) => updateDraft(i, e.target.value)}
-                  onBlur={(e) => saveSlot(i, e.target.value)}
+                  onBlur={(e) => saveSlot(i, e.target.value, false)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();

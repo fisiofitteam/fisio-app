@@ -24,11 +24,13 @@ export async function GET(req: NextRequest) {
   const dateStr = req.nextUrl.searchParams.get("date");
   const date = dateStr ? startOfDayUtc(new Date(dateStr)) : startOfDayUtc();
 
-  const items = await prisma.ceoQuickAgendaItem.findMany({
+  const all = await prisma.ceoQuickAgendaItem.findMany({
     where: { professionalId: user.id, date },
     orderBy: [{ order: "asc" }, { createdAt: "asc" }],
   });
-  return NextResponse.json({ items, date: date.toISOString() });
+  const importantItems = all.filter((i) => i.important);
+  const items = all.filter((i) => !i.important);
+  return NextResponse.json({ items, importantItems, date: date.toISOString() });
 }
 
 export async function POST(req: NextRequest) {
@@ -39,13 +41,19 @@ export async function POST(req: NextRequest) {
   if (!content) return NextResponse.json({ error: "content requerido" }, { status: 400 });
   const date = data?.date ? startOfDayUtc(new Date(data.date)) : startOfDayUtc();
 
-  const last = await prisma.ceoQuickAgendaItem.findFirst({
-    where: { professionalId: user.id, date },
-    orderBy: { order: "desc" },
-    select: { order: true },
-  });
+  const important = !!data?.important;
+  const orderIn = Number.isFinite(Number(data?.order)) ? Number(data.order) : null;
+  let order = orderIn;
+  if (order === null) {
+    const last = await prisma.ceoQuickAgendaItem.findFirst({
+      where: { professionalId: user.id, date, important },
+      orderBy: { order: "desc" },
+      select: { order: true },
+    });
+    order = (last?.order ?? 0) + 1;
+  }
   const created = await prisma.ceoQuickAgendaItem.create({
-    data: { professionalId: user.id, date, content, order: (last?.order ?? 0) + 1 },
+    data: { professionalId: user.id, date, content, order, important },
   });
   return NextResponse.json({ id: created.id });
 }

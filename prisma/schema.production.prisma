@@ -877,6 +877,7 @@ model CeoQuickAgendaItem {
   date            DateTime                                  // 00:00 del día (UTC)
   content         String
   order           Int      @default(0)
+  important       Boolean  @default(false)                  // true = slot 🎯 (3 superiores); false = 7 rápidas
   completedAt     DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

@@ -840,6 +840,7 @@ model CeoQuickAgendaItem {
   date            DateTime
   content         String
   order           Int      @default(0)
+  important       Boolean  @default(false)
   completedAt     DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
