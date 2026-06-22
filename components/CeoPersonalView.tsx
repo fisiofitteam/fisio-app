@@ -14,7 +14,6 @@ import {
   type CeoRecurrence,
   type CeoTaskStatus,
 } from "@/lib/ceo-personal";
-import { DayCloseWizard } from "@/components/CeoReviewWizards";
 
 type Tag = { id: string; name: string; color: string };
 
@@ -235,8 +234,7 @@ export function CeoPersonalView({ userFullName }: { userFullName: string }) {
       {/* 1c. Las 3 dianas — protagonistas del día */}
       <BigDartsBlock importantSource={pending} />
 
-      {/* 1d. Revisión guiada (acceso) + Cosas que se enfrían */}
-      <ReviewBar />
+      {/* 1d. Cosas que se enfrían */}
       <ColdTasksBlock onRefresh={loadAll} />
 
 
@@ -701,62 +699,6 @@ function NotesBlock() {
  * - 3 slots ⌖ "importantes": auto-rellenan con tareas (CeoTask) cuyo dueDate=hoy.
  * - 7 slots normales: editables inline, persisten como CeoQuickAgendaItem (today).
  */
-/**
- * ReviewBar — botón para abrir el wizard de cierre del día.
- * Banner discreto tras las 19:00 si aún no se ha cerrado hoy.
- */
-function ReviewBar() {
-  const [openDay, setOpenDay] = useState(false);
-  const [prefs, setPrefs] = useState<{ lastDayCloseAt: string | null } | null>(null);
-
-  const load = useCallback(async () => {
-    const r = await fetch("/api/ceo/preferences", { cache: "no-store" });
-    if (r.ok) {
-      const data = await r.json();
-      setPrefs({ lastDayCloseAt: data.prefs?.lastDayCloseAt ?? null });
-    }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-  useEffect(() => {
-    function on() { load(); }
-    window.addEventListener("ceo-review:done", on);
-    return () => window.removeEventListener("ceo-review:done", on);
-  }, [load]);
-
-  // Banner cierre del día: tras las 19:00 hora local y sin lastDayCloseAt hoy
-  const now = new Date();
-  const hour = now.getHours();
-  const closedTodayYmd = prefs?.lastDayCloseAt ? prefs.lastDayCloseAt.slice(0, 10) : null;
-  const todayYmdStr = now.toISOString().slice(0, 10);
-  const suggestDayClose = hour >= 19 && closedTodayYmd !== todayYmdStr;
-
-  return (
-    <>
-      {suggestDayClose && (
-        <div className="card bg-indigo-50 border-indigo-200 flex items-center justify-between gap-3">
-          <span className="text-xs text-indigo-800">🌙 ¿Cerramos el día? 30 segundos.</span>
-          <button onClick={() => setOpenDay(true)} className="text-xs btn btn-primary px-3 py-1">Cerrar el día</button>
-        </div>
-      )}
-
-      <section className="card">
-        <header className="mb-2 flex justify-between items-center gap-2 flex-wrap">
-          <div>
-            <h2 className="font-medium text-sm">🌙 Cierre del día</h2>
-            <p className="text-[11px] text-neutral-500 mt-0.5">
-              Repasa las 3 dianas y deja una nota rápida. 30 segundos.
-            </p>
-          </div>
-          <button onClick={() => setOpenDay(true)} className="text-xs btn btn-ghost border border-neutral-300 px-3 py-1.5">🌙 Cerrar el día</button>
-        </header>
-      </section>
-
-      {openDay && <DayCloseWizard onClose={() => setOpenDay(false)} />}
-    </>
-  );
-}
-
 /**
  * ColdTasksBlock — tareas pendientes que llevan > cooldownDays sin tocarse.
  * Permite acciones rápidas: hacer ahora (in_progress), matar (delete), delegar
