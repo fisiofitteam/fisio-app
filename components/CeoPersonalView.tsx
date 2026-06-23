@@ -14,6 +14,7 @@ import {
   type CeoRecurrence,
   type CeoTaskStatus,
 } from "@/lib/ceo-personal";
+import { CeoYesterdayCarryoverModal } from "@/components/CeoYesterdayCarryoverModal";
 
 type Tag = { id: string; name: string; color: string };
 
@@ -220,6 +221,9 @@ export function CeoPersonalView({ userFullName }: { userFullName: string }) {
 
   return (
     <div className="space-y-4">
+      {/* Popup de "ayer quedó esto pendiente" — autoabre una vez al día */}
+      <CeoYesterdayCarryoverModal onResolved={() => { /* nada que hacer en padre, los hijos refrescan vía evento */ }} />
+
       {/* 1. Foco del mes */}
       <FocusBlock
         year={focusYear}
@@ -764,7 +768,7 @@ function ColdTasksBlock({ onRefresh }: { onRefresh: () => void }) {
   );
 }
 
-type AgendaItem = { id: string; content: string; completedAt: string | null; order: number; important: boolean; weeklyGoalId?: string | null };
+type AgendaItem = { id: string; content: string; completedAt: string | null; order: number; important: boolean; weeklyGoalId?: string | null; carriedOver?: boolean };
 
 /**
  * BigDartsBlock — las 3 dianas del día, grandes y a tope del panel.
@@ -806,6 +810,12 @@ function BigDartsBlock({ importantSource }: { importantSource: TaskItem[] }) {
   }, []);
 
   useEffect(() => { loadItems(); }, [loadItems]);
+  // Recarga si el popup de carryover ha movido cosas a hoy
+  useEffect(() => {
+    function on() { loadItems(); }
+    window.addEventListener("ceo-agenda:changed", on);
+    return () => window.removeEventListener("ceo-agenda:changed", on);
+  }, [loadItems]);
 
   useEffect(() => {
     const next = Array(3).fill("");
@@ -986,6 +996,12 @@ function AgendaBlock({ importantSource: _importantSource }: { importantSource: T
   }, []);
 
   useEffect(() => { loadItems(); }, [loadItems]);
+  // Recarga si el popup de carryover ha traído cosas a hoy
+  useEffect(() => {
+    function on() { loadItems(); }
+    window.addEventListener("ceo-agenda:changed", on);
+    return () => window.removeEventListener("ceo-agenda:changed", on);
+  }, [loadItems]);
 
   useEffect(() => {
     const next = Array(7).fill("");
@@ -1044,20 +1060,22 @@ function AgendaBlock({ importantSource: _importantSource }: { importantSource: T
         {[0, 1, 2, 3, 4, 5, 6].map((i) => {
           const it = items[i];
           const done = !!it?.completedAt;
+          const carried = !!it?.carriedOver;
           return (
             <div key={`quick-${i}`} className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => it && toggleDone(i)}
                 disabled={!it}
-                className={`w-3.5 h-3.5 rounded border flex-shrink-0 ${done ? "bg-neutral-900 border-neutral-900" : "border-neutral-300"} ${it ? "cursor-pointer" : "cursor-default opacity-40"}`}
-                title={it ? (done ? "Marcar como pendiente" : "Marcar como hecha") : ""}
+                className={`w-3.5 h-3.5 rounded border flex-shrink-0 ${done ? "bg-neutral-900 border-neutral-900" : carried ? "border-red-400" : "border-neutral-300"} ${it ? "cursor-pointer" : "cursor-default opacity-40"}`}
+                title={it ? (done ? "Marcar como pendiente" : carried ? "De ayer — marcar como hecha" : "Marcar como hecha") : ""}
               >
                 {done && <span className="block text-white text-[9px] leading-none -mt-0.5">✓</span>}
               </button>
+              {carried && <span className="text-[10px] text-red-600 flex-shrink-0" title="Arrastrado de ayer">↩</span>}
               <input
                 type="text"
-                className={`flex-1 text-xs border-0 border-b border-neutral-100 focus:border-neutral-400 outline-none bg-transparent py-1 ${done ? "line-through text-neutral-400" : ""}`}
+                className={`flex-1 text-xs border-0 border-b focus:border-neutral-400 outline-none bg-transparent py-1 ${done ? "line-through text-neutral-400 border-neutral-100" : carried ? "text-red-700 border-red-200" : "border-neutral-100"}`}
                 value={drafts[i] ?? ""}
                 onChange={(e) => updateDraft(i, e.target.value)}
                 onBlur={(e) => saveSlot(i, e.target.value)}

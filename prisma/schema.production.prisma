@@ -890,6 +890,7 @@ model CeoQuickAgendaItem {
   order           Int      @default(0)
   important       Boolean  @default(false)                  // true = slot 🎯 (3 superiores); false = 7 rápidas
   weeklyGoalId    String?                                   // opcional: vincula la diana a un objetivo de la semana
+  carriedOver     Boolean  @default(false)                  // si viene arrastrado de un día anterior (UI lo muestra en rojo ↩)
   completedAt     DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

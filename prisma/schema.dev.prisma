@@ -849,6 +849,7 @@ model CeoQuickAgendaItem {
   order           Int      @default(0)
   important       Boolean  @default(false)
   weeklyGoalId    String?
+  carriedOver     Boolean  @default(false)
   completedAt     DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

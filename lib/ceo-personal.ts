@@ -62,10 +62,26 @@ export function nextRecurrenceDate(
   return null;
 }
 
-/** Día actual a las 00:00 UTC (para CeoJournalEntry.date). */
+/**
+ * "Inicio del día" tomando la fecha en zona Europe/Madrid y devolviéndola
+ * como timestamp UTC 00:00 de ese día Madrid. Es decir, sirve como clave
+ * estable por día desde el punto de vista del CEO en España.
+ *
+ * Nombre antiguo: startOfDayUtc (lo mantenemos por compat de imports). El
+ * comportamiento cambió en v57.x para que cambiar de día a las 00:00 hora
+ * Madrid (no a las 02:00 como antes en verano) refresque la agenda.
+ */
 export function startOfDayUtc(d: Date = new Date()): Date {
-  const out = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0, 0));
-  return out;
+  // Truco habitual: "es-CA" devuelve YYYY-MM-DD; lo combinamos con UTC.
+  const ymd = d.toLocaleDateString("es-CA", { timeZone: "Europe/Madrid" });
+  const [y, m, day] = ymd.split("-").map((x) => Number(x));
+  return new Date(Date.UTC(y, m - 1, day, 0, 0, 0, 0));
+}
+
+/** Día anterior en zona Madrid, mismo formato que startOfDayUtc. */
+export function startOfYesterdayUtc(d: Date = new Date()): Date {
+  const today = startOfDayUtc(d);
+  return new Date(today.getTime() - 24 * 3600 * 1000);
 }
 
 /** Año y mes (1-12) actuales en local. */
