@@ -8,8 +8,6 @@ export default function NewProgramPage() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [bodyZone, setBodyZone] = useState("hombro");
-  const [type, setType] = useState("Movilidad");
-  const [level, setLevel] = useState(1);
   const [weeksCount, setWeeksCount] = useState(4);
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
@@ -17,10 +15,12 @@ export default function NewProgramPage() {
   async function create() {
     if (!name.trim()) return;
     setSaving(true);
+    // type/level se mantienen en el modelo pero no se piden en la UI; van con
+    // un valor neutro para no romper consultas viejas que aún los lean.
     const res = await fetch("/api/programs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, bodyZone, type, level, weeksCount, description }),
+      body: JSON.stringify({ name, bodyZone, type: "—", level: 1, weeksCount, description }),
     });
     const data = await res.json();
     router.push(`/fisio/biblioteca/programas/${data.id}`);
@@ -31,12 +31,13 @@ export default function NewProgramPage() {
       <header className="mb-6">
         <Link href="/fisio/biblioteca/programas" className="text-xs text-neutral-500">← Programas</Link>
         <h1 className="text-xl font-semibold mt-1">Nuevo programa</h1>
+        <p className="text-xs text-neutral-500 mt-1">El título ya refleja la capacidad/nivel; aquí pedimos sólo lo imprescindible.</p>
       </header>
 
       <section className="card space-y-3">
         <div>
           <label className="text-xs text-neutral-500 block mb-1">Nombre</label>
-          <input className="input" placeholder="Ej: Movilidad escapular" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+          <input className="input" placeholder="Ej: Movilidad escapular · Nivel 2" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
@@ -46,31 +47,6 @@ export default function NewProgramPage() {
               <option value="lumbar">Lumbar</option>
               <option value="rodilla">Rodilla</option>
               <option value="otros">Otros</option>
-            </select>
-          </div>
-          <div>
-            <label className="text-xs text-neutral-500 block mb-1">Tipo de trabajo</label>
-            <select className="input" value={type} onChange={(e) => setType(e.target.value)}>
-              <option>Movilidad</option>
-              <option>Tendinoso</option>
-              <option>Exposición</option>
-              <option>Fuerza</option>
-              <option>Activación</option>
-              <option>Cardio</option>
-              <option>Recuperación</option>
-              <option>Otro</option>
-            </select>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="text-xs text-neutral-500 block mb-1">Nivel</label>
-            <select className="input" value={level} onChange={(e) => setLevel(Number(e.target.value))}>
-              {[1, 2, 3, 4, 5].map((n) => (
-                <option key={n} value={n}>
-                  Nivel {n}
-                </option>
-              ))}
             </select>
           </div>
           <div>

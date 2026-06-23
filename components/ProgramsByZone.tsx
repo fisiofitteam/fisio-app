@@ -213,7 +213,7 @@ function ProgramActionsModal({ program, onClose }: { program: Program; onClose: 
       <div className="bg-white rounded-2xl max-w-sm w-full p-4" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3">
           <h3 className="font-medium">{program.name}</h3>
-          <p className="text-xs text-neutral-500 mt-0.5">{program.type} · N{program.level} · {program.weeksCount} semanas</p>
+          <p className="text-xs text-neutral-500 mt-0.5">{program.weeksCount} semanas</p>
         </div>
 
         <div className="space-y-2">

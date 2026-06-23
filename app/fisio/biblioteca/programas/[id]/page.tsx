@@ -39,8 +39,6 @@ export default async function ProgramDetailPage({ params }: { params: { id: stri
           id: program.id,
           name: program.name,
           bodyZone: program.bodyZone,
-          type: program.type,
-          level: program.level,
           weeksCount: program.weeksCount,
           description: program.description ?? null,
         }}
