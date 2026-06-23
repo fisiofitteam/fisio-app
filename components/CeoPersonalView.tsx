@@ -817,10 +817,16 @@ function BigDartsBlock({ importantSource }: { importantSource: TaskItem[] }) {
     return () => window.removeEventListener("ceo-agenda:changed", on);
   }, [loadItems]);
 
+  // Rellena drafts SOLO en slots vacíos; nunca pisa lo que el usuario está
+  // tecleando. Así un refetch (carryover, otra pestaña) no borra texto vivo.
   useEffect(() => {
-    const next = Array(3).fill("");
-    importantItems.slice(0, 3).forEach((it, i) => { next[i] = it.content; });
-    setImportantDrafts(next);
+    setImportantDrafts((prev) => {
+      const next = [...prev];
+      importantItems.slice(0, 3).forEach((it, i) => {
+        if (!next[i] || next[i].trim() === "") next[i] = it.content;
+      });
+      return next;
+    });
   }, [importantItems]);
 
   // Cerrar menú al clicar fuera
@@ -1003,10 +1009,16 @@ function AgendaBlock({ importantSource: _importantSource }: { importantSource: T
     return () => window.removeEventListener("ceo-agenda:changed", on);
   }, [loadItems]);
 
+  // Rellena drafts SOLO en slots vacíos; nunca pisa lo que está escribiendo
+  // el usuario aunque se dispare un refetch externo.
   useEffect(() => {
-    const next = Array(7).fill("");
-    items.slice(0, 7).forEach((it, i) => { next[i] = it.content; });
-    setDrafts(next);
+    setDrafts((prev) => {
+      const next = [...prev];
+      items.slice(0, 7).forEach((it, i) => {
+        if (!next[i] || next[i].trim() === "") next[i] = it.content;
+      });
+      return next;
+    });
   }, [items]);
 
   async function saveSlot(index: number, value: string) {
