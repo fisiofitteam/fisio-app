@@ -783,6 +783,14 @@ function BigDartsBlock({ importantSource }: { importantSource: TaskItem[] }) {
   const [linkMenuOpen, setLinkMenuOpen] = useState<number | null>(null);
   const linkMenuRef = useRef<HTMLDivElement | null>(null);
 
+  // Refs paralelas al estado para poder hacer flush al desmontar (cambio de
+  // pestaña dentro del panel desmonta este componente; sin esto, lo que tenías
+  // en pantalla sin haber hecho blur no se guardaba nunca).
+  const draftsRef = useRef<string[]>(importantDrafts);
+  useEffect(() => { draftsRef.current = importantDrafts; }, [importantDrafts]);
+  const itemsRef = useRef<AgendaItem[]>(importantItems);
+  useEffect(() => { itemsRef.current = importantItems; }, [importantItems]);
+
   // Tareas con dueDate = hoy → sugerencia para las 3 importantes (placeholder)
   const todayYmdStr = todayYmd();
   const todayTasks = useMemo(() => {
@@ -838,6 +846,39 @@ function BigDartsBlock({ importantSource }: { importantSource: TaskItem[] }) {
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
   }, [linkMenuOpen]);
+
+  // Al desmontar (cambio de pestaña, navegación), persistir lo que haya en
+  // drafts si difiere de BD. Disparamos los fetch sin await — el navegador los
+  // completa aunque el componente ya no exista.
+  useEffect(() => {
+    return () => {
+      const drafts = draftsRef.current;
+      const items = itemsRef.current;
+      for (let i = 0; i < 3; i++) {
+        const draft = (drafts[i] ?? "").trim();
+        const existing = items[i];
+        const existingContent = existing?.content ?? "";
+        if (draft === existingContent) continue;
+        if (existing && !draft) {
+          fetch(`/api/ceo/agenda?id=${existing.id}`, { method: "DELETE", keepalive: true });
+        } else if (existing) {
+          fetch("/api/ceo/agenda", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: existing.id, content: draft }),
+            keepalive: true,
+          });
+        } else if (draft) {
+          fetch("/api/ceo/agenda", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content: draft, order: i, important: true }),
+            keepalive: true,
+          });
+        }
+      }
+    };
+  }, []);
 
   async function saveSlot(index: number, value: string) {
     const trimmed = value.trim();
@@ -937,8 +978,23 @@ function BigDartsBlock({ importantSource }: { importantSource: TaskItem[] }) {
                   <div className="relative" ref={showMenu ? linkMenuRef : null}>
                     <button
                       type="button"
-                      onClick={() => setLinkMenuOpen(showMenu ? null : i)}
-                      disabled={!it || goalsWithText.length === 0}
+                      onClick={async () => {
+                        if (showMenu) { setLinkMenuOpen(null); return; }
+                        // Si aún no hay item en BD pero hay draft escrito, lo
+                        // guardamos primero (caso típico: el usuario escribió
+                        // la diana y va directo a Vincular sin pasar por blur).
+                        const draft = (importantDrafts[i] ?? "").trim();
+                        if (!it && draft) {
+                          await fetch("/api/ceo/agenda", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ content: draft, order: i, important: true }),
+                          });
+                          await loadItems();
+                        }
+                        setLinkMenuOpen(i);
+                      }}
+                      disabled={(!it && !(importantDrafts[i] ?? "").trim()) || goalsWithText.length === 0}
                       className="text-[11px] text-neutral-500 hover:text-neutral-900 disabled:opacity-40 inline-flex items-center gap-1"
                       title={goalsWithText.length === 0 ? "Define primero los objetivos de la semana" : "Vincular a un objetivo de la semana"}
                     >
@@ -992,6 +1048,12 @@ function AgendaBlock({ importantSource: _importantSource }: { importantSource: T
   const [drafts, setDrafts] = useState<string[]>(Array(7).fill(""));
   const [loaded, setLoaded] = useState(false);
 
+  // Refs paralelas para hacer flush al desmontar (cambio de pestaña).
+  const draftsRef = useRef<string[]>(drafts);
+  useEffect(() => { draftsRef.current = drafts; }, [drafts]);
+  const itemsRef = useRef<AgendaItem[]>(items);
+  useEffect(() => { itemsRef.current = items; }, [items]);
+
   const loadItems = useCallback(async () => {
     const r = await fetch("/api/ceo/agenda", { cache: "no-store" });
     if (r.ok) {
@@ -1020,6 +1082,39 @@ function AgendaBlock({ importantSource: _importantSource }: { importantSource: T
       return next;
     });
   }, [items]);
+
+  // Flush al desmontar: lo que esté escrito sin haber pasado por blur, se
+  // persiste como POST/PATCH/DELETE con keepalive para que el navegador
+  // complete la petición.
+  useEffect(() => {
+    return () => {
+      const ds = draftsRef.current;
+      const its = itemsRef.current;
+      for (let i = 0; i < 7; i++) {
+        const draft = (ds[i] ?? "").trim();
+        const existing = its[i];
+        const existingContent = existing?.content ?? "";
+        if (draft === existingContent) continue;
+        if (existing && !draft) {
+          fetch(`/api/ceo/agenda?id=${existing.id}`, { method: "DELETE", keepalive: true });
+        } else if (existing) {
+          fetch("/api/ceo/agenda", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: existing.id, content: draft }),
+            keepalive: true,
+          });
+        } else if (draft) {
+          fetch("/api/ceo/agenda", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content: draft, order: i, important: false }),
+            keepalive: true,
+          });
+        }
+      }
+    };
+  }, []);
 
   async function saveSlot(index: number, value: string) {
     const trimmed = value.trim();
