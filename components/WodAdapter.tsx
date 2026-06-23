@@ -16,12 +16,6 @@ type AdaptedLine = {
   physioWarning?: string | null;
 };
 
-const EXAMPLES = [
-  { label: "Fran", text: '"Fran"\n21-15-9 for time\nThrusters 42,5 kg\nPull-ups' },
-  { label: "Helen", text: '"Helen" 3 rondas\n400m run\n21 KB swing 24kg\n12 pull-ups' },
-  { label: "EMOM", text: "EMOM 12 min\nA) 5 power cleans 50kg\nB) 10 burpees over bar\nC) 15 wall balls" },
-];
-
 export function WodAdapter({ patientId }: { patientId: string }) {
   const router = useRouter();
   const [rawText, setRawText] = useState("");
@@ -80,21 +74,10 @@ export function WodAdapter({ patientId }: { patientId: string }) {
         <label className="block text-xs text-neutral-500 mb-1">WOD del entrenador</label>
         <textarea
           className="input min-h-32 font-mono text-sm"
-          placeholder='Ejemplo:&#10;"Fran"&#10;21-15-9 for time&#10;Thrusters 42,5 kg&#10;Pull-ups'
+          placeholder="Pega o escribe aquí el WOD que ha puesto el coach (movimientos, cargas, formato)."
           value={rawText}
           onChange={(e) => setRawText(e.target.value)}
         />
-        <div className="flex gap-2 mt-2 flex-wrap">
-          {EXAMPLES.map((ex) => (
-            <button
-              key={ex.label}
-              onClick={() => setRawText(ex.text)}
-              className="text-xs px-2 py-1 bg-neutral-100 rounded hover:bg-neutral-200"
-            >
-              Cargar "{ex.label}"
-            </button>
-          ))}
-        </div>
         <button onClick={adapt} disabled={!rawText.trim() || loading} className="btn btn-accent w-full mt-3">
           {loading ? "Adaptando..." : "⚡ Adaptar a mi caso"}
         </button>
