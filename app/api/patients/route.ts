@@ -102,6 +102,11 @@ export async function POST(req: NextRequest) {
   // 1) Crear paciente. Los pacientes migrados (legacy=true) ya recibieron
   // sus regalos fuera de la plataforma → giftsAlreadySent oculta el selector
   // de talla y los excluye de "Camisetas/Parches pendientes".
+  //
+  // Onboarding (anamnesis + contrato): los pacientes NO legacy creados
+  // manualmente deben pasar por el gate igual que los que llegan desde Stripe.
+  // Si dejamos onboardingTasks = null el gate los considera legacy y NO les
+  // exige nada — eso era el bug.
   const patient = await prisma.patient.create({
     data: {
       fullName: fullName.trim(),
@@ -117,6 +122,9 @@ export async function POST(req: NextRequest) {
       programMode: mode,
       rollingProgramId: mode === "rolling" ? rollingProgramId : null,
       giftsAlreadySent: isLegacy,
+      onboardingTasks: isLegacy
+        ? undefined // se queda en null → el gate lo trata como legacy y no se lo pide
+        : { anamnesis: false, contract: false, firstSession: false },
     },
   });
 
