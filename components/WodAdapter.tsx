@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type AdaptedLine = {
@@ -25,6 +25,38 @@ export function WodAdapter({ patientId }: { patientId: string }) {
   const [rpe, setRpe] = useState<number | null>(null);
   const [pain, setPain] = useState<number>(0);
   const [saving, setSaving] = useState(false);
+
+  // Foto a la pizarra
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const [reading, setReading] = useState(false);
+  const [imgError, setImgError] = useState<string | null>(null);
+
+  async function readFromPhoto(file: File) {
+    setImgError(null);
+    setReading(true);
+    try {
+      const form = new FormData();
+      form.append("image", file);
+      const r = await fetch("/api/wod/from-image", { method: "POST", body: form });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setImgError(data?.error || "No se pudo leer la foto");
+        return;
+      }
+      const text = String(data?.text ?? "").trim();
+      if (!text) {
+        setImgError("La foto no devolvió texto");
+        return;
+      }
+      // Si ya había algo escrito, añadimos una separación; si no, sustituimos.
+      setRawText((prev) => prev.trim() ? `${prev.trim()}\n\n${text}` : text);
+    } catch (e: any) {
+      setImgError(e?.message || "Error subiendo la foto");
+    } finally {
+      setReading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
 
   async function adapt() {
     if (!rawText.trim()) return;
@@ -71,13 +103,54 @@ export function WodAdapter({ patientId }: { patientId: string }) {
   return (
     <>
       <section className="card mb-3">
-        <label className="block text-xs text-neutral-500 mb-1">WOD del entrenador</label>
+        <div className="flex justify-between items-center mb-1 gap-2 flex-wrap">
+          <label className="block text-xs text-neutral-500">WOD del entrenador</label>
+          <div className="flex gap-2 items-center">
+            {rawText && (
+              <button
+                type="button"
+                onClick={() => { setRawText(""); setAdapted(null); setImgError(null); }}
+                className="text-[11px] text-neutral-400 hover:text-red-600"
+              >
+                Limpiar
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={reading || loading}
+              className="text-xs px-2 py-1 rounded bg-neutral-900 text-white hover:bg-neutral-800 disabled:opacity-50"
+              title="Haz una foto de la pizarra y deja que la IA lo transcriba"
+            >
+              {reading ? "Leyendo pizarra…" : "📸 Foto a la pizarra"}
+            </button>
+          </div>
+        </div>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) readFromPhoto(f);
+          }}
+        />
         <textarea
           className="input min-h-32 font-mono text-sm"
-          placeholder="Pega o escribe aquí el WOD que ha puesto el coach (movimientos, cargas, formato)."
+          placeholder="Pega o escribe aquí el WOD que ha puesto el coach (movimientos, cargas, formato). O usa 📸 Foto a la pizarra."
           value={rawText}
           onChange={(e) => setRawText(e.target.value)}
         />
+        {imgError && (
+          <p className="text-xs text-red-600 mt-2">⚠️ {imgError}</p>
+        )}
+        {rawText && rawText.includes("[?]") && (
+          <p className="text-[11px] text-amber-700 mt-2">
+            La IA marcó con <code className="bg-amber-50 px-1">[?]</code> lo que no leyó claro. Revisa esas líneas antes de adaptar.
+          </p>
+        )}
         <button onClick={adapt} disabled={!rawText.trim() || loading} className="btn btn-accent w-full mt-3">
           {loading ? "Adaptando..." : "⚡ Adaptar a mi caso"}
         </button>
