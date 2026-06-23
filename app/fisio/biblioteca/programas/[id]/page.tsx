@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ProgramEditor } from "@/components/ProgramEditor";
+import { ProgramHeaderEditable } from "@/components/ProgramHeaderEditable";
 
 export default async function ProgramDetailPage({ params }: { params: { id: string } }) {
   const program = await prisma.program.findUnique({
@@ -32,17 +33,18 @@ export default async function ProgramDetailPage({ params }: { params: { id: stri
 
   return (
     <main>
-      <header className="mb-6">
-        <Link href="/fisio/biblioteca/programas" className="text-xs text-neutral-500">← Programas</Link>
-        <h1 className="text-xl font-semibold mt-1">{program.name}</h1>
-        <p className="text-sm text-neutral-500 flex items-center gap-2 mt-1 flex-wrap">
-          <span className="px-2 py-0.5 bg-neutral-100 rounded-full text-xs capitalize">{program.bodyZone}</span>
-          <span className="text-xs">{program.type}</span>
-          <span className="text-xs">· Nivel {program.level}</span>
-          <span className="text-xs">· {program.weeksCount} semanas</span>
-        </p>
-        {program.description && <p className="text-sm text-neutral-600 mt-2">{program.description}</p>}
-      </header>
+      <Link href="/fisio/biblioteca/programas" className="text-xs text-neutral-500">← Programas</Link>
+      <ProgramHeaderEditable
+        program={{
+          id: program.id,
+          name: program.name,
+          bodyZone: program.bodyZone,
+          type: program.type,
+          level: program.level,
+          weeksCount: program.weeksCount,
+          description: program.description ?? null,
+        }}
+      />
 
       <ProgramEditor program={JSON.parse(JSON.stringify(program))} />
     </main>
