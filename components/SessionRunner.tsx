@@ -215,8 +215,29 @@ function typeLabel(type: string) {
 
 function FormResponder({ task, completed, response, onChange }: any) {
   const questions = task.questions ?? [];
+
+  // Puntuación Likert agregada (suma + máx posible). Solo si hay preguntas Likert.
+  const likertDefault = ["Totalmente en desacuerdo", "En desacuerdo", "Neutral", "De acuerdo", "Totalmente de acuerdo"];
+  let likertSum = 0, likertMax = 0, likertCount = 0;
+  for (const q of questions) {
+    if (q.type !== "likert") continue;
+    likertCount += 1;
+    const labels: string[] = Array.isArray(q.scaleLabels) && q.scaleLabels.length > 0 ? q.scaleLabels : likertDefault;
+    likertMax += labels.length;
+    const v = Number(response[q.id]);
+    if (Number.isFinite(v)) likertSum += v;
+  }
+  const showScore = likertCount > 0;
+
   return (
     <div className="space-y-3">
+      {showScore && (
+        <div className="p-2 rounded bg-blue-50 border border-blue-200 text-xs">
+          <span className="font-medium text-blue-900">📊 Puntuación Likert:</span>{" "}
+          <span className="font-semibold text-blue-900">{likertSum} / {likertMax}</span>
+          <span className="text-blue-700"> · {likertMax > 0 ? Math.round((likertSum / likertMax) * 100) : 0}% · {likertCount} pregunta{likertCount > 1 ? "s" : ""}</span>
+        </div>
+      )}
       {questions.map((q: any) => {
         const val = response[q.id];
         return (

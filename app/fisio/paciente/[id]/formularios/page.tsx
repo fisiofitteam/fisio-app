@@ -146,12 +146,21 @@ export default async function PatientFormsTab({ params }: { params: { id: string
           </p>
         ) : (
           <div className="space-y-2">
-            {formSessions.map((f) => (
+            {formSessions.map((f) => {
+              const headerScore = computeLikertScore(f.questions, f.responses);
+              return (
               <details key={f.sessionId} className="card group">
                 <summary className="flex justify-between items-center gap-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
                   <div className="min-w-0">
                     <div className="font-medium text-sm truncate">{f.formTitle}</div>
-                    <div className="text-xs text-neutral-500">{f.programName}</div>
+                    <div className="text-xs text-neutral-500 flex items-center gap-2 flex-wrap">
+                      <span>{f.programName}</span>
+                      {headerScore.count > 0 && (
+                        <span className="px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-medium">
+                          Likert {headerScore.sum}/{headerScore.max}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center gap-3 flex-shrink-0">
                     <div className="text-xs text-right">
@@ -167,22 +176,66 @@ export default async function PatientFormsTab({ params }: { params: { id: string
                 </summary>
 
                 <div className="mt-2 border-t border-neutral-100 pt-2 space-y-1.5">
+                  {(() => {
+                    const score = computeLikertScore(f.questions, f.responses);
+                    if (score.count === 0) return null;
+                    const pct = score.max > 0 ? Math.round((score.sum / score.max) * 100) : 0;
+                    return (
+                      <div className="mb-2 p-2 rounded bg-blue-50 border border-blue-200">
+                        <div className="text-[11px] uppercase tracking-wide text-blue-700">📊 Puntuación Likert</div>
+                        <div className="text-sm font-semibold text-blue-900">
+                          {score.sum} / {score.max} <span className="text-xs font-normal text-blue-700">· {pct}% · {score.count} pregunta{score.count > 1 ? "s" : ""}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   {f.questions.map((q: any) => {
                     const value = f.responses[q.id];
                     if (value === undefined || value === null || value === "") return null;
+                    const display = formatAnswer(q, value);
                     return (
                       <div key={q.id} className="text-xs">
                         <div className="text-neutral-500">{q.text}</div>
-                        <div className="font-medium mt-0.5">{String(value)}</div>
+                        <div className="font-medium mt-0.5">{display}</div>
                       </div>
                     );
                   })}
                 </div>
               </details>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
     </div>
   );
+}
+
+const LIKERT_DEFAULT = [
+  "Totalmente en desacuerdo", "En desacuerdo", "Neutral", "De acuerdo", "Totalmente de acuerdo",
+];
+
+function computeLikertScore(questions: any[], responses: Record<string, any>): { sum: number; max: number; count: number } {
+  let sum = 0, max = 0, count = 0;
+  for (const q of questions) {
+    if (q.type !== "likert") continue;
+    const v = Number(responses[q.id]);
+    if (!Number.isFinite(v)) continue;
+    const labels: string[] = Array.isArray(q.scaleLabels) && q.scaleLabels.length > 0 ? q.scaleLabels : LIKERT_DEFAULT;
+    sum += v;
+    max += labels.length;
+    count += 1;
+  }
+  return { sum, max, count };
+}
+
+function formatAnswer(q: any, v: any): string {
+  if (q.type === "likert") {
+    const labels: string[] = Array.isArray(q.scaleLabels) && q.scaleLabels.length > 0 ? q.scaleLabels : LIKERT_DEFAULT;
+    const idx = Number(v) - 1;
+    const label = labels[idx];
+    return label ? `${v}. ${label}` : String(v);
+  }
+  if (q.type === "scale") return `${v} / ${q.max ?? 10}`;
+  return String(v);
 }
