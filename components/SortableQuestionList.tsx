@@ -20,11 +20,22 @@ export type Question = {
   id: string;
   text: string;
   description?: string;
-  type: "text" | "scale" | "yesno" | "choice";
+  type: "text" | "scale" | "yesno" | "choice" | "likert";
   min?: number;
   max?: number;
   options?: string[];
+  // Solo si type === "likert": etiquetas para cada nivel de la escala (de
+  // menos a más). Si no se rellenan, usa los defaults de 5 niveles.
+  scaleLabels?: string[];
 };
+
+export const LIKERT_DEFAULT_5: string[] = [
+  "Totalmente en desacuerdo",
+  "En desacuerdo",
+  "Neutral",
+  "De acuerdo",
+  "Totalmente de acuerdo",
+];
 
 export function SortableQuestionList({
   questions,
@@ -121,9 +132,59 @@ function SortableQuestionItem({
         />
       </div>
       <div className="text-xs text-neutral-500 pl-10">
-        Tipo: <strong>{q.type === "text" ? "Texto libre" : q.type === "scale" ? "Escala numérica" : q.type === "yesno" ? "Sí/No" : "Opción múltiple"}</strong>
+        Tipo: <strong>
+          {q.type === "text" ? "Texto libre"
+            : q.type === "scale" ? "Escala numérica"
+            : q.type === "yesno" ? "Sí/No"
+            : q.type === "likert" ? "Escala Likert"
+            : "Opción múltiple"}
+        </strong>
         {q.type === "scale" && <span> · {q.min} a {q.max}</span>}
+        {q.type === "likert" && <span> · {(q.scaleLabels ?? LIKERT_DEFAULT_5).length} niveles</span>}
       </div>
+      {q.type === "likert" && (
+        <div className="pl-10 space-y-1">
+          {(q.scaleLabels ?? LIKERT_DEFAULT_5).map((label, idx) => (
+            <div key={idx} className="flex gap-2 items-center">
+              <span className="text-[10px] text-neutral-400 w-4 text-right">{idx + 1}</span>
+              <input
+                className="input text-xs"
+                value={label}
+                onChange={(e) => {
+                  const labels = [...(q.scaleLabels ?? LIKERT_DEFAULT_5)];
+                  labels[idx] = e.target.value;
+                  onUpdate({ scaleLabels: labels });
+                }}
+              />
+              {(q.scaleLabels ?? LIKERT_DEFAULT_5).length > 2 && (
+                <button
+                  onClick={() => onUpdate({ scaleLabels: (q.scaleLabels ?? LIKERT_DEFAULT_5).filter((_, x) => x !== idx) })}
+                  className="text-xs text-red-600 px-1"
+                  type="button"
+                  title="Quitar nivel"
+                >✕</button>
+              )}
+            </div>
+          ))}
+          <div className="flex gap-2">
+            <button
+              onClick={() => onUpdate({ scaleLabels: [...(q.scaleLabels ?? LIKERT_DEFAULT_5), "Nuevo nivel"] })}
+              className="text-xs text-neutral-500"
+              type="button"
+            >
+              + nivel
+            </button>
+            <button
+              onClick={() => onUpdate({ scaleLabels: LIKERT_DEFAULT_5 })}
+              className="text-xs text-neutral-400 hover:text-neutral-700"
+              type="button"
+              title="Restaurar etiquetas por defecto"
+            >
+              ↺ defaults 5 niveles
+            </button>
+          </div>
+        </div>
+      )}
       {q.type === "choice" && (
         <div className="pl-10 space-y-1">
           {(q.options ?? []).map((opt, idx) => (

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { SortableQuestionList, Question } from "../SortableQuestionList";
+import { SortableQuestionList, Question, LIKERT_DEFAULT_5 } from "../SortableQuestionList";
 
 type LibForm = { id: string; name: string; description: string | null; questions: string };
 
@@ -34,6 +34,7 @@ export function FormTaskEditor({ task, onClose, onSave }: { task: any; onClose: 
       type,
       ...(type === "scale" ? { min: 0, max: 10 } : {}),
       ...(type === "choice" ? { options: ["Opción 1", "Opción 2"] } : {}),
+      ...(type === "likert" ? { scaleLabels: [...LIKERT_DEFAULT_5] } : {}),
     };
     setQuestions((prev) => [...prev, q]);
   }
@@ -117,6 +118,7 @@ export function FormTaskEditor({ task, onClose, onSave }: { task: any; onClose: 
         <div className="flex gap-2 mt-2 flex-wrap">
           <button onClick={() => addQuestion("text")} className="btn btn-ghost text-xs">+ Texto libre</button>
           <button onClick={() => addQuestion("scale")} className="btn btn-ghost text-xs">+ Escala (0-10)</button>
+          <button onClick={() => addQuestion("likert")} className="btn btn-ghost text-xs">+ Likert</button>
           <button onClick={() => addQuestion("yesno")} className="btn btn-ghost text-xs">+ Sí/No</button>
           <button onClick={() => addQuestion("choice")} className="btn btn-ghost text-xs">+ Opción múltiple</button>
         </div>

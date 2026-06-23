@@ -279,6 +279,29 @@ function FormResponder({ task, completed, response, onChange }: any) {
                 ))}
               </div>
             )}
+            {q.type === "likert" && (
+              <div className="space-y-1">
+                {((q.scaleLabels && q.scaleLabels.length > 0) ? q.scaleLabels : [
+                  "Totalmente en desacuerdo", "En desacuerdo", "Neutral", "De acuerdo", "Totalmente de acuerdo",
+                ]).map((label: string, idx: number) => {
+                  const value = idx + 1; // guardamos 1..N
+                  const selected = val === value;
+                  return (
+                    <button
+                      key={idx}
+                      disabled={completed}
+                      onClick={() => onChange({ ...response, [q.id]: value })}
+                      className={`w-full text-left py-2 px-3 text-sm rounded-lg flex items-center gap-2 ${selected ? "bg-neutral-900 text-white" : "bg-neutral-100"}`}
+                    >
+                      <span className={`flex-shrink-0 w-5 h-5 rounded-full border flex items-center justify-center text-[10px] ${selected ? "bg-white text-neutral-900 border-white" : "border-neutral-300 text-neutral-500"}`}>
+                        {value}
+                      </span>
+                      <span>{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         );
       })}

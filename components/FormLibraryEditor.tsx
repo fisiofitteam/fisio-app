@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { SortableQuestionList, Question } from "./SortableQuestionList";
+import { SortableQuestionList, Question, LIKERT_DEFAULT_5 } from "./SortableQuestionList";
 
 type FormData = {
   id: string;
@@ -25,6 +25,7 @@ export function FormLibraryEditor({ form }: { form: FormData | null }) {
       type,
       ...(type === "scale" ? { min: 0, max: 10 } : {}),
       ...(type === "choice" ? { options: ["Opción 1", "Opción 2"] } : {}),
+      ...(type === "likert" ? { scaleLabels: [...LIKERT_DEFAULT_5] } : {}),
     };
     setQuestions((prev) => [...prev, q]);
   }
@@ -71,7 +72,8 @@ export function FormLibraryEditor({ form }: { form: FormData | null }) {
         )}
         <div className="flex gap-2 mt-3 flex-wrap">
           <button onClick={() => addQuestion("text")} className="btn btn-ghost text-xs">+ Texto libre</button>
-          <button onClick={() => addQuestion("scale")} className="btn btn-ghost text-xs">+ Escala</button>
+          <button onClick={() => addQuestion("scale")} className="btn btn-ghost text-xs">+ Escala numérica</button>
+          <button onClick={() => addQuestion("likert")} className="btn btn-ghost text-xs">+ Likert (acuerdo/etc)</button>
           <button onClick={() => addQuestion("yesno")} className="btn btn-ghost text-xs">+ Sí/No</button>
           <button onClick={() => addQuestion("choice")} className="btn btn-ghost text-xs">+ Opción múltiple</button>
         </div>
