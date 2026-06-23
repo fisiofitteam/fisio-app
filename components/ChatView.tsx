@@ -26,6 +26,7 @@ type Message = {
   id: string;
   authorId: string | null;
   authorName: string;
+  authorPhotoUrl?: string | null;
   body: string;
   mentions: string[];
   createdAt: string;
@@ -368,24 +369,63 @@ function MessagesList({
     return m;
   }, [teamMembers, currentUserId, currentUserName]);
 
+  // Agrupado visual: si el mensaje anterior es del mismo autor y dentro de
+  // 5 min, no repetimos avatar+cabecera para que sea menos ruidoso.
+  function isClusteredWithPrev(idx: number): boolean {
+    if (idx === 0) return false;
+    const prev = messages[idx - 1];
+    const cur = messages[idx];
+    if (prev.authorId !== cur.authorId) return false;
+    const dt = new Date(cur.createdAt).getTime() - new Date(prev.createdAt).getTime();
+    return dt < 5 * 60 * 1000;
+  }
+
   return (
-    <div ref={ref} className="flex-1 overflow-y-auto p-3 space-y-3">
+    <div ref={ref} className="flex-1 overflow-y-auto p-3 space-y-1">
       {loading && messages.length === 0 ? (
         <p className="text-xs text-neutral-400 italic text-center">Cargando mensajes…</p>
       ) : messages.length === 0 ? (
         <p className="text-xs text-neutral-400 italic text-center">Aún no hay mensajes. Sé el primero.</p>
       ) : (
-        messages.map((m) => (
+        messages.map((m, idx) => (
           <MessageRow
             key={m.id}
             message={m}
             isOwn={m.authorId === currentUserId}
             mentionsMe={m.mentions.includes(currentUserId)}
             memberById={memberById}
+            clustered={isClusteredWithPrev(idx)}
           />
         ))
       )}
     </div>
+  );
+}
+
+function ChatAvatar({ url, name, size = 32 }: { url: string | null | undefined; name: string; size?: number }) {
+  if (url) {
+    return (
+      <img
+        src={url}
+        alt=""
+        className="rounded-full object-cover flex-shrink-0 border border-neutral-200"
+        style={{ width: size, height: size }}
+      />
+    );
+  }
+  return (
+    <span
+      className="rounded-full flex items-center justify-center font-bold flex-shrink-0"
+      style={{
+        width: size,
+        height: size,
+        background: "linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)",
+        color: "#0A0A0A",
+        fontSize: Math.round(size * 0.42),
+      }}
+    >
+      {(name || "?").charAt(0).toUpperCase()}
+    </span>
   );
 }
 
@@ -394,32 +434,63 @@ function MessageRow({
   isOwn,
   mentionsMe,
   memberById,
+  clustered,
 }: {
   message: Message;
   isOwn: boolean;
   mentionsMe: boolean;
   memberById: Record<string, Member>;
+  clustered: boolean;
 }) {
   const date = new Date(message.createdAt);
   const time = date.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
   const isDeleted = !!message.deletedAt;
 
+  // Estilo burbuja: verde claro (propio) / gris (resto). Si el mensaje
+  // menciona al usuario, marcamos con un anillo ámbar discreto.
+  const bubbleBase = "rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words shadow-sm";
+  const bubbleColor = isOwn
+    ? "bg-emerald-100 text-neutral-900 border border-emerald-200"
+    : "bg-neutral-100 text-neutral-900 border border-neutral-200";
+  const mentionedRing = mentionsMe ? "ring-2 ring-amber-300" : "";
+
+  // Esquina puntiaguda en la primera burbuja del cluster para marcar autor.
+  const tail = !clustered
+    ? isOwn ? "rounded-tr-md" : "rounded-tl-md"
+    : "";
+
   return (
-    <div className={`flex flex-col gap-0.5 ${mentionsMe ? "bg-amber-50 -mx-2 px-2 py-1 rounded" : ""}`}>
-      <div className="flex items-baseline gap-2">
-        <span className={`text-xs font-medium ${isOwn ? "text-neutral-900" : "text-neutral-700"}`}>
-          {message.authorName}
-        </span>
-        <span className="text-[10px] text-neutral-400">{time}</span>
-        {message.editedAt && !isDeleted && (
-          <span className="text-[10px] text-neutral-300">(editado)</span>
+    <div className={`flex gap-2 ${isOwn ? "flex-row-reverse" : "flex-row"} ${clustered ? "mt-0.5" : "mt-2"}`}>
+      {/* Hueco a la izquierda/derecha — sólo pintamos avatar en el primero del cluster */}
+      <div className="w-8 flex-shrink-0 flex justify-center">
+        {!clustered ? (
+          <ChatAvatar url={message.authorPhotoUrl ?? null} name={message.authorName} size={32} />
+        ) : (
+          <div style={{ width: 32 }} />
         )}
       </div>
-      <div className="text-sm whitespace-pre-wrap text-neutral-800">
-        {isDeleted ? (
-          <em className="text-neutral-400">Mensaje eliminado</em>
-        ) : (
-          renderBodyWithMentions(message.body, memberById)
+
+      <div className={`flex flex-col min-w-0 max-w-[80%] ${isOwn ? "items-end" : "items-start"}`}>
+        {!clustered && (
+          <div className={`flex items-baseline gap-2 mb-0.5 ${isOwn ? "flex-row-reverse" : "flex-row"}`}>
+            <span className="text-xs font-medium text-neutral-800">{message.authorName}</span>
+            <span className="text-[10px] text-neutral-400">{time}</span>
+            {message.editedAt && !isDeleted && (
+              <span className="text-[10px] text-neutral-300">(editado)</span>
+            )}
+          </div>
+        )}
+        <div className={`${bubbleBase} ${bubbleColor} ${mentionedRing} ${tail}`}>
+          {isDeleted ? (
+            <em className="text-neutral-400">Mensaje eliminado</em>
+          ) : (
+            renderBodyWithMentions(message.body, memberById)
+          )}
+        </div>
+        {clustered && (
+          <span className="text-[9px] text-neutral-400 mt-0.5 mr-1">
+            {time}{message.editedAt && !isDeleted && " · editado"}
+          </span>
         )}
       </div>
     </div>

@@ -53,12 +53,25 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     },
   });
 
+  // Enriquecemos con la foto actual de cada autor (lookup batch). Foto puede
+  // cambiar; el message guarda nombre + id pero no la foto histórica.
+  const authorIds = Array.from(new Set(messages.map((m) => m.authorId).filter((x): x is string => !!x)));
+  const photos: Record<string, string | null> = {};
+  if (authorIds.length > 0) {
+    const pros = await prisma.professional.findMany({
+      where: { id: { in: authorIds } },
+      select: { id: true, photoUrl: true },
+    });
+    for (const p of pros) photos[p.id] = p.photoUrl ?? null;
+  }
+
   // Devolvemos ASC para que el cliente pinte de arriba a abajo.
   return NextResponse.json({
     messages: messages.reverse().map((m) => ({
       id: m.id,
       authorId: m.authorId,
       authorName: m.authorName,
+      authorPhotoUrl: m.authorId ? (photos[m.authorId] ?? null) : null,
       body: m.deletedAt ? "" : m.body,
       mentions: safeParseStringArray(m.mentions),
       createdAt: m.createdAt.toISOString(),
@@ -159,10 +172,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     });
   }
 
+  // Foto actual del autor para no requerir un GET de refresco solo para esto.
+  const pro = await prisma.professional.findUnique({
+    where: { id: user.id },
+    select: { photoUrl: true },
+  });
   return NextResponse.json({
     id: message.id,
     authorId: message.authorId,
     authorName: message.authorName,
+    authorPhotoUrl: pro?.photoUrl ?? null,
     body: message.body,
     mentions: validMentions,
     createdAt: message.createdAt.toISOString(),
