@@ -930,9 +930,21 @@ function BigDartsBlock({ importantSource }: { importantSource: TaskItem[] }) {
     loadItems();
   }
 
+  // Debounced autosave por slot — garantía contra "cambio de tab borra el draft".
+  const saveTimers = useRef<Array<ReturnType<typeof setTimeout> | null>>([null, null, null]);
+  function scheduleSave(i: number, value: string) {
+    if (saveTimers.current[i]) clearTimeout(saveTimers.current[i]!);
+    saveTimers.current[i] = setTimeout(() => {
+      saveSlot(i, value);
+    }, 700);
+  }
   function updateDraft(i: number, v: string) {
     setImportantDrafts((prev) => { const n = [...prev]; n[i] = v; return n; });
+    scheduleSave(i, v);
   }
+  useEffect(() => () => {
+    for (const t of saveTimers.current) if (t) clearTimeout(t);
+  }, []);
 
   const goalsWithText = weeklyGoals.filter((g) => g.title?.trim());
 
@@ -1151,9 +1163,21 @@ function AgendaBlock({ importantSource: _importantSource }: { importantSource: T
     loadItems();
   }
 
+  // Debounced autosave por slot — igual que en BigDartsBlock.
+  const saveTimers = useRef<Array<ReturnType<typeof setTimeout> | null>>([null, null, null, null, null, null, null]);
+  function scheduleSave(i: number, value: string) {
+    if (saveTimers.current[i]) clearTimeout(saveTimers.current[i]!);
+    saveTimers.current[i] = setTimeout(() => {
+      saveSlot(i, value);
+    }, 700);
+  }
   function updateDraft(i: number, v: string) {
     setDrafts((prev) => { const n = [...prev]; n[i] = v; return n; });
+    scheduleSave(i, v);
   }
+  useEffect(() => () => {
+    for (const t of saveTimers.current) if (t) clearTimeout(t);
+  }, []);
 
   return (
     <section className="card">
