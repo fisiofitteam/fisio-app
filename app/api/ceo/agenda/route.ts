@@ -34,49 +34,62 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const user = await getActiveProfessional();
-  if (!user || !canUseCeoPersonal(user.role)) return forbidden();
-  const data = await req.json().catch(() => ({}));
-  const content = typeof data?.content === "string" ? data.content.trim() : "";
-  if (!content) return NextResponse.json({ error: "content requerido" }, { status: 400 });
-  const date = data?.date ? startOfDayUtc(new Date(data.date)) : startOfDayUtc();
+  try {
+    const user = await getActiveProfessional();
+    if (!user || !canUseCeoPersonal(user.role)) return forbidden();
+    const data = await req.json().catch(() => ({}));
+    const content = typeof data?.content === "string" ? data.content.trim() : "";
+    if (!content) return NextResponse.json({ error: "content requerido" }, { status: 400 });
+    const date = data?.date ? startOfDayUtc(new Date(data.date)) : startOfDayUtc();
 
-  const important = !!data?.important;
-  const orderIn = Number.isFinite(Number(data?.order)) ? Number(data.order) : null;
-  let order = orderIn;
-  if (order === null) {
-    const last = await prisma.ceoQuickAgendaItem.findFirst({
-      where: { professionalId: user.id, date, important },
-      orderBy: { order: "desc" },
-      select: { order: true },
+    const important = !!data?.important;
+    const orderIn = Number.isFinite(Number(data?.order)) ? Number(data.order) : null;
+    let order = orderIn;
+    if (order === null) {
+      const last = await prisma.ceoQuickAgendaItem.findFirst({
+        where: { professionalId: user.id, date, important },
+        orderBy: { order: "desc" },
+        select: { order: true },
+      });
+      order = (last?.order ?? 0) + 1;
+    }
+    const weeklyGoalId = typeof data?.weeklyGoalId === "string" && data.weeklyGoalId ? data.weeklyGoalId : null;
+    const created = await prisma.ceoQuickAgendaItem.create({
+      data: { professionalId: user.id, date, content, order, important, weeklyGoalId },
     });
-    order = (last?.order ?? 0) + 1;
+    return NextResponse.json({ id: created.id });
+  } catch (e: any) {
+    console.error("[POST /api/ceo/agenda]", e?.code, e?.message, e?.meta);
+    return NextResponse.json(
+      { error: e?.message ?? "Error desconocido", code: e?.code, meta: e?.meta },
+      { status: 500 },
+    );
   }
-  const weeklyGoalId = typeof data?.weeklyGoalId === "string" && data.weeklyGoalId ? data.weeklyGoalId : null;
-  const created = await prisma.ceoQuickAgendaItem.create({
-    data: { professionalId: user.id, date, content, order, important, weeklyGoalId },
-  });
-  return NextResponse.json({ id: created.id });
 }
 
 export async function PATCH(req: NextRequest) {
-  const user = await getActiveProfessional();
-  if (!user || !canUseCeoPersonal(user.role)) return forbidden();
-  const data = await req.json().catch(() => ({}));
-  const id = typeof data?.id === "string" ? data.id : "";
-  if (!id) return NextResponse.json({ error: "id requerido" }, { status: 400 });
+  try {
+    const user = await getActiveProfessional();
+    if (!user || !canUseCeoPersonal(user.role)) return forbidden();
+    const data = await req.json().catch(() => ({}));
+    const id = typeof data?.id === "string" ? data.id : "";
+    if (!id) return NextResponse.json({ error: "id requerido" }, { status: 400 });
 
-  const existing = await prisma.ceoQuickAgendaItem.findUnique({ where: { id }, select: { professionalId: true } });
-  if (!existing || existing.professionalId !== user.id) return forbidden();
+    const existing = await prisma.ceoQuickAgendaItem.findUnique({ where: { id }, select: { professionalId: true } });
+    if (!existing || existing.professionalId !== user.id) return forbidden();
 
-  const update: any = {};
-  if (data.content !== undefined) update.content = String(data.content);
-  if (data.completedAt !== undefined) update.completedAt = data.completedAt ? new Date(data.completedAt) : null;
-  if (data.order !== undefined && Number.isFinite(Number(data.order))) update.order = Number(data.order);
-  if (data.weeklyGoalId !== undefined) update.weeklyGoalId = data.weeklyGoalId ? String(data.weeklyGoalId) : null;
+    const update: any = {};
+    if (data.content !== undefined) update.content = String(data.content);
+    if (data.completedAt !== undefined) update.completedAt = data.completedAt ? new Date(data.completedAt) : null;
+    if (data.order !== undefined && Number.isFinite(Number(data.order))) update.order = Number(data.order);
+    if (data.weeklyGoalId !== undefined) update.weeklyGoalId = data.weeklyGoalId ? String(data.weeklyGoalId) : null;
 
-  await prisma.ceoQuickAgendaItem.update({ where: { id }, data: update });
-  return NextResponse.json({ ok: true });
+    await prisma.ceoQuickAgendaItem.update({ where: { id }, data: update });
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    console.error("[PATCH /api/ceo/agenda]", e?.code, e?.message, e?.meta);
+    return NextResponse.json({ error: e?.message ?? "Error desconocido", code: e?.code }, { status: 500 });
+  }
 }
 
 export async function DELETE(req: NextRequest) {
