@@ -947,9 +947,24 @@ function BigDartsBlock({ importantSource }: { importantSource: TaskItem[] }) {
 
   // ─── Autoguardado debounced + localStorage en cada keystroke ──────────
   const saveTimers = useRef<Array<ReturnType<typeof setTimeout> | null>>([null, null, null]);
+  // Lo que el usuario tipeó pero aún no está confirmado en server.
+  const pendingValues = useRef<string[]>(["", "", ""]);
+  const [savingState, setSavingState] = useState<("idle" | "saving" | "saved")[]>(["idle", "idle", "idle"]);
+
+  function setSavingFor(i: number, s: "idle" | "saving" | "saved") {
+    setSavingState((prev) => { const n = [...prev]; n[i] = s; return n; });
+  }
+
   function scheduleSave(i: number, value: string) {
+    pendingValues.current[i] = value;
     if (saveTimers.current[i]) clearTimeout(saveTimers.current[i]!);
-    saveTimers.current[i] = setTimeout(() => { saveSlotNow(i, value); }, 600);
+    setSavingFor(i, "saving");
+    saveTimers.current[i] = setTimeout(async () => {
+      await saveSlotNow(i, value);
+      pendingValues.current[i] = "";
+      setSavingFor(i, "saved");
+      setTimeout(() => setSavingFor(i, "idle"), 1200);
+    }, 600);
   }
   function updateDraft(i: number, v: string) {
     // 1) Estado React (UI).
@@ -959,10 +974,72 @@ function BigDartsBlock({ importantSource }: { importantSource: TaskItem[] }) {
     // 3) Programa el save a server.
     scheduleSave(i, v);
   }
-  // Al desmontar: cancela timers; los drafts ya están en localStorage y se
-  // recuperarán al volver. NO disparamos keepalive (causaba duplicados).
+
+  // Beacon helper: dispara save inmediato vía sendBeacon (sobrevive a unmount,
+  // cierre de pestaña del navegador, etc.). Solo se usa cuando hay value pendiente.
+  function beaconFlush(i: number, value: string) {
+    const trimmed = value.trim();
+    const slot = slotsRef.current[i];
+    if (trimmed === (slot?.content ?? "")) return;
+    try {
+      if (slot.id && !trimmed) {
+        // sendBeacon no soporta DELETE; usamos fetch keepalive como fallback.
+        fetch(`/api/ceo/agenda?id=${slot.id}`, { method: "DELETE", keepalive: true });
+        return;
+      }
+      const payload = slot.id
+        ? { id: slot.id, content: trimmed }
+        : { content: trimmed, order: i, important: true };
+      const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
+      const url = "/api/ceo/agenda" + (slot.id ? "?_m=PATCH" : "");
+      // sendBeacon es POST. El endpoint distingue por payload (con id ⇒ PATCH-like).
+      const ok = navigator.sendBeacon?.(url, blob);
+      if (!ok) {
+        fetch("/api/ceo/agenda", {
+          method: slot.id ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          keepalive: true,
+        });
+      } else if (slot.id) {
+        // sendBeacon siempre es POST, pero nuestro endpoint POST sin id crea nuevo.
+        // Para evitar duplicar, si hay id forzamos fetch keepalive PATCH:
+        fetch("/api/ceo/agenda", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          keepalive: true,
+        });
+      }
+    } catch {}
+  }
+
+  // Al desmontar (cambio de pestaña Mi CEO → otra, navegación de ruta…):
+  // si hay timer pendiente o pendingValues con texto, lo disparamos sí o sí.
   useEffect(() => () => {
-    for (const t of saveTimers.current) if (t) clearTimeout(t);
+    for (let i = 0; i < 3; i++) {
+      if (saveTimers.current[i]) clearTimeout(saveTimers.current[i]!);
+      const pending = pendingValues.current[i];
+      if (pending !== "" && pending !== slotsRef.current[i]?.content) {
+        beaconFlush(i, pending);
+      }
+    }
+  }, []);
+
+  // Si el usuario cambia de tab del navegador o minimiza, también flusheamos.
+  useEffect(() => {
+    function onHide() {
+      if (document.visibilityState === "hidden") {
+        for (let i = 0; i < 3; i++) {
+          const pending = pendingValues.current[i];
+          if (pending !== "" && pending !== slotsRef.current[i]?.content) {
+            beaconFlush(i, pending);
+          }
+        }
+      }
+    }
+    document.addEventListener("visibilitychange", onHide);
+    return () => document.removeEventListener("visibilitychange", onHide);
   }, []);
 
   const goalsWithText = weeklyGoals.filter((g) => g.title?.trim());
@@ -994,17 +1071,22 @@ function BigDartsBlock({ importantSource }: { importantSource: TaskItem[] }) {
                 {done && <span className="text-white text-sm leading-none">✓</span>}
               </button>
               <div className="flex-1 min-w-0">
-                <input
-                  type="text"
-                  className={`w-full text-base font-medium border-0 border-b border-neutral-200 focus:border-neutral-700 outline-none bg-transparent py-1.5 ${done ? "line-through text-neutral-400" : "text-neutral-900"}`}
-                  value={importantDrafts[i] ?? ""}
-                  onChange={(e) => updateDraft(i, e.target.value)}
-                  onBlur={(e) => saveSlotNow(i, e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); }
-                  }}
-                  placeholder={loaded ? (suggested ? `${suggested}` : `Diana ${i + 1} — ¿qué vas a hacer hoy sin falta?`) : ""}
-                />
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    className={`flex-1 text-base font-medium border-0 border-b border-neutral-200 focus:border-neutral-700 outline-none bg-transparent py-1.5 ${done ? "line-through text-neutral-400" : "text-neutral-900"}`}
+                    value={importantDrafts[i] ?? ""}
+                    onChange={(e) => updateDraft(i, e.target.value)}
+                    onBlur={(e) => saveSlotNow(i, e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); }
+                    }}
+                    placeholder={loaded ? (suggested ? `${suggested}` : `Diana ${i + 1} — ¿qué vas a hacer hoy sin falta?`) : ""}
+                  />
+                  <span className="text-[10px] text-neutral-400 min-w-[60px] text-right">
+                    {savingState[i] === "saving" ? "Guardando…" : savingState[i] === "saved" ? "✓" : ""}
+                  </span>
+                </div>
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
                   <div className="relative" ref={showMenu ? linkMenuRef : null}>
                     <button
@@ -1180,17 +1262,68 @@ function AgendaBlock({ importantSource: _importantSource }: { importantSource: T
   }
 
   const saveTimers = useRef<Array<ReturnType<typeof setTimeout> | null>>([null, null, null, null, null, null, null]);
+  const pendingValues = useRef<string[]>(["", "", "", "", "", "", ""]);
+
   function scheduleSave(i: number, value: string) {
+    pendingValues.current[i] = value;
     if (saveTimers.current[i]) clearTimeout(saveTimers.current[i]!);
-    saveTimers.current[i] = setTimeout(() => { saveSlotNow(i, value); }, 600);
+    saveTimers.current[i] = setTimeout(async () => {
+      await saveSlotNow(i, value);
+      pendingValues.current[i] = "";
+    }, 600);
   }
   function updateDraft(i: number, v: string) {
     setDrafts((prev) => { const n = [...prev]; n[i] = v; return n; });
     writeLocalDraft(i, v);
     scheduleSave(i, v);
   }
+
+  function beaconFlush(i: number, value: string) {
+    const trimmed = value.trim();
+    const slot = slotsRef.current[i];
+    if (trimmed === (slot?.content ?? "")) return;
+    try {
+      if (slot.id && !trimmed) {
+        fetch(`/api/ceo/agenda?id=${slot.id}`, { method: "DELETE", keepalive: true });
+        return;
+      }
+      const payload = slot.id
+        ? { id: slot.id, content: trimmed }
+        : { content: trimmed, order: i, important: false };
+      fetch("/api/ceo/agenda", {
+        method: slot.id ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        keepalive: true,
+      });
+    } catch {}
+  }
+
+  // Al desmontar: dispara saves pendientes vía keepalive (no se cancelan).
   useEffect(() => () => {
-    for (const t of saveTimers.current) if (t) clearTimeout(t);
+    for (let i = 0; i < 7; i++) {
+      if (saveTimers.current[i]) clearTimeout(saveTimers.current[i]!);
+      const pending = pendingValues.current[i];
+      if (pending !== "" && pending !== slotsRef.current[i]?.content) {
+        beaconFlush(i, pending);
+      }
+    }
+  }, []);
+
+  // visibilitychange (tab navegador): flushea también.
+  useEffect(() => {
+    function onHide() {
+      if (document.visibilityState === "hidden") {
+        for (let i = 0; i < 7; i++) {
+          const pending = pendingValues.current[i];
+          if (pending !== "" && pending !== slotsRef.current[i]?.content) {
+            beaconFlush(i, pending);
+          }
+        }
+      }
+    }
+    document.addEventListener("visibilitychange", onHide);
+    return () => document.removeEventListener("visibilitychange", onHide);
   }, []);
 
   return (
