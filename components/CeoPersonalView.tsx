@@ -880,24 +880,24 @@ function BigDartsBlock({ importantSource }: { importantSource: TaskItem[] }) {
   }, [linkMenuOpen]);
 
   // ─── Save serializado por slot ─────────────────────────────────────────
-  // Cada save por slot espera a que termine el anterior, y lee/escribe el
-  // id desde slotsRef. Así nunca se hacen dos POST simultáneos para el
-  // mismo slot.
-  function saveSlotNow(i: number, value: string): Promise<void> {
+  function saveSlotNow(i: number, value: string): Promise<boolean> {
     const trimmed = value.trim();
+    let okOut = true;
     const work = async () => {
       const slot = slotsRef.current[i];
-      if (trimmed === slot.content) return;
+      if (trimmed === slot.content) { okOut = true; return; }
       try {
         if (slot.id && !trimmed) {
-          await fetch(`/api/ceo/agenda?id=${slot.id}`, { method: "DELETE" });
+          const r = await fetch(`/api/ceo/agenda?id=${slot.id}`, { method: "DELETE" });
+          if (!r.ok) { okOut = false; throw new Error(`DELETE ${r.status}`); }
           slotsRef.current[i] = { id: null, content: "" };
         } else if (slot.id) {
-          await fetch("/api/ceo/agenda", {
+          const r = await fetch("/api/ceo/agenda", {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ id: slot.id, content: trimmed }),
           });
+          if (!r.ok) { okOut = false; throw new Error(`PATCH ${r.status}`); }
           slotsRef.current[i] = { id: slot.id, content: trimmed };
         } else if (trimmed) {
           const r = await fetch("/api/ceo/agenda", {
@@ -905,20 +905,21 @@ function BigDartsBlock({ importantSource }: { importantSource: TaskItem[] }) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ content: trimmed, order: i, important: true }),
           });
-          if (r.ok) {
-            const d = await r.json().catch(() => ({}));
-            slotsRef.current[i] = { id: d?.id ?? null, content: trimmed };
-          }
+          if (!r.ok) { okOut = false; throw new Error(`POST ${r.status}`); }
+          const d = await r.json().catch(() => ({}));
+          if (!d?.id) { okOut = false; throw new Error("POST sin id"); }
+          slotsRef.current[i] = { id: d.id, content: trimmed };
         }
-        // Save OK → limpiamos el draft local (el server ya tiene la verdad).
         writeLocalDraft(i, "");
-      } catch {
-        // Si falla, dejamos el draft en localStorage para reintentar al cargar.
+      } catch (e: any) {
+        okOut = false;
         writeLocalDraft(i, value);
+        console.error("[CeoDart] save fail slot", i, e?.message ?? e);
       }
     };
-    slotLocks.current[i] = slotLocks.current[i].then(work, work);
-    return slotLocks.current[i];
+    const p = slotLocks.current[i].then(work, work);
+    slotLocks.current[i] = p;
+    return p.then(() => okOut);
   }
 
   async function toggleDone(index: number) {
@@ -949,9 +950,9 @@ function BigDartsBlock({ importantSource }: { importantSource: TaskItem[] }) {
   const saveTimers = useRef<Array<ReturnType<typeof setTimeout> | null>>([null, null, null]);
   // Lo que el usuario tipeó pero aún no está confirmado en server.
   const pendingValues = useRef<string[]>(["", "", ""]);
-  const [savingState, setSavingState] = useState<("idle" | "saving" | "saved")[]>(["idle", "idle", "idle"]);
+  const [savingState, setSavingState] = useState<("idle" | "saving" | "saved" | "error")[]>(["idle", "idle", "idle"]);
 
-  function setSavingFor(i: number, s: "idle" | "saving" | "saved") {
+  function setSavingFor(i: number, s: "idle" | "saving" | "saved" | "error") {
     setSavingState((prev) => { const n = [...prev]; n[i] = s; return n; });
   }
 
@@ -960,10 +961,14 @@ function BigDartsBlock({ importantSource }: { importantSource: TaskItem[] }) {
     if (saveTimers.current[i]) clearTimeout(saveTimers.current[i]!);
     setSavingFor(i, "saving");
     saveTimers.current[i] = setTimeout(async () => {
-      await saveSlotNow(i, value);
+      const ok = await saveSlotNow(i, value);
       pendingValues.current[i] = "";
-      setSavingFor(i, "saved");
-      setTimeout(() => setSavingFor(i, "idle"), 1200);
+      if (ok) {
+        setSavingFor(i, "saved");
+        setTimeout(() => setSavingFor(i, "idle"), 1200);
+      } else {
+        setSavingFor(i, "error");
+      }
     }, 600);
   }
   function updateDraft(i: number, v: string) {
@@ -1083,8 +1088,11 @@ function BigDartsBlock({ importantSource }: { importantSource: TaskItem[] }) {
                     }}
                     placeholder={loaded ? (suggested ? `${suggested}` : `Diana ${i + 1} — ¿qué vas a hacer hoy sin falta?`) : ""}
                   />
-                  <span className="text-[10px] text-neutral-400 min-w-[60px] text-right">
-                    {savingState[i] === "saving" ? "Guardando…" : savingState[i] === "saved" ? "✓" : ""}
+                  <span className={`text-[10px] min-w-[80px] text-right ${savingState[i] === "error" ? "text-red-600 font-medium" : "text-neutral-400"}`}>
+                    {savingState[i] === "saving" ? "Guardando…"
+                     : savingState[i] === "saved" ? "✓"
+                     : savingState[i] === "error" ? "⚠ Error"
+                     : ""}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
