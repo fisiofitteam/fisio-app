@@ -880,46 +880,49 @@ function BigDartsBlock({ importantSource }: { importantSource: TaskItem[] }) {
   }, [linkMenuOpen]);
 
   // ─── Save serializado por slot ─────────────────────────────────────────
-  function saveSlotNow(i: number, value: string): Promise<boolean> {
+  function saveSlotNow(i: number, value: string): Promise<{ ok: boolean; error?: string }> {
     const trimmed = value.trim();
     let okOut = true;
+    let errOut = "";
     const work = async () => {
       const slot = slotsRef.current[i];
       if (trimmed === slot.content) { okOut = true; return; }
       try {
+        let r: Response | null = null;
         if (slot.id && !trimmed) {
-          const r = await fetch(`/api/ceo/agenda?id=${slot.id}`, { method: "DELETE" });
-          if (!r.ok) { okOut = false; throw new Error(`DELETE ${r.status}`); }
+          r = await fetch(`/api/ceo/agenda?id=${slot.id}`, { method: "DELETE" });
+          if (!r.ok) throw new Error(`DELETE ${r.status} ${await r.text().catch(() => "")}`);
           slotsRef.current[i] = { id: null, content: "" };
         } else if (slot.id) {
-          const r = await fetch("/api/ceo/agenda", {
+          r = await fetch("/api/ceo/agenda", {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ id: slot.id, content: trimmed }),
           });
-          if (!r.ok) { okOut = false; throw new Error(`PATCH ${r.status}`); }
+          if (!r.ok) throw new Error(`PATCH ${r.status} ${await r.text().catch(() => "")}`);
           slotsRef.current[i] = { id: slot.id, content: trimmed };
         } else if (trimmed) {
-          const r = await fetch("/api/ceo/agenda", {
+          r = await fetch("/api/ceo/agenda", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ content: trimmed, order: i, important: true }),
           });
-          if (!r.ok) { okOut = false; throw new Error(`POST ${r.status}`); }
+          if (!r.ok) throw new Error(`POST ${r.status} ${await r.text().catch(() => "")}`);
           const d = await r.json().catch(() => ({}));
-          if (!d?.id) { okOut = false; throw new Error("POST sin id"); }
+          if (!d?.id) throw new Error("POST 200 sin id");
           slotsRef.current[i] = { id: d.id, content: trimmed };
         }
         writeLocalDraft(i, "");
       } catch (e: any) {
         okOut = false;
+        errOut = String(e?.message ?? e).slice(0, 80);
         writeLocalDraft(i, value);
-        console.error("[CeoDart] save fail slot", i, e?.message ?? e);
+        console.error("[CeoDart] save fail slot", i, errOut);
       }
     };
     const p = slotLocks.current[i].then(work, work);
     slotLocks.current[i] = p;
-    return p.then(() => okOut);
+    return p.then(() => ({ ok: okOut, error: errOut }));
   }
 
   async function toggleDone(index: number) {
@@ -951,9 +954,12 @@ function BigDartsBlock({ importantSource }: { importantSource: TaskItem[] }) {
   // Lo que el usuario tipeó pero aún no está confirmado en server.
   const pendingValues = useRef<string[]>(["", "", ""]);
   const [savingState, setSavingState] = useState<("idle" | "saving" | "saved" | "error")[]>(["idle", "idle", "idle"]);
+  const [lastError, setLastError] = useState<string[]>(["", "", ""]);
 
-  function setSavingFor(i: number, s: "idle" | "saving" | "saved" | "error") {
+  function setSavingFor(i: number, s: "idle" | "saving" | "saved" | "error", err?: string) {
     setSavingState((prev) => { const n = [...prev]; n[i] = s; return n; });
+    if (s === "error") setLastError((prev) => { const n = [...prev]; n[i] = err ?? "?"; return n; });
+    else if (s === "saved") setLastError((prev) => { const n = [...prev]; n[i] = ""; return n; });
   }
 
   function scheduleSave(i: number, value: string) {
@@ -961,13 +967,13 @@ function BigDartsBlock({ importantSource }: { importantSource: TaskItem[] }) {
     if (saveTimers.current[i]) clearTimeout(saveTimers.current[i]!);
     setSavingFor(i, "saving");
     saveTimers.current[i] = setTimeout(async () => {
-      const ok = await saveSlotNow(i, value);
+      const result = await saveSlotNow(i, value);
       pendingValues.current[i] = "";
-      if (ok) {
+      if (result.ok) {
         setSavingFor(i, "saved");
         setTimeout(() => setSavingFor(i, "idle"), 1200);
       } else {
-        setSavingFor(i, "error");
+        setSavingFor(i, "error", result.error);
       }
     }, 600);
   }
@@ -1088,10 +1094,13 @@ function BigDartsBlock({ importantSource }: { importantSource: TaskItem[] }) {
                     }}
                     placeholder={loaded ? (suggested ? `${suggested}` : `Diana ${i + 1} — ¿qué vas a hacer hoy sin falta?`) : ""}
                   />
-                  <span className={`text-[10px] min-w-[80px] text-right ${savingState[i] === "error" ? "text-red-600 font-medium" : "text-neutral-400"}`}>
+                  <span
+                    className={`text-[10px] min-w-[60px] text-right ${savingState[i] === "error" ? "text-red-600 font-medium" : "text-neutral-400"}`}
+                    title={savingState[i] === "error" ? lastError[i] : ""}
+                  >
                     {savingState[i] === "saving" ? "Guardando…"
                      : savingState[i] === "saved" ? "✓"
-                     : savingState[i] === "error" ? "⚠ Error"
+                     : savingState[i] === "error" ? `⚠ ${lastError[i].slice(0, 30)}`
                      : ""}
                   </span>
                 </div>
