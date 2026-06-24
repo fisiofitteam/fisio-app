@@ -45,9 +45,13 @@ export function PaymentLinkModal({
   onClose: () => void;
 }) {
   // Estados del wizard
-  const [step, setStep] = useState<"loading" | "existing" | "program" | "duration" | "result">("loading");
+  const [step, setStep] = useState<"loading" | "existing" | "program" | "duration" | "price" | "result">("loading");
   const [program, setProgram] = useState<ProgramType | null>(null);
   const [duration, setDuration] = useState<Duration | null>(null);
+  // Precio personalizable (en euros). Se prellena con el default Stripe cuando se entra al paso "price".
+  const [priceEuros, setPriceEuros] = useState<string>("");
+  const [priceSuggested, setPriceSuggested] = useState<number | null>(null); // en céntimos
+  const [loadingPrice, setLoadingPrice] = useState(false);
 
   // Datos del Sale
   const [activeSale, setActiveSale] = useState<ActiveSale | null>(null);
@@ -116,17 +120,47 @@ export function PaymentLinkModal({
     }
   }
 
-  // ── Acción: crear el Sale con programa+duración seleccionados ───────────
+  // ── Acción: ir al paso de precio (consulta sugerencia Stripe) ──────────
+  async function goToPriceStep() {
+    if (!program || !duration) return;
+    const productCode = `${program}_${duration}M`;
+    setError("");
+    setStep("price");
+    setLoadingPrice(true);
+    try {
+      const r = await fetch(`/api/products/price-suggestion?productCode=${productCode}`);
+      const data = await r.json();
+      if (typeof data?.amountCents === "number") {
+        setPriceSuggested(data.amountCents);
+        setPriceEuros((data.amountCents / 100).toFixed(2).replace(".", ","));
+      } else {
+        setPriceSuggested(null);
+        setPriceEuros("");
+      }
+    } catch {
+      setPriceSuggested(null);
+      setPriceEuros("");
+    } finally {
+      setLoadingPrice(false);
+    }
+  }
+
+  // ── Acción: crear el Sale con programa+duración+precio seleccionados ────
   async function generate() {
     if (!program || !duration) return;
     const productCode = `${program}_${duration}M` as `${ProgramType}_${Duration}M`;
+    const amountEuros = Number((priceEuros ?? "").replace(",", "."));
+    if (!Number.isFinite(amountEuros) || amountEuros <= 0) {
+      setError("Indica un importe válido (> 0).");
+      return;
+    }
     setWorking(true);
     setError("");
     try {
       const res = await fetch(`/api/leads/${lead.id}/generate-payment-link`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productCode }),
+        body: JSON.stringify({ productCode, amountEuros }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "No se pudo generar el link");
@@ -303,11 +337,64 @@ export function PaymentLinkModal({
             )}
 
             <button
-              onClick={generate}
-              disabled={!duration || working}
+              onClick={goToPriceStep}
+              disabled={!duration}
               className="btn btn-accent w-full text-sm"
             >
-              {working ? "Generando link..." : "Generar link de pago"}
+              Siguiente: precio →
+            </button>
+          </div>
+        )}
+
+        {/* ── Paso 3: precio personalizable ───────────────────────────────── */}
+        {step === "price" && program && duration && (
+          <div className="space-y-3">
+            <button
+              onClick={() => { setStep("duration"); setError(""); }}
+              className="text-xs text-neutral-500 hover:text-neutral-900"
+            >
+              ← Cambiar duración
+            </button>
+            <p className="text-sm text-neutral-700">
+              <strong>{program}</strong> · {duration} meses. ¿Qué precio le pones?
+            </p>
+
+            {loadingPrice && (
+              <div className="text-xs text-neutral-400 italic">Consultando precio sugerido…</div>
+            )}
+
+            {!loadingPrice && priceSuggested !== null && (
+              <div className="text-[11px] text-neutral-500">
+                Precio sugerido (Stripe): <strong>{(priceSuggested / 100).toFixed(2).replace(".", ",")} €</strong>. Puedes cambiarlo abajo.
+              </div>
+            )}
+
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">Importe a cobrar (€)</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  className="input flex-1"
+                  value={priceEuros}
+                  onChange={(e) => setPriceEuros(e.target.value.replace(/[^\d.,]/g, ""))}
+                  placeholder="Ej: 749 o 749,00"
+                  autoFocus
+                />
+                <span className="text-sm text-neutral-500">€</span>
+              </div>
+            </div>
+
+            {error && (
+              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>
+            )}
+
+            <button
+              onClick={generate}
+              disabled={working || !priceEuros.trim()}
+              className="btn btn-accent w-full text-sm"
+            >
+              {working ? "Generando link…" : "Generar link de pago"}
             </button>
           </div>
         )}

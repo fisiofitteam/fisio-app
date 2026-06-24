@@ -166,6 +166,7 @@ model Patient {
   sessions        Session[]
   programPauses   ProgramPause[]
   notifications   PatientNotification[]
+  pushTokens      PatientPushToken[]
   sales           Sale[]
   invoices        PatientInvoice[]
   communityComments  CommunityComment[]
@@ -1634,6 +1635,30 @@ model ProfessionalLeave {
 // Tipos usados hoy:
 //  - "leave_bonus": vacaciones del fisio → días extra de regalo
 // ============================================================================
+
+// Tokens de push notifications de los pacientes (uno o varios por paciente,
+// uno por dispositivo iOS/Android). Se registra desde la app móvil al abrir
+// y se actualiza si cambia el token APNs/FCM.
+model PatientPushToken {
+  id          String   @id @default(cuid())
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  token       String                                  // APNs device token (hex string) o FCM token
+  platform    String                                  // "ios" | "android"
+  // bundleId: para distinguir entre la app de prod y testflight si convive.
+  bundleId    String?
+  // Activo: false si el envío devolvió "Unregistered" (lo desactivamos pero
+  // mantenemos historial). Re-registrar al abrir la app vuelve a activarlo.
+  active      Boolean  @default(true)
+  lastUsedAt  DateTime?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([token])
+  @@index([patientId, active])
+}
 
 model PatientNotification {
   id          String   @id @default(cuid())

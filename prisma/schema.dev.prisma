@@ -152,6 +152,7 @@ model Patient {
   sessions        Session[]
   programPauses   ProgramPause[]
   notifications   PatientNotification[]
+  pushTokens      PatientPushToken[]
   sales           Sale[]
   invoices        PatientInvoice[]
   communityComments  CommunityComment[]
@@ -1572,6 +1573,23 @@ model PatientNotification {
 
   @@index([patientId])
   @@index([readAt])
+}
+
+model PatientPushToken {
+  id          String   @id @default(cuid())
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  token       String   @unique
+  platform    String
+  bundleId    String?
+  active      Boolean  @default(true)
+  lastUsedAt  DateTime?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([patientId, active])
 }
 
 // ============================================================================

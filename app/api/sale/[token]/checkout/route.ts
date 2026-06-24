@@ -8,7 +8,7 @@
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { stripe, PRODUCT_CONFIG, getPriceIdForProduct } from "@/lib/stripe";
+import { stripe, PRODUCT_CONFIG } from "@/lib/stripe";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -41,19 +41,18 @@ export async function POST(req: Request, { params }: { params: { token: string }
     return NextResponse.json({ error: "Producto no válido" }, { status: 400 });
   }
 
-  const priceId = getPriceIdForProduct(sale.productCode as keyof typeof PRODUCT_CONFIG);
-  if (!priceId) {
-    return NextResponse.json(
-      { error: `Precio no configurado para ${sale.productCode}` },
-      { status: 503 }
-    );
-  }
-
   // Construir URLs de retorno
   const url = new URL(req.url);
   const origin = `${url.protocol}//${url.host}`;
   const successUrl = `${origin}/pagar/gracias?token=${sale.paymentToken}&session_id={CHECKOUT_SESSION_ID}`;
   const cancelUrl = `${origin}/contratar/${sale.paymentToken}?cancelled=1`;
+
+  // Usamos siempre price_data con el amountCents guardado en el Sale.
+  // Así un precio personalizado por el closer/CEO (diferente al Price preconfigurado
+  // en Stripe) se respeta tal cual. Mantiene un único path de pago para todos los Sales.
+  if (!Number.isFinite(sale.amountCents) || sale.amountCents <= 0) {
+    return NextResponse.json({ error: "Importe del Sale inválido" }, { status: 500 });
+  }
 
   try {
     const session = await stripe.checkout.sessions.create({
@@ -61,7 +60,13 @@ export async function POST(req: Request, { params }: { params: { token: string }
       payment_method_types: ["card", "klarna"],
       line_items: [
         {
-          price: priceId,
+          price_data: {
+            currency: (sale.currency || "eur").toLowerCase(),
+            unit_amount: sale.amountCents,
+            product_data: {
+              name: config.label,
+            },
+          },
           quantity: 1,
         },
       ],
@@ -74,9 +79,7 @@ export async function POST(req: Request, { params }: { params: { token: string }
         productCode: sale.productCode,
         paymentToken: sale.paymentToken,
       },
-      // Permitir códigos promocionales en el futuro
       allow_promotion_codes: false,
-      // Locale español
       locale: "es",
     });
 
@@ -85,7 +88,6 @@ export async function POST(req: Request, { params }: { params: { token: string }
       where: { id: sale.id },
       data: {
         stripeSessionId: session.id,
-        stripePriceId: priceId,
       },
     });
 

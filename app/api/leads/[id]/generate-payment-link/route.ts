@@ -90,24 +90,36 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     );
   }
 
-  // 3. Resolver priceId y obtener precio real desde Stripe
-  const priceId = getPriceIdForProduct(productCode);
-  if (!priceId) {
-    return NextResponse.json({ error: `Precio no configurado para ${productCode}` }, { status: 503 });
-  }
-
+  // 3. Resolver precio:
+  //    - Si el body trae amountEuros (precio personalizado por el closer/CEO),
+  //      lo usamos directamente (mínimo 1€, máximo 99.999€).
+  //    - Si no, consultamos el precio default desde Stripe.
+  const priceId = getPriceIdForProduct(productCode); // puede ser null si solo se usan precios custom
+  const customEuros = Number(body?.amountEuros);
   let amountCents: number;
-  let currency: string;
-  try {
-    const price = await stripe.prices.retrieve(priceId);
-    if (!price.unit_amount) {
-      return NextResponse.json({ error: "El precio en Stripe no tiene unit_amount" }, { status: 502 });
+  let currency = "eur";
+
+  if (Number.isFinite(customEuros) && customEuros > 0) {
+    if (customEuros < 1 || customEuros > 99999) {
+      return NextResponse.json({ error: "Importe fuera de rango (1-99999)" }, { status: 400 });
     }
-    amountCents = price.unit_amount;
-    currency = (price.currency || "eur").toLowerCase();
-  } catch (err: any) {
-    console.error("[generate-payment-link] Stripe price retrieve failed:", err);
-    return NextResponse.json({ error: "No se pudo obtener el precio desde Stripe" }, { status: 502 });
+    amountCents = Math.round(customEuros * 100);
+  } else {
+    // Sin precio custom → usa el price preconfigurado de Stripe.
+    if (!priceId) {
+      return NextResponse.json({ error: `Precio no configurado para ${productCode}` }, { status: 503 });
+    }
+    try {
+      const price = await stripe.prices.retrieve(priceId);
+      if (!price.unit_amount) {
+        return NextResponse.json({ error: "El precio en Stripe no tiene unit_amount" }, { status: 502 });
+      }
+      amountCents = price.unit_amount;
+      currency = (price.currency || "eur").toLowerCase();
+    } catch (err: any) {
+      console.error("[generate-payment-link] Stripe price retrieve failed:", err);
+      return NextResponse.json({ error: "No se pudo obtener el precio desde Stripe" }, { status: 502 });
+    }
   }
 
   // 4. Generar token + crear Sale
@@ -121,7 +133,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       productCode,
       programType: config.programType,
       durationMonths: config.durationMonths,
-      stripePriceId: priceId,
+      stripePriceId: priceId, // referencia (puede ser null si custom-only)
       amountCents,
       currency,
       paymentToken: token,

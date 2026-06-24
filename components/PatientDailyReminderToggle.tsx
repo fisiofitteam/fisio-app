@@ -39,7 +39,7 @@ export function PatientDailyReminderToggle({ initial }: { initial: boolean }) {
       style={{ background: "transparent" }}
     >
       <div className="text-left">
-        <div className="font-semibold text-sm">Aviso diario por email</div>
+        <div className="font-semibold text-sm">Aviso diario en el móvil</div>
         <div className="text-xs" style={{ color: "var(--p-text-dim)" }}>
           Cada mañana a las 7:00 con un resumen de tus tareas de hoy.
         </div>
