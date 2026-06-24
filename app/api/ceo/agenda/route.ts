@@ -59,11 +59,9 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ id: created.id });
   } catch (e: any) {
-    console.error("[POST /api/ceo/agenda]", e?.code, e?.message, e?.meta);
-    return NextResponse.json(
-      { error: e?.message ?? "Error desconocido", code: e?.code, meta: e?.meta },
-      { status: 500 },
-    );
+    const fullMsg = `${e?.code ?? "NO_CODE"} :: ${e?.message ?? "no message"} :: ${JSON.stringify(e?.meta ?? {})}`;
+    console.error("[POST /api/ceo/agenda]", fullMsg);
+    return NextResponse.json({ error: fullMsg }, { status: 500 });
   }
 }
 

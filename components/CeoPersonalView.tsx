@@ -915,7 +915,7 @@ function BigDartsBlock({ importantSource }: { importantSource: TaskItem[] }) {
         writeLocalDraft(i, "");
       } catch (e: any) {
         okOut = false;
-        errOut = String(e?.message ?? e).slice(0, 80);
+        errOut = String(e?.message ?? e);
         writeLocalDraft(i, value);
         console.error("[CeoDart] save fail slot", i, errOut);
       }
