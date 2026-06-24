@@ -1094,15 +1094,22 @@ function BigDartsBlock({ importantSource }: { importantSource: TaskItem[] }) {
                     }}
                     placeholder={loaded ? (suggested ? `${suggested}` : `Diana ${i + 1} — ¿qué vas a hacer hoy sin falta?`) : ""}
                   />
-                  <span
-                    className={`text-[10px] min-w-[60px] text-right ${savingState[i] === "error" ? "text-red-600 font-medium" : "text-neutral-400"}`}
-                    title={savingState[i] === "error" ? lastError[i] : ""}
-                  >
-                    {savingState[i] === "saving" ? "Guardando…"
-                     : savingState[i] === "saved" ? "✓"
-                     : savingState[i] === "error" ? `⚠ ${lastError[i].slice(0, 30)}`
-                     : ""}
-                  </span>
+                  {savingState[i] === "error" ? (
+                    <button
+                      type="button"
+                      onClick={() => alert("Error guardando diana " + (i + 1) + ":\n\n" + lastError[i])}
+                      className="text-[10px] min-w-[60px] text-right text-red-600 font-medium underline"
+                      title="Click para ver el error completo"
+                    >
+                      ⚠ Click ver error
+                    </button>
+                  ) : (
+                    <span className="text-[10px] min-w-[60px] text-right text-neutral-400">
+                      {savingState[i] === "saving" ? "Guardando…"
+                       : savingState[i] === "saved" ? "✓"
+                       : ""}
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
                   <div className="relative" ref={showMenu ? linkMenuRef : null}>
