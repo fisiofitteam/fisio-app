@@ -67,15 +67,42 @@ export function nextRecurrenceDate(
  * como timestamp UTC 00:00 de ese día Madrid. Es decir, sirve como clave
  * estable por día desde el punto de vista del CEO en España.
  *
- * Nombre antiguo: startOfDayUtc (lo mantenemos por compat de imports). El
- * comportamiento cambió en v57.x para que cambiar de día a las 00:00 hora
- * Madrid (no a las 02:00 como antes en verano) refresque la agenda.
+ * Implementación robusta: usa Intl.DateTimeFormat.formatToParts (estándar
+ * en Node 18+ y Vercel). Si Intl falla por small-ICU u otro, cae a un
+ * cálculo manual con DST de la UE.
  */
 export function startOfDayUtc(d: Date = new Date()): Date {
-  // Truco habitual: "es-CA" devuelve YYYY-MM-DD; lo combinamos con UTC.
-  const ymd = d.toLocaleDateString("es-CA", { timeZone: "Europe/Madrid" });
-  const [y, m, day] = ymd.split("-").map((x) => Number(x));
-  return new Date(Date.UTC(y, m - 1, day, 0, 0, 0, 0));
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Madrid",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(d);
+    const y = Number(parts.find((p) => p.type === "year")?.value);
+    const m = Number(parts.find((p) => p.type === "month")?.value);
+    const day = Number(parts.find((p) => p.type === "day")?.value);
+    if (Number.isFinite(y) && Number.isFinite(m) && Number.isFinite(day)) {
+      const out = new Date(Date.UTC(y, m - 1, day, 0, 0, 0, 0));
+      if (!isNaN(out.getTime())) return out;
+    }
+  } catch {}
+
+  // Fallback: aproximamos DST europeo (último domingo marzo → +2h, último
+  // domingo octubre → +1h). Suficientemente preciso para una clave de día.
+  const year = d.getUTCFullYear();
+  function lastSundayOf(y: number, monthIdx: number): Date {
+    const lastDayOfMonth = new Date(Date.UTC(y, monthIdx + 1, 0, 1, 0, 0, 0));
+    const offsetToSunday = lastDayOfMonth.getUTCDay();
+    lastDayOfMonth.setUTCDate(lastDayOfMonth.getUTCDate() - offsetToSunday);
+    return lastDayOfMonth;
+  }
+  const dstStart = lastSundayOf(year, 2); // Marzo
+  const dstEnd = lastSundayOf(year, 9); // Octubre
+  const isDst = d.getTime() >= dstStart.getTime() && d.getTime() < dstEnd.getTime();
+  const offsetMs = (isDst ? 2 : 1) * 3600 * 1000;
+  const madridNow = new Date(d.getTime() + offsetMs);
+  return new Date(Date.UTC(madridNow.getUTCFullYear(), madridNow.getUTCMonth(), madridNow.getUTCDate(), 0, 0, 0, 0));
 }
 
 /** Día anterior en zona Madrid, mismo formato que startOfDayUtc. */
