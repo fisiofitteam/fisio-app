@@ -23,6 +23,8 @@ model Patient {
 
   whatsappGroupUrl         String?
 
+  dailyReminderEnabled     Boolean  @default(true)
+
   // Parche de bienvenida (regalo del setter al iniciar el programa)
   patchSent                Boolean   @default(false)
   patchSentAt              DateTime?

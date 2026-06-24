@@ -23,6 +23,10 @@ model Patient {
 
   whatsappGroupUrl         String?
 
+  // Aviso diario a las 7:00 Madrid con las tareas del día.
+  // Por defecto activo. El paciente puede silenciarlo desde sus ajustes.
+  dailyReminderEnabled     Boolean  @default(true)
+
   // Parche de bienvenida (regalo del setter al iniciar el programa)
   patchSent                Boolean   @default(false)
   patchSentAt              DateTime?

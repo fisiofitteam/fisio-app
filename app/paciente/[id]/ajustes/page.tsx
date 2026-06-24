@@ -6,6 +6,7 @@ import { PatientThemeToggle } from "@/components/PatientThemeToggle";
 import { PatientLogoutButton } from "@/components/PatientLogoutButton";
 import { PatientPhotoUploader } from "@/components/PatientPhotoUploader";
 import { PatientShippingForm } from "@/components/PatientShippingForm";
+import { PatientDailyReminderToggle } from "@/components/PatientDailyReminderToggle";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ export default async function PatientSettingsPage({ params }: { params: { id: st
       shippingStreet: true, shippingNumber: true, shippingFloor: true,
       shippingStaircase: true, shippingDoor: true, shippingCity: true,
       shippingProvince: true, shippingPostalCode: true, shippingPhone: true,
+      dailyReminderEnabled: true,
     },
   });
   if (!patient) notFound();
@@ -62,6 +64,17 @@ export default async function PatientSettingsPage({ params }: { params: { id: st
             shippingPostalCode: patient.shippingPostalCode,
             shippingPhone: patient.shippingPhone,
           }} />
+        </section>
+
+        <section
+          className="rounded-2xl p-4 mb-3"
+          style={{ background: "var(--p-surface)", border: "1px solid var(--p-border)" }}
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-lg">🔔</span>
+            <h2 className="font-semibold text-sm">Notificaciones</h2>
+          </div>
+          <PatientDailyReminderToggle initial={patient.dailyReminderEnabled} />
         </section>
 
         <section
