@@ -783,13 +783,34 @@ function BigDartsBlock({ importantSource }: { importantSource: TaskItem[] }) {
   const [linkMenuOpen, setLinkMenuOpen] = useState<number | null>(null);
   const linkMenuRef = useRef<HTMLDivElement | null>(null);
 
-  // Refs paralelas al estado para poder hacer flush al desmontar (cambio de
-  // pestaña dentro del panel desmonta este componente; sin esto, lo que tenías
-  // en pantalla sin haber hecho blur no se guardaba nunca).
-  const draftsRef = useRef<string[]>(importantDrafts);
-  useEffect(() => { draftsRef.current = importantDrafts; }, [importantDrafts]);
-  const itemsRef = useRef<AgendaItem[]>(importantItems);
-  useEffect(() => { itemsRef.current = importantItems; }, [importantItems]);
+  // ─── Estado canónico por slot ──────────────────────────────────────────
+  // Para evitar stale closures y duplicados: cada slot tiene su id (si ya
+  // existe en BD) y su content vigente. Es la fuente de verdad para los
+  // saves. `importantItems` solo se usa para datos secundarios (completedAt,
+  // weeklyGoalId) y para reconstruir slotsRef al cargar.
+  type SlotState = { id: string | null; content: string };
+  const slotsRef = useRef<SlotState[]>([
+    { id: null, content: "" }, { id: null, content: "" }, { id: null, content: "" },
+  ]);
+  // Locks para serializar peticiones por slot (evita carrera POST+POST).
+  const slotLocks = useRef<Promise<void>[]>([Promise.resolve(), Promise.resolve(), Promise.resolve()]);
+
+  // ─── localStorage redundancia ──────────────────────────────────────────
+  // Si por lo que sea no llega al server (red flaky, cookie, cleanup tarde),
+  // el draft se conserva en localStorage y se rehidrata al volver.
+  function todayKey(i: number): string {
+    const ymd = new Date().toLocaleDateString("es-CA", { timeZone: "Europe/Madrid" });
+    return `ceo-darts-${ymd}-${i}`;
+  }
+  function readLocalDraft(i: number): string | null {
+    try { return localStorage.getItem(todayKey(i)); } catch { return null; }
+  }
+  function writeLocalDraft(i: number, v: string) {
+    try {
+      if (v) localStorage.setItem(todayKey(i), v);
+      else localStorage.removeItem(todayKey(i));
+    } catch {}
+  }
 
   // Tareas con dueDate = hoy → sugerencia para las 3 importantes (placeholder)
   const todayYmdStr = todayYmd();
@@ -806,7 +827,30 @@ function BigDartsBlock({ importantSource }: { importantSource: TaskItem[] }) {
     ]);
     if (aRes.ok) {
       const data = await aRes.json();
-      setImportantItems(((data.importantItems ?? []) as AgendaItem[]).slice().sort((a, b) => a.order - b.order));
+      const sorted = ((data.importantItems ?? []) as AgendaItem[]).slice().sort((a, b) => a.order - b.order);
+      setImportantItems(sorted);
+      // Sincroniza slotsRef con BD, conservando drafts locales si difieren.
+      const next: SlotState[] = [
+        { id: null, content: "" }, { id: null, content: "" }, { id: null, content: "" },
+      ];
+      sorted.slice(0, 3).forEach((it, i) => {
+        next[i] = { id: it.id, content: it.content };
+      });
+      slotsRef.current = next;
+      // Rehidrata drafts: prioriza el draft local si difiere de BD (caso "no se guardó al cambiar de tab").
+      setImportantDrafts((prev) => {
+        const out = [...prev];
+        for (let i = 0; i < 3; i++) {
+          const local = readLocalDraft(i);
+          const fromBd = next[i].content;
+          if (local && local !== fromBd) {
+            out[i] = local; // draft local pendiente → prioriza
+          } else if (!out[i] || out[i].trim() === "") {
+            out[i] = fromBd; // BD si no hay nada
+          }
+        }
+        return out;
+      });
     }
     if (gRes.ok) {
       const data = await gRes.json();
@@ -825,18 +869,6 @@ function BigDartsBlock({ importantSource }: { importantSource: TaskItem[] }) {
     return () => window.removeEventListener("ceo-agenda:changed", on);
   }, [loadItems]);
 
-  // Rellena drafts SOLO en slots vacíos; nunca pisa lo que el usuario está
-  // tecleando. Así un refetch (carryover, otra pestaña) no borra texto vivo.
-  useEffect(() => {
-    setImportantDrafts((prev) => {
-      const next = [...prev];
-      importantItems.slice(0, 3).forEach((it, i) => {
-        if (!next[i] || next[i].trim() === "") next[i] = it.content;
-      });
-      return next;
-    });
-  }, [importantItems]);
-
   // Cerrar menú al clicar fuera
   useEffect(() => {
     if (linkMenuOpen === null) return;
@@ -847,101 +879,88 @@ function BigDartsBlock({ importantSource }: { importantSource: TaskItem[] }) {
     return () => document.removeEventListener("mousedown", onDoc);
   }, [linkMenuOpen]);
 
-  // Al desmontar (cambio de pestaña, navegación), persistir lo que haya en
-  // drafts si difiere de BD. Disparamos los fetch sin await — el navegador los
-  // completa aunque el componente ya no exista.
-  useEffect(() => {
-    return () => {
-      const drafts = draftsRef.current;
-      const items = itemsRef.current;
-      for (let i = 0; i < 3; i++) {
-        const draft = (drafts[i] ?? "").trim();
-        const existing = items[i];
-        const existingContent = existing?.content ?? "";
-        if (draft === existingContent) continue;
-        if (existing && !draft) {
-          fetch(`/api/ceo/agenda?id=${existing.id}`, { method: "DELETE", keepalive: true });
-        } else if (existing) {
-          fetch("/api/ceo/agenda", {
+  // ─── Save serializado por slot ─────────────────────────────────────────
+  // Cada save por slot espera a que termine el anterior, y lee/escribe el
+  // id desde slotsRef. Así nunca se hacen dos POST simultáneos para el
+  // mismo slot.
+  function saveSlotNow(i: number, value: string): Promise<void> {
+    const trimmed = value.trim();
+    const work = async () => {
+      const slot = slotsRef.current[i];
+      if (trimmed === slot.content) return;
+      try {
+        if (slot.id && !trimmed) {
+          await fetch(`/api/ceo/agenda?id=${slot.id}`, { method: "DELETE" });
+          slotsRef.current[i] = { id: null, content: "" };
+        } else if (slot.id) {
+          await fetch("/api/ceo/agenda", {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: existing.id, content: draft }),
-            keepalive: true,
+            body: JSON.stringify({ id: slot.id, content: trimmed }),
           });
-        } else if (draft) {
-          fetch("/api/ceo/agenda", {
+          slotsRef.current[i] = { id: slot.id, content: trimmed };
+        } else if (trimmed) {
+          const r = await fetch("/api/ceo/agenda", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ content: draft, order: i, important: true }),
-            keepalive: true,
+            body: JSON.stringify({ content: trimmed, order: i, important: true }),
           });
+          if (r.ok) {
+            const d = await r.json().catch(() => ({}));
+            slotsRef.current[i] = { id: d?.id ?? null, content: trimmed };
+          }
         }
+        // Save OK → limpiamos el draft local (el server ya tiene la verdad).
+        writeLocalDraft(i, "");
+      } catch {
+        // Si falla, dejamos el draft en localStorage para reintentar al cargar.
+        writeLocalDraft(i, value);
       }
     };
-  }, []);
-
-  async function saveSlot(index: number, value: string) {
-    const trimmed = value.trim();
-    const existing = importantItems[index];
-    if (existing) {
-      if (trimmed === existing.content) return;
-      if (!trimmed) {
-        await fetch(`/api/ceo/agenda?id=${existing.id}`, { method: "DELETE" });
-      } else {
-        await fetch("/api/ceo/agenda", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: existing.id, content: trimmed }),
-        });
-      }
-    } else if (trimmed) {
-      await fetch("/api/ceo/agenda", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: trimmed, order: index, important: true }),
-      });
-    }
-    loadItems();
+    slotLocks.current[i] = slotLocks.current[i].then(work, work);
+    return slotLocks.current[i];
   }
 
   async function toggleDone(index: number) {
-    const it = importantItems[index];
-    if (!it) return;
+    const id = slotsRef.current[index]?.id;
+    if (!id) return;
+    const current = importantItems.find((x) => x.id === id);
     await fetch("/api/ceo/agenda", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: it.id, completedAt: it.completedAt ? null : new Date().toISOString() }),
+      body: JSON.stringify({ id, completedAt: current?.completedAt ? null : new Date().toISOString() }),
     });
     loadItems();
   }
 
   async function linkToGoal(index: number, goalId: string | null) {
-    const it = importantItems[index];
-    if (!it) {
-      setLinkMenuOpen(null);
-      return;
-    }
+    const id = slotsRef.current[index]?.id;
+    if (!id) { setLinkMenuOpen(null); return; }
     await fetch("/api/ceo/agenda", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: it.id, weeklyGoalId: goalId }),
+      body: JSON.stringify({ id, weeklyGoalId: goalId }),
     });
     setLinkMenuOpen(null);
     loadItems();
   }
 
-  // Debounced autosave por slot — garantía contra "cambio de tab borra el draft".
+  // ─── Autoguardado debounced + localStorage en cada keystroke ──────────
   const saveTimers = useRef<Array<ReturnType<typeof setTimeout> | null>>([null, null, null]);
   function scheduleSave(i: number, value: string) {
     if (saveTimers.current[i]) clearTimeout(saveTimers.current[i]!);
-    saveTimers.current[i] = setTimeout(() => {
-      saveSlot(i, value);
-    }, 700);
+    saveTimers.current[i] = setTimeout(() => { saveSlotNow(i, value); }, 600);
   }
   function updateDraft(i: number, v: string) {
+    // 1) Estado React (UI).
     setImportantDrafts((prev) => { const n = [...prev]; n[i] = v; return n; });
+    // 2) localStorage síncrono (red de seguridad).
+    writeLocalDraft(i, v);
+    // 3) Programa el save a server.
     scheduleSave(i, v);
   }
+  // Al desmontar: cancela timers; los drafts ya están en localStorage y se
+  // recuperarán al volver. NO disparamos keepalive (causaba duplicados).
   useEffect(() => () => {
     for (const t of saveTimers.current) if (t) clearTimeout(t);
   }, []);
@@ -980,7 +999,7 @@ function BigDartsBlock({ importantSource }: { importantSource: TaskItem[] }) {
                   className={`w-full text-base font-medium border-0 border-b border-neutral-200 focus:border-neutral-700 outline-none bg-transparent py-1.5 ${done ? "line-through text-neutral-400" : "text-neutral-900"}`}
                   value={importantDrafts[i] ?? ""}
                   onChange={(e) => updateDraft(i, e.target.value)}
-                  onBlur={(e) => saveSlot(i, e.target.value)}
+                  onBlur={(e) => saveSlotNow(i, e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); }
                   }}
@@ -993,20 +1012,15 @@ function BigDartsBlock({ importantSource }: { importantSource: TaskItem[] }) {
                       onClick={async () => {
                         if (showMenu) { setLinkMenuOpen(null); return; }
                         // Si aún no hay item en BD pero hay draft escrito, lo
-                        // guardamos primero (caso típico: el usuario escribió
-                        // la diana y va directo a Vincular sin pasar por blur).
+                        // guardamos primero (saveSlotNow respeta el lock por
+                        // slot, así no se crean duplicados).
                         const draft = (importantDrafts[i] ?? "").trim();
-                        if (!it && draft) {
-                          await fetch("/api/ceo/agenda", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ content: draft, order: i, important: true }),
-                          });
-                          await loadItems();
+                        if (!slotsRef.current[i].id && draft) {
+                          await saveSlotNow(i, draft);
                         }
                         setLinkMenuOpen(i);
                       }}
-                      disabled={(!it && !(importantDrafts[i] ?? "").trim()) || goalsWithText.length === 0}
+                      disabled={(!slotsRef.current[i]?.id && !(importantDrafts[i] ?? "").trim()) || goalsWithText.length === 0}
                       className="text-[11px] text-neutral-500 hover:text-neutral-900 disabled:opacity-40 inline-flex items-center gap-1"
                       title={goalsWithText.length === 0 ? "Define primero los objetivos de la semana" : "Vincular a un objetivo de la semana"}
                     >
@@ -1060,119 +1074,119 @@ function AgendaBlock({ importantSource: _importantSource }: { importantSource: T
   const [drafts, setDrafts] = useState<string[]>(Array(7).fill(""));
   const [loaded, setLoaded] = useState(false);
 
-  // Refs paralelas para hacer flush al desmontar (cambio de pestaña).
-  const draftsRef = useRef<string[]>(drafts);
-  useEffect(() => { draftsRef.current = drafts; }, [drafts]);
-  const itemsRef = useRef<AgendaItem[]>(items);
-  useEffect(() => { itemsRef.current = items; }, [items]);
+  // Mismo patrón que BigDartsBlock: slots canónicos (id + content) + locks
+  // por slot + localStorage como red de seguridad.
+  type SlotState = { id: string | null; content: string };
+  const slotsRef = useRef<SlotState[]>(Array(7).fill(null).map(() => ({ id: null, content: "" })));
+  const slotLocks = useRef<Promise<void>[]>(Array(7).fill(null).map(() => Promise.resolve()));
+
+  function todayKey(i: number): string {
+    const ymd = new Date().toLocaleDateString("es-CA", { timeZone: "Europe/Madrid" });
+    return `ceo-quicky-${ymd}-${i}`;
+  }
+  function readLocalDraft(i: number): string | null {
+    try { return localStorage.getItem(todayKey(i)); } catch { return null; }
+  }
+  function writeLocalDraft(i: number, v: string) {
+    try {
+      if (v) localStorage.setItem(todayKey(i), v);
+      else localStorage.removeItem(todayKey(i));
+    } catch {}
+  }
 
   const loadItems = useCallback(async () => {
     const r = await fetch("/api/ceo/agenda", { cache: "no-store" });
     if (r.ok) {
       const data = await r.json();
-      setItems(((data.items ?? []) as AgendaItem[]).slice().sort((a, b) => a.order - b.order));
+      const sorted = ((data.items ?? []) as AgendaItem[]).slice().sort((a, b) => a.order - b.order);
+      setItems(sorted);
+      // Reset slotsRef desde BD.
+      const next: SlotState[] = Array(7).fill(null).map(() => ({ id: null, content: "" }));
+      sorted.slice(0, 7).forEach((it, i) => {
+        next[i] = { id: it.id, content: it.content };
+      });
+      slotsRef.current = next;
+      // Rehidrata drafts: prioriza local si difiere de BD.
+      setDrafts((prev) => {
+        const out = [...prev];
+        for (let i = 0; i < 7; i++) {
+          const local = readLocalDraft(i);
+          const fromBd = next[i].content;
+          if (local && local !== fromBd) {
+            out[i] = local;
+          } else if (!out[i] || out[i].trim() === "") {
+            out[i] = fromBd;
+          }
+        }
+        return out;
+      });
     }
     setLoaded(true);
   }, []);
 
   useEffect(() => { loadItems(); }, [loadItems]);
-  // Recarga si el popup de carryover ha traído cosas a hoy
   useEffect(() => {
     function on() { loadItems(); }
     window.addEventListener("ceo-agenda:changed", on);
     return () => window.removeEventListener("ceo-agenda:changed", on);
   }, [loadItems]);
 
-  // Rellena drafts SOLO en slots vacíos; nunca pisa lo que está escribiendo
-  // el usuario aunque se dispare un refetch externo.
-  useEffect(() => {
-    setDrafts((prev) => {
-      const next = [...prev];
-      items.slice(0, 7).forEach((it, i) => {
-        if (!next[i] || next[i].trim() === "") next[i] = it.content;
-      });
-      return next;
-    });
-  }, [items]);
-
-  // Flush al desmontar: lo que esté escrito sin haber pasado por blur, se
-  // persiste como POST/PATCH/DELETE con keepalive para que el navegador
-  // complete la petición.
-  useEffect(() => {
-    return () => {
-      const ds = draftsRef.current;
-      const its = itemsRef.current;
-      for (let i = 0; i < 7; i++) {
-        const draft = (ds[i] ?? "").trim();
-        const existing = its[i];
-        const existingContent = existing?.content ?? "";
-        if (draft === existingContent) continue;
-        if (existing && !draft) {
-          fetch(`/api/ceo/agenda?id=${existing.id}`, { method: "DELETE", keepalive: true });
-        } else if (existing) {
-          fetch("/api/ceo/agenda", {
+  function saveSlotNow(i: number, value: string): Promise<void> {
+    const trimmed = value.trim();
+    const work = async () => {
+      const slot = slotsRef.current[i];
+      if (trimmed === slot.content) return;
+      try {
+        if (slot.id && !trimmed) {
+          await fetch(`/api/ceo/agenda?id=${slot.id}`, { method: "DELETE" });
+          slotsRef.current[i] = { id: null, content: "" };
+        } else if (slot.id) {
+          await fetch("/api/ceo/agenda", {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: existing.id, content: draft }),
-            keepalive: true,
+            body: JSON.stringify({ id: slot.id, content: trimmed }),
           });
-        } else if (draft) {
-          fetch("/api/ceo/agenda", {
+          slotsRef.current[i] = { id: slot.id, content: trimmed };
+        } else if (trimmed) {
+          const r = await fetch("/api/ceo/agenda", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ content: draft, order: i, important: false }),
-            keepalive: true,
+            body: JSON.stringify({ content: trimmed, order: i, important: false }),
           });
+          if (r.ok) {
+            const d = await r.json().catch(() => ({}));
+            slotsRef.current[i] = { id: d?.id ?? null, content: trimmed };
+          }
         }
+        writeLocalDraft(i, "");
+      } catch {
+        writeLocalDraft(i, value);
       }
     };
-  }, []);
-
-  async function saveSlot(index: number, value: string) {
-    const trimmed = value.trim();
-    const existing = items[index];
-    if (existing) {
-      if (trimmed === existing.content) return;
-      if (!trimmed) {
-        await fetch(`/api/ceo/agenda?id=${existing.id}`, { method: "DELETE" });
-      } else {
-        await fetch("/api/ceo/agenda", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: existing.id, content: trimmed }),
-        });
-      }
-    } else if (trimmed) {
-      await fetch("/api/ceo/agenda", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: trimmed, order: index, important: false }),
-      });
-    }
-    loadItems();
+    slotLocks.current[i] = slotLocks.current[i].then(work, work);
+    return slotLocks.current[i];
   }
 
   async function toggleDone(index: number) {
-    const it = items[index];
-    if (!it) return;
+    const id = slotsRef.current[index]?.id;
+    if (!id) return;
+    const current = items.find((x) => x.id === id);
     await fetch("/api/ceo/agenda", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: it.id, completedAt: it.completedAt ? null : new Date().toISOString() }),
+      body: JSON.stringify({ id, completedAt: current?.completedAt ? null : new Date().toISOString() }),
     });
     loadItems();
   }
 
-  // Debounced autosave por slot — igual que en BigDartsBlock.
   const saveTimers = useRef<Array<ReturnType<typeof setTimeout> | null>>([null, null, null, null, null, null, null]);
   function scheduleSave(i: number, value: string) {
     if (saveTimers.current[i]) clearTimeout(saveTimers.current[i]!);
-    saveTimers.current[i] = setTimeout(() => {
-      saveSlot(i, value);
-    }, 700);
+    saveTimers.current[i] = setTimeout(() => { saveSlotNow(i, value); }, 600);
   }
   function updateDraft(i: number, v: string) {
     setDrafts((prev) => { const n = [...prev]; n[i] = v; return n; });
+    writeLocalDraft(i, v);
     scheduleSave(i, v);
   }
   useEffect(() => () => {
@@ -1209,7 +1223,7 @@ function AgendaBlock({ importantSource: _importantSource }: { importantSource: T
                 className={`flex-1 text-xs border-0 border-b focus:border-neutral-400 outline-none bg-transparent py-1 ${done ? "line-through text-neutral-400 border-neutral-100" : carried ? "text-red-700 border-red-200" : "border-neutral-100"}`}
                 value={drafts[i] ?? ""}
                 onChange={(e) => updateDraft(i, e.target.value)}
-                onBlur={(e) => saveSlot(i, e.target.value)}
+                onBlur={(e) => saveSlotNow(i, e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();
