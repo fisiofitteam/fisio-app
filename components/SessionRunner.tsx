@@ -214,17 +214,40 @@ function typeLabel(type: string) {
 }
 
 function FormResponder({ task, completed, response, onChange }: any) {
-  const questions = task.questions ?? [];
+  // Defensivo: questions puede venir como array, como string JSON (snapshots
+  // antiguos) o como null. Lo normalizamos antes de usar.
+  let questions: any[] = [];
+  try {
+    if (Array.isArray(task?.questions)) {
+      questions = task.questions;
+    } else if (typeof task?.questions === "string") {
+      const parsed = JSON.parse(task.questions);
+      if (Array.isArray(parsed)) questions = parsed;
+    }
+  } catch {
+    questions = [];
+  }
+  // Defensivo: respuestas pueden venir null/undefined.
+  const safeResponse: Record<string, any> = response && typeof response === "object" ? response : {};
+
+  if (questions.length === 0) {
+    return (
+      <div className="p-3 rounded bg-amber-50 border border-amber-200 text-sm text-amber-900">
+        ⚠️ Este formulario no tiene preguntas o se ha guardado en un formato no compatible.
+        Avisa a tu fisio para que vuelva a abrirlo y guardarlo desde la app.
+      </div>
+    );
+  }
 
   // Puntuación Likert agregada (suma + máx posible). Solo si hay preguntas Likert.
   const likertDefault = ["Totalmente en desacuerdo", "En desacuerdo", "Neutral", "De acuerdo", "Totalmente de acuerdo"];
   let likertSum = 0, likertMax = 0, likertCount = 0;
   for (const q of questions) {
-    if (q.type !== "likert") continue;
+    if (!q || q.type !== "likert") continue;
     likertCount += 1;
     const labels: string[] = Array.isArray(q.scaleLabels) && q.scaleLabels.length > 0 ? q.scaleLabels : likertDefault;
     likertMax += labels.length;
-    const v = Number(response[q.id]);
+    const v = Number(safeResponse[q.id]);
     if (Number.isFinite(v)) likertSum += v;
   }
   const showScore = likertCount > 0;
@@ -238,11 +261,12 @@ function FormResponder({ task, completed, response, onChange }: any) {
           <span className="text-blue-700"> · {likertMax > 0 ? Math.round((likertSum / likertMax) * 100) : 0}% · {likertCount} pregunta{likertCount > 1 ? "s" : ""}</span>
         </div>
       )}
-      {questions.map((q: any) => {
-        const val = response[q.id];
+      {questions.map((q: any, qi: number) => {
+        if (!q || !q.id) return null;
+        const val = safeResponse[q.id];
         return (
-          <div key={q.id}>
-            <label className="text-sm font-medium block">{q.text}</label>
+          <div key={q.id ?? `q-${qi}`}>
+            <label className="text-sm font-medium block">{q.text ?? "(sin texto)"}</label>
             {q.description && (
               <p className="text-xs text-neutral-400 italic mb-1">{q.description}</p>
             )}
@@ -253,7 +277,7 @@ function FormResponder({ task, completed, response, onChange }: any) {
                 rows={2}
                 disabled={completed}
                 value={val ?? ""}
-                onChange={(e) => onChange({ ...response, [q.id]: e.target.value })}
+                onChange={(e) => onChange({ ...safeResponse, [q.id]: e.target.value })}
               />
             )}
             {q.type === "scale" && (
@@ -264,7 +288,7 @@ function FormResponder({ task, completed, response, onChange }: any) {
                   max={q.max ?? 10}
                   disabled={completed}
                   value={val ?? q.min ?? 0}
-                  onChange={(e) => onChange({ ...response, [q.id]: Number(e.target.value) })}
+                  onChange={(e) => onChange({ ...safeResponse, [q.id]: Number(e.target.value) })}
                   className="w-full"
                 />
                 <div className="text-xs text-neutral-500 text-center">
@@ -278,7 +302,7 @@ function FormResponder({ task, completed, response, onChange }: any) {
                   <button
                     key={opt}
                     disabled={completed}
-                    onClick={() => onChange({ ...response, [q.id]: opt })}
+                    onClick={() => onChange({ ...safeResponse, [q.id]: opt })}
                     className={`flex-1 py-2 text-sm rounded-lg ${val === opt ? "bg-neutral-900 text-white" : "bg-neutral-100"}`}
                   >
                     {opt}
@@ -288,11 +312,11 @@ function FormResponder({ task, completed, response, onChange }: any) {
             )}
             {q.type === "choice" && (
               <div className="space-y-1">
-                {(q.options ?? []).map((opt: string) => (
+                {(Array.isArray(q.options) ? q.options : []).map((opt: string, oi: number) => (
                   <button
-                    key={opt}
+                    key={`${opt}-${oi}`}
                     disabled={completed}
-                    onClick={() => onChange({ ...response, [q.id]: opt })}
+                    onClick={() => onChange({ ...safeResponse, [q.id]: opt })}
                     className={`w-full text-left py-2 px-3 text-sm rounded-lg ${val === opt ? "bg-neutral-900 text-white" : "bg-neutral-100"}`}
                   >
                     {opt}
@@ -302,7 +326,7 @@ function FormResponder({ task, completed, response, onChange }: any) {
             )}
             {q.type === "likert" && (
               <div className="space-y-1">
-                {((q.scaleLabels && q.scaleLabels.length > 0) ? q.scaleLabels : [
+                {((Array.isArray(q.scaleLabels) && q.scaleLabels.length > 0) ? q.scaleLabels : [
                   "Totalmente en desacuerdo", "En desacuerdo", "Neutral", "De acuerdo", "Totalmente de acuerdo",
                 ]).map((label: string, idx: number) => {
                   const value = idx + 1; // guardamos 1..N
@@ -311,7 +335,7 @@ function FormResponder({ task, completed, response, onChange }: any) {
                     <button
                       key={idx}
                       disabled={completed}
-                      onClick={() => onChange({ ...response, [q.id]: value })}
+                      onClick={() => onChange({ ...safeResponse, [q.id]: value })}
                       className={`w-full text-left py-2 px-3 text-sm rounded-lg flex items-center gap-2 ${selected ? "bg-neutral-900 text-white" : "bg-neutral-100"}`}
                     >
                       <span className={`flex-shrink-0 w-5 h-5 rounded-full border flex items-center justify-center text-[10px] ${selected ? "bg-white text-neutral-900 border-white" : "border-neutral-300 text-neutral-500"}`}>
