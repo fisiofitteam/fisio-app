@@ -11,7 +11,7 @@ import Anthropic from "@anthropic-ai/sdk";
 
 export type LoadReviewModel = "claude-sonnet-4-6" | "claude-opus-4-7";
 export const DEFAULT_LOAD_REVIEW_MODEL: LoadReviewModel = "claude-sonnet-4-6";
-const MAX_OUTPUT_TOKENS = 3000;
+const MAX_OUTPUT_TOKENS = 8000;
 
 let _client: Anthropic | null = null;
 function client(): Anthropic {
@@ -280,11 +280,11 @@ export async function suggestLoadReview(
     .trim();
   const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
 
-  let parsed: any;
-  try {
-    parsed = JSON.parse(cleaned);
-  } catch (e: any) {
-    throw new Error(`La IA no devolvió JSON válido: ${e?.message}`);
+  const parsed = tryParseJsonLoose(cleaned);
+  if (!parsed) {
+    // Si seguimos sin poder parsear, devolvemos algo útil para depurar.
+    const preview = cleaned.slice(0, 200).replace(/\s+/g, " ");
+    throw new Error(`La IA devolvió respuesta no parseable. Inicio: "${preview}…"`);
   }
 
   function normState(v: any): AdaptationState | null {
@@ -324,4 +324,50 @@ export async function suggestLoadReview(
     inputTokens: (resp as any).usage?.input_tokens,
     outputTokens: (resp as any).usage?.output_tokens,
   };
+}
+
+/**
+ * Intenta parsear JSON aplicando varios "fixes" comunes que la IA suele
+ * cometer (trailing commas, JSON cortado, comillas listas...). Devuelve el
+ * objeto parseado o null si no hay manera.
+ */
+function tryParseJsonLoose(input: string): any | null {
+  // 1) Tal cual.
+  try { return JSON.parse(input); } catch {}
+
+  // 2) Quitar trailing commas antes de `}` o `]`.
+  let s = input.replace(/,\s*([}\]])/g, "$1");
+  try { return JSON.parse(s); } catch {}
+
+  // 3) Si está cortado (faltan cierres), intentar completar contando llaves.
+  const openCurly = (s.match(/{/g) ?? []).length;
+  const closeCurly = (s.match(/}/g) ?? []).length;
+  const openSquare = (s.match(/\[/g) ?? []).length;
+  const closeSquare = (s.match(/]/g) ?? []).length;
+  if (openCurly > closeCurly || openSquare > closeSquare) {
+    // Cortar todo después de la última coma/{/[ válida si está a medias.
+    // Heurística simple: añadir cierres faltantes y reintentar.
+    let t = s;
+    if (openSquare > closeSquare) t += "]".repeat(openSquare - closeSquare);
+    if (openCurly > closeCurly) t += "}".repeat(openCurly - closeCurly);
+    try { return JSON.parse(t); } catch {}
+    // Si aún falla, intentar cortar antes del último elemento truncado.
+    const lastValidIdx = Math.max(s.lastIndexOf("},"), s.lastIndexOf("],"), s.lastIndexOf("}\n"));
+    if (lastValidIdx > 0) {
+      let u = s.slice(0, lastValidIdx + 1);
+      if (openSquare > closeSquare) u += "]".repeat(openSquare - closeSquare);
+      if (openCurly > closeCurly) u += "}".repeat(openCurly - closeCurly);
+      try { return JSON.parse(u); } catch {}
+    }
+  }
+
+  // 4) Última opción: extraer el bloque JSON entre el primer `{` y el último `}`.
+  const first = s.indexOf("{");
+  const last = s.lastIndexOf("}");
+  if (first >= 0 && last > first) {
+    const chunk = s.slice(first, last + 1).replace(/,\s*([}\]])/g, "$1");
+    try { return JSON.parse(chunk); } catch {}
+  }
+
+  return null;
 }
