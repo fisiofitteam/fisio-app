@@ -356,42 +356,73 @@ export function PatientHomeDark({
                 </Link>
               )}
             </>
-          ) : (
-            <div className="space-y-2">
-              {todaySessions.map((s) => (
-                <Link
-                  key={s.id}
-                  href={`/paciente/${patient.id}/sesion/${s.id}`}
-                  className="block p-3 rounded-xl"
-                  style={{
-                    background: "rgba(0,0,0,0.3)",
-                    border: "1px solid var(--p-surface-2)",
-                  }}
-                >
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium" style={{ letterSpacing: "-0.015em" }}>
-                        {s.programName}
+          ) : (() => {
+            // Si todas las sesiones de hoy están completadas, las mostramos en
+            // tarjetas individuales con check. Si quedan abiertas, las unimos
+            // en UNA sola tarjeta "Sesión de hoy" que va a la ruta combinada.
+            const pending = todaySessions.filter((s) => !s.completed);
+            const done = todaySessions.filter((s) => s.completed);
+            const totalTasksPending = pending.reduce((acc, s) => acc + (s.tasksCount ?? 0), 0);
+            return (
+              <div className="space-y-2">
+                {pending.length > 0 && (
+                  <Link
+                    href={pending.length === 1
+                      ? `/paciente/${patient.id}/sesion/${pending[0].id}`
+                      : `/paciente/${patient.id}/sesion-combinada-hoy`}
+                    className="block p-3 rounded-xl"
+                    style={{
+                      background: "rgba(0,0,0,0.3)",
+                      border: "1px solid var(--p-surface-2)",
+                    }}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium" style={{ letterSpacing: "-0.015em" }}>
+                          Sesión de hoy
+                        </div>
+                        <div className="text-xs mt-0.5" style={{ color: "var(--p-text-dim)" }}>
+                          {totalTasksPending} {totalTasksPending === 1 ? "tarea" : "tareas"}
+                          {pending.length > 1 && (
+                            <span> · {pending.map((s) => s.programName).join(" + ")}</span>
+                          )}
+                        </div>
                       </div>
-                      <div className="text-xs mt-0.5" style={{ color: "var(--p-text-dim)" }}>
-                        {s.tasksCount} {s.tasksCount === 1 ? "tarea" : "tareas"}
-                      </div>
+                      <ChevronRight size={18} style={{ color: "var(--p-accent)" }} />
                     </div>
-                    {s.completed ? (
+                  </Link>
+                )}
+                {done.map((s) => (
+                  <div
+                    key={s.id}
+                    className="block p-3 rounded-xl"
+                    style={{
+                      background: "rgba(0,0,0,0.18)",
+                      border: "1px solid var(--p-surface-2)",
+                      opacity: 0.7,
+                    }}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium" style={{ letterSpacing: "-0.015em" }}>
+                          {s.programName}
+                        </div>
+                        <div className="text-xs mt-0.5" style={{ color: "var(--p-text-dim)" }}>
+                          {s.tasksCount} {s.tasksCount === 1 ? "tarea" : "tareas"}
+                        </div>
+                      </div>
                       <span
                         className="text-[11px] font-medium px-2 py-0.5 rounded-full"
                         style={{ background: "var(--p-accent)", color: "var(--p-accent-ink)" }}
                       >
                         ✓ Hecho
                       </span>
-                    ) : (
-                      <ChevronRight size={18} style={{ color: "var(--p-accent)" }} />
-                    )}
+                    </div>
                   </div>
-                </Link>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            );
+          })()}
         </div>
 
         {/* Cumplimiento */}

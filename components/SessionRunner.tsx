@@ -1,21 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { youtubeEmbedUrl } from "@/lib/youtube";
 
-type Exercise = { id: string; name: string; category: string; youtubeUrl: string | null; description: string | null };
+export type Exercise = { id: string; name: string; category: string; youtubeUrl: string | null; description: string | null };
 
-type Task = {
+export type Task = {
   id: string;
   type: "WORKOUT" | "VIDEO" | "FORM" | "EVOLUTION";
   title: string;
   order: number;
   bodyText?: string;
-  // Snapshot moderno: `exercises` con campos planos.
   exercises?: Exercise[];
-  // Snapshots antiguos guardaron los ejercicios bajo `linkedExercises` (legacy
-  // del WorkoutTaskEditor en modo snapshot). Toleramos ambos.
   linkedExercises?: Exercise[];
   youtubeUrl?: string;
   description?: string | null;
@@ -25,7 +22,7 @@ type Task = {
 
 // Normaliza la lista de ejercicios de una tarea WORKOUT independientemente de
 // cómo se serializó el snapshot.
-function getTaskExercises(t: Task): Exercise[] {
+export function getTaskExercises(t: Task): Exercise[] {
   const arr = t.exercises ?? t.linkedExercises ?? [];
   return arr.map((ex: any) => ({
     id: String(ex.id),
@@ -205,7 +202,7 @@ export function SessionRunner({
   );
 }
 
-function typeLabel(type: string) {
+export function typeLabel(type: string) {
   return type === "WORKOUT" ? "Workout"
     : type === "VIDEO" ? "Vídeo"
     : type === "FORM" ? "Formulario"
@@ -213,7 +210,7 @@ function typeLabel(type: string) {
     : type;
 }
 
-function FormResponder({ task, completed, response, onChange }: any) {
+export function FormResponder({ task, completed, response, onChange }: any) {
   // Defensivo: questions puede venir como array, como string JSON (snapshots
   // antiguos) o como null. Lo normalizamos antes de usar.
   let questions: any[] = [];
@@ -362,7 +359,7 @@ const FALLBACK_METRICS = [
   { key: "stiffness", name: "Rigidez", unit: "0-10" },
 ];
 
-function EvolutionResponder({ task, completed, response, onChange }: any) {
+export function EvolutionResponder({ task, completed, response, onChange }: any) {
   const [metrics, setMetrics] = useState<{ key: string; name: string; unit: string | null }[]>(FALLBACK_METRICS);
   const [loaded, setLoaded] = useState(false);
 
@@ -406,7 +403,7 @@ function EvolutionResponder({ task, completed, response, onChange }: any) {
   );
 }
 
-function ScaleField({ label, value, completed, onChange }: any) {
+export function ScaleField({ label, value, completed, onChange }: any) {
   return (
     <div>
       <label className="text-sm font-medium block mb-1">{label}: {value ?? 0}/10</label>
