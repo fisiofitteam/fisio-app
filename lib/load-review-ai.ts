@@ -277,12 +277,16 @@ export async function suggestLoadReview(
   }
   userBlocks.push({ type: "text", text: usr });
 
-  const resp = await client().messages.create({
+  // Anthropic exige streaming para max_tokens altos (>=8k aprox). Usamos
+  // .stream(...).finalMessage() para esperar al resultado completo igual que
+  // si fuera no-streaming.
+  const stream = client().messages.stream({
     model,
     max_tokens: MAX_OUTPUT_TOKENS,
     system: sys,
     messages: [{ role: "user", content: userBlocks }],
   });
+  const resp = await stream.finalMessage();
 
   const text = resp.content
     .map((b) => (b.type === "text" ? b.text : ""))
@@ -297,7 +301,7 @@ export async function suggestLoadReview(
   if (!parsed) {
     console.warn("[load-review-ai] JSON inválido, reintentando self-correction…");
     try {
-      const fixResp = await client().messages.create({
+      const fixStream = client().messages.stream({
         model,
         max_tokens: MAX_OUTPUT_TOKENS,
         system: "Devuelve SOLO JSON válido en una sola respuesta. Sin texto antes ni después. Sin ```. Escapa correctamente las comillas dobles dentro de strings con \\\". No uses comas finales.",
@@ -306,6 +310,7 @@ export async function suggestLoadReview(
           content: `El siguiente JSON tiene un error de sintaxis. Devuélvemelo arreglado MANTENIENDO el mismo contenido. Solo el JSON, sin nada más:\n\n${cleaned}`,
         }],
       });
+      const fixResp = await fixStream.finalMessage();
       const fixText = fixResp.content.map((b) => (b.type === "text" ? b.text : "")).join("").trim();
       const fixCleaned = fixText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
       parsed = tryParseJsonLoose(fixCleaned);
