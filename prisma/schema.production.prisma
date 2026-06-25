@@ -167,6 +167,7 @@ model Patient {
   programPauses   ProgramPause[]
   notifications   PatientNotification[]
   pushTokens      PatientPushToken[]
+  loadReviewRecords LoadReviewRecord[]
   sales           Sale[]
   invoices        PatientInvoice[]
   communityComments  CommunityComment[]
@@ -231,6 +232,7 @@ model Professional {
   weeklyTeamTaskCompletions WeeklyTeamTaskCompletion[] @relation("WeeklyTeamTaskCompletions")
   teamTaskAdHocCompletions  TeamTaskAdHocCompletion[]  @relation("TeamTaskAdHocCompletions")
   chatMemberships           ChatMember[]
+  loadReviewRecords         LoadReviewRecord[]
   chatMessages              ChatMessage[]              @relation("ChatMessageAuthor")
 }
 
@@ -2084,6 +2086,49 @@ model PatientInvoice {
 // Brief para la IA de generación de contenido (fila única, editable por CEO).
 // Es el "system prompt" personalizado que define quién eres, cómo hablas y qué
 // quieres / no quieres que la IA produzca. Se inyecta en cada llamada a Opus.
+// Brief metodológico del equipo de fisioterapia para la sugerencia IA de
+// control de cargas. Singleton. Lo editan los managers desde Biblioteca.
+// Contenido: reglas tipo "RPE<7 dos semanas → +5%", "dolor>4 → mantener",
+// rojos absolutos, plantilla de progresión, etc.
+model LoadReviewBrief {
+  id              String   @id @default("singleton")
+  // Texto libre con las reglas/metodología. Va literal al system prompt.
+  methodology     String   @default("")
+  // Reglas duras de seguridad (rojos absolutos) que la IA NUNCA debe ignorar.
+  hardRules       String   @default("")
+  // Ejemplos de propuestas que les han salido bien (few-shot).
+  goodExamples    String   @default("")
+  updatedAt       DateTime @updatedAt
+  updatedById     String?
+}
+
+// Registro de cada vez que la IA sugiere un control de cargas y qué hizo el
+// fisio con la propuesta. Útil para auditoría legal (qué propuso vs qué
+// aplicó), KPI de adopción y futuro fine-tuning del prompt.
+model LoadReviewRecord {
+  id                String   @id @default(cuid())
+  patientId         String
+  patient           Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  professionalId    String   // quién pidió la sugerencia
+  professional      Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  aiModel           String                       // "claude-sonnet-4-6" | "claude-opus-4-7"
+  aiSuggestion      String                       // JSON: { resumenEstado, propuesta, razonamiento, flags[], alternativas[] }
+  aiInputTokens     Int?
+  aiOutputTokens    Int?
+
+  // Decisión del fisio: "apply" (tal cual) | "edit" (modificó) | "ignore" (descartó)
+  decision          String?
+  // Lo que finalmente se aplicó (si decision=edit, aquí va el texto editado).
+  appliedNotes      String?
+  decidedAt         DateTime?
+
+  createdAt         DateTime @default(now())
+
+  @@index([patientId, createdAt])
+  @@index([professionalId, createdAt])
+}
+
 model AiContentBrief {
   id              String   @id @default("singleton")
   brand           String   @default("")   // quiénes sois, valores, posicionamiento

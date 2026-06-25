@@ -153,6 +153,7 @@ model Patient {
   programPauses   ProgramPause[]
   notifications   PatientNotification[]
   pushTokens      PatientPushToken[]
+  loadReviewRecords LoadReviewRecord[]
   sales           Sale[]
   invoices        PatientInvoice[]
   communityComments  CommunityComment[]
@@ -218,6 +219,7 @@ model Professional {
   teamTaskAdHocCompletions  TeamTaskAdHocCompletion[]  @relation("TeamTaskAdHocCompletions")
   chatMemberships           ChatMember[]
   chatMessages              ChatMessage[]              @relation("ChatMessageAuthor")
+  loadReviewRecords         LoadReviewRecord[]
 }
 
 // Condiciones laborales / compensación de un profesional (1:1). Solo CEO edita.
@@ -1986,6 +1988,34 @@ model PatientInvoice {
 }
 
 // Brief para la IA de generación de contenido (singleton, editable por CEO).
+model LoadReviewBrief {
+  id              String   @id @default("singleton")
+  methodology     String   @default("")
+  hardRules       String   @default("")
+  goodExamples    String   @default("")
+  updatedAt       DateTime @updatedAt
+  updatedById     String?
+}
+
+model LoadReviewRecord {
+  id                String   @id @default(cuid())
+  patientId         String
+  patient           Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  professionalId    String
+  professional      Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  aiModel           String
+  aiSuggestion      String
+  aiInputTokens     Int?
+  aiOutputTokens    Int?
+  decision          String?
+  appliedNotes      String?
+  decidedAt         DateTime?
+  createdAt         DateTime @default(now())
+
+  @@index([patientId, createdAt])
+  @@index([professionalId, createdAt])
+}
+
 model AiContentBrief {
   id              String   @id @default("singleton")
   brand           String   @default("")

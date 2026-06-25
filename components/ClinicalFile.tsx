@@ -6,6 +6,7 @@ import { PROGRAM_TYPES, DIFFICULTIES, PROGRAM_LABELS, DIFFICULTY_LABELS } from "
 import { RollingAssignmentBlock } from "./RollingAssignmentBlock";
 import { DeletePatientButton } from "./DeletePatientButton";
 import { IssueInvoiceButton } from "./IssueInvoiceButton";
+import { LoadReviewSuggestionPanel } from "./LoadReviewSuggestionPanel";
 
 type Patient = {
   id: string;
@@ -253,6 +254,9 @@ export function ClinicalFile({
           {saving ? "Guardando..." : "Guardar cambios"}
         </button>
       </div>
+
+      {/* Panel IA — bajo demanda; el coste es 0 hasta que el fisio pulse el botón. */}
+      <LoadReviewSuggestionPanel patientId={patient.id} />
 
       {patient.appliedProfileName && (
         <section className="card">
