@@ -11,12 +11,6 @@ const SECTIONS = [
     desc: "Plantillas multi-semana y Rolling",
   },
   {
-    id: "perfiles",
-    label: "Controles de cargas",
-    icon: "🏋️",
-    desc: "Protocolos por patología",
-  },
-  {
     id: "ejercicios",
     label: "Ejercicios",
     icon: "🎥",
@@ -67,19 +61,13 @@ const METRICAS_SECTION = {
   icon: "📈",
   desc: "Métricas generales de todos los pacientes (CEO)",
 };
-// Editor del catálogo de control de cargas (CEO + Head Success).
-const CATALOGO_SECTION = {
-  id: "catalogo",
-  label: "Catálogo cargas",
-  icon: "🏋️",
-  desc: "Bloques y ejercicios del control de cargas",
-};
-// Niveles por categoría (gestiona los escalones de cada bloque).
-const NIVELES_CATEGORIA_SECTION = {
+// Controles de cargas: por cada categoría, niveles + reglas por movimiento.
+// Sustituye al antiguo "Catálogo cargas" y a los "Perfiles clínicos".
+const CONTROLES_CARGAS_SECTION = {
   id: "niveles-categoria",
-  label: "Niveles por categoría",
-  icon: "🪜",
-  desc: "Niveles que tiene cada categoría y reglas por movimiento",
+  label: "Controles de cargas",
+  icon: "🏋️",
+  desc: "Categorías, niveles y reglas por movimiento. La IA usa esto para sugerir el nivel de cada paciente.",
 };
 // Brief metodológico que alimenta la IA de control de cargas.
 const LOAD_REVIEW_SECTION = {
@@ -100,7 +88,7 @@ export function LibrarySidebar({ showOnboarding = false, showCatalog = false }: 
   const pathname = usePathname() ?? "";
   const sections = [
     ...SECTIONS,
-    ...(showCatalog ? [CATALOGO_SECTION, NIVELES_CATEGORIA_SECTION, CASOS_EXITO_SECTION] : []),
+    ...(showCatalog ? [CONTROLES_CARGAS_SECTION, CASOS_EXITO_SECTION] : []),
     ...(showOnboarding ? [METRICAS_SECTION, LOAD_REVIEW_SECTION, ONBOARDING_SECTION, LANDINGS_SECTION, MENSAJES_SECTION] : []),
   ];
 

@@ -44,12 +44,14 @@ export function AdaptationEditor({
   movements,
   categories,
   profiles,
+  hideProfileSelector = false,
 }: {
   patientId: string;
   appliedLevelId: string | null;
   existing: Adaptation[];
   movements: Movement[];
   categories: Category[];
+  hideProfileSelector?: boolean;
   profiles: ClinicalProfile[];
 }) {
   const router = useRouter();
@@ -199,7 +201,9 @@ export function AdaptationEditor({
 
   return (
     <>
-      {/* Selector de perfil clínico */}
+      {/* Selector de perfil clínico (deprecated; oculto cuando se usan los
+          niveles por categoría como fuente principal). */}
+      {!hideProfileSelector && (
       <section className="card mb-3">
         <h2 className="font-medium mb-3">Perfil clínico aplicado</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
@@ -247,6 +251,7 @@ export function AdaptationEditor({
           También puedes editar los movimientos uno a uno abajo. Lo que edites manualmente se mantendrá hasta que apliques un nuevo nivel.
         </p>
       </section>
+      )}
 
       {/* Resumen */}
       <section className="card mb-3">

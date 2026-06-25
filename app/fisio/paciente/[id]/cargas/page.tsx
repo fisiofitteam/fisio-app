@@ -53,6 +53,7 @@ export default async function PatientCargasTab({ params }: { params: { id: strin
       <AdaptationEditor
         patientId={patient.id}
         appliedLevelId={null}
+        hideProfileSelector={true}
         existing={patient.adaptations.map((a) => ({
           movementId: a.movementId,
           state: a.state as "OK" | "CONDITIONAL" | "BLOCKED",
