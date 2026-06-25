@@ -19,7 +19,9 @@ export async function POST(req: NextRequest) {
   const demoEmail = process.env.DEMO_PATIENT_EMAIL?.toLowerCase().trim();
   const demoCode = process.env.DEMO_PATIENT_CODE?.trim();
   if (demoEmail && demoCode && normalized === demoEmail && String(code).trim() === demoCode) {
-    const patient = await prisma.patient.findUnique({ where: { email: normalized } });
+    const patient = await prisma.patient.findFirst({
+      where: { email: { equals: normalized, mode: "insensitive" } },
+    });
     if (!patient) {
       return NextResponse.json({ error: "Paciente demo no encontrado" }, { status: 500 });
     }
@@ -56,7 +58,10 @@ export async function POST(req: NextRequest) {
   // Consumir el código
   await prisma.loginCode.update({ where: { id: record.id }, data: { consumed: true } });
 
-  const patient = await prisma.patient.findUnique({ where: { email: normalized } });
+  // Búsqueda case-insensitive (ver patient-code/route.ts).
+  const patient = await prisma.patient.findFirst({
+    where: { email: { equals: normalized, mode: "insensitive" } },
+  });
   if (!patient) return genericError;
 
   const ua = req.headers.get("user-agent") || undefined;

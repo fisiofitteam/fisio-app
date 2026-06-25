@@ -11,12 +11,19 @@ export async function POST(req: NextRequest) {
   }
 
   const data = await req.json();
+  // Normalizamos el email para que el login posterior coincida (Postgres
+  // case-sensitive). El teléfono lo dejamos tal cual (no afecta a login).
+  const contactType = data.contactType ?? "phone";
+  const contactValueNorm = contactType === "email" && typeof data.contactValue === "string"
+    ? data.contactValue.trim().toLowerCase()
+    : data.contactValue;
+  const emailNorm = typeof data.email === "string" && data.email ? data.email.trim().toLowerCase() : null;
   const lead = await prisma.lead.create({
     data: {
       fullName: data.fullName,
-      contactType: data.contactType ?? "phone",
-      contactValue: data.contactValue,
-      email: data.email || null,
+      contactType,
+      contactValue: contactValueNorm,
+      email: emailNorm,
       phone: data.phone || null,
       aiSummary: data.aiSummary || null,
       callScheduledAt: new Date(data.callScheduledAt),
@@ -49,8 +56,14 @@ export async function PATCH(req: NextRequest) {
   const updateData: any = {};
   if (rest.fullName !== undefined) updateData.fullName = rest.fullName;
   if (rest.contactType !== undefined) updateData.contactType = rest.contactType;
-  if (rest.contactValue !== undefined) updateData.contactValue = rest.contactValue;
-  if (rest.email !== undefined) updateData.email = rest.email || null;
+  if (rest.contactValue !== undefined) {
+    // Normaliza si es email; teléfono se queda igual.
+    const ct = rest.contactType ?? "phone";
+    updateData.contactValue = ct === "email" && typeof rest.contactValue === "string"
+      ? rest.contactValue.trim().toLowerCase()
+      : rest.contactValue;
+  }
+  if (rest.email !== undefined) updateData.email = (typeof rest.email === "string" && rest.email) ? rest.email.trim().toLowerCase() : null;
   if (rest.phone !== undefined) updateData.phone = rest.phone || null;
   if (rest.aiSummary !== undefined) updateData.aiSummary = rest.aiSummary || null;
   if (rest.callScheduledAt !== undefined) updateData.callScheduledAt = new Date(rest.callScheduledAt);

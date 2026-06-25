@@ -62,7 +62,12 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       );
     }
 
-    const existing = await prisma.patient.findUnique({ where: { email: sale.lead.email } });
+    // Normalizamos: lead.email puede venir con mayúsculas/espacios y eso
+    // rompe la búsqueda posterior por findUnique (Postgres es case-sensitive).
+    const normalizedEmail = sale.lead.email.trim().toLowerCase();
+    const existing = await prisma.patient.findFirst({
+      where: { email: { equals: normalizedEmail, mode: "insensitive" } },
+    });
     if (existing) {
       // Ya existe → actualizar y vincular
       patient = await prisma.patient.update({
@@ -89,7 +94,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       patient = await prisma.patient.create({
         data: {
           fullName: sale.lead.fullName,
-          email: sale.lead.email,
+          email: normalizedEmail,
           ...(passwordHash ? { passwordHash } : {}),
           programType: sale.programType,
           programDurationMonths: sale.durationMonths,

@@ -199,8 +199,12 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     const patient = await tx.patient.create({
       data: {
         fullName: sale.lead.fullName,
-        // El campo email del Lead es contactValue solo si contactType==="email"
-        email: sale.lead.contactType === "email" ? sale.lead.contactValue : null,
+        // El campo email del Lead es contactValue solo si contactType==="email".
+        // Normalizamos (lowercase+trim) para que el login posterior siempre
+        // coincida con lo que el paciente escriba.
+        email: sale.lead.contactType === "email"
+          ? sale.lead.contactValue.trim().toLowerCase()
+          : null,
         sport: "CrossFit",
         startedAt: now,
         subscriptionStartDate: now,

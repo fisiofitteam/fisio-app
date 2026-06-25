@@ -23,7 +23,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  const patient = await prisma.patient.findUnique({ where: { email: normalized } });
+  // Búsqueda case-insensitive: cubre pacientes guardados antes del fix de
+  // normalización (algunos leads se crearon con email con mayúsculas y al
+  // cascadear al Patient quedó así → al normalizar el input no coincidía).
+  const patient = await prisma.patient.findFirst({
+    where: { email: { equals: normalized, mode: "insensitive" } },
+  });
 
   // No revelamos si existe el paciente o no
   if (!patient) {
