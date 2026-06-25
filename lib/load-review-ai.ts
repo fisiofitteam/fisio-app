@@ -36,6 +36,8 @@ export type LoadReviewInput = {
     methodology: string;
     hardRules: string;
     goodExamples: string;
+    pdfUrl?: string | null;        // si hay PDF adjunto, se descarga y se pasa a Anthropic
+    pdfName?: string | null;
   };
   anamnesisCallNotes: string | null;
   anamnesisData: Record<string, any> | null;
@@ -55,16 +57,21 @@ export type LoadReviewOutput = {
 };
 
 function systemPrompt(brief: LoadReviewInput["brief"]): string {
-  // El fisio pega un brief completo. Lo inyectamos tal cual, sin
-  // sub-secciones. Sólo añadimos rol mínimo y el formato de salida obligatorio.
+  // El fisio pega un brief completo. Lo inyectamos tal cual. Si además
+  // adjuntó un PDF, viene como bloque "document" en el mensaje del usuario
+  // (no aquí) y se le menciona en el prompt para que la IA lo consulte.
   const fisioBrief = (brief.methodology || "").trim();
   return [
     "Eres un asistente clínico para un fisioterapeuta especializado en atletas de CrossFit.",
     "Tu trabajo es proponer UN borrador de control de cargas para que el fisio lo revise y apruebe.",
     "NO eres autónomo: el fisio es quien decide y firma.",
     "",
+    brief.pdfUrl
+      ? "El fisio ha adjuntado un documento PDF con su metodología completa. Es la referencia principal: léelo en cada llamada y aplícalo. El bloque de texto de abajo lo complementa pero el PDF manda."
+      : "",
+    "",
     "─── BRIEF DEL FISIO ───────────────────────────────────",
-    fisioBrief || "(sin brief definido todavía — sé conservador y pide al fisio que añada uno)",
+    fisioBrief || "(sin texto adicional; usa el PDF si lo hay)",
     "─── FIN DEL BRIEF ─────────────────────────────────────",
     "",
     "FORMATO DE SALIDA (obligatorio):",
@@ -72,11 +79,11 @@ function systemPrompt(brief: LoadReviewInput["brief"]): string {
     `{
   "resumenEstado": "2-3 frases sobre dónde está el paciente HOY",
   "propuesta": "qué cambiar concretamente esta semana (ejercicios, series, reps, %RM, frecuencia)",
-  "razonamiento": "por qué, citando datos del histórico",
+  "razonamiento": "por qué, citando datos del histórico (y del PDF metodológico si aplica)",
   "flags": ["alerta 1", "alerta 2"],
   "alternativas": ["alternativa A si quiere ser más conservador", "alternativa B si quiere empujar más"]
 }`,
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 }
 
 function userPrompt(input: LoadReviewInput): string {
@@ -138,6 +145,17 @@ function userPrompt(input: LoadReviewInput): string {
   return lines.join("\n");
 }
 
+async function fetchPdfAsBase64(url: string): Promise<string | null> {
+  try {
+    const r = await fetch(url, { cache: "no-store" });
+    if (!r.ok) return null;
+    const buf = await r.arrayBuffer();
+    return Buffer.from(buf).toString("base64");
+  } catch {
+    return null;
+  }
+}
+
 export async function suggestLoadReview(
   input: LoadReviewInput,
   model: LoadReviewModel = DEFAULT_LOAD_REVIEW_MODEL,
@@ -145,11 +163,28 @@ export async function suggestLoadReview(
   const sys = systemPrompt(input.brief);
   const usr = userPrompt(input);
 
+  // Construir el bloque de mensaje del usuario. Si hay PDF adjunto, va como
+  // primer bloque "document" con cache ephemeral → Anthropic reutiliza la
+  // computación del PDF entre llamadas (10% del coste tras la primera).
+  const userBlocks: any[] = [];
+  if (input.brief.pdfUrl) {
+    const b64 = await fetchPdfAsBase64(input.brief.pdfUrl);
+    if (b64) {
+      userBlocks.push({
+        type: "document",
+        source: { type: "base64", media_type: "application/pdf", data: b64 },
+        title: input.brief.pdfName ?? "Brief metodológico (PDF)",
+        cache_control: { type: "ephemeral" },
+      });
+    }
+  }
+  userBlocks.push({ type: "text", text: usr });
+
   const resp = await client().messages.create({
     model,
     max_tokens: MAX_OUTPUT_TOKENS,
     system: sys,
-    messages: [{ role: "user", content: usr }],
+    messages: [{ role: "user", content: userBlocks }],
   });
 
   const text = resp.content

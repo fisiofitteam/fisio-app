@@ -1993,6 +1993,9 @@ model LoadReviewBrief {
   methodology     String   @default("")
   hardRules       String   @default("")
   goodExamples    String   @default("")
+  briefPdfUrl     String?
+  briefPdfName    String?
+  briefPdfSize    Int?
   updatedAt       DateTime @updatedAt
   updatedById     String?
 }

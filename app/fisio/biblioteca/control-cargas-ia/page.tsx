@@ -30,6 +30,9 @@ export default async function LoadReviewBriefPage() {
           methodology: brief.methodology,
           hardRules: brief.hardRules,
           goodExamples: brief.goodExamples,
+          briefPdfUrl: brief.briefPdfUrl,
+          briefPdfName: brief.briefPdfName,
+          briefPdfSize: brief.briefPdfSize,
         }}
       />
     </main>

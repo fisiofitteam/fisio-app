@@ -2098,6 +2098,11 @@ model LoadReviewBrief {
   hardRules       String   @default("")
   // Ejemplos de propuestas que les han salido bien (few-shot).
   goodExamples    String   @default("")
+  // PDF adjunto opcional. Se sube a Vercel Blob y se pasa a Anthropic como
+  // `document` con prompt caching (se cobra solo la primera vez por hora).
+  briefPdfUrl     String?
+  briefPdfName    String?
+  briefPdfSize    Int?
   updatedAt       DateTime @updatedAt
   updatedById     String?
 }

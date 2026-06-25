@@ -108,6 +108,8 @@ export async function POST(req: NextRequest) {
           methodology: brief.methodology,
           hardRules: brief.hardRules,
           goodExamples: brief.goodExamples,
+          pdfUrl: brief.briefPdfUrl,
+          pdfName: brief.briefPdfName,
         },
         anamnesisCallNotes: patient.anamnesisCallNotes,
         anamnesisData,

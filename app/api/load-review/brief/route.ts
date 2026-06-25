@@ -16,7 +16,16 @@ export async function GET() {
     create: { id: "singleton" },
     update: {},
   });
-  return NextResponse.json({ brief });
+  return NextResponse.json({
+    brief: {
+      methodology: brief.methodology,
+      hardRules: brief.hardRules,
+      goodExamples: brief.goodExamples,
+      briefPdfUrl: brief.briefPdfUrl,
+      briefPdfName: brief.briefPdfName,
+      briefPdfSize: brief.briefPdfSize,
+    },
+  });
 }
 
 export async function PUT(req: NextRequest) {
