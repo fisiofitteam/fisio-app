@@ -43,13 +43,18 @@ export async function sendEmail(payload: EmailPayload): Promise<{ ok: boolean; p
       text: payload.text,
     });
     if (result.error) {
-      console.error("Resend error:", result.error);
-      return { ok: false, previewMode: false };
+      console.error("[email] Resend error:", result.error);
+      return {
+        ok: false,
+        previewMode: false,
+        error: typeof result.error === "string" ? result.error : JSON.stringify(result.error),
+      } as any;
     }
-    return { ok: true, previewMode: false };
-  } catch (err) {
-    console.error("Email send failed:", err);
-    return { ok: false, previewMode: false };
+    console.log("[email] OK →", payload.to, "id:", (result.data as any)?.id);
+    return { ok: true, previewMode: false } as any;
+  } catch (err: any) {
+    console.error("[email] send failed:", err);
+    return { ok: false, previewMode: false, error: err?.message ?? String(err) } as any;
   }
 }
 

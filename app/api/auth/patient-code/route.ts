@@ -66,7 +66,15 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  await emailLoginCode({ to: patient.email!, code, fullName: patient.fullName });
+  const emailRes: any = await emailLoginCode({ to: patient.email!, code, fullName: patient.fullName });
+  console.log("[patient-code] sendCode →", patient.email, "ok:", emailRes?.ok, "err:", emailRes?.error ?? "-");
 
+  // Si el debug=1 se pide explícitamente, devolvemos el resultado real para
+  // que el CEO pueda ver el motivo del fallo. En flujo normal nunca lo pasa el
+  // cliente, así que seguimos siendo opacos para usuarios públicos.
+  const debug = req.nextUrl.searchParams.get("debug") === "1";
+  if (debug) {
+    return NextResponse.json({ ok: !!emailRes?.ok, error: emailRes?.error ?? null });
+  }
   return NextResponse.json({ ok: true });
 }
