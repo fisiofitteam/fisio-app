@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
   // tenga ese email aunque esté guardado con mayúsculas).
   const ci = await prisma.patient.findFirst({
     where: { email: { equals: normalized, mode: "insensitive" } },
-    select: { id: true, fullName: true, email: true, onboardingStatus: true, createdAt: true },
+    select: { id: true, fullName: true, email: true, onboardingStatus: true, startedAt: true },
   });
 
   // 2) Búsqueda strict por findUnique (compara con el valor exact-match
@@ -71,7 +71,7 @@ export async function GET(req: NextRequest) {
           fullName: ci.fullName,
           emailEnBD: ci.email,
           onboardingStatus: ci.onboardingStatus,
-          createdAt: ci.createdAt,
+          startedAt: ci.startedAt,
           encontradoExacto: !!strict,
           notas: !strict ? "El email en BD difiere por mayúsculas/espacios del input normalizado" : null,
         }
