@@ -16,9 +16,9 @@ import { suggestLoadReview, DEFAULT_LOAD_REVIEW_MODEL, type LoadReviewModel } fr
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-// La primera llamada con PDF puede tardar bastante porque Anthropic procesa
-// el documento entero (las siguientes van por caché). 300s = máximo Vercel Pro.
-export const maxDuration = 300;
+// Plan Hobby: máximo 60s. Si la primera llamada con PDF se acerca al límite,
+// la siguiente ya va por caché y es 5-10x más rápida.
+export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   try {
