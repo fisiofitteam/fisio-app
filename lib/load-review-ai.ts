@@ -24,6 +24,18 @@ function client(): Anthropic {
   return _client;
 }
 
+export type AdaptationState = "OK" | "CONDITIONAL" | "BLOCKED";
+
+export type CurrentAdaptation = {
+  movementId: string;
+  movementName: string;
+  category: string;
+  state: AdaptationState;
+  loadConstraint: string | null;
+  substitutionText: string | null;
+  physioWarning: string | null;
+};
+
 export type LoadReviewInput = {
   patient: {
     fullName: string;
@@ -36,11 +48,16 @@ export type LoadReviewInput = {
     methodology: string;
     hardRules: string;
     goodExamples: string;
-    pdfUrl?: string | null;        // si hay PDF adjunto, se descarga y se pasa a Anthropic
+    pdfUrl?: string | null;
     pdfName?: string | null;
   };
   anamnesisCallNotes: string | null;
   anamnesisData: Record<string, any> | null;
+  // Estado actual del control de cargas: lo que ya tiene marcado el fisio.
+  currentAdaptations: CurrentAdaptation[];
+  // Catálogo de movimientos disponibles (id+nombre+categoría) por si la IA
+  // quiere mover algo de OK a CONDITIONAL/BLOCKED que aún no estaba.
+  movementCatalog: Array<{ id: string; name: string; category: string }>;
   history: {
     recentSessions: Array<{ date: string; completed: boolean; programName: string }>;
     recentMetrics: Array<{ date: string; key: string; value: number }>;
@@ -48,26 +65,56 @@ export type LoadReviewInput = {
   };
 };
 
+// Cambio concreto a aplicar sobre UN movimiento del paciente.
+export type AdaptationChange = {
+  movementId: string;
+  movementName: string;
+  // Estado actual del paciente (para que la UI lo muestre).
+  current: {
+    state: AdaptationState | null;       // null = aún no había adaptación
+    loadConstraint: string | null;
+    substitutionText: string | null;
+    physioWarning: string | null;
+  };
+  // Lo que propone la IA. null = no toca ese campo.
+  proposed: {
+    state: AdaptationState | null;
+    loadConstraint: string | null;
+    substitutionText: string | null;
+    physioWarning: string | null;
+  };
+  reason: string;                        // por qué este cambio (1-2 frases).
+};
+
 export type LoadReviewOutput = {
-  resumenEstado: string;          // 2-3 frases sobre dónde está el paciente.
-  propuesta: string;               // qué hacer concretamente esta semana.
-  razonamiento: string;            // por qué (cita datos del histórico).
-  flags: string[];                 // alertas (dolor alto, plateau, baja adherencia, etc.).
-  alternativas: string[];          // 1-2 alternativas si el fisio no está convencido.
+  resumenEstado: string;                 // 2-3 frases de contexto del paciente.
+  changes: AdaptationChange[];           // cambios concretos por movimiento.
+  flags: string[];                       // alertas globales (dolor alto, plateau, baja adherencia…).
+  noChangeReason?: string;               // si changes está vacío: por qué (ej: "mantener semana de consolidación").
 };
 
 function systemPrompt(brief: LoadReviewInput["brief"]): string {
-  // El fisio pega un brief completo. Lo inyectamos tal cual. Si además
-  // adjuntó un PDF, viene como bloque "document" en el mensaje del usuario
-  // (no aquí) y se le menciona en el prompt para que la IA lo consulte.
   const fisioBrief = (brief.methodology || "").trim();
   return [
     "Eres un asistente clínico para un fisioterapeuta especializado en atletas de CrossFit.",
-    "Tu trabajo es proponer UN borrador de control de cargas para que el fisio lo revise y apruebe.",
-    "NO eres autónomo: el fisio es quien decide y firma.",
+    "Tu trabajo: modificar el CONTROL DE CARGAS del paciente proponiendo cambios CONCRETOS sobre ejercicios específicos.",
+    "NO das consejos en texto libre. NO eres autónomo: el fisio revisa y aplica.",
+    "",
+    "QUÉ PUEDES CAMBIAR de cada ejercicio:",
+    " - state: 'OK' (puede hacerlo tal cual) | 'CONDITIONAL' (con condiciones/sustitución parcial) | 'BLOCKED' (no puede hacerlo)",
+    " - loadConstraint: carga máxima permitida en formato libre (ej: '60kg', 'Max 70% 1RM', 'Solo barra vacía')",
+    " - substitutionText: ejercicio alternativo si CONDITIONAL/BLOCKED (ej: 'Z-Press en lugar de Push Press, 3x6 @ 20kg')",
+    " - physioWarning: nota corta de cuidado (ej: 'Mantener escápula deprimida', 'Dolor > 4 → parar')",
+    "",
+    "REGLAS DE OUTPUT:",
+    " 1. Sólo incluye en 'changes' los movimientos que CAMBIAN respecto a lo actual. Si un movimiento se mantiene igual, NO lo incluyas.",
+    " 2. Si crees que el paciente no necesita cambios esta semana, devuelve changes=[] y rellena 'noChangeReason' con 1 frase clara.",
+    " 3. Para cada cambio: pon en 'current' lo que tiene HOY (te lo doy en el input), y en 'proposed' lo que tú sugieres. Si un campo no cambia, déjalo igual en current y proposed.",
+    " 4. Cada cambio debe tener 'reason' explicando por qué (1-2 frases citando datos del histórico o del PDF metodológico).",
+    " 5. SI HAY DOLOR AGUDO NUEVO o flag clínica seria → propón BLOCKED + flags=[advertencia]. No empujes progresión.",
     "",
     brief.pdfUrl
-      ? "El fisio ha adjuntado un documento PDF con su metodología completa. Es la referencia principal: léelo en cada llamada y aplícalo. El bloque de texto de abajo lo complementa pero el PDF manda."
+      ? "El fisio ha adjuntado un PDF con su metodología completa. Es la referencia principal: léelo y aplícalo. El texto extra de abajo lo complementa pero el PDF manda."
       : "",
     "",
     "─── BRIEF DEL FISIO ───────────────────────────────────",
@@ -77,11 +124,28 @@ function systemPrompt(brief: LoadReviewInput["brief"]): string {
     "FORMATO DE SALIDA (obligatorio):",
     "Devuelve SOLO JSON válido, sin markdown, sin ```. Estructura exacta:",
     `{
-  "resumenEstado": "2-3 frases sobre dónde está el paciente HOY",
-  "propuesta": "qué cambiar concretamente esta semana (ejercicios, series, reps, %RM, frecuencia)",
-  "razonamiento": "por qué, citando datos del histórico (y del PDF metodológico si aplica)",
-  "flags": ["alerta 1", "alerta 2"],
-  "alternativas": ["alternativa A si quiere ser más conservador", "alternativa B si quiere empujar más"]
+  "resumenEstado": "2-3 frases de contexto (cómo está el paciente HOY).",
+  "changes": [
+    {
+      "movementId": "<id exacto del catálogo o del estado actual>",
+      "movementName": "<nombre del movimiento>",
+      "current": {
+        "state": "OK"|"CONDITIONAL"|"BLOCKED"|null,
+        "loadConstraint": "..." | null,
+        "substitutionText": "..." | null,
+        "physioWarning": "..." | null
+      },
+      "proposed": {
+        "state": "OK"|"CONDITIONAL"|"BLOCKED"|null,
+        "loadConstraint": "..." | null,
+        "substitutionText": "..." | null,
+        "physioWarning": "..." | null
+      },
+      "reason": "1-2 frases de por qué"
+    }
+  ],
+  "flags": ["alerta clínica 1", "alerta 2"],
+  "noChangeReason": "solo si changes está vacío: por qué"
 }`,
   ].filter(Boolean).join("\n");
 }
@@ -141,7 +205,30 @@ function userPrompt(input: LoadReviewInput): string {
     lines.push("");
   }
 
-  lines.push("Genera ahora la propuesta de control de cargas para esta semana en el JSON especificado.");
+  // Estado actual del control de cargas (lo que el fisio ya tiene marcado).
+  if (input.currentAdaptations.length > 0) {
+    lines.push("ESTADO ACTUAL DEL CONTROL DE CARGAS (lo que tiene HOY):");
+    for (const a of input.currentAdaptations) {
+      const parts = [`${a.movementName} [${a.movementId}]`, `(${a.category})`, `state=${a.state}`];
+      if (a.loadConstraint) parts.push(`load="${a.loadConstraint}"`);
+      if (a.substitutionText) parts.push(`subst="${a.substitutionText}"`);
+      if (a.physioWarning) parts.push(`warn="${a.physioWarning}"`);
+      lines.push("  · " + parts.join(" · "));
+    }
+    lines.push("");
+  } else {
+    lines.push("ESTADO ACTUAL: no hay adaptaciones aún. Todo se considera OK por defecto.");
+    lines.push("");
+  }
+
+  lines.push("CATÁLOGO DE MOVIMIENTOS DISPONIBLES (usa estos ids exactos si añades nuevas restricciones):");
+  for (const m of input.movementCatalog) {
+    lines.push(`  · [${m.id}] ${m.name} (${m.category})`);
+  }
+  lines.push("");
+
+  lines.push("Genera ahora los cambios concretos al control de cargas en el JSON especificado.");
+  lines.push("Recuerda: SOLO incluye en 'changes' los movimientos que CAMBIAN. Si no cambia nada, changes=[] + noChangeReason.");
   return lines.join("\n");
 }
 
@@ -200,12 +287,36 @@ export async function suggestLoadReview(
     throw new Error(`La IA no devolvió JSON válido: ${e?.message}`);
   }
 
+  function normState(v: any): AdaptationState | null {
+    const s = String(v ?? "").toUpperCase();
+    if (s === "OK" || s === "CONDITIONAL" || s === "BLOCKED") return s as AdaptationState;
+    return null;
+  }
+  function normSlot(v: any): { state: AdaptationState | null; loadConstraint: string | null; substitutionText: string | null; physioWarning: string | null } {
+    const o = v && typeof v === "object" ? v : {};
+    return {
+      state: normState(o?.state),
+      loadConstraint: o?.loadConstraint ? String(o.loadConstraint) : null,
+      substitutionText: o?.substitutionText ? String(o.substitutionText) : null,
+      physioWarning: o?.physioWarning ? String(o.physioWarning) : null,
+    };
+  }
+  const rawChanges = Array.isArray(parsed?.changes) ? parsed.changes : [];
+  const changes: AdaptationChange[] = rawChanges
+    .map((c: any) => ({
+      movementId: String(c?.movementId ?? "").trim(),
+      movementName: String(c?.movementName ?? "").trim(),
+      current: normSlot(c?.current),
+      proposed: normSlot(c?.proposed),
+      reason: String(c?.reason ?? "").trim(),
+    }))
+    .filter((c: AdaptationChange) => c.movementId && c.movementName);
+
   const output: LoadReviewOutput = {
     resumenEstado: String(parsed?.resumenEstado ?? "").trim(),
-    propuesta: String(parsed?.propuesta ?? "").trim(),
-    razonamiento: String(parsed?.razonamiento ?? "").trim(),
+    changes,
     flags: Array.isArray(parsed?.flags) ? parsed.flags.map(String) : [],
-    alternativas: Array.isArray(parsed?.alternativas) ? parsed.alternativas.map(String) : [],
+    noChangeReason: parsed?.noChangeReason ? String(parsed.noChangeReason) : undefined,
   };
 
   return {

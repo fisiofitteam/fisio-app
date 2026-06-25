@@ -57,6 +57,18 @@ export async function POST(req: NextRequest) {
   const fourWeeksAgo = new Date();
   fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
 
+  // Estado actual del control de cargas + catálogo de movimientos.
+  const [adaptationsRaw, catalogRaw] = await Promise.all([
+    prisma.patientAdaptation.findMany({
+      where: { patientId },
+      include: { movement: { include: { category: true } } },
+    }),
+    prisma.movement.findMany({
+      include: { category: true },
+      orderBy: [{ category: { name: "asc" } }, { displayName: "asc" }],
+    }),
+  ]);
+
   const [sessionsRaw, metricsRaw, wodsRaw] = await Promise.all([
     prisma.programSession.findMany({
       where: {
@@ -117,6 +129,20 @@ export async function POST(req: NextRequest) {
         },
         anamnesisCallNotes: patient.anamnesisCallNotes,
         anamnesisData,
+        currentAdaptations: adaptationsRaw.map((a) => ({
+          movementId: a.movementId,
+          movementName: a.movement.displayName,
+          category: a.movement.category.name,
+          state: a.state as any,
+          loadConstraint: a.loadConstraint,
+          substitutionText: a.substitutionText,
+          physioWarning: a.physioWarning,
+        })),
+        movementCatalog: catalogRaw.map((m) => ({
+          id: m.id,
+          name: m.displayName,
+          category: m.category.name,
+        })),
         history: {
           recentSessions: sessionsRaw.map((s) => ({
             date: s.scheduledDate.toISOString().slice(0, 10),
