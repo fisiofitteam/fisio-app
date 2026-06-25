@@ -13,12 +13,19 @@ import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
+  try {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (user.role !== "ceo") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const rawEmail = req.nextUrl.searchParams.get("email");
-  if (!rawEmail) return NextResponse.json({ error: "Falta ?email=..." }, { status: 400 });
+  if (!rawEmail) return NextResponse.json({ error: "Falta ?email=foo@bar.com" }, { status: 400 });
+  if (!rawEmail.includes("@")) {
+    return NextResponse.json({
+      error: "El parámetro 'email' no parece un email. Sustituye el placeholder por un email real.",
+      received: rawEmail,
+    }, { status: 400 });
+  }
   const normalized = rawEmail.toLowerCase().trim();
 
   // 1) Búsqueda case-insensitive (debe encontrar siempre que el paciente
@@ -78,4 +85,12 @@ export async function GET(req: NextRequest) {
         ? "⏱ Cooldown activo. Espera 30s y reintenta."
         : "✅ Paciente encontrado y sin cooldown. El envío debería funcionar.",
   });
+  } catch (e: any) {
+    console.error("[check-patient-email] error:", e?.message, e?.code, e?.meta);
+    return NextResponse.json({
+      error: e?.message ?? "Error desconocido",
+      code: e?.code,
+      meta: e?.meta,
+    }, { status: 500 });
+  }
 }
