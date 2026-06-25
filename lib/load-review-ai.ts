@@ -11,7 +11,9 @@ import Anthropic from "@anthropic-ai/sdk";
 
 export type LoadReviewModel = "claude-sonnet-4-6" | "claude-opus-4-7";
 export const DEFAULT_LOAD_REVIEW_MODEL: LoadReviewModel = "claude-sonnet-4-6";
-const MAX_OUTPUT_TOKENS = 32000;
+// Sonnet 4.6 genera ~100 tokens/s. Con plan Hobby de Vercel (60s timeout)
+// caben ~6000 tokens útiles. Si actualizas a Pro (300s), sube esto a 16000+.
+const MAX_OUTPUT_TOKENS = 6000;
 
 let _client: Anthropic | null = null;
 function client(): Anthropic {
@@ -106,14 +108,15 @@ function systemPrompt(brief: LoadReviewInput["brief"]): string {
     " - substitutionText: ejercicio alternativo si CONDITIONAL/BLOCKED (ej: 'Z-Press en lugar de Push Press, 3x6 @ 20kg')",
     " - physioWarning: nota corta de cuidado (ej: 'Mantener escápula deprimida', 'Dolor > 4 → parar')",
     "",
-    "REGLAS DE OUTPUT:",
-    " 1. Sólo incluye en 'changes' los movimientos que CAMBIAN respecto a lo actual. Si un movimiento se mantiene igual, NO lo incluyas.",
-    " 2. NO hay límite de número de cambios. Incluye TODOS los movimientos que el paciente necesite modificar según su perfil clínico. Pueden ser 5, 20, 50 o más.",
-    " 3. Todos los textos (substitutionText, physioWarning, reason) deben ser CORTOS Y CONCRETOS: máximo 120 caracteres cada uno. Sin explicaciones largas — el fisio ya tiene el contexto.",
-    " 4. Si crees que el paciente no necesita cambios esta semana, devuelve changes=[] y rellena 'noChangeReason' con 1 frase clara.",
-    " 5. Para cada cambio: pon en 'current' lo que tiene HOY (te lo doy en el input), y en 'proposed' lo que tú sugieres. Si un campo no cambia, déjalo igual en current y proposed.",
-    " 6. SI HAY DOLOR AGUDO NUEVO o flag clínica seria → propón BLOCKED + flags=[advertencia]. No empujes progresión.",
-    " 7. CRÍTICO: tu respuesta debe ser un JSON completo. Si vas a generar muchos cambios, mantén los textos al mínimo para no quedarte sin espacio.",
+    "REGLAS DE OUTPUT (TIENES UN PRESUPUESTO DE TOKENS LIMITADO):",
+    " 1. Sólo incluye en 'changes' los movimientos que CAMBIAN respecto a lo actual.",
+    " 2. PRIORIZA: incluye primero lo más crítico (BLOCKED por seguridad, cambios de estado importantes). Si te quedas sin espacio, mejor que sobren movimientos no incluidos a que el JSON salga truncado.",
+    " 3. Textos ultra-cortos: substitutionText ≤80 chars, physioWarning ≤80 chars, reason ≤80 chars. SIN explicaciones largas.",
+    " 4. resumenEstado: máximo 2 frases (≤200 chars en total).",
+    " 5. Si crees que el paciente no necesita cambios esta semana, devuelve changes=[] y rellena 'noChangeReason' con 1 frase.",
+    " 6. Para cada cambio: pon en 'current' lo que tiene HOY, y en 'proposed' lo que sugieres. Si un campo no cambia, déjalo igual en current y proposed.",
+    " 7. SI HAY DOLOR AGUDO NUEVO o flag clínica seria → propón BLOCKED + flags=[advertencia].",
+    " 8. CRÍTICO: tu respuesta debe ser un JSON COMPLETO y válido. Mejor 25 cambios bien escritos que 50 truncados a la mitad.",
     "",
     brief.pdfUrl
       ? "El fisio ha adjuntado un PDF con su metodología completa. Es la referencia principal: léelo y aplícalo. El texto extra de abajo lo complementa pero el PDF manda."
