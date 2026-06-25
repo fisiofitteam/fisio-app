@@ -74,8 +74,8 @@ export async function POST(req: NextRequest) {
       take: 200,
     }),
     prisma.wodLog.findMany({
-      where: { patientId, recordedAt: { gte: fourWeeksAgo } },
-      orderBy: { recordedAt: "asc" },
+      where: { patientId, submittedAt: { gte: fourWeeksAgo } },
+      orderBy: { submittedAt: "asc" },
       take: 30,
     }),
   ]);
@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
             value: m.value,
           })),
           recentWodLogs: wodsRaw.map((w) => ({
-            date: w.recordedAt.toISOString().slice(0, 10),
+            date: w.submittedAt.toISOString().slice(0, 10),
             rpe: w.rpe ?? null,
             painScore: w.painScore ?? null,
             notes: w.notes ?? null,
