@@ -1,11 +1,18 @@
 "use client";
 /**
- * Panel de sugerencia IA para control de cargas — VERSIÓN CAMBIOS CONCRETOS.
+ * Panel de sugerencia IA para control de cargas — VERSIÓN PLAN APROBADO.
  *
- * El fisio pulsa "💡 Sugerir cambios" y la IA propone modificaciones concretas
- * sobre los ejercicios del paciente (state OK/CONDITIONAL/BLOCKED + load +
- * sustitución + warning). El fisio marca cuáles quiere aplicar y pulsa
- * "Aplicar seleccionados".
+ * Flujo:
+ *  1. Fisio pulsa "💡 Sugerir cambios".
+ *  2. La IA piensa. Aparece un MODAL con el planteamiento y un resumen de
+ *     todos los cambios que va a aplicar.
+ *  3. Si pulsa "Aprobar plan" → se aplican TODOS los cambios sobre los
+ *     ejercicios del paciente. El modal se cierra y la pestaña se refresca
+ *     mostrando ya las adaptaciones nuevas.
+ *  4. Si pulsa "Cancelar" → se descarta sin tocar nada.
+ *
+ * Después, si quiere ajustar manualmente algún movimiento, lo hace en el
+ * editor de adaptaciones de siempre.
  */
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -38,16 +45,12 @@ export function LoadReviewSuggestionPanel({ patientId }: { patientId: string }) 
   const [model, setModel] = useState<string | null>(null);
   const [output, setOutput] = useState<Output | null>(null);
   const [tokens, setTokens] = useState<{ input?: number; output?: number }>({});
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [closing, setClosing] = useState(false);
-  const [doneMsg, setDoneMsg] = useState<string | null>(null);
 
   async function ask(modelChoice: "claude-sonnet-4-6" | "claude-opus-4-7") {
     setLoading(true);
     setError(null);
     setOutput(null);
-    setSelected(new Set());
-    setDoneMsg(null);
     try {
       const r = await fetch("/api/load-review/suggest", {
         method: "POST",
@@ -66,8 +69,6 @@ export function LoadReviewSuggestionPanel({ patientId }: { patientId: string }) 
       setModel(data.model);
       setOutput(data.output);
       setTokens({ input: data.inputTokens, output: data.outputTokens });
-      // Por defecto, selecciono todos los cambios propuestos (el fisio deselecciona los que no quiera).
-      setSelected(new Set((data.output?.changes ?? []).map((c: Change) => c.movementId)));
     } catch (e: any) {
       setError(e?.message ?? "Error");
     } finally {
@@ -75,29 +76,24 @@ export function LoadReviewSuggestionPanel({ patientId }: { patientId: string }) 
     }
   }
 
-  async function applySelected() {
+  async function approvePlan() {
     if (!recordId || !output) return;
-    const changesToApply = output.changes.filter((c) => selected.has(c.movementId));
-    if (changesToApply.length === 0) {
-      // Sin cambios seleccionados → tratamos como "ignorar"
-      return ignoreAll();
-    }
     setClosing(true);
     try {
-      const allSelected = changesToApply.length === output.changes.length;
       const r = await fetch("/api/load-review/apply-changes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           recordId,
           patientId,
-          changes: changesToApply,
-          decision: allSelected ? "apply" : "edit",
+          changes: output.changes,
+          decision: "apply",
         }),
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data?.error ?? "Error aplicando cambios");
-      setDoneMsg(`✓ Aplicados ${data.applied} cambio${data.applied !== 1 ? "s" : ""} al control de cargas.`);
+      setOutput(null);
+      setRecordId(null);
       router.refresh();
     } catch (e: any) {
       setError(e?.message ?? "Error");
@@ -106,7 +102,7 @@ export function LoadReviewSuggestionPanel({ patientId }: { patientId: string }) 
     }
   }
 
-  async function ignoreAll() {
+  async function cancelPlan() {
     if (!recordId) return;
     setClosing(true);
     try {
@@ -115,35 +111,22 @@ export function LoadReviewSuggestionPanel({ patientId }: { patientId: string }) 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ recordId, decision: "ignore", appliedNotes: null }),
       });
-      setDoneMsg("❌ Sugerencia descartada.");
-      router.refresh();
+      setOutput(null);
+      setRecordId(null);
     } finally {
       setClosing(false);
     }
   }
 
-  if (doneMsg) {
-    return (
-      <section className="card bg-emerald-50 border-emerald-200">
-        <p className="text-sm text-emerald-900">{doneMsg}</p>
-        <button
-          onClick={() => { setDoneMsg(null); setOutput(null); setRecordId(null); setSelected(new Set()); }}
-          className="text-xs text-emerald-800 underline mt-2"
-        >
-          Pedir otra sugerencia
-        </button>
-      </section>
-    );
-  }
-
-  if (!output) {
-    return (
+  return (
+    <>
       <section className="card">
         <div className="flex justify-between items-start gap-2 flex-wrap">
           <div>
             <h2 className="font-medium text-sm">🧠 Control de cargas con IA</h2>
             <p className="text-[11px] text-neutral-500 mt-0.5">
-              La IA propone cambios CONCRETOS por ejercicio (estado, carga máx, sustitución, warning). Tú marcas cuáles aceptas y pulsas aplicar.
+              La IA propone un plan de cambios sobre los ejercicios. Tú decides si lo apruebas tal cual.
+              Luego puedes ajustar a mano cualquier movimiento si necesitas afinar.
             </p>
           </div>
           <button
@@ -154,130 +137,138 @@ export function LoadReviewSuggestionPanel({ patientId }: { patientId: string }) 
             {loading ? "Pensando…" : "💡 Sugerir cambios"}
           </button>
         </div>
-        {error && <p className="text-xs text-red-700 mt-2">⚠️ {error}</p>}
+        {error && !output && <p className="text-xs text-red-700 mt-2">⚠️ {error}</p>}
       </section>
-    );
-  }
 
+      {output && recordId && (
+        <PlanModal
+          output={output}
+          model={model}
+          tokens={tokens}
+          closing={closing}
+          error={error}
+          onApprove={approvePlan}
+          onCancel={cancelPlan}
+          onClose={() => { setOutput(null); setRecordId(null); }}
+          onSecondOpinion={() => ask("claude-opus-4-7")}
+        />
+      )}
+    </>
+  );
+}
+
+function PlanModal({
+  output, model, tokens, closing, error, onApprove, onCancel, onClose, onSecondOpinion,
+}: {
+  output: Output;
+  model: string | null;
+  tokens: { input?: number; output?: number };
+  closing: boolean;
+  error: string | null;
+  onApprove: () => void;
+  onCancel: () => void;
+  onClose: () => void;
+  onSecondOpinion: () => void;
+}) {
   return (
-    <section className="card border-amber-200 bg-amber-50/30">
-      <header className="flex justify-between items-start gap-2 flex-wrap mb-3">
-        <div>
-          <h2 className="font-medium text-sm">🧠 Cambios propuestos</h2>
-          <p className="text-[10px] text-neutral-500">
-            Modelo: {model === "claude-opus-4-7" ? "Opus 4.7" : "Sonnet 4.6"}
-            {tokens.input && tokens.output && <> · {tokens.input} in / {tokens.output} out tokens</>}
-          </p>
-        </div>
-        <button
-          onClick={() => ask("claude-opus-4-7")}
-          disabled={loading || closing}
-          className="text-xs text-neutral-600 underline"
-          title="Regenera con Opus 4.7"
-        >
-          {loading ? "…" : "🧠 Segunda opinión Opus"}
-        </button>
-      </header>
-
-      <div className="space-y-3">
-        {output.resumenEstado && (
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-10 px-4 bg-black/50 overflow-y-auto">
+      <div className="bg-white rounded-2xl max-w-2xl w-full my-8 shadow-2xl">
+        <header className="px-5 py-3 border-b border-neutral-200 flex justify-between items-center sticky top-0 bg-white rounded-t-2xl">
           <div>
-            <div className="text-[10px] uppercase tracking-wide text-neutral-500 mb-1">Resumen del estado</div>
-            <p className="text-sm whitespace-pre-wrap text-neutral-900">{output.resumenEstado}</p>
+            <h3 className="font-semibold text-base">🧠 Plan de cambios sugerido</h3>
+            <p className="text-[10px] text-neutral-500">
+              Modelo: {model === "claude-opus-4-7" ? "Opus 4.7" : "Sonnet 4.6"}
+              {tokens.input && tokens.output && <> · {tokens.input} in / {tokens.output} out tokens</>}
+            </p>
           </div>
-        )}
+          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700 text-xl">✕</button>
+        </header>
 
-        {output.flags.length > 0 && (
-          <div>
-            <div className="text-[10px] uppercase tracking-wide text-amber-700 mb-1">⚠ Flags</div>
-            <ul className="text-xs text-amber-900 space-y-0.5">
-              {output.flags.map((f, i) => <li key={i}>· {f}</li>)}
-            </ul>
-          </div>
-        )}
-
-        {output.changes.length === 0 ? (
-          <div className="p-3 rounded bg-blue-50 border border-blue-200 text-sm text-blue-900">
-            <strong>Sin cambios sugeridos.</strong>
-            {output.noChangeReason && <p className="mt-1 text-xs">{output.noChangeReason}</p>}
-          </div>
-        ) : (
-          <div>
-            <div className="text-[10px] uppercase tracking-wide text-neutral-500 mb-2">
-              Cambios concretos ({output.changes.length})
+        <div className="p-5 space-y-4">
+          {output.resumenEstado && (
+            <div>
+              <div className="text-[10px] uppercase tracking-wide text-neutral-500 mb-1">Resumen del estado</div>
+              <p className="text-sm whitespace-pre-wrap text-neutral-900">{output.resumenEstado}</p>
             </div>
-            <div className="space-y-2">
-              {output.changes.map((c) => {
-                const sel = selected.has(c.movementId);
-                return (
-                  <div
-                    key={c.movementId}
-                    className={`p-2 rounded border ${sel ? "border-emerald-300 bg-white" : "border-neutral-200 bg-neutral-50/60 opacity-70"}`}
-                  >
-                    <label className="flex items-start gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={sel}
-                        onChange={() => {
-                          setSelected((prev) => {
-                            const n = new Set(prev);
-                            if (n.has(c.movementId)) n.delete(c.movementId); else n.add(c.movementId);
-                            return n;
-                          });
-                        }}
-                        className="mt-1"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-semibold">{c.movementName}</div>
-                        <DiffRow label="Estado" before={c.current.state} after={c.proposed.state} />
-                        <DiffRow label="Carga máx" before={c.current.loadConstraint} after={c.proposed.loadConstraint} />
-                        <DiffRow label="Sustitución" before={c.current.substitutionText} after={c.proposed.substitutionText} />
-                        <DiffRow label="Warning" before={c.current.physioWarning} after={c.proposed.physioWarning} />
-                        {c.reason && (
-                          <p className="text-[11px] text-neutral-500 mt-1 italic">💬 {c.reason}</p>
-                        )}
-                      </div>
-                    </label>
+          )}
+
+          {output.flags.length > 0 && (
+            <div className="p-3 rounded border border-amber-200 bg-amber-50">
+              <div className="text-[10px] uppercase tracking-wide text-amber-700 mb-1">⚠ Atención</div>
+              <ul className="text-xs text-amber-900 space-y-0.5">
+                {output.flags.map((f, i) => <li key={i}>· {f}</li>)}
+              </ul>
+            </div>
+          )}
+
+          {output.changes.length === 0 ? (
+            <div className="p-3 rounded bg-blue-50 border border-blue-200 text-sm text-blue-900">
+              <strong>Sin cambios sugeridos esta semana.</strong>
+              {output.noChangeReason && <p className="mt-1 text-xs">{output.noChangeReason}</p>}
+            </div>
+          ) : (
+            <div>
+              <div className="text-[10px] uppercase tracking-wide text-neutral-500 mb-2">
+                Cambios que se aplicarán ({output.changes.length})
+              </div>
+              <div className="space-y-2">
+                {output.changes.map((c) => (
+                  <div key={c.movementId} className="p-3 rounded border border-neutral-200 bg-neutral-50">
+                    <div className="text-sm font-semibold">{c.movementName}</div>
+                    <DiffRow label="Estado" before={c.current.state} after={c.proposed.state} />
+                    <DiffRow label="Carga máx" before={c.current.loadConstraint} after={c.proposed.loadConstraint} />
+                    <DiffRow label="Sustitución" before={c.current.substitutionText} after={c.proposed.substitutionText} />
+                    <DiffRow label="Warning" before={c.current.physioWarning} after={c.proposed.physioWarning} />
+                    {c.reason && <p className="text-[11px] text-neutral-500 mt-2 italic">💬 {c.reason}</p>}
                   </div>
-                );
-              })}
+                ))}
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
 
-      <div className="flex gap-2 mt-4 flex-wrap">
-        {output.changes.length > 0 && (
+          {error && <p className="text-xs text-red-700">⚠️ {error}</p>}
+        </div>
+
+        <footer className="px-5 py-3 border-t border-neutral-200 flex justify-between gap-2 flex-wrap sticky bottom-0 bg-white rounded-b-2xl">
           <button
-            onClick={applySelected}
-            disabled={closing || selected.size === 0}
-            className="btn btn-primary text-xs"
+            onClick={onSecondOpinion}
+            disabled={closing}
+            className="text-xs text-neutral-600 underline"
+            title="Regenerar con Opus 4.7"
           >
-            ✓ Aplicar seleccionados ({selected.size})
+            🧠 Segunda opinión Opus
           </button>
-        )}
-        <button
-          onClick={ignoreAll}
-          disabled={closing}
-          className="btn text-xs text-red-700 border border-red-200 bg-white"
-        >
-          ❌ Ignorar todo
-        </button>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={onCancel}
+              disabled={closing}
+              className="btn text-xs text-red-700 border border-red-200 bg-white px-4 py-2"
+            >
+              Cancelar
+            </button>
+            {output.changes.length > 0 && (
+              <button
+                onClick={onApprove}
+                disabled={closing}
+                className="btn btn-primary text-xs px-4 py-2"
+              >
+                {closing ? "Aplicando…" : "✓ Aprobar plan"}
+              </button>
+            )}
+          </div>
+        </footer>
       </div>
-
-      {error && <p className="text-xs text-red-700 mt-2">⚠️ {error}</p>}
-    </section>
+    </div>
   );
 }
 
 function DiffRow({ label, before, after }: { label: string; before: string | null; after: string | null }) {
-  // Sólo pintamos si hay cambio respecto al actual.
   const beforeStr = before ?? "—";
   const afterStr = after ?? "—";
   const same = beforeStr === afterStr;
   if (same && (before === null && after === null)) return null;
   return (
-    <div className="text-xs mt-0.5 flex gap-1">
+    <div className="text-xs mt-1 flex gap-2">
       <span className="text-neutral-500 w-20 flex-shrink-0">{label}:</span>
       {same ? (
         <span className="text-neutral-500">{afterStr}</span>
