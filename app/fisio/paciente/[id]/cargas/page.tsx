@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { AdaptationEditor } from "@/components/AdaptationEditor";
+import { LoadReviewSuggestionPanel } from "@/components/LoadReviewSuggestionPanel";
 
 export default async function PatientCargasTab({ params }: { params: { id: string } }) {
   const patient = await prisma.patient.findUnique({
@@ -26,7 +27,10 @@ export default async function PatientCargasTab({ params }: { params: { id: strin
   });
 
   return (
-    <div>
+    <div className="space-y-4">
+      {/* Panel IA — bajo demanda; coste = 0 hasta que se pulsa el botón. */}
+      <LoadReviewSuggestionPanel patientId={patient.id} />
+
       <AdaptationEditor
         patientId={patient.id}
         appliedLevelId={patient.appliedLevelId}
