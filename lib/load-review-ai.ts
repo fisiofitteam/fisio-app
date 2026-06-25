@@ -55,28 +55,19 @@ export type LoadReviewOutput = {
 };
 
 function systemPrompt(brief: LoadReviewInput["brief"]): string {
+  // El fisio pega un brief completo. Lo inyectamos tal cual, sin
+  // sub-secciones. Sólo añadimos rol mínimo y el formato de salida obligatorio.
+  const fisioBrief = (brief.methodology || "").trim();
   return [
     "Eres un asistente clínico para un fisioterapeuta especializado en atletas de CrossFit.",
     "Tu trabajo es proponer UN borrador de control de cargas para que el fisio lo revise y apruebe.",
-    "NO eres autónomo: el fisio es quien decide y firma. Tú propones.",
+    "NO eres autónomo: el fisio es quien decide y firma.",
     "",
-    "TONO Y SEGURIDAD:",
-    " - Cauteloso, basado en datos del histórico (no inventes).",
-    " - Si hay señales de riesgo (dolor alto, lesión, mala adherencia), prioriza seguridad sobre progresión.",
-    " - Si no tienes suficientes datos, DILO en 'flags' y propón una opción conservadora.",
-    " - No diagnostiques nuevas patologías. No prescribas medicación.",
+    "─── BRIEF DEL FISIO ───────────────────────────────────",
+    fisioBrief || "(sin brief definido todavía — sé conservador y pide al fisio que añada uno)",
+    "─── FIN DEL BRIEF ─────────────────────────────────────",
     "",
-    "METODOLOGÍA DEL EQUIPO (texto libre del fisio responsable):",
-    brief.methodology?.trim() || "(sin metodología específica definida)",
-    "",
-    "REGLAS DURAS DE SEGURIDAD (NUNCA las saltes):",
-    brief.hardRules?.trim() || "(sin reglas duras definidas)",
-    "",
-    brief.goodExamples?.trim()
-      ? `EJEMPLOS DE PROPUESTAS QUE LE HAN GUSTADO AL FISIO (referencia de estilo):\n${brief.goodExamples.trim()}`
-      : "",
-    "",
-    "FORMATO DE SALIDA:",
+    "FORMATO DE SALIDA (obligatorio):",
     "Devuelve SOLO JSON válido, sin markdown, sin ```. Estructura exacta:",
     `{
   "resumenEstado": "2-3 frases sobre dónde está el paciente HOY",
@@ -85,7 +76,7 @@ function systemPrompt(brief: LoadReviewInput["brief"]): string {
   "flags": ["alerta 1", "alerta 2"],
   "alternativas": ["alternativa A si quiere ser más conservador", "alternativa B si quiere empujar más"]
 }`,
-  ].filter(Boolean).join("\n");
+  ].join("\n");
 }
 
 function userPrompt(input: LoadReviewInput): string {

@@ -21,9 +21,8 @@ export default async function LoadReviewBriefPage() {
       <header>
         <h2 className="text-base font-semibold">🧠 Brief de control de cargas (IA)</h2>
         <p className="text-xs text-neutral-500 mt-1">
-          Esto es lo que la IA usa cuando le pides "💡 Sugerir control" en la ficha de un paciente.
-          La IA NO decide: propone un borrador para que el fisio lo revise y firme. Cuanto más
-          concreta sea esta metodología, mejor saldrá la propuesta.
+          Pega aquí el brief completo que vas a usar como base de la sugerencia IA.
+          La IA NO decide: propone un borrador para que el fisio lo revise y firme.
         </p>
       </header>
       <LoadReviewBriefEditor
