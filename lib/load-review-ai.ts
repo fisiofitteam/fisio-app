@@ -121,8 +121,16 @@ function systemPrompt(brief: LoadReviewInput["brief"]): string {
     fisioBrief || "(sin texto adicional; usa el PDF si lo hay)",
     "─── FIN DEL BRIEF ─────────────────────────────────────",
     "",
-    "FORMATO DE SALIDA (obligatorio):",
-    "Devuelve SOLO JSON válido, sin markdown, sin ```. Estructura exacta:",
+    "FORMATO DE SALIDA (obligatorio y CRÍTICO):",
+    "Devuelve SOLO JSON válido. Sin markdown, sin ```, sin texto antes ni después.",
+    "REGLAS DE FORMATO QUE NUNCA DEBES SALTAR:",
+    " · Escapa cualquier comilla doble DENTRO de un string con \\\" (ej: \"warning\": \"Atento al \\\"clic\\\" del hombro\").",
+    " · NO uses comas finales (trailing commas) antes de } o ].",
+    " · Usa \\n para saltos de línea dentro de strings, nunca saltos reales.",
+    " · No mezcles comillas simples y dobles. Solo dobles.",
+    " · El JSON debe poder pasar JSON.parse() directamente. Si dudas, simplifica el texto antes que arriesgar.",
+    "",
+    "Estructura exacta:",
     `{
   "resumenEstado": "2-3 frases de contexto (cómo está el paciente HOY).",
   "changes": [
@@ -280,11 +288,33 @@ export async function suggestLoadReview(
     .trim();
   const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
 
-  const parsed = tryParseJsonLoose(cleaned);
+  let parsed = tryParseJsonLoose(cleaned);
+
+  // Reintento automático: si no se puede parsear, le pedimos al modelo
+  // que devuelva el mismo contenido pero como JSON válido y compacto.
   if (!parsed) {
-    // Si seguimos sin poder parsear, devolvemos algo útil para depurar.
-    const preview = cleaned.slice(0, 200).replace(/\s+/g, " ");
-    throw new Error(`La IA devolvió respuesta no parseable. Inicio: "${preview}…"`);
+    console.warn("[load-review-ai] JSON inválido, reintentando self-correction…");
+    try {
+      const fixResp = await client().messages.create({
+        model,
+        max_tokens: MAX_OUTPUT_TOKENS,
+        system: "Devuelve SOLO JSON válido en una sola respuesta. Sin texto antes ni después. Sin ```. Escapa correctamente las comillas dobles dentro de strings con \\\". No uses comas finales.",
+        messages: [{
+          role: "user",
+          content: `El siguiente JSON tiene un error de sintaxis. Devuélvemelo arreglado MANTENIENDO el mismo contenido. Solo el JSON, sin nada más:\n\n${cleaned}`,
+        }],
+      });
+      const fixText = fixResp.content.map((b) => (b.type === "text" ? b.text : "")).join("").trim();
+      const fixCleaned = fixText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+      parsed = tryParseJsonLoose(fixCleaned);
+    } catch (e) {
+      console.error("[load-review-ai] self-correction falló:", e);
+    }
+  }
+
+  if (!parsed) {
+    // Si tras todo seguimos sin parsear, devolvemos el raw completo para depurar.
+    throw new Error(`La IA devolvió respuesta no parseable tras reintento. Raw output:\n\n${cleaned.slice(0, 2000)}`);
   }
 
   function normState(v: any): AdaptationState | null {
