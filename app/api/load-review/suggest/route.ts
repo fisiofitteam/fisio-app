@@ -15,9 +15,13 @@ import { getActiveProfessional } from "@/lib/session";
 import { suggestLoadReview, DEFAULT_LOAD_REVIEW_MODEL, type LoadReviewModel } from "@/lib/load-review-ai";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const runtime = "nodejs";
+// La primera llamada con PDF puede tardar bastante porque Anthropic procesa
+// el documento entero (las siguientes van por caché). 300s = máximo Vercel Pro.
+export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
+  try {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -157,4 +161,11 @@ export async function POST(req: NextRequest) {
     inputTokens: result.inputTokens,
     outputTokens: result.outputTokens,
   });
+  } catch (e: any) {
+    console.error("[load-review/suggest] error inesperado:", e?.message, e?.stack);
+    return NextResponse.json(
+      { error: e?.message ?? "Error inesperado generando sugerencia" },
+      { status: 500 },
+    );
+  }
 }

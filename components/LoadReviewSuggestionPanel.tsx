@@ -44,8 +44,18 @@ export function LoadReviewSuggestionPanel({ patientId }: { patientId: string }) 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ patientId, model: modelChoice }),
       });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data?.error || "Error de la IA");
+      // Soporta respuesta sin body (504 timeout de Vercel) o no-JSON.
+      const text = await r.text();
+      let data: any = null;
+      try { data = text ? JSON.parse(text) : null; } catch {}
+      if (!r.ok) {
+        const msg = data?.error
+          ?? (r.status === 504
+                ? "La sugerencia tardó demasiado (timeout). Si tienes un PDF muy grande, la 1ª llamada del día puede pasarse de tiempo; vuelve a intentarlo en 30s y debería ir mucho más rápido (caché)."
+                : `Error ${r.status}${text ? `: ${text.slice(0, 200)}` : ""}`);
+        throw new Error(msg);
+      }
+      if (!data) throw new Error("Respuesta vacía del servidor");
       setRecordId(data.recordId);
       setModel(data.model);
       setOutput(data.output);
