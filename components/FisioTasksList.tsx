@@ -247,7 +247,22 @@ function TaskModal({
   );
   const [recurrenceType, setRecurrenceType] = useState(task?.recurrenceType ?? "none");
   const [recurrenceDay, setRecurrenceDay] = useState<number | "">(task?.recurrenceDay ?? "");
+  // ─── Recurrencia avanzada (estilo Harbiz) — sólo al CREAR (no al editar) ───
+  const [advRepeat, setAdvRepeat] = useState(false);
+  const [advDays, setAdvDays] = useState<Set<number>>(new Set()); // 1..7 ISO
+  const [advInterval, setAdvInterval] = useState<number | "">(1);
+  const [advMode, setAdvMode] = useState<"duration" | "until">("duration");
+  const [advDurationWeeks, setAdvDurationWeeks] = useState<number | "">(1);
+  const [advUntilDate, setAdvUntilDate] = useState("");
   const [saving, setSaving] = useState(false);
+
+  function toggleAdvDay(d: number) {
+    setAdvDays((prev) => {
+      const n = new Set(prev);
+      if (n.has(d)) n.delete(d); else n.add(d);
+      return n;
+    });
+  }
 
   function toggleAssignee(name: string) {
     setAssignedTo((prev) =>
@@ -258,7 +273,8 @@ function TaskModal({
   async function save() {
     if (!title.trim()) return;
     setSaving(true);
-    const payload = {
+    const useAdvanced = !isEdit && advRepeat && advDays.size > 0 && !!dueDate;
+    const payload: any = {
       ...(isEdit && { id: task!.id }),
       title,
       description,
@@ -268,9 +284,22 @@ function TaskModal({
       assignedBy: source === "team" ? assignedBy : null,
       assignedTo: source === "team" && assignedTo.length > 0 ? assignedTo.join(",") : null,
       priority,
-      recurrenceType,
-      recurrenceDay: (recurrenceType === "weekly" || recurrenceType === "monthly") && recurrenceDay !== "" ? Number(recurrenceDay) : null,
+      recurrenceType: useAdvanced ? "none" : recurrenceType,
+      recurrenceDay: useAdvanced
+        ? null
+        : (recurrenceType === "weekly" || recurrenceType === "monthly") && recurrenceDay !== ""
+          ? Number(recurrenceDay)
+          : null,
     };
+    if (useAdvanced) {
+      payload.recurrenceAdvanced = {
+        daysOfWeek: Array.from(advDays).sort(),
+        intervalWeeks: Number(advInterval) || 1,
+        ...(advMode === "duration"
+          ? { durationWeeks: Number(advDurationWeeks) || 1 }
+          : { untilDate: advUntilDate || null }),
+      };
+    }
     await fetch("/api/tasks", {
       method: isEdit ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
@@ -360,53 +389,144 @@ function TaskModal({
             </div>
           </div>
 
-          <div className="border-t border-neutral-100 pt-3">
-            <label className="text-xs text-neutral-500 block mb-1">🔁 Recurrencia</label>
-            <select className="input" value={recurrenceType} onChange={(e) => setRecurrenceType(e.target.value)}>
-              <option value="none">Sin recurrencia</option>
-              <option value="daily">Cada día</option>
-              <option value="weekly">Cada semana</option>
-              <option value="monthly">Cada mes</option>
-            </select>
-            {recurrenceType === "weekly" && (
-              <div className="mt-2">
-                <label className="text-xs text-neutral-500 block mb-1">Día de la semana</label>
-                <div className="flex gap-1">
-                  {DAY_NAMES.slice(1).map((label, i) => {
-                    const dayNum = i + 1;
-                    const active = recurrenceDay === dayNum;
-                    return (
-                      <button
-                        key={i}
-                        onClick={() => setRecurrenceDay(dayNum)}
-                        className={`flex-1 py-2 text-xs rounded ${active ? "bg-neutral-900 text-white" : "bg-neutral-100"}`}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
+          {!isEdit && (
+            <div className="border-t border-neutral-100 pt-3 space-y-2">
+              <div className="flex items-center gap-3">
+                <label className="text-xs text-neutral-700 font-medium">🔁 ¿Quieres repetir esta tarea?</label>
+                <button
+                  type="button"
+                  onClick={() => setAdvRepeat(true)}
+                  className={`px-3 py-1 text-xs rounded-full border ${advRepeat ? "bg-amber-100 border-amber-400 text-amber-900" : "bg-white border-neutral-300 text-neutral-600"}`}
+                >Sí</button>
+                <button
+                  type="button"
+                  onClick={() => setAdvRepeat(false)}
+                  className={`px-3 py-1 text-xs rounded-full border ${!advRepeat ? "bg-neutral-900 border-neutral-900 text-white" : "bg-white border-neutral-300 text-neutral-600"}`}
+                >No</button>
+              </div>
+
+              {advRepeat && (
+                <div className="space-y-3 pl-1">
+                  <div>
+                    <label className="text-xs text-neutral-500 block mb-1">Repetir los días:</label>
+                    <div className="flex gap-1.5">
+                      {DAY_NAMES.slice(1).map((label, i) => {
+                        const d = i + 1;
+                        const active = advDays.has(d);
+                        return (
+                          <button
+                            key={d}
+                            type="button"
+                            onClick={() => toggleAdvDay(d)}
+                            className={`w-9 h-9 rounded-full text-xs font-medium border ${active ? "bg-neutral-900 text-white border-neutral-900" : "bg-white text-neutral-700 border-neutral-300"}`}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-neutral-500 block mb-1">Cada cuántas semanas <span className="text-red-500">*</span></label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={52}
+                      className="input w-24"
+                      value={advInterval}
+                      onChange={(e) => setAdvInterval(e.target.value ? Number(e.target.value) : "")}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="flex items-center gap-2 text-xs">
+                      <input
+                        type="radio"
+                        checked={advMode === "duration"}
+                        onChange={() => setAdvMode("duration")}
+                      />
+                      <span className="text-neutral-700">Durante</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={104}
+                        className="input w-20"
+                        value={advDurationWeeks}
+                        onChange={(e) => setAdvDurationWeeks(e.target.value ? Number(e.target.value) : "")}
+                        disabled={advMode !== "duration"}
+                      />
+                      <span className="text-neutral-700">semanas</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-xs">
+                      <input
+                        type="radio"
+                        checked={advMode === "until"}
+                        onChange={() => setAdvMode("until")}
+                      />
+                      <span className="text-neutral-700">Hasta el día</span>
+                      <input
+                        type="date"
+                        className="input"
+                        value={advUntilDate}
+                        onChange={(e) => setAdvUntilDate(e.target.value)}
+                        disabled={advMode !== "until"}
+                      />
+                    </label>
+                    {advMode === "until" && (
+                      <p className="text-[11px] text-neutral-400 italic">Último día del evento en el calendario.</p>
+                    )}
+                  </div>
+
+                  {advDays.size === 0 && (
+                    <p className="text-[11px] text-amber-700">Selecciona al menos un día de la semana.</p>
+                  )}
+                  {!dueDate && (
+                    <p className="text-[11px] text-amber-700">Pon una fecha objetivo arriba como punto de partida.</p>
+                  )}
                 </div>
-              </div>
-            )}
-            {recurrenceType === "monthly" && (
-              <div className="mt-2">
-                <label className="text-xs text-neutral-500 block mb-1">Día del mes (1-31)</label>
-                <input
-                  type="number"
-                  className="input"
-                  min={1}
-                  max={31}
-                  value={recurrenceDay}
-                  onChange={(e) => setRecurrenceDay(e.target.value ? Number(e.target.value) : "")}
-                />
-              </div>
-            )}
-            {recurrenceType !== "none" && (
-              <p className="text-xs text-neutral-400 mt-2 italic">
-                Al completar esta tarea, se creará una nueva copia con la siguiente fecha. Mantendrás el historial.
-              </p>
-            )}
-          </div>
+              )}
+            </div>
+          )}
+
+          {isEdit && (
+            <div className="border-t border-neutral-100 pt-3">
+              <label className="text-xs text-neutral-500 block mb-1">🔁 Recurrencia (legacy)</label>
+              <select className="input" value={recurrenceType} onChange={(e) => setRecurrenceType(e.target.value)}>
+                <option value="none">Sin recurrencia</option>
+                <option value="daily">Cada día</option>
+                <option value="weekly">Cada semana</option>
+                <option value="monthly">Cada mes</option>
+              </select>
+              {recurrenceType === "weekly" && (
+                <div className="mt-2">
+                  <label className="text-xs text-neutral-500 block mb-1">Día de la semana</label>
+                  <div className="flex gap-1">
+                    {DAY_NAMES.slice(1).map((label, i) => {
+                      const dayNum = i + 1;
+                      const active = recurrenceDay === dayNum;
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => setRecurrenceDay(dayNum)}
+                          className={`flex-1 py-2 text-xs rounded ${active ? "bg-neutral-900 text-white" : "bg-neutral-100"}`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {recurrenceType === "monthly" && (
+                <div className="mt-2">
+                  <label className="text-xs text-neutral-500 block mb-1">Día del mes (1-31)</label>
+                  <input type="number" className="input" min={1} max={31} value={recurrenceDay}
+                    onChange={(e) => setRecurrenceDay(e.target.value ? Number(e.target.value) : "")} />
+                </div>
+              )}
+            </div>
+          )}
 
           <button onClick={save} disabled={!title.trim() || saving} className="btn btn-primary w-full">
             {saving ? "Guardando..." : isEdit ? "Guardar cambios" : "Crear tarea"}
