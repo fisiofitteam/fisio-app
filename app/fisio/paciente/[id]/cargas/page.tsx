@@ -2,12 +2,14 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { AdaptationEditor } from "@/components/AdaptationEditor";
 import { LoadReviewSuggestionPanel } from "@/components/LoadReviewSuggestionPanel";
+import { PatientCategoryLevelsPanel } from "@/components/PatientCategoryLevelsPanel";
 
 export default async function PatientCargasTab({ params }: { params: { id: string } }) {
   const patient = await prisma.patient.findUnique({
     where: { id: params.id },
     include: {
       adaptations: true,
+      categoryLevels: { include: { category: true, categoryLevel: true } },
     },
   });
   if (!patient) notFound();
@@ -16,24 +18,41 @@ export default async function PatientCargasTab({ params }: { params: { id: strin
     include: { category: true },
     orderBy: [{ category: { name: "asc" } }, { displayName: "asc" }],
   });
-
   const categories = await prisma.movementCategory.findMany({
-    orderBy: { name: "asc" },
-  });
-
-  const profiles = await prisma.clinicalProfile.findMany({
     include: { levels: { orderBy: { order: "asc" } } },
     orderBy: { name: "asc" },
   });
 
+  // Catálogo solo de categorías que tienen niveles definidos.
+  const catalog = categories
+    .filter((c) => c.levels.length > 0)
+    .map((c) => ({
+      categoryId: c.id,
+      categoryName: c.name,
+      levels: c.levels.map((l) => ({ id: l.id, name: l.name, description: l.description, order: l.order })),
+    }));
+
+  const initialSelections = catalog.map((c) => ({
+    categoryId: c.categoryId,
+    categoryLevelId: patient.categoryLevels.find((s) => s.categoryId === c.categoryId)?.categoryLevelId ?? null,
+  }));
+
+  // Sistema antiguo de Profile/Level lo mantenemos por compat pero ya NO lo
+  // renderizamos. Quedará desactivado en UI hasta limpiar todo en fase 2.
+  const profiles: any[] = [];
+
   return (
     <div className="space-y-4">
-      {/* Panel IA — bajo demanda; coste = 0 hasta que se pulsa el botón. */}
       <LoadReviewSuggestionPanel patientId={patient.id} />
+      <PatientCategoryLevelsPanel
+        patientId={patient.id}
+        catalog={catalog}
+        initialSelections={initialSelections}
+      />
 
       <AdaptationEditor
         patientId={patient.id}
-        appliedLevelId={patient.appliedLevelId}
+        appliedLevelId={null}
         existing={patient.adaptations.map((a) => ({
           movementId: a.movementId,
           state: a.state as "OK" | "CONDITIONAL" | "BLOCKED",
@@ -48,13 +67,8 @@ export default async function PatientCargasTab({ params }: { params: { id: strin
           categoryName: m.category.name,
         }))}
         categories={categories.map((c) => ({ id: c.id, name: c.name }))}
-        profiles={profiles.map((p) => ({
-          id: p.id,
-          name: p.name,
-          levels: p.levels.map((l) => ({ id: l.id, name: l.name, order: l.order })),
-        }))}
+        profiles={profiles}
       />
-
     </div>
   );
 }

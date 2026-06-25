@@ -1,14 +1,3 @@
-/**
- * Genera una propuesta de control de cargas con IA para un paciente.
- *
- * POST body: { patientId: string, model?: "claude-sonnet-4-6" | "claude-opus-4-7" }
- *  → { recordId, output, model, inputTokens, outputTokens }
- *
- * Persiste el LoadReviewRecord con la sugerencia (sin decisión aún).
- * El paso de "aplicar/editar/ignorar" lo cierra /api/load-review/record.
- *
- * Solo CEO, head_success y fisio asignado al paciente pueden pedirlo.
- */
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
@@ -16,182 +5,176 @@ import { suggestLoadReview, DEFAULT_LOAD_REVIEW_MODEL, type LoadReviewModel } fr
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-// Plan Hobby: máximo 60s. Si la primera llamada con PDF se acerca al límite,
-// la siguiente ya va por caché y es 5-10x más rápida.
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   try {
-  const user = await getActiveProfessional();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const user = await getActiveProfessional();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const data = await req.json().catch(() => ({}));
-  const patientId = typeof data?.patientId === "string" ? data.patientId : "";
-  const modelIn = typeof data?.model === "string" ? data.model : "";
-  const model: LoadReviewModel = modelIn === "claude-opus-4-7" ? "claude-opus-4-7" : DEFAULT_LOAD_REVIEW_MODEL;
-  if (!patientId) return NextResponse.json({ error: "patientId requerido" }, { status: 400 });
+    const data = await req.json().catch(() => ({}));
+    const patientId = typeof data?.patientId === "string" ? data.patientId : "";
+    const modelIn = typeof data?.model === "string" ? data.model : "";
+    const model: LoadReviewModel = modelIn === "claude-opus-4-7" ? "claude-opus-4-7" : DEFAULT_LOAD_REVIEW_MODEL;
+    if (!patientId) return NextResponse.json({ error: "patientId requerido" }, { status: 400 });
 
-  // Acceso: managers o el fisio asignado.
-  const patient = await prisma.patient.findUnique({
-    where: { id: patientId },
-    select: {
-      id: true, fullName: true, diagnosis: true, bodyZone: true,
-      programType: true, programStartDate: true,
-      anamnesisCallNotes: true, anamnesisData: true,
-      assignedProfessionalId: true,
-    },
-  });
-  if (!patient) return NextResponse.json({ error: "Paciente no encontrado" }, { status: 404 });
-
-  const allowed = user.isManager || patient.assignedProfessionalId === user.id;
-  if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-
-  // Brief (singleton, sembrar vacío si no existe).
-  const brief = await prisma.loadReviewBrief.upsert({
-    where: { id: "singleton" },
-    create: { id: "singleton" },
-    update: {},
-  });
-
-  // Histórico reciente (últimas 4 semanas).
-  const fourWeeksAgo = new Date();
-  fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
-
-  // Estado actual del control de cargas + catálogo de movimientos.
-  const [adaptationsRaw, catalogRaw] = await Promise.all([
-    prisma.patientAdaptation.findMany({
-      where: { patientId },
-      include: { movement: { include: { category: true } } },
-    }),
-    prisma.movement.findMany({
-      include: { category: true },
-      orderBy: [{ category: { name: "asc" } }, { displayName: "asc" }],
-    }),
-  ]);
-
-  const [sessionsRaw, metricsRaw, wodsRaw] = await Promise.all([
-    prisma.programSession.findMany({
-      where: {
-        assignment: { patientId },
-        scheduledDate: { gte: fourWeeksAgo },
+    const patient = await prisma.patient.findUnique({
+      where: { id: patientId },
+      select: {
+        id: true, fullName: true, diagnosis: true, bodyZone: true,
+        programType: true, programStartDate: true,
+        anamnesisCallNotes: true, anamnesisData: true,
+        assignedProfessionalId: true,
       },
-      include: { assignment: { include: { program: true } } },
-      orderBy: { scheduledDate: "asc" },
-      take: 60,
-    }),
-    prisma.metricEntry.findMany({
-      where: { metric: { patientId }, recordedAt: { gte: fourWeeksAgo } },
-      include: { metric: { select: { key: true } } },
-      orderBy: { recordedAt: "asc" },
-      take: 200,
-    }),
-    prisma.wodLog.findMany({
-      where: { patientId, submittedAt: { gte: fourWeeksAgo } },
-      orderBy: { submittedAt: "asc" },
-      take: 30,
-    }),
-  ]);
+    });
+    if (!patient) return NextResponse.json({ error: "Paciente no encontrado" }, { status: 404 });
+    const allowed = user.isManager || patient.assignedProfessionalId === user.id;
+    if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  // Semana en programa.
-  let weekInProgram: number | null = null;
-  if (patient.programStartDate) {
-    const diffMs = Date.now() - patient.programStartDate.getTime();
-    weekInProgram = Math.max(1, Math.floor(diffMs / (7 * 86400 * 1000)) + 1);
-  }
+    const brief = await prisma.loadReviewBrief.upsert({
+      where: { id: "singleton" },
+      create: { id: "singleton" },
+      update: {},
+    });
 
-  // anamnesisData puede venir como objeto (Postgres Json) o string (legacy).
-  let anamnesisData: Record<string, any> | null = null;
-  if (patient.anamnesisData) {
-    if (typeof patient.anamnesisData === "string") {
-      try { anamnesisData = JSON.parse(patient.anamnesisData); } catch { anamnesisData = null; }
-    } else if (typeof patient.anamnesisData === "object") {
-      anamnesisData = patient.anamnesisData as any;
+    // Catálogo: categorías que TIENEN niveles definidos.
+    const categories = await prisma.movementCategory.findMany({
+      include: {
+        levels: { orderBy: { order: "asc" }, select: { id: true, name: true, description: true, order: true } },
+      },
+      orderBy: { name: "asc" },
+    });
+    const catalog = categories
+      .filter((c) => c.levels.length > 0)
+      .map((c) => ({
+        categoryId: c.id,
+        categoryName: c.name,
+        levels: c.levels,
+      }));
+    if (catalog.length === 0) {
+      return NextResponse.json({
+        error: "No hay niveles definidos en el catálogo. Ve a Biblioteca → Niveles por categoría y crea al menos uno.",
+      }, { status: 400 });
     }
-  }
 
-  let result;
-  try {
-    result = await suggestLoadReview(
-      {
-        patient: {
-          fullName: patient.fullName,
-          diagnosis: patient.diagnosis,
-          bodyZone: patient.bodyZone,
-          programType: patient.programType,
-          weekInProgram,
+    // Selecciones actuales del paciente (rellenamos null para categorías sin asignar).
+    const currentSel = await prisma.patientCategoryLevel.findMany({
+      where: { patientId },
+      include: { category: true, categoryLevel: true },
+    });
+    const currentByCat = new Map(currentSel.map((s) => [s.categoryId, s]));
+    const currentSelections = catalog.map((c) => {
+      const cur = currentByCat.get(c.categoryId);
+      return {
+        categoryId: c.categoryId,
+        categoryName: c.categoryName,
+        levelId: cur?.categoryLevelId ?? null,
+        levelName: cur?.categoryLevel?.name ?? null,
+      };
+    });
+
+    // Historia 4 semanas.
+    const fourWeeksAgo = new Date();
+    fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
+    const [sessionsRaw, metricsRaw, wodsRaw] = await Promise.all([
+      prisma.programSession.findMany({
+        where: { assignment: { patientId }, scheduledDate: { gte: fourWeeksAgo } },
+        include: { assignment: { include: { program: true } } },
+        orderBy: { scheduledDate: "asc" },
+        take: 40,
+      }),
+      prisma.metricEntry.findMany({
+        where: { metric: { patientId }, recordedAt: { gte: fourWeeksAgo } },
+        include: { metric: { select: { key: true } } },
+        orderBy: { recordedAt: "asc" },
+        take: 80,
+      }),
+      prisma.wodLog.findMany({
+        where: { patientId, submittedAt: { gte: fourWeeksAgo } },
+        orderBy: { submittedAt: "asc" },
+        take: 10,
+      }),
+    ]);
+
+    let weekInProgram: number | null = null;
+    if (patient.programStartDate) {
+      const diffMs = Date.now() - patient.programStartDate.getTime();
+      weekInProgram = Math.max(1, Math.floor(diffMs / (7 * 86400 * 1000)) + 1);
+    }
+    let anamnesisData: Record<string, any> | null = null;
+    if (patient.anamnesisData) {
+      if (typeof patient.anamnesisData === "string") {
+        try { anamnesisData = JSON.parse(patient.anamnesisData); } catch {}
+      } else if (typeof patient.anamnesisData === "object") {
+        anamnesisData = patient.anamnesisData as any;
+      }
+    }
+
+    let result;
+    try {
+      result = await suggestLoadReview(
+        {
+          patient: {
+            fullName: patient.fullName,
+            diagnosis: patient.diagnosis,
+            bodyZone: patient.bodyZone,
+            programType: patient.programType,
+            weekInProgram,
+          },
+          brief: {
+            methodology: brief.methodology,
+            pdfUrl: brief.briefPdfUrl,
+            pdfName: brief.briefPdfName,
+          },
+          anamnesisCallNotes: patient.anamnesisCallNotes,
+          anamnesisData,
+          currentSelections,
+          catalog,
+          history: {
+            recentSessions: sessionsRaw.map((s) => ({
+              date: s.scheduledDate.toISOString().slice(0, 10),
+              completed: !!s.completedAt,
+              programName: s.assignment.program.name,
+            })),
+            recentMetrics: metricsRaw.map((m) => ({
+              date: m.recordedAt.toISOString().slice(0, 10),
+              key: m.metric.key,
+              value: m.value,
+            })),
+            recentWodLogs: wodsRaw.map((w) => ({
+              date: w.submittedAt.toISOString().slice(0, 10),
+              rpe: w.rpe ?? null,
+              painScore: w.painScore ?? null,
+              notes: w.notes ?? null,
+            })),
+          },
         },
-        brief: {
-          methodology: brief.methodology,
-          hardRules: brief.hardRules,
-          goodExamples: brief.goodExamples,
-          pdfUrl: brief.briefPdfUrl,
-          pdfName: brief.briefPdfName,
-        },
-        anamnesisCallNotes: patient.anamnesisCallNotes,
-        anamnesisData,
-        currentAdaptations: adaptationsRaw.map((a) => ({
-          movementId: a.movementId,
-          movementName: a.movement.displayName,
-          category: a.movement.category.name,
-          state: a.state as any,
-          loadConstraint: a.loadConstraint,
-          substitutionText: a.substitutionText,
-          physioWarning: a.physioWarning,
-        })),
-        movementCatalog: catalogRaw.map((m) => ({
-          id: m.id,
-          name: m.displayName,
-          category: m.category.name,
-        })),
-        history: {
-          recentSessions: sessionsRaw.map((s) => ({
-            date: s.scheduledDate.toISOString().slice(0, 10),
-            completed: !!s.completedAt,
-            programName: s.assignment.program.name,
-          })),
-          recentMetrics: metricsRaw.map((m) => ({
-            date: m.recordedAt.toISOString().slice(0, 10),
-            key: m.metric.key,
-            value: m.value,
-          })),
-          recentWodLogs: wodsRaw.map((w) => ({
-            date: w.submittedAt.toISOString().slice(0, 10),
-            rpe: w.rpe ?? null,
-            painScore: w.painScore ?? null,
-            notes: w.notes ?? null,
-          })),
-        },
+        model,
+      );
+    } catch (e: any) {
+      return NextResponse.json({ error: e?.message ?? "Error generando sugerencia" }, { status: 502 });
+    }
+
+    const record = await prisma.loadReviewRecord.create({
+      data: {
+        patientId,
+        professionalId: user.id,
+        aiModel: model,
+        aiSuggestion: JSON.stringify(result.output),
+        aiInputTokens: result.inputTokens ?? null,
+        aiOutputTokens: result.outputTokens ?? null,
       },
+    });
+
+    return NextResponse.json({
+      recordId: record.id,
       model,
-    );
+      output: result.output,
+      inputTokens: result.inputTokens,
+      outputTokens: result.outputTokens,
+    });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "Error generando sugerencia" }, { status: 502 });
-  }
-
-  // Persistir registro (sin decisión aún).
-  const record = await prisma.loadReviewRecord.create({
-    data: {
-      patientId,
-      professionalId: user.id,
-      aiModel: model,
-      aiSuggestion: JSON.stringify(result.output),
-      aiInputTokens: result.inputTokens ?? null,
-      aiOutputTokens: result.outputTokens ?? null,
-    },
-  });
-
-  return NextResponse.json({
-    recordId: record.id,
-    model,
-    output: result.output,
-    inputTokens: result.inputTokens,
-    outputTokens: result.outputTokens,
-  });
-  } catch (e: any) {
-    console.error("[load-review/suggest] error inesperado:", e?.message, e?.stack);
-    return NextResponse.json(
-      { error: e?.message ?? "Error inesperado generando sugerencia" },
-      { status: 500 },
-    );
+    console.error("[load-review/suggest] error:", e?.message);
+    return NextResponse.json({ error: e?.message ?? "Error inesperado" }, { status: 500 });
   }
 }

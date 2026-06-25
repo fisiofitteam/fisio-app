@@ -1,42 +1,24 @@
 /**
- * Generación de propuestas de control de cargas con Anthropic.
+ * Sugerencia IA del control de cargas: selecciona UN NIVEL por cada CATEGORÍA
+ * del catálogo. Output muy compacto (cabe en 60s plan Hobby holgadamente).
  *
- * Solo se importa desde el server (lee process.env y llama a la API).
- *
- * - Default Sonnet 4.6 (más barato, suficiente para 90% casos).
- * - Botón opcional Opus 4.7 para casos confusos.
- * - Output JSON estructurado para pintar UI consistente.
+ * - Sonnet 4.6 default. Opus 4.7 opcional para "segunda opinión".
+ * - Soporta PDF adjunto (con prompt caching de Anthropic).
  */
 import Anthropic from "@anthropic-ai/sdk";
 
 export type LoadReviewModel = "claude-sonnet-4-6" | "claude-opus-4-7";
 export const DEFAULT_LOAD_REVIEW_MODEL: LoadReviewModel = "claude-sonnet-4-6";
-// Sonnet 4.6 genera ~100 tokens/s. Con plan Hobby de Vercel (60s timeout)
-// caben ~6000 tokens útiles. Si actualizas a Pro (300s), sube esto a 16000+.
-const MAX_OUTPUT_TOKENS = 6000;
+const MAX_OUTPUT_TOKENS = 2500;
 
 let _client: Anthropic | null = null;
 function client(): Anthropic {
   if (_client) return _client;
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    throw new Error("ANTHROPIC_API_KEY no configurada en Vercel.");
-  }
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY no configurada en Vercel.");
   _client = new Anthropic({ apiKey });
   return _client;
 }
-
-export type AdaptationState = "OK" | "CONDITIONAL" | "BLOCKED";
-
-export type CurrentAdaptation = {
-  movementId: string;
-  movementName: string;
-  category: string;
-  state: AdaptationState;
-  loadConstraint: string | null;
-  substitutionText: string | null;
-  physioWarning: string | null;
-};
 
 export type LoadReviewInput = {
   patient: {
@@ -48,18 +30,24 @@ export type LoadReviewInput = {
   };
   brief: {
     methodology: string;
-    hardRules: string;
-    goodExamples: string;
     pdfUrl?: string | null;
     pdfName?: string | null;
   };
   anamnesisCallNotes: string | null;
   anamnesisData: Record<string, any> | null;
-  // Estado actual del control de cargas: lo que ya tiene marcado el fisio.
-  currentAdaptations: CurrentAdaptation[];
-  // Catálogo de movimientos disponibles (id+nombre+categoría) por si la IA
-  // quiere mover algo de OK a CONDITIONAL/BLOCKED que aún no estaba.
-  movementCatalog: Array<{ id: string; name: string; category: string }>;
+  // Estado actual: por cada categoría, qué nivel tiene (o null).
+  currentSelections: Array<{
+    categoryId: string;
+    categoryName: string;
+    levelId: string | null;
+    levelName: string | null;
+  }>;
+  // Catálogo: por cada categoría, los niveles disponibles que puede elegir.
+  catalog: Array<{
+    categoryId: string;
+    categoryName: string;
+    levels: Array<{ id: string; name: string; description: string | null; order: number }>;
+  }>;
   history: {
     recentSessions: Array<{ date: string; completed: boolean; programName: string }>;
     recentMetrics: Array<{ date: string; key: string; value: number }>;
@@ -67,99 +55,59 @@ export type LoadReviewInput = {
   };
 };
 
-// Cambio concreto a aplicar sobre UN movimiento del paciente.
-export type AdaptationChange = {
-  movementId: string;
-  movementName: string;
-  // Estado actual del paciente (para que la UI lo muestre).
-  current: {
-    state: AdaptationState | null;       // null = aún no había adaptación
-    loadConstraint: string | null;
-    substitutionText: string | null;
-    physioWarning: string | null;
-  };
-  // Lo que propone la IA. null = no toca ese campo.
-  proposed: {
-    state: AdaptationState | null;
-    loadConstraint: string | null;
-    substitutionText: string | null;
-    physioWarning: string | null;
-  };
-  reason: string;                        // por qué este cambio (1-2 frases).
+export type LevelSelection = {
+  categoryId: string;
+  categoryName: string;
+  currentLevelId: string | null;
+  currentLevelName: string | null;
+  proposedLevelId: string;
+  proposedLevelName: string;
+  reason: string;
 };
 
 export type LoadReviewOutput = {
-  resumenEstado: string;                 // 2-3 frases de contexto del paciente.
-  changes: AdaptationChange[];           // cambios concretos por movimiento.
-  flags: string[];                       // alertas globales (dolor alto, plateau, baja adherencia…).
-  noChangeReason?: string;               // si changes está vacío: por qué (ej: "mantener semana de consolidación").
+  resumenEstado: string;
+  selections: LevelSelection[];
+  flags: string[];
 };
 
 function systemPrompt(brief: LoadReviewInput["brief"]): string {
   const fisioBrief = (brief.methodology || "").trim();
   return [
     "Eres un asistente clínico para un fisioterapeuta especializado en atletas de CrossFit.",
-    "Tu trabajo: modificar el CONTROL DE CARGAS del paciente proponiendo cambios CONCRETOS sobre ejercicios específicos.",
-    "NO das consejos en texto libre. NO eres autónomo: el fisio revisa y aplica.",
-    "",
-    "QUÉ PUEDES CAMBIAR de cada ejercicio:",
-    " - state: 'OK' (puede hacerlo tal cual) | 'CONDITIONAL' (con condiciones/sustitución parcial) | 'BLOCKED' (no puede hacerlo)",
-    " - loadConstraint: carga máxima permitida en formato libre (ej: '60kg', 'Max 70% 1RM', 'Solo barra vacía')",
-    " - substitutionText: ejercicio alternativo si CONDITIONAL/BLOCKED (ej: 'Z-Press en lugar de Push Press, 3x6 @ 20kg')",
-    " - physioWarning: nota corta de cuidado (ej: 'Mantener escápula deprimida', 'Dolor > 4 → parar')",
-    "",
-    "REGLAS DE OUTPUT (TIENES UN PRESUPUESTO DE TOKENS LIMITADO):",
-    " 1. Sólo incluye en 'changes' los movimientos que CAMBIAN respecto a lo actual.",
-    " 2. PRIORIZA: incluye primero lo más crítico (BLOCKED por seguridad, cambios de estado importantes). Si te quedas sin espacio, mejor que sobren movimientos no incluidos a que el JSON salga truncado.",
-    " 3. Textos ultra-cortos: substitutionText ≤80 chars, physioWarning ≤80 chars, reason ≤80 chars. SIN explicaciones largas.",
-    " 4. resumenEstado: máximo 2 frases (≤200 chars en total).",
-    " 5. Si crees que el paciente no necesita cambios esta semana, devuelve changes=[] y rellena 'noChangeReason' con 1 frase.",
-    " 6. Para cada cambio: pon en 'current' lo que tiene HOY, y en 'proposed' lo que sugieres. Si un campo no cambia, déjalo igual en current y proposed.",
-    " 7. SI HAY DOLOR AGUDO NUEVO o flag clínica seria → propón BLOCKED + flags=[advertencia].",
-    " 8. CRÍTICO: tu respuesta debe ser un JSON COMPLETO y válido. Mejor 25 cambios bien escritos que 50 truncados a la mitad.",
+    "Tu única tarea: elegir UN NIVEL por cada CATEGORÍA del catálogo, basándote en el perfil clínico del paciente.",
+    "NO inventes niveles. SOLO elige entre los niveles disponibles que te paso para cada categoría.",
+    "NO eres autónomo: el fisio revisa el plan y aprueba.",
     "",
     brief.pdfUrl
-      ? "El fisio ha adjuntado un PDF con su metodología completa. Es la referencia principal: léelo y aplícalo. El texto extra de abajo lo complementa pero el PDF manda."
+      ? "Hay un PDF adjunto con la metodología completa del fisio. Es la referencia principal; léelo y aplícalo."
       : "",
     "",
-    "─── BRIEF DEL FISIO ───────────────────────────────────",
-    fisioBrief || "(sin texto adicional; usa el PDF si lo hay)",
-    "─── FIN DEL BRIEF ─────────────────────────────────────",
+    "─── BRIEF DEL FISIO ───",
+    fisioBrief || "(sin texto adicional)",
+    "─── FIN ───",
     "",
-    "FORMATO DE SALIDA (obligatorio y CRÍTICO):",
-    "Devuelve SOLO JSON válido. Sin markdown, sin ```, sin texto antes ni después.",
-    "REGLAS DE FORMATO QUE NUNCA DEBES SALTAR:",
-    " · Escapa cualquier comilla doble DENTRO de un string con \\\" (ej: \"warning\": \"Atento al \\\"clic\\\" del hombro\").",
-    " · NO uses comas finales (trailing commas) antes de } o ].",
-    " · Usa \\n para saltos de línea dentro de strings, nunca saltos reales.",
-    " · No mezcles comillas simples y dobles. Solo dobles.",
-    " · El JSON debe poder pasar JSON.parse() directamente. Si dudas, simplifica el texto antes que arriesgar.",
+    "REGLAS:",
+    " 1. Para cada categoría del catálogo, propón UN nivel (de los disponibles para esa categoría).",
+    " 2. Si crees que el nivel actual ya es correcto, vuelve a proponerlo (no es problema; el fisio lo verá igual).",
+    " 3. Si hay dolor agudo / flag clínica seria → propón el nivel MÁS conservador disponible y márcalo en flags.",
+    " 4. 'reason' de cada selección debe ser CORTO (≤120 chars).",
+    " 5. 'resumenEstado' debe ser CORTO (≤300 chars).",
     "",
-    "Estructura exacta:",
+    "FORMATO DE SALIDA (obligatorio):",
+    "Devuelve SOLO JSON válido, sin markdown, sin ```. Estructura exacta:",
     `{
-  "resumenEstado": "2-3 frases de contexto (cómo está el paciente HOY).",
-  "changes": [
-    {
-      "movementId": "<id exacto del catálogo o del estado actual>",
-      "movementName": "<nombre del movimiento>",
-      "current": {
-        "state": "OK"|"CONDITIONAL"|"BLOCKED"|null,
-        "loadConstraint": "..." | null,
-        "substitutionText": "..." | null,
-        "physioWarning": "..." | null
-      },
-      "proposed": {
-        "state": "OK"|"CONDITIONAL"|"BLOCKED"|null,
-        "loadConstraint": "..." | null,
-        "substitutionText": "..." | null,
-        "physioWarning": "..." | null
-      },
-      "reason": "1-2 frases de por qué"
-    }
+  "resumenEstado": "2 frases sobre dónde está el paciente HOY",
+  "selections": [
+    { "categoryId": "<id exacto>", "categoryName": "<nombre>", "proposedLevelId": "<id exacto>", "proposedLevelName": "<nombre>", "reason": "1 frase" }
   ],
-  "flags": ["alerta clínica 1", "alerta 2"],
-  "noChangeReason": "solo si changes está vacío: por qué"
+  "flags": ["alerta 1"]
 }`,
+    "",
+    "REGLAS DE FORMATO JSON:",
+    " · Escapa comillas dobles dentro de strings con \\\".",
+    " · Sin trailing commas.",
+    " · Solo comillas dobles.",
   ].filter(Boolean).join("\n");
 }
 
@@ -168,80 +116,59 @@ function userPrompt(input: LoadReviewInput): string {
   lines.push(`PACIENTE: ${input.patient.fullName}`);
   if (input.patient.programType) lines.push(`Programa: ${input.patient.programType}`);
   if (input.patient.bodyZone) lines.push(`Zona afectada: ${input.patient.bodyZone}`);
-  if (input.patient.diagnosis) lines.push(`Diagnóstico/motivo: ${input.patient.diagnosis}`);
+  if (input.patient.diagnosis) lines.push(`Diagnóstico: ${input.patient.diagnosis}`);
   if (input.patient.weekInProgram != null) lines.push(`Semana en programa: ${input.patient.weekInProgram}`);
   lines.push("");
 
   if (input.anamnesisCallNotes) {
-    lines.push("RESUMEN DE LA LLAMADA DE ANAMNESIS:");
-    lines.push(input.anamnesisCallNotes.slice(0, 4000));
+    lines.push("RESUMEN LLAMADA DE ANAMNESIS:");
+    lines.push(input.anamnesisCallNotes.slice(0, 3500));
     lines.push("");
   }
-
   if (input.anamnesisData && Object.keys(input.anamnesisData).length > 0) {
-    lines.push("FORMULARIO DE ONBOARDING (anamnesis del paciente):");
+    lines.push("FORMULARIO ONBOARDING:");
     for (const [k, v] of Object.entries(input.anamnesisData)) {
       const valStr = typeof v === "object" ? JSON.stringify(v) : String(v);
-      lines.push(`  · ${k}: ${valStr.slice(0, 300)}`);
+      lines.push(`  · ${k}: ${valStr.slice(0, 200)}`);
     }
     lines.push("");
   }
 
-  // Histórico reciente
-  const sessions = input.history.recentSessions.slice(-20);
-  if (sessions.length > 0) {
-    lines.push("SESIONES RECIENTES (más antigua → más reciente):");
-    for (const s of sessions) {
-      lines.push(`  · ${s.date} · ${s.programName} · ${s.completed ? "✓ completada" : "✗ NO completada"}`);
-    }
-    const total = sessions.length;
-    const done = sessions.filter((s) => s.completed).length;
-    lines.push(`(Adherencia últimas ${total}: ${done}/${total} = ${Math.round((done / total) * 100)}%)`);
-    lines.push("");
+  // Historia compacta
+  const s = input.history.recentSessions.slice(-10);
+  if (s.length > 0) {
+    const done = s.filter((x) => x.completed).length;
+    lines.push(`SESIONES ÚLT (${s.length}): adherencia ${done}/${s.length}.`);
   }
-
-  const metrics = input.history.recentMetrics.slice(-40);
-  if (metrics.length > 0) {
-    lines.push("MÉTRICAS RECIENTES (clave → valor):");
-    for (const m of metrics) {
-      lines.push(`  · ${m.date} · ${m.key}=${m.value}`);
-    }
-    lines.push("");
+  const m = input.history.recentMetrics.slice(-20);
+  if (m.length > 0) {
+    lines.push("MÉTRICAS RECIENTES:");
+    for (const x of m) lines.push(`  · ${x.date} ${x.key}=${x.value}`);
   }
-
-  const wods = input.history.recentWodLogs.slice(-10);
-  if (wods.length > 0) {
-    lines.push("WODS RECIENTES ADAPTADOS:");
-    for (const w of wods) {
-      lines.push(`  · ${w.date} · RPE=${w.rpe ?? "—"} · dolor=${w.painScore ?? "—"}${w.notes ? ` · notas: ${w.notes.slice(0, 120)}` : ""}`);
-    }
-    lines.push("");
-  }
-
-  // Estado actual del control de cargas (lo que el fisio ya tiene marcado).
-  if (input.currentAdaptations.length > 0) {
-    lines.push("ESTADO ACTUAL DEL CONTROL DE CARGAS (lo que tiene HOY):");
-    for (const a of input.currentAdaptations) {
-      const parts = [`${a.movementName} [${a.movementId}]`, `(${a.category})`, `state=${a.state}`];
-      if (a.loadConstraint) parts.push(`load="${a.loadConstraint}"`);
-      if (a.substitutionText) parts.push(`subst="${a.substitutionText}"`);
-      if (a.physioWarning) parts.push(`warn="${a.physioWarning}"`);
-      lines.push("  · " + parts.join(" · "));
-    }
-    lines.push("");
-  } else {
-    lines.push("ESTADO ACTUAL: no hay adaptaciones aún. Todo se considera OK por defecto.");
-    lines.push("");
-  }
-
-  lines.push("CATÁLOGO DE MOVIMIENTOS DISPONIBLES (usa estos ids exactos si añades nuevas restricciones):");
-  for (const m of input.movementCatalog) {
-    lines.push(`  · [${m.id}] ${m.name} (${m.category})`);
+  const w = input.history.recentWodLogs.slice(-5);
+  if (w.length > 0) {
+    lines.push("WODs:");
+    for (const x of w) lines.push(`  · ${x.date} RPE=${x.rpe ?? "-"} dolor=${x.painScore ?? "-"}`);
   }
   lines.push("");
 
-  lines.push("Genera ahora los cambios concretos al control de cargas en el JSON especificado.");
-  lines.push("Recuerda: SOLO incluye en 'changes' los movimientos que CAMBIAN. Si no cambia nada, changes=[] + noChangeReason.");
+  // Estado actual
+  lines.push("ESTADO ACTUAL POR CATEGORÍA:");
+  for (const c of input.currentSelections) {
+    lines.push(`  · ${c.categoryName} [${c.categoryId}] → ${c.levelName ?? "(sin asignar)"}`);
+  }
+  lines.push("");
+
+  // Catálogo
+  lines.push("CATÁLOGO DE NIVELES DISPONIBLES (usa los IDs exactos en tu respuesta):");
+  for (const cat of input.catalog) {
+    lines.push(`Categoría "${cat.categoryName}" [${cat.categoryId}]:`);
+    for (const lv of cat.levels) {
+      lines.push(`  · [${lv.id}] ${lv.name}${lv.description ? ` — ${lv.description.slice(0, 80)}` : ""}`);
+    }
+  }
+  lines.push("");
+  lines.push("Devuelve el JSON con UN nivel propuesto por cada categoría del catálogo.");
   return lines.join("\n");
 }
 
@@ -263,9 +190,6 @@ export async function suggestLoadReview(
   const sys = systemPrompt(input.brief);
   const usr = userPrompt(input);
 
-  // Construir el bloque de mensaje del usuario. Si hay PDF adjunto, va como
-  // primer bloque "document" con cache ephemeral → Anthropic reutiliza la
-  // computación del PDF entre llamadas (10% del coste tras la primera).
   const userBlocks: any[] = [];
   if (input.brief.pdfUrl) {
     const b64 = await fetchPdfAsBase64(input.brief.pdfUrl);
@@ -280,16 +204,12 @@ export async function suggestLoadReview(
   }
   userBlocks.push({ type: "text", text: usr });
 
-  // Anthropic exige streaming para max_tokens altos (>=8k aprox). Usamos
-  // .stream(...).finalMessage() para esperar al resultado completo igual que
-  // si fuera no-streaming.
-  const stream = client().messages.stream({
+  const resp = await client().messages.create({
     model,
     max_tokens: MAX_OUTPUT_TOKENS,
     system: sys,
     messages: [{ role: "user", content: userBlocks }],
   });
-  const resp = await stream.finalMessage();
 
   const text = resp.content
     .map((b) => (b.type === "text" ? b.text : ""))
@@ -297,73 +217,34 @@ export async function suggestLoadReview(
     .trim();
   const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
 
-  let parsed = tryParseJsonLoose(cleaned);
-
-  // Reintento automático: si no se puede parsear, le pedimos al modelo
-  // que devuelva el mismo contenido pero como JSON válido y compacto.
+  const parsed = tryParseJsonLoose(cleaned);
   if (!parsed) {
-    console.warn("[load-review-ai] JSON inválido, reintentando self-correction…");
-    try {
-      const fixStream = client().messages.stream({
-        model,
-        max_tokens: MAX_OUTPUT_TOKENS,
-        system: "Devuelve SOLO JSON válido en una sola respuesta. Sin texto antes ni después. Sin ```. Escapa correctamente las comillas dobles dentro de strings con \\\". No uses comas finales.",
-        messages: [{
-          role: "user",
-          content: `El siguiente JSON tiene un error de sintaxis. Devuélvemelo arreglado MANTENIENDO el mismo contenido. Solo el JSON, sin nada más:\n\n${cleaned}`,
-        }],
-      });
-      const fixResp = await fixStream.finalMessage();
-      const fixText = fixResp.content.map((b) => (b.type === "text" ? b.text : "")).join("").trim();
-      const fixCleaned = fixText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-      parsed = tryParseJsonLoose(fixCleaned);
-    } catch (e) {
-      console.error("[load-review-ai] self-correction falló:", e);
-    }
+    throw new Error(`La IA devolvió JSON no parseable. Inicio: "${cleaned.slice(0, 200)}…"`);
   }
 
-  if (!parsed) {
-    // Si tras todo seguimos sin parsear, lo más probable es que el output se haya
-    // truncado por límite de tokens (output muy verboso).
-    const looksTruncated = !cleaned.trim().endsWith("}") && !cleaned.trim().endsWith("]");
-    if (looksTruncated) {
-      throw new Error(
-        "La IA generó un plan demasiado largo y se quedó truncado. Vuelve a intentar; si pasa de nuevo prueba con 'Segunda opinión Opus' que suele resumir mejor."
-      );
-    }
-    throw new Error(`La IA devolvió respuesta no parseable. Raw output (primeros 1500 chars):\n\n${cleaned.slice(0, 1500)}`);
-  }
-
-  function normState(v: any): AdaptationState | null {
-    const s = String(v ?? "").toUpperCase();
-    if (s === "OK" || s === "CONDITIONAL" || s === "BLOCKED") return s as AdaptationState;
-    return null;
-  }
-  function normSlot(v: any): { state: AdaptationState | null; loadConstraint: string | null; substitutionText: string | null; physioWarning: string | null } {
-    const o = v && typeof v === "object" ? v : {};
-    return {
-      state: normState(o?.state),
-      loadConstraint: o?.loadConstraint ? String(o.loadConstraint) : null,
-      substitutionText: o?.substitutionText ? String(o.substitutionText) : null,
-      physioWarning: o?.physioWarning ? String(o.physioWarning) : null,
-    };
-  }
-  const rawChanges = Array.isArray(parsed?.changes) ? parsed.changes : [];
-  const changes: AdaptationChange[] = rawChanges
-    .map((c: any) => ({
-      movementId: String(c?.movementId ?? "").trim(),
-      movementName: String(c?.movementName ?? "").trim(),
-      current: normSlot(c?.current),
-      proposed: normSlot(c?.proposed),
-      reason: String(c?.reason ?? "").trim(),
-    }))
-    .filter((c: AdaptationChange) => c.movementId && c.movementName);
+  // Construir el output cruzando con currentSelections para rellenar currentLevelId/Name.
+  const currentByCat = new Map(input.currentSelections.map((c) => [c.categoryId, c]));
+  const rawSelections = Array.isArray(parsed?.selections) ? parsed.selections : [];
+  const selections: LevelSelection[] = rawSelections
+    .map((s: any) => {
+      const categoryId = String(s?.categoryId ?? "").trim();
+      const current = currentByCat.get(categoryId);
+      return {
+        categoryId,
+        categoryName: String(s?.categoryName ?? current?.categoryName ?? "").trim(),
+        currentLevelId: current?.levelId ?? null,
+        currentLevelName: current?.levelName ?? null,
+        proposedLevelId: String(s?.proposedLevelId ?? "").trim(),
+        proposedLevelName: String(s?.proposedLevelName ?? "").trim(),
+        reason: String(s?.reason ?? "").trim(),
+      };
+    })
+    .filter((s: LevelSelection) => s.categoryId && s.proposedLevelId);
 
   const output: LoadReviewOutput = {
     resumenEstado: String(parsed?.resumenEstado ?? "").trim(),
-    changes,
+    selections,
     flags: Array.isArray(parsed?.flags) ? parsed.flags.map(String) : [],
-    noChangeReason: parsed?.noChangeReason ? String(parsed.noChangeReason) : undefined,
   };
 
   return {
@@ -373,48 +254,15 @@ export async function suggestLoadReview(
   };
 }
 
-/**
- * Intenta parsear JSON aplicando varios "fixes" comunes que la IA suele
- * cometer (trailing commas, JSON cortado, comillas listas...). Devuelve el
- * objeto parseado o null si no hay manera.
- */
 function tryParseJsonLoose(input: string): any | null {
-  // 1) Tal cual.
   try { return JSON.parse(input); } catch {}
-
-  // 2) Quitar trailing commas antes de `}` o `]`.
   let s = input.replace(/,\s*([}\]])/g, "$1");
   try { return JSON.parse(s); } catch {}
-
-  // 3) Si está cortado (faltan cierres), intentar completar contando llaves.
-  const openCurly = (s.match(/{/g) ?? []).length;
-  const closeCurly = (s.match(/}/g) ?? []).length;
-  const openSquare = (s.match(/\[/g) ?? []).length;
-  const closeSquare = (s.match(/]/g) ?? []).length;
-  if (openCurly > closeCurly || openSquare > closeSquare) {
-    // Cortar todo después de la última coma/{/[ válida si está a medias.
-    // Heurística simple: añadir cierres faltantes y reintentar.
-    let t = s;
-    if (openSquare > closeSquare) t += "]".repeat(openSquare - closeSquare);
-    if (openCurly > closeCurly) t += "}".repeat(openCurly - closeCurly);
-    try { return JSON.parse(t); } catch {}
-    // Si aún falla, intentar cortar antes del último elemento truncado.
-    const lastValidIdx = Math.max(s.lastIndexOf("},"), s.lastIndexOf("],"), s.lastIndexOf("}\n"));
-    if (lastValidIdx > 0) {
-      let u = s.slice(0, lastValidIdx + 1);
-      if (openSquare > closeSquare) u += "]".repeat(openSquare - closeSquare);
-      if (openCurly > closeCurly) u += "}".repeat(openCurly - closeCurly);
-      try { return JSON.parse(u); } catch {}
-    }
-  }
-
-  // 4) Última opción: extraer el bloque JSON entre el primer `{` y el último `}`.
   const first = s.indexOf("{");
   const last = s.lastIndexOf("}");
   if (first >= 0 && last > first) {
     const chunk = s.slice(first, last + 1).replace(/,\s*([}\]])/g, "$1");
     try { return JSON.parse(chunk); } catch {}
   }
-
   return null;
 }

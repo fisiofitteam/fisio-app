@@ -74,6 +74,13 @@ const CATALOGO_SECTION = {
   icon: "🏋️",
   desc: "Bloques y ejercicios del control de cargas",
 };
+// Niveles por categoría (gestiona los escalones de cada bloque).
+const NIVELES_CATEGORIA_SECTION = {
+  id: "niveles-categoria",
+  label: "Niveles por categoría",
+  icon: "🪜",
+  desc: "Niveles que tiene cada categoría y reglas por movimiento",
+};
 // Brief metodológico que alimenta la IA de control de cargas.
 const LOAD_REVIEW_SECTION = {
   id: "control-cargas-ia",
@@ -93,7 +100,7 @@ export function LibrarySidebar({ showOnboarding = false, showCatalog = false }: 
   const pathname = usePathname() ?? "";
   const sections = [
     ...SECTIONS,
-    ...(showCatalog ? [CATALOGO_SECTION, CASOS_EXITO_SECTION] : []),
+    ...(showCatalog ? [CATALOGO_SECTION, NIVELES_CATEGORIA_SECTION, CASOS_EXITO_SECTION] : []),
     ...(showOnboarding ? [METRICAS_SECTION, LOAD_REVIEW_SECTION, ONBOARDING_SECTION, LANDINGS_SECTION, MENSAJES_SECTION] : []),
   ];
 

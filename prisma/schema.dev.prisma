@@ -154,6 +154,7 @@ model Patient {
   notifications   PatientNotification[]
   pushTokens      PatientPushToken[]
   loadReviewRecords LoadReviewRecord[]
+  categoryLevels  PatientCategoryLevel[]  @relation("PatientCategoryLevels")
   sales           Sale[]
   invoices        PatientInvoice[]
   communityComments  CommunityComment[]
@@ -421,6 +422,47 @@ model MovementCategory {
   description String?
 
   movements   Movement[]
+  levels      CategoryLevel[]
+  patientSelections PatientCategoryLevel[]
+}
+
+model CategoryLevel {
+  id              String   @id @default(cuid())
+  categoryId      String
+  category        MovementCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  name            String
+  order           Int
+  description     String?
+  createdAt       DateTime @default(now())
+  rules           CategoryLevelRule[]
+  patientSelections PatientCategoryLevel[]
+  @@unique([categoryId, order])
+}
+
+model CategoryLevelRule {
+  id              String   @id @default(cuid())
+  categoryLevelId String
+  categoryLevel   CategoryLevel @relation(fields: [categoryLevelId], references: [id], onDelete: Cascade)
+  movementId      String
+  movement        Movement @relation("MovementRules", fields: [movementId], references: [id], onDelete: Cascade)
+  state            String
+  loadConstraint   String?
+  substitutionText String?
+  physioWarning    String?
+  @@unique([categoryLevelId, movementId])
+}
+
+model PatientCategoryLevel {
+  id              String   @id @default(cuid())
+  patientId       String
+  patient         Patient  @relation("PatientCategoryLevels", fields: [patientId], references: [id], onDelete: Cascade)
+  categoryId      String
+  category        MovementCategory @relation(fields: [categoryId], references: [id])
+  categoryLevelId String
+  categoryLevel   CategoryLevel @relation(fields: [categoryLevelId], references: [id])
+  updatedAt       DateTime @updatedAt
+  @@unique([patientId, categoryId])
+  @@index([patientId])
 }
 
 model Movement {
@@ -438,6 +480,7 @@ model Movement {
 
   adaptations   PatientAdaptation[]
   clinicalRules ClinicalLevelRule[]
+  categoryRules CategoryLevelRule[] @relation("MovementRules")
 }
 
 model PatientAdaptation {

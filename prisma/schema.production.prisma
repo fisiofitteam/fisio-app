@@ -168,6 +168,7 @@ model Patient {
   notifications   PatientNotification[]
   pushTokens      PatientPushToken[]
   loadReviewRecords LoadReviewRecord[]
+  categoryLevels  PatientCategoryLevel[]  @relation("PatientCategoryLevels")
   sales           Sale[]
   invoices        PatientInvoice[]
   communityComments  CommunityComment[]
@@ -441,6 +442,61 @@ model MovementCategory {
   description String?
 
   movements   Movement[]
+  levels      CategoryLevel[]
+  patientSelections PatientCategoryLevel[]
+}
+
+// Nivel dentro de una categoría (ej. "Squat → Nivel 1 - Fase aguda").
+// El fisio define los niveles que tenga cada categoría (libre, no fijo).
+// Por cada nivel, define qué reglas tiene sobre los movimientos de esa
+// categoría (state + carga + sustitución + warning).
+model CategoryLevel {
+  id              String   @id @default(cuid())
+  categoryId      String
+  category        MovementCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  name            String                       // "Nivel 1", "Avanzado"
+  order           Int                          // 0, 1, 2…
+  description     String?
+  createdAt       DateTime @default(now())
+
+  rules           CategoryLevelRule[]
+  patientSelections PatientCategoryLevel[]
+
+  @@unique([categoryId, order])
+}
+
+// Regla concreta de un nivel sobre un movimiento de su categoría.
+model CategoryLevelRule {
+  id              String   @id @default(cuid())
+  categoryLevelId String
+  categoryLevel   CategoryLevel @relation(fields: [categoryLevelId], references: [id], onDelete: Cascade)
+  movementId      String
+  movement        Movement @relation("MovementRules", fields: [movementId], references: [id], onDelete: Cascade)
+
+  state            String  // "OK" | "CONDITIONAL" | "BLOCKED"
+  loadConstraint   String?
+  substitutionText String?
+  physioWarning    String?
+
+  @@unique([categoryLevelId, movementId])
+}
+
+// Asignación actual: por cada categoría, qué nivel tiene el paciente.
+// Al cambiar de nivel, se MATERIALIZAN las reglas en PatientAdaptation para
+// que el WodAdapter y el resto del código siga consultando la fuente única.
+model PatientCategoryLevel {
+  id              String   @id @default(cuid())
+  patientId       String
+  patient         Patient  @relation("PatientCategoryLevels", fields: [patientId], references: [id], onDelete: Cascade)
+  categoryId      String
+  category        MovementCategory @relation(fields: [categoryId], references: [id])
+  categoryLevelId String
+  categoryLevel   CategoryLevel @relation(fields: [categoryLevelId], references: [id])
+  updatedAt       DateTime @updatedAt
+
+  @@unique([patientId, categoryId])
+  @@index([patientId])
 }
 
 model Movement {
@@ -458,6 +514,7 @@ model Movement {
 
   adaptations   PatientAdaptation[]
   clinicalRules ClinicalLevelRule[]
+  categoryRules CategoryLevelRule[] @relation("MovementRules")
 }
 
 model PatientAdaptation {
