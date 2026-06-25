@@ -61,13 +61,19 @@ const METRICAS_SECTION = {
   icon: "📈",
   desc: "Métricas generales de todos los pacientes (CEO)",
 };
+// Catálogo de movimientos: categorías y ejercicios.
+const CATALOGO_SECTION = {
+  id: "catalogo",
+  label: "Catálogo de movimientos",
+  icon: "📚",
+  desc: "Categorías y ejercicios. Base de todo el control de cargas.",
+};
 // Controles de cargas: por cada categoría, niveles + reglas por movimiento.
-// Sustituye al antiguo "Catálogo cargas" y a los "Perfiles clínicos".
 const CONTROLES_CARGAS_SECTION = {
   id: "niveles-categoria",
   label: "Controles de cargas",
   icon: "🏋️",
-  desc: "Categorías, niveles y reglas por movimiento. La IA usa esto para sugerir el nivel de cada paciente.",
+  desc: "Niveles que tiene cada categoría y reglas por movimiento. La IA usa esto para sugerir el nivel de cada paciente.",
 };
 // Brief metodológico que alimenta la IA de control de cargas.
 const LOAD_REVIEW_SECTION = {
@@ -88,7 +94,7 @@ export function LibrarySidebar({ showOnboarding = false, showCatalog = false }: 
   const pathname = usePathname() ?? "";
   const sections = [
     ...SECTIONS,
-    ...(showCatalog ? [CONTROLES_CARGAS_SECTION, CASOS_EXITO_SECTION] : []),
+    ...(showCatalog ? [CATALOGO_SECTION, CONTROLES_CARGAS_SECTION, CASOS_EXITO_SECTION] : []),
     ...(showOnboarding ? [METRICAS_SECTION, LOAD_REVIEW_SECTION, ONBOARDING_SECTION, LANDINGS_SECTION, MENSAJES_SECTION] : []),
   ];
 
