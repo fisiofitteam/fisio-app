@@ -11,7 +11,7 @@ import Anthropic from "@anthropic-ai/sdk";
 
 export type LoadReviewModel = "claude-sonnet-4-6" | "claude-opus-4-7";
 export const DEFAULT_LOAD_REVIEW_MODEL: LoadReviewModel = "claude-sonnet-4-6";
-const MAX_OUTPUT_TOKENS = 8000;
+const MAX_OUTPUT_TOKENS = 16000;
 
 let _client: Anthropic | null = null;
 function client(): Anthropic {
@@ -108,10 +108,11 @@ function systemPrompt(brief: LoadReviewInput["brief"]): string {
     "",
     "REGLAS DE OUTPUT:",
     " 1. Sólo incluye en 'changes' los movimientos que CAMBIAN respecto a lo actual. Si un movimiento se mantiene igual, NO lo incluyas.",
-    " 2. Si crees que el paciente no necesita cambios esta semana, devuelve changes=[] y rellena 'noChangeReason' con 1 frase clara.",
-    " 3. Para cada cambio: pon en 'current' lo que tiene HOY (te lo doy en el input), y en 'proposed' lo que tú sugieres. Si un campo no cambia, déjalo igual en current y proposed.",
-    " 4. Cada cambio debe tener 'reason' explicando por qué (1-2 frases citando datos del histórico o del PDF metodológico).",
-    " 5. SI HAY DOLOR AGUDO NUEVO o flag clínica seria → propón BLOCKED + flags=[advertencia]. No empujes progresión.",
+    " 2. MÁXIMO 12 cambios por respuesta. Si hay más, prioriza los más importantes/peligrosos. El fisio podrá pedir otra ronda después.",
+    " 3. Todos los textos (substitutionText, physioWarning, reason) deben ser CORTOS Y CONCRETOS: máximo 150 caracteres cada uno. Sin explicaciones largas — el fisio ya sabe el contexto.",
+    " 4. Si crees que el paciente no necesita cambios esta semana, devuelve changes=[] y rellena 'noChangeReason' con 1 frase clara.",
+    " 5. Para cada cambio: pon en 'current' lo que tiene HOY (te lo doy en el input), y en 'proposed' lo que tú sugieres. Si un campo no cambia, déjalo igual en current y proposed.",
+    " 6. SI HAY DOLOR AGUDO NUEVO o flag clínica seria → propón BLOCKED + flags=[advertencia]. No empujes progresión.",
     "",
     brief.pdfUrl
       ? "El fisio ha adjuntado un PDF con su metodología completa. Es la referencia principal: léelo y aplícalo. El texto extra de abajo lo complementa pero el PDF manda."
@@ -313,8 +314,15 @@ export async function suggestLoadReview(
   }
 
   if (!parsed) {
-    // Si tras todo seguimos sin parsear, devolvemos el raw completo para depurar.
-    throw new Error(`La IA devolvió respuesta no parseable tras reintento. Raw output:\n\n${cleaned.slice(0, 2000)}`);
+    // Si tras todo seguimos sin parsear, lo más probable es que el output se haya
+    // truncado por límite de tokens (output muy verboso).
+    const looksTruncated = !cleaned.trim().endsWith("}") && !cleaned.trim().endsWith("]");
+    if (looksTruncated) {
+      throw new Error(
+        "La IA generó un plan demasiado largo y se quedó truncado. Vuelve a intentar; si pasa de nuevo prueba con 'Segunda opinión Opus' que suele resumir mejor."
+      );
+    }
+    throw new Error(`La IA devolvió respuesta no parseable. Raw output (primeros 1500 chars):\n\n${cleaned.slice(0, 1500)}`);
   }
 
   function normState(v: any): AdaptationState | null {
