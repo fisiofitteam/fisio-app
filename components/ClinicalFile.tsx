@@ -10,6 +10,7 @@ import { IssueInvoiceButton } from "./IssueInvoiceButton";
 type Patient = {
   id: string;
   fullName: string;
+  email: string | null;
   diagnosis: string;
   bodyZone: string;
   appliedProfileName: string;
@@ -51,6 +52,7 @@ export function ClinicalFile({
 }) {
   const router = useRouter();
   const [fullName, setFullName] = useState(patient.fullName);
+  const [email, setEmail] = useState(patient.email ?? "");
   const [diagnosis, setDiagnosis] = useState(patient.diagnosis);
   // bodyZone es read-only en la ficha: la fuente de verdad es la anamnesis
   // (paso "Zona afectada" del onboarding) y se sincroniza vía
@@ -68,12 +70,13 @@ export function ClinicalFile({
 
   async function save() {
     setSaving(true);
-    await fetch("/api/patients", {
+    const res = await fetch("/api/patients", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         id: patient.id,
         fullName,
+        email: email.trim() || null,
         diagnosis,
         subscriptionStartDate: subscriptionStartDate || null,
         subscriptionPeriodMonths: Number(subscriptionPeriodMonths) || 4,
@@ -82,8 +85,13 @@ export function ClinicalFile({
         ...(isManager && { difficulty: difficulty || null }),
       }),
     });
-    setSavedAt(new Date());
     setSaving(false);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data?.error || "No se pudieron guardar los cambios");
+      return;
+    }
+    setSavedAt(new Date());
     router.refresh();
   }
 
@@ -102,6 +110,21 @@ export function ClinicalFile({
         <div>
           <label className="text-xs text-neutral-500 block mb-1">Nombre completo</label>
           <input className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-xs text-neutral-500 block mb-1">
+            Email <span className="text-neutral-400 font-normal">(con el que entra a la app)</span>
+          </label>
+          <input
+            className="input"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="paciente@ejemplo.com"
+          />
+          <p className="text-[10px] text-neutral-400 mt-1 italic">
+            Si lo cambias, el paciente recibirá el código de acceso a este nuevo email.
+          </p>
         </div>
         <div>
           <label className="text-xs text-neutral-500 block mb-1">Diagnóstico / motivo</label>

@@ -25,6 +25,7 @@ export default async function PatientFichaTab({ params }: { params: { id: string
       patient={{
         id: patient.id,
         fullName: patient.fullName,
+        email: patient.email ?? null,
         diagnosis: patient.diagnosis ?? "",
         bodyZone: patient.bodyZone ?? "",
         appliedProfileName: patient.appliedLevel?.profile.name ?? "",
