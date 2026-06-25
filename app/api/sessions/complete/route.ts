@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { materializePatientMetrics } from "@/lib/metric-definitions";
 
 export async function POST(req: NextRequest) {
   const { sessionId, responses } = await req.json();
@@ -13,23 +14,28 @@ export async function POST(req: NextRequest) {
     include: { assignment: true },
   });
 
-  // Recorrer las respuestas y, si alguna es de tipo EVOLUTION, alimentar métricas
   const tasksSnapshot = JSON.parse(session.tasksSnapshot) as any[];
   const patientId = session.assignment.patientId;
   const now = session.completedAt ?? new Date();
 
-  // Solo registramos automáticamente las métricas que el CEO ha marcado como
-  // automáticas y activas (MetricDefinition). Origen de datos en la sesión:
-  // rpe / pain / stiffness.
+  // Métricas activas con auto=true (las que se piden en sesión).
   const autoDefs = await prisma.metricDefinition.findMany({
     where: { auto: true, active: true },
     select: { key: true },
   });
-  const autoKeys = new Set(autoDefs.map((d) => d.key));
+  const autoKeys = autoDefs.map((d) => d.key);
+  if (autoKeys.length === 0) {
+    return NextResponse.json(session);
+  }
+
+  // Asegura que existen PatientMetric para todas las keys auto (por si el CEO
+  // añadió una métrica después de crear al paciente, no estaría materializada).
+  await materializePatientMetrics(patientId);
 
   // Mapa key → metricId
   const metrics = await prisma.patientMetric.findMany({
-    where: { patientId, key: { in: ["pain", "rpe", "stiffness"] } },
+    where: { patientId, key: { in: autoKeys } },
+    select: { id: true, key: true },
   });
   const byKey: Record<string, string> = {};
   for (const m of metrics) byKey[m.key] = m.id;
@@ -37,17 +43,11 @@ export async function POST(req: NextRequest) {
   for (const task of tasksSnapshot) {
     if (task.type !== "EVOLUTION") continue;
     const r = responses?.[task.id];
-    if (!r) continue;
+    if (!r || typeof r !== "object") continue;
 
-    const mappings: { key: string; value: any }[] = [
-      { key: "rpe", value: r.rpe },
-      { key: "pain", value: r.pain },
-      { key: "stiffness", value: r.stiffness },
-    ];
-
-    for (const { key, value } of mappings) {
+    for (const key of autoKeys) {
+      const value = (r as any)[key];
       if (typeof value !== "number") continue;
-      if (!autoKeys.has(key)) continue;   // el CEO desactivó el automático de esta métrica
       if (!byKey[key]) continue;
       await prisma.metricEntry.create({
         data: { metricId: byKey[key], value, recordedAt: now, source: "session", sessionId },

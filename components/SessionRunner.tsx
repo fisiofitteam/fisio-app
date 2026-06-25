@@ -354,30 +354,54 @@ function FormResponder({ task, completed, response, onChange }: any) {
   );
 }
 
+// Métricas por defecto si el fetch falla (red flaky); coincide con los keys
+// hardcoded antiguos para no romper sesiones ya en curso.
+const FALLBACK_METRICS = [
+  { key: "rpe", name: "RPE percibido", unit: "0-10" },
+  { key: "pain", name: "Dolor", unit: "0-10" },
+  { key: "stiffness", name: "Rigidez", unit: "0-10" },
+];
+
 function EvolutionResponder({ task, completed, response, onChange }: any) {
+  const [metrics, setMetrics] = useState<{ key: string; name: string; unit: string | null }[]>(FALLBACK_METRICS);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch("/api/patient/active-metrics", { cache: "no-store" });
+        if (r.ok) {
+          const data = await r.json();
+          if (Array.isArray(data?.metrics) && data.metrics.length > 0) {
+            setMetrics(data.metrics);
+          }
+        }
+      } catch {}
+      setLoaded(true);
+    })();
+  }, []);
+
+  // Soporta retrocompat: si la respuesta previa tenía claves antiguas (rpe,
+  // pain, stiffness) y no aparecen en metrics, igual las dejamos en BD pero
+  // no las pintamos aquí.
+
   return (
     <div className="space-y-3">
       {task.instructions && (
         <p className="text-xs text-neutral-600 italic bg-neutral-50 p-2 rounded">{task.instructions}</p>
       )}
-      <ScaleField
-        label="RPE percibido"
-        value={response.rpe}
-        completed={completed}
-        onChange={(v) => onChange({ ...response, rpe: v })}
-      />
-      <ScaleField
-        label="Dolor"
-        value={response.pain}
-        completed={completed}
-        onChange={(v) => onChange({ ...response, pain: v })}
-      />
-      <ScaleField
-        label="Rigidez"
-        value={response.stiffness}
-        completed={completed}
-        onChange={(v) => onChange({ ...response, stiffness: v })}
-      />
+      {!loaded && (
+        <p className="text-xs text-neutral-400 italic">Cargando métricas…</p>
+      )}
+      {loaded && metrics.map((m) => (
+        <ScaleField
+          key={m.key}
+          label={m.unit ? `${m.name} (${m.unit})` : m.name}
+          value={response?.[m.key]}
+          completed={completed}
+          onChange={(v) => onChange({ ...response, [m.key]: v })}
+        />
+      ))}
     </div>
   );
 }

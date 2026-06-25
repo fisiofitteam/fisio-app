@@ -68,9 +68,12 @@ export function MetricDefinitionsEditor({ initial }: { initial: Def[] }) {
                 </div>
               </div>
               <div className="flex items-center gap-3 flex-shrink-0">
-                {/* Interruptor Automática */}
-                <label className="flex items-center gap-1.5 text-xs text-neutral-600 cursor-pointer select-none" title="Se rellena sola con los datos de la sesión (Dolor/RPE/Rigidez)">
-                  <span className="hidden sm:inline">Auto</span>
+                {/* Interruptor "Pedir en sesión": si está activo, esta métrica
+                    se pregunta al paciente en cada sesión de evolución y se
+                    registra automáticamente. Si está apagado, solo se registra
+                    a mano desde la pestaña Evolución del paciente. */}
+                <label className="flex items-center gap-1.5 text-xs text-neutral-600 cursor-pointer select-none" title="Si activo, esta métrica se pregunta al paciente en cada sesión de evolución.">
+                  <span className="hidden sm:inline">En sesión</span>
                   <button
                     onClick={() => patch(d, { auto: !d.auto })}
                     role="switch"
@@ -93,8 +96,9 @@ export function MetricDefinitionsEditor({ initial }: { initial: Def[] }) {
       </div>
 
       <p className="text-[11px] text-neutral-400">
-        <strong>Automática</strong>: se rellena sola al completar sesiones. Solo tiene origen de datos
-        para Dolor, RPE y Rigidez (lo que capta la sesión); el resto se registran a mano en la evolución.
+        <strong>En sesión</strong>: si está activo, esta métrica se pregunta al paciente al completar
+        una sesión de evolución y se registra automáticamente. Si está apagado, solo se registra a
+        mano desde la pestaña Evolución del paciente.
       </p>
 
       <div className="card">
