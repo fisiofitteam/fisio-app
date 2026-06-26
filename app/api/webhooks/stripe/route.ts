@@ -196,15 +196,20 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   // Transacción: Patient + Sale + Lead atómicos
   const result = await prisma.$transaction(async (tx) => {
     // Crear Patient heredando del Lead
+    // Email: si contactType es email, lo cogemos del contactValue. Si no, del
+    // campo email del Lead (que puede haberlo guardado el setter aparte).
+    const leadEmailRaw = sale.lead.contactType === "email"
+      ? sale.lead.contactValue
+      : sale.lead.email;
+    const leadPhoneRaw = sale.lead.contactType === "phone"
+      ? sale.lead.contactValue
+      : sale.lead.phone;
     const patient = await tx.patient.create({
       data: {
         fullName: sale.lead.fullName,
-        // El campo email del Lead es contactValue solo si contactType==="email".
-        // Normalizamos (lowercase+trim) para que el login posterior siempre
-        // coincida con lo que el paciente escriba.
-        email: sale.lead.contactType === "email"
-          ? sale.lead.contactValue.trim().toLowerCase()
-          : null,
+        email: leadEmailRaw ? leadEmailRaw.trim().toLowerCase() : null,
+        phone: leadPhoneRaw?.trim() || null,
+        instagram: sale.lead.instagram?.trim().replace(/^@+/, "") || null,
         sport: "CrossFit",
         startedAt: now,
         subscriptionStartDate: now,

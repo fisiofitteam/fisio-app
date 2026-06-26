@@ -91,10 +91,15 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     } else {
       const now = new Date();
       const endDate = new Date(now.getTime() + sale.durationMonths * 30 * 86400 * 1000);
+      const leadPhoneRaw = sale.lead.contactType === "phone"
+        ? sale.lead.contactValue
+        : sale.lead.phone;
       patient = await prisma.patient.create({
         data: {
           fullName: sale.lead.fullName,
           email: normalizedEmail,
+          phone: leadPhoneRaw?.trim() || null,
+          instagram: sale.lead.instagram?.trim().replace(/^@+/, "") || null,
           ...(passwordHash ? { passwordHash } : {}),
           programType: sale.programType,
           programDurationMonths: sale.durationMonths,

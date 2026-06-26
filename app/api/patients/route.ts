@@ -19,6 +19,8 @@ export async function POST(req: NextRequest) {
   const {
     fullName,
     email,
+    phone,
+    instagram,
     shippingPhone,
     diagnosis,
     assignedProfessionalId,
@@ -111,6 +113,8 @@ export async function POST(req: NextRequest) {
     data: {
       fullName: fullName.trim(),
       email: normalizedEmail,
+      phone: phone?.trim() || null,
+      instagram: instagram?.trim().replace(/^@+/, "") || null,
       sport: "CrossFit",
       diagnosis: diagnosis?.trim() || null,
       shippingPhone: shippingPhone?.trim() || null,

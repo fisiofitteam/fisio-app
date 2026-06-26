@@ -142,7 +142,7 @@ export function ClinicalFile({
   return (
     <div className="space-y-4">
       <section className="card space-y-3">
-        <h2 className="font-medium">Datos del paciente</h2>
+        <h2 className="font-medium">📇 Datos personales</h2>
         <div>
           <label className="text-xs text-neutral-500 block mb-1">Nombre completo</label>
           <input className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} />
@@ -162,7 +162,86 @@ export function ClinicalFile({
             Si lo cambias, el paciente recibirá el código de acceso a este nuevo email.
           </p>
         </div>
-        <div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Teléfono</label>
+            <input
+              className="input"
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="+34 600 000 000"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Instagram</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 text-sm">@</span>
+              <input
+                className="input pl-7"
+                value={instagram}
+                onChange={(e) => setInstagram(e.target.value.replace(/^@+/, ""))}
+                placeholder="usuario"
+              />
+            </div>
+          </div>
+        </div>
+
+        <details className="border-t border-neutral-100 pt-3">
+          <summary className="text-sm font-medium cursor-pointer flex items-center gap-2">
+            📮 Dirección postal
+            <span className="text-[10px] text-neutral-400 font-normal">
+              {patient.shippingStreet ? "(con dirección)" : "(vacía)"}
+            </span>
+          </summary>
+          <div className="mt-3 space-y-2">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="col-span-2">
+                <label className="text-xs text-neutral-500 block mb-1">Calle</label>
+                <input className="input" value={shippingStreet} onChange={(e) => setShippingStreet(e.target.value)} placeholder="Calle Mayor" />
+              </div>
+              <div>
+                <label className="text-xs text-neutral-500 block mb-1">Número</label>
+                <input className="input" value={shippingNumber} onChange={(e) => setShippingNumber(e.target.value)} placeholder="42" />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="text-xs text-neutral-500 block mb-1">Piso</label>
+                <input className="input" value={shippingFloor} onChange={(e) => setShippingFloor(e.target.value)} placeholder="3" />
+              </div>
+              <div>
+                <label className="text-xs text-neutral-500 block mb-1">Escalera</label>
+                <input className="input" value={shippingStaircase} onChange={(e) => setShippingStaircase(e.target.value)} placeholder="A" />
+              </div>
+              <div>
+                <label className="text-xs text-neutral-500 block mb-1">Puerta</label>
+                <input className="input" value={shippingDoor} onChange={(e) => setShippingDoor(e.target.value)} placeholder="2" />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="text-xs text-neutral-500 block mb-1">Código postal</label>
+                <input className="input" value={shippingPostalCode} onChange={(e) => setShippingPostalCode(e.target.value)} placeholder="28001" />
+              </div>
+              <div>
+                <label className="text-xs text-neutral-500 block mb-1">Ciudad</label>
+                <input className="input" value={shippingCity} onChange={(e) => setShippingCity(e.target.value)} placeholder="Madrid" />
+              </div>
+              <div>
+                <label className="text-xs text-neutral-500 block mb-1">Provincia</label>
+                <input className="input" value={shippingProvince} onChange={(e) => setShippingProvince(e.target.value)} placeholder="Madrid" />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">Teléfono de contacto para envíos</label>
+              <input className="input" type="tel" value={shippingPhone} onChange={(e) => setShippingPhone(e.target.value)} placeholder="+34 600 000 000" />
+            </div>
+          </div>
+        </details>
+
+        <div className="border-t border-neutral-100 pt-3">
           <label className="text-xs text-neutral-500 block mb-1">Diagnóstico / motivo</label>
           <textarea className="input" rows={3} value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} />
         </div>
@@ -281,102 +360,6 @@ export function ClinicalFile({
           currentTrainingId={patient.rollingTrainingId}
           isManager={isManager}
         />
-      </section>
-
-      {/* Datos personales (contacto + dirección) */}
-      <section className="card space-y-3">
-        <h2 className="font-medium">📇 Datos personales</h2>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs text-neutral-500 block mb-1">Teléfono</label>
-            <input
-              className="input"
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="+34 600 000 000"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-neutral-500 block mb-1">Instagram</label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 text-sm">@</span>
-              <input
-                className="input pl-7"
-                value={instagram}
-                onChange={(e) => setInstagram(e.target.value.replace(/^@+/, ""))}
-                placeholder="usuario"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <label className="text-xs text-neutral-500 block mb-1">Grupo de seguimiento (WhatsApp)</label>
-          <input
-            className="input"
-            value={whatsappGroupUrl}
-            onChange={(e) => setWhatsappGroupUrl(e.target.value)}
-            placeholder="https://chat.whatsapp.com/..."
-          />
-          <p className="text-[10px] text-neutral-400 mt-1">
-            Link de invitación del grupo. Lo coges desde WhatsApp → Datos del grupo → Invitar mediante enlace.
-          </p>
-        </div>
-
-        <details className="border-t border-neutral-100 pt-3">
-          <summary className="text-sm font-medium cursor-pointer flex items-center gap-2">
-            📮 Dirección postal
-            <span className="text-[10px] text-neutral-400 font-normal">
-              {patient.shippingStreet ? "(con dirección)" : "(vacía)"}
-            </span>
-          </summary>
-          <div className="mt-3 space-y-2">
-            <div className="grid grid-cols-3 gap-2">
-              <div className="col-span-2">
-                <label className="text-xs text-neutral-500 block mb-1">Calle</label>
-                <input className="input" value={shippingStreet} onChange={(e) => setShippingStreet(e.target.value)} placeholder="Calle Mayor" />
-              </div>
-              <div>
-                <label className="text-xs text-neutral-500 block mb-1">Número</label>
-                <input className="input" value={shippingNumber} onChange={(e) => setShippingNumber(e.target.value)} placeholder="42" />
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <label className="text-xs text-neutral-500 block mb-1">Piso</label>
-                <input className="input" value={shippingFloor} onChange={(e) => setShippingFloor(e.target.value)} placeholder="3" />
-              </div>
-              <div>
-                <label className="text-xs text-neutral-500 block mb-1">Escalera</label>
-                <input className="input" value={shippingStaircase} onChange={(e) => setShippingStaircase(e.target.value)} placeholder="A" />
-              </div>
-              <div>
-                <label className="text-xs text-neutral-500 block mb-1">Puerta</label>
-                <input className="input" value={shippingDoor} onChange={(e) => setShippingDoor(e.target.value)} placeholder="2" />
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <label className="text-xs text-neutral-500 block mb-1">Código postal</label>
-                <input className="input" value={shippingPostalCode} onChange={(e) => setShippingPostalCode(e.target.value)} placeholder="28001" />
-              </div>
-              <div>
-                <label className="text-xs text-neutral-500 block mb-1">Ciudad</label>
-                <input className="input" value={shippingCity} onChange={(e) => setShippingCity(e.target.value)} placeholder="Madrid" />
-              </div>
-              <div>
-                <label className="text-xs text-neutral-500 block mb-1">Provincia</label>
-                <input className="input" value={shippingProvince} onChange={(e) => setShippingProvince(e.target.value)} placeholder="Madrid" />
-              </div>
-            </div>
-            <div>
-              <label className="text-xs text-neutral-500 block mb-1">Teléfono de contacto para envíos</label>
-              <input className="input" type="tel" value={shippingPhone} onChange={(e) => setShippingPhone(e.target.value)} placeholder="+34 600 000 000" />
-            </div>
-          </div>
-        </details>
       </section>
 
       <div className="flex justify-end items-center gap-3">
