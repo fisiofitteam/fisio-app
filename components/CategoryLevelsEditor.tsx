@@ -1,20 +1,18 @@
 "use client";
 /**
- * Editor de niveles por categoría.
+ * Editor de Controles de Cargas (niveles por categoría).
  *
- * Estructura jerárquica: Categoría → Niveles → Reglas por movimiento.
- *
- * - Por cada categoría, lista de niveles + botón "+ Nivel".
- * - Por cada nivel, lista de movimientos de esa categoría. Para cada uno:
- *   selector state, inputs de carga / sustitución / warning. Cambios se
- *   guardan al perder foco (debounce 600ms).
+ * Misma vista que el AdaptationEditor del paciente: categoría como sección,
+ * niveles colapsables dentro, resumen Total/OK/Cond/Bloq, lista de movimientos
+ * como tarjetas y edición inline con pills + sustituto + carga + warning.
  */
-import { useEffect, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 
 type Movement = { id: string; displayName: string };
+type State = "OK" | "CONDITIONAL" | "BLOCKED";
 type Rule = {
   movementId: string;
-  state: "OK" | "CONDITIONAL" | "BLOCKED";
+  state: State;
   loadConstraint: string | null;
   substitutionText: string | null;
   physioWarning: string | null;
@@ -33,11 +31,19 @@ type Category = {
   levels: Level[];
 };
 
+const DEFAULT_RULE = (movementId: string): Rule => ({
+  movementId,
+  state: "OK",
+  loadConstraint: null,
+  substitutionText: null,
+  physioWarning: null,
+});
+
 export function CategoryLevelsEditor({ initial }: { initial: Category[] }) {
   const [cats, setCats] = useState<Category[]>(initial);
 
   async function addLevel(catId: string) {
-    const name = prompt("Nombre del nivel (ej: 'Nivel 1 - Fase aguda')");
+    const name = prompt("Nombre del nivel (ej: 'Nivel 1 — Fase aguda')");
     if (!name?.trim()) return;
     const r = await fetch("/api/category-levels", {
       method: "POST",
@@ -66,7 +72,7 @@ export function CategoryLevelsEditor({ initial }: { initial: Category[] }) {
   }
 
   async function deleteLevel(catId: string, levelId: string) {
-    if (!confirm("¿Borrar el nivel y todas sus reglas? Pacientes que lo tengan asignado se quedarán sin nivel.")) return;
+    if (!confirm("¿Borrar el nivel y todas sus reglas? Pacientes asignados perderán este nivel.")) return;
     await fetch(`/api/category-levels?id=${levelId}`, { method: "DELETE" });
     setCats((arr) => arr.map((c) => c.id === catId ? { ...c, levels: c.levels.filter((l) => l.id !== levelId) } : c));
   }
@@ -117,132 +123,221 @@ function LevelBlock({
   onDelete: () => void;
   onRulesChange: (next: Rule[]) => void;
 }) {
-  const [rules, setRules] = useState<Rule[]>(level.rules);
   const [open, setOpen] = useState(false);
-  useEffect(() => { setRules(level.rules); }, [level.rules]);
+  const [editingMov, setEditingMov] = useState<string | null>(null);
 
-  function ruleFor(movementId: string): Rule {
-    return rules.find((r) => r.movementId === movementId) ?? {
-      movementId, state: "OK", loadConstraint: null, substitutionText: null, physioWarning: null,
-    };
+  const rulesById = useMemo(() => {
+    const m = new Map<string, Rule>();
+    for (const r of level.rules) m.set(r.movementId, r);
+    return m;
+  }, [level.rules]);
+
+  function getDisplay(mov: Movement): Rule {
+    return rulesById.get(mov.id) ?? DEFAULT_RULE(mov.id);
   }
 
-  function updateLocal(next: Rule) {
-    setRules((arr) => {
-      const others = arr.filter((r) => r.movementId !== next.movementId);
-      // Si todo el state queda como OK + sin texto, lo consideramos "sin restricción" y lo eliminamos.
-      const empty = next.state === "OK" && !next.loadConstraint && !next.substitutionText && !next.physioWarning;
-      const out = empty ? others : [...others, next];
-      onRulesChange(out);
-      return out;
-    });
+  const stats = useMemo(() => {
+    let ok = 0, cond = 0, blocked = 0;
+    for (const mov of category.movements) {
+      const r = getDisplay(mov);
+      if (r.state === "BLOCKED") blocked++;
+      else if (r.state === "CONDITIONAL") cond++;
+      else ok++;
+    }
+    return { total: category.movements.length, ok, cond, blocked };
+  }, [category.movements, rulesById]);
+
+  async function saveRule(mov: Movement, item: Rule) {
+    const empty = item.state === "OK" && !item.loadConstraint && !item.substitutionText && !item.physioWarning;
+    if (empty) {
+      await fetch(`/api/category-levels/rules?categoryLevelId=${level.id}&movementId=${mov.id}`, { method: "DELETE" });
+      const next = level.rules.filter((r) => r.movementId !== mov.id);
+      onRulesChange(next);
+    } else {
+      await fetch("/api/category-levels/rules", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          categoryLevelId: level.id, movementId: mov.id,
+          state: item.state,
+          loadConstraint: item.loadConstraint || null,
+          substitutionText: item.substitutionText || null,
+          physioWarning: item.physioWarning || null,
+        }),
+      });
+      const others = level.rules.filter((r) => r.movementId !== mov.id);
+      onRulesChange([...others, item]);
+    }
+    setEditingMov(null);
+  }
+
+  async function resetToOk(mov: Movement) {
+    await fetch(`/api/category-levels/rules?categoryLevelId=${level.id}&movementId=${mov.id}`, { method: "DELETE" });
+    onRulesChange(level.rules.filter((r) => r.movementId !== mov.id));
+    setEditingMov(null);
   }
 
   return (
-    <div className="border border-neutral-200 rounded-lg p-2">
-      <div className="flex justify-between items-center">
-        <button onClick={() => setOpen((v) => !v)} className="text-sm font-medium text-left">
-          <span className="mr-2">{open ? "▼" : "▶"}</span>
-          🪜 {level.name}
-          <span className="text-[10px] text-neutral-400 font-normal ml-2">({rules.length} reglas)</span>
+    <div className="border border-neutral-200 rounded-lg overflow-hidden">
+      <div className="flex justify-between items-center bg-neutral-50">
+        <button onClick={() => setOpen((v) => !v)} className="flex-1 text-left px-3 py-2 flex items-center gap-2 hover:bg-neutral-100">
+          <span className="text-neutral-400">{open ? "▾" : "▸"}</span>
+          <span className="text-sm font-medium">🪜 {level.name}</span>
+          <span className="text-[10px] text-neutral-400 font-normal ml-1">({level.rules.length} reglas)</span>
         </button>
-        <div className="flex gap-2">
-          <button onClick={onRename} className="text-[11px] text-neutral-500 hover:text-neutral-900">Renombrar</button>
-          <button onClick={onDelete} className="text-[11px] text-red-700 hover:underline">Borrar</button>
+        <div className="flex gap-1 pr-2">
+          <button onClick={onRename} className="text-[11px] text-neutral-500 hover:text-neutral-900 px-2">Renombrar</button>
+          <button onClick={onDelete} className="text-[11px] text-red-700 hover:underline px-2">Borrar</button>
         </div>
       </div>
 
       {open && (
-        <div className="mt-2 space-y-1.5">
-          {category.movements.map((m) => (
-            <RuleRow key={m.id} movement={m} initial={ruleFor(m.id)} categoryLevelId={level.id} onSaved={updateLocal} />
-          ))}
+        <div className="p-3 bg-white space-y-3">
+          {/* Resumen igual que en el editor del paciente */}
+          <div className="grid grid-cols-4 gap-2 text-center">
+            <div className="bg-neutral-100 p-2 rounded">
+              <div className="text-base font-semibold">{stats.total}</div>
+              <div className="text-[10px] text-neutral-500">Total</div>
+            </div>
+            <div className="bg-emerald-50 p-2 rounded">
+              <div className="text-base font-semibold text-emerald-800">{stats.ok}</div>
+              <div className="text-[10px] text-emerald-700">OK</div>
+            </div>
+            <div className="bg-amber-50 p-2 rounded">
+              <div className="text-base font-semibold text-amber-800">{stats.cond}</div>
+              <div className="text-[10px] text-amber-700">Cond.</div>
+            </div>
+            <div className="bg-red-50 p-2 rounded">
+              <div className="text-base font-semibold text-red-800">{stats.blocked}</div>
+              <div className="text-[10px] text-red-700">Bloq.</div>
+            </div>
+          </div>
+
+          <div className="border border-neutral-200 rounded">
+            {category.movements.map((mov) => {
+              const a = getDisplay(mov);
+              const isEditing = editingMov === mov.id;
+              return (
+                <div
+                  key={mov.id}
+                  className={`border-b border-neutral-100 last:border-0 ${
+                    a.state === "BLOCKED" ? "bg-red-50"
+                    : a.state === "CONDITIONAL" ? "bg-amber-50"
+                    : ""
+                  }`}
+                >
+                  {!isEditing ? (
+                    <button
+                      onClick={() => setEditingMov(mov.id)}
+                      className="w-full text-left px-3 py-2 hover:bg-neutral-100"
+                    >
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm">{mov.displayName}</div>
+                          {(a.substitutionText || a.loadConstraint) && (
+                            <div className="text-xs text-neutral-600 mt-0.5 truncate">
+                              {a.substitutionText && <span className="text-red-700">→ {a.substitutionText}</span>}
+                              {a.loadConstraint && <span className="text-neutral-500"> · {a.loadConstraint}</span>}
+                            </div>
+                          )}
+                          {a.physioWarning && (
+                            <div className="text-xs italic text-amber-800 mt-0.5">⚠ {a.physioWarning}</div>
+                          )}
+                        </div>
+                        <StatePill state={a.state} />
+                      </div>
+                    </button>
+                  ) : (
+                    <InlineRuleEditor
+                      mov={mov}
+                      current={a}
+                      onSave={(item) => saveRule(mov, item)}
+                      onCancel={() => setEditingMov(null)}
+                      onReset={() => resetToOk(mov)}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-function RuleRow({
-  movement, initial, categoryLevelId, onSaved,
+function StatePill({ state }: { state: State }) {
+  if (state === "OK") return <span className="text-[10px] uppercase rounded px-1.5 py-0.5 bg-emerald-100 text-emerald-800">OK</span>;
+  if (state === "CONDITIONAL") return <span className="text-[10px] uppercase rounded px-1.5 py-0.5 bg-amber-100 text-amber-800">Cond.</span>;
+  return <span className="text-[10px] uppercase rounded px-1.5 py-0.5 bg-red-100 text-red-800">Bloq.</span>;
+}
+
+function InlineRuleEditor({
+  mov, current, onSave, onCancel, onReset,
 }: {
-  movement: Movement;
-  initial: Rule;
-  categoryLevelId: string;
-  onSaved: (rule: Rule) => void;
+  mov: Movement;
+  current: Rule;
+  onSave: (item: Rule) => void;
+  onCancel: () => void;
+  onReset: () => void;
 }) {
-  const [state, setState] = useState<Rule["state"]>(initial.state);
-  const [load, setLoad] = useState(initial.loadConstraint ?? "");
-  const [subst, setSubst] = useState(initial.substitutionText ?? "");
-  const [warn, setWarn] = useState(initial.physioWarning ?? "");
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  function schedule() {
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(save, 600);
-  }
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
-
-  async function save() {
-    const empty = state === "OK" && !load.trim() && !subst.trim() && !warn.trim();
-    if (empty) {
-      await fetch(`/api/category-levels/rules?categoryLevelId=${categoryLevelId}&movementId=${movement.id}`, { method: "DELETE" });
-      onSaved({ movementId: movement.id, state: "OK", loadConstraint: null, substitutionText: null, physioWarning: null });
-      return;
-    }
-    const payload = {
-      categoryLevelId, movementId: movement.id,
-      state, loadConstraint: load.trim() || null, substitutionText: subst.trim() || null, physioWarning: warn.trim() || null,
-    };
-    const r = await fetch("/api/category-levels/rules", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (r.ok) onSaved({ movementId: movement.id, state, loadConstraint: load.trim() || null, substitutionText: subst.trim() || null, physioWarning: warn.trim() || null });
-  }
-
-  const stateColor = state === "OK" ? "bg-emerald-100 text-emerald-800" : state === "CONDITIONAL" ? "bg-amber-100 text-amber-800" : "bg-red-100 text-red-800";
+  const [state, setState] = useState<State>(current.state);
+  const [sub, setSub] = useState(current.substitutionText ?? "");
+  const [load, setLoad] = useState(current.loadConstraint ?? "");
+  const [warn, setWarn] = useState(current.physioWarning ?? "");
 
   return (
-    <div className="border border-neutral-100 rounded p-2 bg-neutral-50/40 space-y-1.5">
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs font-medium flex-1 min-w-0 truncate">{movement.displayName}</span>
-        <select
-          value={state}
-          onChange={(e) => { setState(e.target.value as Rule["state"]); schedule(); }}
-          className={`text-[11px] px-2 py-0.5 rounded ${stateColor} border-0 outline-none`}
-        >
-          <option value="OK">OK</option>
-          <option value="CONDITIONAL">CONDICIONAL</option>
-          <option value="BLOCKED">BLOQUEADO</option>
-        </select>
+    <div className="px-3 py-2 bg-white border-l-4 border-neutral-900">
+      <div className="flex justify-between items-center mb-2">
+        <div className="font-medium text-sm">{mov.displayName}</div>
+        <button onClick={onCancel} className="text-xs text-neutral-400">✕ Cerrar</button>
       </div>
-      {state !== "OK" && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 pl-1">
-          <input
-            className="input text-[11px]"
-            placeholder="Carga máx (ej: 60kg)"
-            value={load}
-            onChange={(e) => { setLoad(e.target.value); schedule(); }}
-            onBlur={save}
-          />
-          <input
-            className="input text-[11px]"
-            placeholder="Sustitución"
-            value={subst}
-            onChange={(e) => { setSubst(e.target.value); schedule(); }}
-            onBlur={save}
-          />
-          <input
-            className="input text-[11px]"
-            placeholder="Warning"
-            value={warn}
-            onChange={(e) => { setWarn(e.target.value); schedule(); }}
-            onBlur={save}
-          />
+      <div className="space-y-2">
+        <div className="flex gap-1">
+          {(["OK", "CONDITIONAL", "BLOCKED"] as State[]).map((s) => (
+            <button
+              key={s}
+              onClick={() => setState(s)}
+              className={`flex-1 py-1.5 text-xs rounded ${state === s ? "bg-neutral-900 text-white" : "bg-neutral-100"}`}
+            >
+              {s === "OK" ? "OK" : s === "CONDITIONAL" ? "Cond." : "Bloq."}
+            </button>
+          ))}
         </div>
-      )}
+        <input
+          className="input text-sm"
+          placeholder="Sustituto (ej: Ring row inclinado)"
+          value={sub}
+          onChange={(e) => setSub(e.target.value)}
+        />
+        <input
+          className="input text-sm"
+          placeholder="Carga máx (ej: 16 kg, 60% 1RM, BW)"
+          value={load}
+          onChange={(e) => setLoad(e.target.value)}
+        />
+        <input
+          className="input text-sm"
+          placeholder="Aviso al paciente (ej: si dolor > 5, parar)"
+          value={warn}
+          onChange={(e) => setWarn(e.target.value)}
+        />
+        <div className="flex justify-between gap-2 pt-1">
+          <button onClick={onReset} className="text-xs text-neutral-500 underline">Volver a default (OK)</button>
+          <button
+            onClick={() => onSave({
+              movementId: mov.id,
+              state,
+              loadConstraint: load.trim() || null,
+              substitutionText: sub.trim() || null,
+              physioWarning: warn.trim() || null,
+            })}
+            className="btn btn-primary text-xs"
+          >
+            Guardar
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
