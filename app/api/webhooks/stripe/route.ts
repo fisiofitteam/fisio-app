@@ -289,7 +289,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       type: "patient_new_unassigned",
       title: "Nuevo paciente sin asignar",
       body: `${sale.lead.fullName} ha pagado el programa ${sale.programType} de ${sale.durationMonths} meses. Asígnale fisio.`,
-      actionUrl: `/pacientes/${result.id}`,
+      actionUrl: `/fisio/paciente/${result.id}/ficha`,
     });
   } catch (err) {
     console.error("[stripe-webhook] Error notificando a head_success:", err);
@@ -375,7 +375,7 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
       type: "sale_refunded",
       title: "Reembolso procesado",
       body: `Se ha reembolsado ${(charge.amount_refunded / 100).toFixed(2)}€ del pago de ${sale.lead.fullName}.`,
-      actionUrl: sale.patientId ? `/pacientes/${sale.patientId}` : undefined,
+      actionUrl: sale.patientId ? `/fisio/paciente/${sale.patientId}/ficha` : undefined,
     });
   } catch (err) {
     console.error("[stripe-webhook] Error notificando refund:", err);
