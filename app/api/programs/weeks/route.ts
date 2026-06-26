@@ -1,7 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getActiveProfessional } from "@/lib/session";
+
+// CEO, head_success y fisio pueden gestionar semanas de programa.
+// Setter/closer no entran en la biblioteca de programas.
+function canEditPrograms(role: string): boolean {
+  return role === "ceo" || role === "head_success" || role === "fisio";
+}
 
 export async function POST(req: NextRequest) {
+  const user = await getActiveProfessional();
+  if (!user || !canEditPrograms(user.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   const { programId } = await req.json();
   const last = await prisma.programWeek.findFirst({
     where: { programId },
@@ -24,6 +35,10 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const user = await getActiveProfessional();
+  if (!user || !canEditPrograms(user.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "missing id" }, { status: 400 });
   const week = await prisma.programWeek.findUnique({ where: { id } });

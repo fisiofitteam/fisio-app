@@ -84,7 +84,12 @@ export function ProgramEditor({ program }: { program: any }) {
 
   async function deleteWeek(weekId: string) {
     if (!confirm("¿Eliminar esta semana? Se borrarán todas sus tareas.")) return;
-    await fetch(`/api/programs/weeks?id=${weekId}`, { method: "DELETE" });
+    const r = await fetch(`/api/programs/weeks?id=${weekId}`, { method: "DELETE" });
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      alert(d?.error ?? `No se pudo borrar (HTTP ${r.status})`);
+      return;
+    }
     router.refresh();
   }
 
