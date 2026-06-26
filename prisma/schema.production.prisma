@@ -11,6 +11,8 @@ model Patient {
   id              String   @id @default(cuid())
   fullName        String
   email           String?  @unique                  // para login con código de 6 dígitos
+  phone           String?                           // teléfono de contacto (editable desde la ficha)
+  instagram       String?                           // @usuario IG (editable desde la ficha)
   photoUrl        String?                           // foto de perfil del paciente
   sport           String   @default("CrossFit")
   diagnosis       String?

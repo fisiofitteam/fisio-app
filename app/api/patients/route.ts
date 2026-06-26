@@ -177,6 +177,8 @@ export async function PATCH(req: NextRequest) {
     subscriptionStartDate,
     subscriptionPeriodMonths,
     whatsappGroupUrl,
+    phone,
+    instagram,
     assignedProfessionalId,
     programType,
     difficulty,
@@ -273,6 +275,10 @@ export async function PATCH(req: NextRequest) {
       }),
       ...(whatsappGroupUrl !== undefined && {
         whatsappGroupUrl: whatsappGroupUrl || null,
+      }),
+      ...(phone !== undefined && { phone: phone?.trim() || null }),
+      ...(instagram !== undefined && {
+        instagram: instagram?.trim().replace(/^@+/, "") || null,
       }),
       ...(assignedProfessionalId !== undefined && {
         assignedProfessionalId: assignedProfessionalId || null,

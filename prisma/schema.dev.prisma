@@ -10,7 +10,9 @@ datasource db {
 model Patient {
   id              String   @id @default(cuid())
   fullName        String
-  email           String?  @unique                  // para login con código de 6 dígitos
+  email           String?  @unique
+  phone           String?
+  instagram       String?
   photoUrl        String?                           // foto de perfil del paciente
   sport           String   @default("CrossFit")
   diagnosis       String?
