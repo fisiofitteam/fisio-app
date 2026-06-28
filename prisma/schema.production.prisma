@@ -1354,6 +1354,11 @@ model ContentWeek {
 
   // Historias de la semana: JSON array de 7 strings (índice 0=Lun ... 6=Dom)
   weekStories     String   @default("[]")
+  // Instrucciones libres del CEO para la generación de stories de esta semana.
+  // El endpoint stories-generate las inyecta en el user prompt y las trata
+  // como prioritarias por encima de la estructura sugerida (Lun=pregunta,
+  // Mar=mito...). Vacío = se mantiene la estructura por defecto.
+  weekStoriesInstructions String? @default("")
 
   // PDF de estrategia/briefing de la semana (Vercel Blob). Solo CEO sube.
   strategyPdfUrl  String?

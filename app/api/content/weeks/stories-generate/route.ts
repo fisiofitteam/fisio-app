@@ -48,6 +48,11 @@ function systemPrompt(): string {
     "Tu trabajo: redactar mini-guiones de stories accionables que el CEO pueda grabar improvisando con confianza.",
     "Estilo: tono cercano, profesional pero sin postureo médico. Sin tecnicismos vacíos. Cero promesas absolutas. Honestidad sobre lo que sirve y lo que no.",
     "",
+    "JERARQUÍA DE INSTRUCCIONES:",
+    "1. Si el usuario incluye un bloque 'INSTRUCCIONES DEL CEO PARA ESTA SEMANA', esas son las más importantes y mandan sobre todo lo demás.",
+    "2. La estructura por día (Lun=pregunta, Mar=mito, etc.) es una SUGERENCIA por defecto. Puedes apartarte de ella si las instrucciones del CEO o el tema de la semana lo justifican. No la fuerces si rompe el sentido de la pieza.",
+    "3. El formato vídeo/imagen también es flexible: ajústalo a lo que pida el CEO.",
+    "",
     "FORMATO DE SALIDA por cada guion (obligatorio):",
     "Cada guion empieza con DOS líneas de cabecera:",
     "  FORMATO: <una línea muy concreta indicando si es vídeo selfie / imagen con sticker / secuencia mixta / etc, y la duración aproximada si aplica>",
@@ -84,6 +89,8 @@ function userPrompt(opts: {
   weekNumber: number;
   year: number;
   dayIndices: number[];
+  weekInstructions: string;        // persistente (guardado en la semana)
+  oneShotInstructions: string;     // del momento (no se guarda)
 }): string {
   const lines: string[] = [];
   lines.push(`Semana ${opts.weekNumber}/${opts.year} — Tema central: "${opts.centralTheme}". Zona del cuerpo: ${opts.bodyZone}. Tipo de semana: ${opts.weekType}.`);
@@ -93,18 +100,36 @@ function userPrompt(opts: {
   if (opts.leadMagnetName) {
     lines.push(`Lead magnet activo: "${opts.leadMagnetName}"${opts.leadMagnetKeyword ? ` (palabra clave DM: "${opts.leadMagnetKeyword}")` : ""}.`);
   }
+
+  // Bloque de instrucciones libres del CEO. Va lo primero después del contexto
+  // para que el modelo lo lea como "norte" antes de procesar la estructura.
+  if (opts.weekInstructions.trim() || opts.oneShotInstructions.trim()) {
+    lines.push("");
+    lines.push("═══════════════════════════════════════════════════════════════");
+    lines.push("INSTRUCCIONES DEL CEO PARA ESTA SEMANA (prioritarias):");
+    if (opts.weekInstructions.trim()) {
+      lines.push(opts.weekInstructions.trim());
+    }
+    if (opts.oneShotInstructions.trim()) {
+      lines.push("");
+      lines.push("Además, para esta generación en concreto:");
+      lines.push(opts.oneShotInstructions.trim());
+    }
+    lines.push("═══════════════════════════════════════════════════════════════");
+  }
+
   lines.push("");
-  lines.push("Días a redactar (sigue ESTRICTAMENTE la estructura de cada día):");
+  lines.push("Días a redactar — la siguiente estructura es una SUGERENCIA. Respétala si encaja con las instrucciones del CEO; apártate si no:");
   lines.push("");
   for (const idx of opts.dayIndices) {
     const s = dayStructureFor(idx);
-    lines.push(`— ${s.label} (dayIndex=${idx}) — Tipo: ${s.type}.`);
-    lines.push(`  Propósito: ${s.purpose}`);
-    lines.push(`  Formato sugerido: ${s.defaultFormat} (puedes ajustarlo si lo justificas, pero respeta la naturaleza vídeo/imagen)`);
-    lines.push(`  Estructura: ${s.framework}`);
+    lines.push(`— ${s.label} (dayIndex=${idx}) — Tipo sugerido: ${s.type}.`);
+    lines.push(`  Propósito sugerido: ${s.purpose}`);
+    lines.push(`  Formato sugerido: ${s.defaultFormat}`);
+    lines.push(`  Estructura sugerida: ${s.framework}`);
     lines.push("");
   }
-  lines.push("Cada guion: máximo 4 frames, redactado para improvisar fácil. Sin hashtags, sin emojis abusivos.");
+  lines.push("Cada guion: redactado para improvisar fácil. Sin hashtags, sin emojis abusivos.");
   lines.push(`Devuelve el JSON con SOLO los días pedidos (${opts.dayIndices.join(", ")}).`);
   return lines.join("\n");
 }
@@ -121,6 +146,12 @@ export async function POST(req: NextRequest) {
   const dayIndexRaw = body?.dayIndex;
   const single = typeof dayIndexRaw === "number" && dayIndexRaw >= 0 && dayIndexRaw <= 6;
   const dayIndices: number[] = single ? [dayIndexRaw] : [0, 1, 2, 3, 4, 5, 6];
+
+  // Nota one-shot opcional: el CEO puede afinar SOLO esta generación sin
+  // tocar las instrucciones persistentes de la semana.
+  const oneShotInstructions = typeof body?.oneShotInstructions === "string"
+    ? body.oneShotInstructions
+    : "";
 
   const week = await prisma.contentWeek.findUnique({ where: { id: weekId } });
   if (!week) return NextResponse.json({ error: "Semana no encontrada" }, { status: 404 });
@@ -142,6 +173,8 @@ export async function POST(req: NextRequest) {
     weekNumber: week.weekNumber,
     year: week.year,
     dayIndices,
+    weekInstructions: week.weekStoriesInstructions ?? "",
+    oneShotInstructions,
   });
 
   let resp;

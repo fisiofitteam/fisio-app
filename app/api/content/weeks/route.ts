@@ -113,6 +113,11 @@ export async function PATCH(req: NextRequest) {
   }
   if (rest.limitingBeliefs !== undefined) update.limitingBeliefs = JSON.stringify(rest.limitingBeliefs);
   if (rest.weekStories !== undefined) update.weekStories = JSON.stringify(rest.weekStories);
+  if (rest.weekStoriesInstructions !== undefined) {
+    update.weekStoriesInstructions = typeof rest.weekStoriesInstructions === "string"
+      ? rest.weekStoriesInstructions
+      : "";
+  }
   if (rest.mixValue !== undefined) update.mixValue = Number(rest.mixValue);
   if (rest.mixBeliefs !== undefined) update.mixBeliefs = Number(rest.mixBeliefs);
   if (rest.mixConversion !== undefined) update.mixConversion = Number(rest.mixConversion);

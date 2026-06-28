@@ -50,6 +50,7 @@ type Week = {
   winningHooks?: string | null;
   ideasEmerged?: string | null;
   weekStories?: string | null;
+  weekStoriesInstructions?: string | null;
   strategyPdfUrl?: string | null;
   strategyPdfName?: string | null;
   pieces: Piece[];
@@ -615,10 +616,22 @@ function WeekStoriesSection({ week }: { week: Week }) {
   const [genError, setGenError] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Instrucciones persistentes a nivel semana (se guardan en
+  // ContentWeek.weekStoriesInstructions y se inyectan en cada generación).
+  const [instructions, setInstructions] = useState<string>(week.weekStoriesInstructions ?? "");
+  const [instrSaveState, setInstrSaveState] = useState<"idle" | "saving" | "saved">("idle");
+  const instrTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Nota one-shot que se manda SOLO en la próxima generación, sin guardar.
+  const [oneShot, setOneShot] = useState<string>("");
+
   // Si cambiamos de semana (mismo componente, distinto week.id), resetear
   useEffect(() => {
     setValues(parseWeekStories(week.weekStories));
+    setInstructions(week.weekStoriesInstructions ?? "");
+    setOneShot("");
     setSaveState("idle");
+    setInstrSaveState("idle");
     setGenError(null);
   }, [week.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -636,6 +649,20 @@ function WeekStoriesSection({ week }: { week: Week }) {
     }, 1000);
   }
 
+  function scheduleSaveInstructions(next: string) {
+    setInstrSaveState("saving");
+    if (instrTimer.current) clearTimeout(instrTimer.current);
+    instrTimer.current = setTimeout(async () => {
+      await fetch("/api/content/weeks", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: week.id, weekStoriesInstructions: next }),
+      });
+      setInstrSaveState("saved");
+      setTimeout(() => setInstrSaveState("idle"), 1500);
+    }, 800);
+  }
+
   function setDay(idx: number, val: string) {
     const next = values.map((v, i) => (i === idx ? val : v));
     setValues(next);
@@ -649,7 +676,11 @@ function WeekStoriesSection({ week }: { week: Week }) {
       const r = await fetch("/api/content/weeks/stories-generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ weekId: week.id, ...(dayIndex !== null ? { dayIndex } : {}) }),
+        body: JSON.stringify({
+          weekId: week.id,
+          ...(dayIndex !== null ? { dayIndex } : {}),
+          ...(oneShot.trim() ? { oneShotInstructions: oneShot.trim() } : {}),
+        }),
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data?.error || "Error generando guiones");
@@ -664,6 +695,9 @@ function WeekStoriesSection({ week }: { week: Week }) {
       // sólo refrescamos el estado visual.
       setSaveState("saved");
       setTimeout(() => setSaveState("idle"), 1500);
+      // La nota one-shot se consume — la limpiamos para que no se aplique
+      // por accidente en la siguiente generación.
+      setOneShot("");
     } catch (e: any) {
       setGenError(e?.message || "Error desconocido");
     } finally {
@@ -684,16 +718,58 @@ function WeekStoriesSection({ week }: { week: Week }) {
             onClick={() => generate(null)}
             disabled={genAll || genDay !== null}
             className="text-xs px-3 py-1.5 rounded-md bg-neutral-900 text-white hover:bg-neutral-800 disabled:opacity-50"
-            title="Genera las 7 stories siguiendo la estructura semanal (sobrescribe lo que haya)"
+            title="Genera las 7 stories. Respeta tus instrucciones por encima de la estructura sugerida."
           >
             {genAll ? "Generando las 7…" : "✨ Generar las 7"}
           </button>
         </div>
       </div>
       <p className="text-sm text-neutral-500 mb-3">
-        Estructura fija por día (Lun pregunta, Mar mito, Mié caso, Jue tip, Vie BTS, Sáb interacción, Dom recap).
-        La IA rellena cada día con un mini-guion accionable a partir del tema de la semana.
+        Cuéntale a la IA qué quieres esta semana. Tus instrucciones mandan; la
+        estructura por día (Lun pregunta, Mar mito, Mié caso, Jue tip, Vie BTS,
+        Sáb interacción, Dom recap) es solo una sugerencia que puede saltarse
+        si lo justifica tu mensaje.
       </p>
+
+      {/* Instrucciones persistentes a nivel semana */}
+      <div className="card mb-3">
+        <div className="flex items-baseline justify-between gap-2 mb-1.5">
+          <label className="text-xs font-semibold text-neutral-700">
+            🎯 Instrucciones para esta semana
+            <span className="text-neutral-400 font-normal"> · se quedan guardadas y se usan en cada generación</span>
+          </label>
+          <span className="text-[11px] text-neutral-400 min-w-[70px] text-right">
+            {instrSaveState === "saving" ? "Guardando…" : instrSaveState === "saved" ? "Guardado ✓" : ""}
+          </span>
+        </div>
+        <textarea
+          className="w-full text-sm resize-y min-h-[80px] rounded-md border border-neutral-200 bg-white px-3 py-2 outline-none focus:border-neutral-500 focus:ring-1 focus:ring-neutral-300"
+          rows={4}
+          value={instructions}
+          onChange={(e) => {
+            setInstructions(e.target.value);
+            scheduleSaveInstructions(e.target.value);
+          }}
+          placeholder={'Ej. "Esta semana quiero que las stories vayan más al grano, menos vídeos selfie y más imágenes con sticker de pregunta. Que el viernes no sea BTS sino un caso real con vídeo del paciente."'}
+        />
+      </div>
+
+      {/* Nota one-shot opcional para esta generación */}
+      <div className="card mb-3" style={{ background: "#FFFBEB", border: "1px dashed #FCD34D" }}>
+        <label className="text-xs font-semibold block mb-1.5" style={{ color: "#78350F" }}>
+          🔁 Ajuste solo para la próxima generación
+          <span className="font-normal" style={{ color: "#92400E" }}> · no se guarda</span>
+        </label>
+        <textarea
+          className="w-full text-sm resize-y min-h-[50px] rounded-md outline-none bg-white px-3 py-2"
+          style={{ border: "1px solid #FCD34D" }}
+          rows={2}
+          value={oneShot}
+          onChange={(e) => setOneShot(e.target.value)}
+          placeholder='Ej. "Hazlas más cortas", "menos académico", "remata todas con CTA a DM con la palabra HOMBRO"…'
+        />
+      </div>
+
       {genError && (
         <p className="text-xs text-red-600 mb-2">⚠️ {genError}</p>
       )}
