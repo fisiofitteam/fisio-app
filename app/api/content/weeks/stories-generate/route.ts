@@ -88,10 +88,10 @@ function userPrompt(opts: {
   leadMagnetKeyword: string | null;
   weekNumber: number;
   year: number;
-  dayIndices: number[];
-  weekInstructions: string;        // persistente (guardado en la semana)
-  oneShotInstructions: string;     // del momento (no se guarda)
+  dayIndex: number;
+  dayInstructions: string;
 }): string {
+  const s = dayStructureFor(opts.dayIndex);
   const lines: string[] = [];
   lines.push(`Semana ${opts.weekNumber}/${opts.year} — Tema central: "${opts.centralTheme}". Zona del cuerpo: ${opts.bodyZone}. Tipo de semana: ${opts.weekType}.`);
   if (opts.limitingBeliefs.length) {
@@ -100,37 +100,29 @@ function userPrompt(opts: {
   if (opts.leadMagnetName) {
     lines.push(`Lead magnet activo: "${opts.leadMagnetName}"${opts.leadMagnetKeyword ? ` (palabra clave DM: "${opts.leadMagnetKeyword}")` : ""}.`);
   }
+  lines.push("");
+  lines.push(`Día a redactar: ${s.label} (dayIndex=${opts.dayIndex}).`);
 
-  // Bloque de instrucciones libres del CEO. Va lo primero después del contexto
-  // para que el modelo lo lea como "norte" antes de procesar la estructura.
-  if (opts.weekInstructions.trim() || opts.oneShotInstructions.trim()) {
+  // Bloque de instrucciones del CEO PARA ESTE DÍA. Va antes de la estructura
+  // sugerida para que el modelo lo lea como "norte" y pueda apartarse del
+  // tipo por defecto del día si las instrucciones lo justifican.
+  if (opts.dayInstructions.trim()) {
     lines.push("");
     lines.push("═══════════════════════════════════════════════════════════════");
-    lines.push("INSTRUCCIONES DEL CEO PARA ESTA SEMANA (prioritarias):");
-    if (opts.weekInstructions.trim()) {
-      lines.push(opts.weekInstructions.trim());
-    }
-    if (opts.oneShotInstructions.trim()) {
-      lines.push("");
-      lines.push("Además, para esta generación en concreto:");
-      lines.push(opts.oneShotInstructions.trim());
-    }
+    lines.push("INSTRUCCIONES DEL CEO PARA ESTA HISTORIA (prioritarias — mandan sobre la estructura sugerida):");
+    lines.push(opts.dayInstructions.trim());
     lines.push("═══════════════════════════════════════════════════════════════");
   }
 
   lines.push("");
-  lines.push("Días a redactar — la siguiente estructura es una SUGERENCIA. Respétala si encaja con las instrucciones del CEO; apártate si no:");
+  lines.push("Estructura SUGERIDA por defecto para este día (úsala solo si encaja con lo que pide el CEO; si no, apártate):");
+  lines.push(`  Tipo: ${s.type}.`);
+  lines.push(`  Propósito: ${s.purpose}`);
+  lines.push(`  Formato: ${s.defaultFormat}`);
+  lines.push(`  Estructura: ${s.framework}`);
   lines.push("");
-  for (const idx of opts.dayIndices) {
-    const s = dayStructureFor(idx);
-    lines.push(`— ${s.label} (dayIndex=${idx}) — Tipo sugerido: ${s.type}.`);
-    lines.push(`  Propósito sugerido: ${s.purpose}`);
-    lines.push(`  Formato sugerido: ${s.defaultFormat}`);
-    lines.push(`  Estructura sugerida: ${s.framework}`);
-    lines.push("");
-  }
-  lines.push("Cada guion: redactado para improvisar fácil. Sin hashtags, sin emojis abusivos.");
-  lines.push(`Devuelve el JSON con SOLO los días pedidos (${opts.dayIndices.join(", ")}).`);
+  lines.push("El guion: redactado para improvisar fácil. Sin hashtags, sin emojis abusivos.");
+  lines.push(`Devuelve el JSON con el guion para dayIndex=${opts.dayIndex}.`);
   return lines.join("\n");
 }
 
@@ -144,13 +136,16 @@ export async function POST(req: NextRequest) {
   if (!weekId) return NextResponse.json({ error: "weekId requerido" }, { status: 400 });
 
   const dayIndexRaw = body?.dayIndex;
-  const single = typeof dayIndexRaw === "number" && dayIndexRaw >= 0 && dayIndexRaw <= 6;
-  const dayIndices: number[] = single ? [dayIndexRaw] : [0, 1, 2, 3, 4, 5, 6];
+  if (typeof dayIndexRaw !== "number" || dayIndexRaw < 0 || dayIndexRaw > 6) {
+    return NextResponse.json({ error: "dayIndex requerido (0=Lun..6=Dom)" }, { status: 400 });
+  }
+  const dayIndex = dayIndexRaw;
 
-  // Nota one-shot opcional: el CEO puede afinar SOLO esta generación sin
-  // tocar las instrucciones persistentes de la semana.
-  const oneShotInstructions = typeof body?.oneShotInstructions === "string"
-    ? body.oneShotInstructions
+  // Instrucciones específicas del CEO para ESTA historia. Es lo único que
+  // dirige al modelo además del contexto de la semana. La estructura por
+  // día queda como sugerencia, no como jaula.
+  const dayInstructions = typeof body?.dayInstructions === "string"
+    ? body.dayInstructions
     : "";
 
   const week = await prisma.contentWeek.findUnique({ where: { id: weekId } });
@@ -172,9 +167,8 @@ export async function POST(req: NextRequest) {
     leadMagnetKeyword: week.leadMagnetKeyword,
     weekNumber: week.weekNumber,
     year: week.year,
-    dayIndices,
-    weekInstructions: week.weekStoriesInstructions ?? "",
-    oneShotInstructions,
+    dayIndex,
+    dayInstructions,
   });
 
   let resp;
@@ -198,29 +192,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `La IA no devolvió JSON válido: ${e?.message}` }, { status: 502 });
   }
 
-  const scripts: Record<number, string> = {};
+  // El modelo devuelve { scripts: { "<dayIndex>": "..." } }. Aceptamos también
+  // que devuelva el script suelto bajo `script` por robustez.
   const raw = parsed?.scripts ?? {};
-  for (const idx of dayIndices) {
-    const v = raw[String(idx)] ?? raw[idx];
-    if (typeof v === "string" && v.trim()) scripts[idx] = v.trim();
-  }
+  const candidate = raw[String(dayIndex)] ?? raw[dayIndex] ?? parsed?.script;
+  const script = typeof candidate === "string" ? candidate.trim() : "";
 
-  if (Object.keys(scripts).length === 0) {
+  if (!script) {
     return NextResponse.json({ error: "La IA no devolvió ningún guion utilizable." }, { status: 502 });
   }
 
-  // Persistir en weekStories (sobrescribiendo los días pedidos)
+  // Persistir en weekStories (sobrescribiendo solo el día pedido).
   const current = parseStories(week.weekStories);
-  for (const idxStr of Object.keys(scripts)) {
-    const i = Number(idxStr);
-    current[i] = scripts[i];
-  }
+  current[dayIndex] = script;
   await prisma.contentWeek.update({
     where: { id: weekId },
     data: { weekStories: JSON.stringify(current) },
   });
 
-  return NextResponse.json({ ok: true, scripts });
+  return NextResponse.json({ ok: true, scripts: { [dayIndex]: script } });
 }
 
 // Para que el front pueda mostrar la etiqueta de cada día sin hardcodear

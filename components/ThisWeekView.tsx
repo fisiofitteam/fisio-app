@@ -608,28 +608,45 @@ const STORY_DAY_TYPES: Record<number, { type: string; purpose: string; format: s
   7: { type: "Recap + cierre", purpose: "Cerrar y preparar la próxima", format: "🎬 Mixto" },
 };
 
+// Parsea el JSON de instrucciones por día. Toleramos formatos antiguos:
+//  - "" (vacío) → 7 strings vacíos.
+//  - string suelto (versión previa, instrucciones a nivel semana) → lo
+//    metemos en cada día como punto de partida.
+//  - JSON array → lo normalizamos a 7 elementos.
+function parseDayInstructions(raw: string | null | undefined): string[] {
+  const arr: string[] = Array(7).fill("");
+  if (!raw || !raw.trim()) return arr;
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      for (let i = 0; i < 7; i++) {
+        arr[i] = typeof parsed[i] === "string" ? parsed[i] : "";
+      }
+      return arr;
+    }
+  } catch {}
+  // Fallback: era un string suelto (formato semanal antiguo). Lo replicamos
+  // en cada día para no perder el contenido.
+  return arr.map(() => raw.trim());
+}
+
 function WeekStoriesSection({ week }: { week: Week }) {
   const [values, setValues] = useState<string[]>(() => parseWeekStories(week.weekStories));
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
-  const [genAll, setGenAll] = useState(false);
   const [genDay, setGenDay] = useState<number | null>(null);
   const [genError, setGenError] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Instrucciones persistentes a nivel semana (se guardan en
-  // ContentWeek.weekStoriesInstructions y se inyectan en cada generación).
-  const [instructions, setInstructions] = useState<string>(week.weekStoriesInstructions ?? "");
+  // Instrucciones por día (persistentes en weekStoriesInstructions, ahora
+  // serializado como JSON array de 7 strings).
+  const [dayInstr, setDayInstr] = useState<string[]>(() => parseDayInstructions(week.weekStoriesInstructions));
   const [instrSaveState, setInstrSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const instrTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Nota one-shot que se manda SOLO en la próxima generación, sin guardar.
-  const [oneShot, setOneShot] = useState<string>("");
 
   // Si cambiamos de semana (mismo componente, distinto week.id), resetear
   useEffect(() => {
     setValues(parseWeekStories(week.weekStories));
-    setInstructions(week.weekStoriesInstructions ?? "");
-    setOneShot("");
+    setDayInstr(parseDayInstructions(week.weekStoriesInstructions));
     setSaveState("idle");
     setInstrSaveState("idle");
     setGenError(null);
@@ -649,14 +666,14 @@ function WeekStoriesSection({ week }: { week: Week }) {
     }, 1000);
   }
 
-  function scheduleSaveInstructions(next: string) {
+  function scheduleSaveDayInstructions(next: string[]) {
     setInstrSaveState("saving");
     if (instrTimer.current) clearTimeout(instrTimer.current);
     instrTimer.current = setTimeout(async () => {
       await fetch("/api/content/weeks", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: week.id, weekStoriesInstructions: next }),
+        body: JSON.stringify({ id: week.id, weekStoriesInstructions: JSON.stringify(next) }),
       });
       setInstrSaveState("saved");
       setTimeout(() => setInstrSaveState("idle"), 1500);
@@ -669,39 +686,40 @@ function WeekStoriesSection({ week }: { week: Week }) {
     scheduleSave(next);
   }
 
-  async function generate(dayIndex: number | null) {
+  function setDayInstruction(idx: number, val: string) {
+    const next = dayInstr.map((v, i) => (i === idx ? val : v));
+    setDayInstr(next);
+    scheduleSaveDayInstructions(next);
+  }
+
+  async function generate(dayIndex: number) {
     setGenError(null);
-    if (dayIndex === null) setGenAll(true); else setGenDay(dayIndex);
+    setGenDay(dayIndex);
     try {
       const r = await fetch("/api/content/weeks/stories-generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           weekId: week.id,
-          ...(dayIndex !== null ? { dayIndex } : {}),
-          ...(oneShot.trim() ? { oneShotInstructions: oneShot.trim() } : {}),
+          dayIndex,
+          ...(dayInstr[dayIndex]?.trim() ? { dayInstructions: dayInstr[dayIndex].trim() } : {}),
         }),
       });
       const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data?.error || "Error generando guiones");
+      if (!r.ok) throw new Error(data?.error || "Error generando guion");
       const scripts: Record<string, string> = data.scripts || {};
-      const next = [...values];
-      for (const k of Object.keys(scripts)) {
-        const i = Number(k);
-        if (i >= 0 && i < 7) next[i] = scripts[k];
+      const script = scripts[String(dayIndex)] ?? scripts[dayIndex as unknown as string];
+      if (typeof script === "string" && script.trim()) {
+        const next = [...values];
+        next[dayIndex] = script;
+        setValues(next);
+        // El endpoint ya persiste — solo refrescamos el indicador.
+        setSaveState("saved");
+        setTimeout(() => setSaveState("idle"), 1500);
       }
-      setValues(next);
-      // El endpoint ya persiste — no relanzamos scheduleSave para evitar pisado raro,
-      // sólo refrescamos el estado visual.
-      setSaveState("saved");
-      setTimeout(() => setSaveState("idle"), 1500);
-      // La nota one-shot se consume — la limpiamos para que no se aplique
-      // por accidente en la siguiente generación.
-      setOneShot("");
     } catch (e: any) {
       setGenError(e?.message || "Error desconocido");
     } finally {
-      setGenAll(false);
       setGenDay(null);
     }
   }
@@ -710,66 +728,21 @@ function WeekStoriesSection({ week }: { week: Week }) {
     <section className="mt-10">
       <div className="flex items-center justify-between gap-3 mb-1 flex-wrap">
         <h2 className="text-xl font-bold flex items-center gap-2">📲 Historias de la semana</h2>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-neutral-400 min-w-[70px] text-right">
-            {saveState === "saving" ? "Guardando…" : saveState === "saved" ? "Guardado ✓" : ""}
-          </span>
-          <button
-            onClick={() => generate(null)}
-            disabled={genAll || genDay !== null}
-            className="text-xs px-3 py-1.5 rounded-md bg-neutral-900 text-white hover:bg-neutral-800 disabled:opacity-50"
-            title="Genera las 7 stories. Respeta tus instrucciones por encima de la estructura sugerida."
-          >
-            {genAll ? "Generando las 7…" : "✨ Generar las 7"}
-          </button>
-        </div>
+        <span className="text-xs text-neutral-400 min-w-[70px] text-right">
+          {saveState === "saving" ? "Guardando…" : saveState === "saved" ? "Guardado ✓" : ""}
+        </span>
       </div>
       <p className="text-sm text-neutral-500 mb-3">
-        Cuéntale a la IA qué quieres esta semana. Tus instrucciones mandan; la
-        estructura por día (Lun pregunta, Mar mito, Mié caso, Jue tip, Vie BTS,
-        Sáb interacción, Dom recap) es solo una sugerencia que puede saltarse
-        si lo justifica tu mensaje.
+        Genera cada día por separado. Tus instrucciones por día mandan: la
+        estructura sugerida (Lun pregunta, Mar mito, Mié caso, Jue tip, Vie
+        BTS, Sáb interacción, Dom recap) es solo un punto de partida que la
+        IA puede saltarse si tu mensaje lo justifica.
       </p>
-
-      {/* Instrucciones persistentes a nivel semana */}
-      <div className="card mb-3">
-        <div className="flex items-baseline justify-between gap-2 mb-1.5">
-          <label className="text-xs font-semibold text-neutral-700">
-            🎯 Instrucciones para esta semana
-            <span className="text-neutral-400 font-normal"> · se quedan guardadas y se usan en cada generación</span>
-          </label>
-          <span className="text-[11px] text-neutral-400 min-w-[70px] text-right">
-            {instrSaveState === "saving" ? "Guardando…" : instrSaveState === "saved" ? "Guardado ✓" : ""}
-          </span>
-        </div>
-        <textarea
-          className="w-full text-sm resize-y min-h-[80px] rounded-md border border-neutral-200 bg-white px-3 py-2 outline-none focus:border-neutral-500 focus:ring-1 focus:ring-neutral-300"
-          rows={4}
-          value={instructions}
-          onChange={(e) => {
-            setInstructions(e.target.value);
-            scheduleSaveInstructions(e.target.value);
-          }}
-          placeholder={'Ej. "Esta semana quiero que las stories vayan más al grano, menos vídeos selfie y más imágenes con sticker de pregunta. Que el viernes no sea BTS sino un caso real con vídeo del paciente."'}
-        />
-      </div>
-
-      {/* Nota one-shot opcional para esta generación */}
-      <div className="card mb-3" style={{ background: "#FFFBEB", border: "1px dashed #FCD34D" }}>
-        <label className="text-xs font-semibold block mb-1.5" style={{ color: "#78350F" }}>
-          🔁 Ajuste solo para la próxima generación
-          <span className="font-normal" style={{ color: "#92400E" }}> · no se guarda</span>
-        </label>
-        <textarea
-          className="w-full text-sm resize-y min-h-[50px] rounded-md outline-none bg-white px-3 py-2"
-          style={{ border: "1px solid #FCD34D" }}
-          rows={2}
-          value={oneShot}
-          onChange={(e) => setOneShot(e.target.value)}
-          placeholder='Ej. "Hazlas más cortas", "menos académico", "remata todas con CTA a DM con la palabra HOMBRO"…'
-        />
-      </div>
-
+      {instrSaveState !== "idle" && (
+        <p className="text-[11px] text-neutral-400 mb-2">
+          Instrucciones por día: {instrSaveState === "saving" ? "guardando…" : "guardadas ✓"}
+        </p>
+      )}
       {genError && (
         <p className="text-xs text-red-600 mb-2">⚠️ {genError}</p>
       )}
@@ -798,31 +771,54 @@ function WeekStoriesSection({ week }: { week: Week }) {
                   )}
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <button
-                    onClick={() => generate(idx)}
-                    disabled={genAll || genDay !== null}
-                    className="text-[11px] px-2 py-1 rounded bg-neutral-100 hover:bg-neutral-200 disabled:opacity-50"
-                    title="Generar mini-guion para este día (sobrescribe lo que haya)"
-                  >
-                    {isGenThis ? "Generando…" : "✨ Generar"}
-                  </button>
                   {val && (
                     <button
                       onClick={() => setDay(idx, "")}
                       className="text-[11px] text-neutral-300 hover:text-red-600"
-                      title="Borrar contenido de este día"
+                      title="Borrar el guion de este día"
                     >
                       Borrar
                     </button>
                   )}
                 </div>
               </div>
+
+              {/* Caja de instrucciones para ESTE día. Lo que escribas aquí
+                  manda sobre la estructura sugerida al pulsar Generar. */}
+              <div
+                className="rounded-md p-2 mb-2"
+                style={{ background: "#FFFBEB", border: "1px dashed #FCD34D" }}
+              >
+                <label className="text-[10px] font-semibold block mb-1" style={{ color: "#78350F" }}>
+                  🎯 Instrucciones para esta historia
+                </label>
+                <textarea
+                  className="w-full text-[12px] resize-y min-h-[44px] rounded outline-none bg-white px-2 py-1.5"
+                  style={{ border: "1px solid #FCD34D" }}
+                  rows={2}
+                  value={dayInstr[idx] ?? ""}
+                  onChange={(e) => setDayInstruction(idx, e.target.value)}
+                  placeholder='Cuéntale qué quieres: ángulo, formato, qué decir, qué evitar…'
+                />
+                <div className="flex justify-end mt-1.5">
+                  <button
+                    onClick={() => generate(idx)}
+                    disabled={genDay !== null}
+                    className="text-[11px] font-semibold px-2.5 py-1 rounded disabled:opacity-50"
+                    style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+                    title="Generar mini-guion para este día (sobrescribe lo que haya)"
+                  >
+                    {isGenThis ? "Generando…" : "✨ Generar este día"}
+                  </button>
+                </div>
+              </div>
+
               <textarea
                 className="w-full text-sm resize-y min-h-[80px] rounded-md border border-neutral-200 bg-white px-2 py-1.5 outline-none focus:border-neutral-500 focus:ring-1 focus:ring-neutral-300 hover:border-neutral-300 leading-snug font-mono"
                 rows={Math.max(4, Math.min(16, (val.match(/\n/g)?.length ?? 0) + 2))}
                 value={val}
                 onChange={(e) => setDay(idx, e.target.value)}
-                placeholder={meta ? `Pulsa ✨ Generar y luego edita libremente (se autoguarda).` : ""}
+                placeholder={meta ? `Pulsa "Generar este día" o escribe el guion a mano (se autoguarda).` : ""}
               />
               <div className="text-[10px] text-neutral-400 mt-1">
                 ✏️ Editable: tocas cualquier línea y se guarda automáticamente.
