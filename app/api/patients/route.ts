@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
+import { notifyHeadSuccess } from "@/lib/notifications";
 
 /**
  * POST /api/patients
@@ -164,6 +165,33 @@ export async function POST(req: NextRequest) {
         professionalId: assignedProfessionalId || user.id,
       },
     });
+  }
+
+  // 3) Notificar al head_success de que entra paciente nuevo. Aplicamos el
+  // mismo tipo que en el webhook Stripe (patient_new_unassigned) para que
+  // los head_success no tengan que configurar dos toggles. El body deja
+  // claro si trae ya fisio asignado o no, para que sepan si tienen tarea.
+  // Los pacientes legacy (migración) no notifican: se está vaciando el
+  // histórico, no son altas reales.
+  if (!isLegacy) {
+    try {
+      let fisioLabel = "Sin fisio asignado · falta asignarle uno";
+      if (finalAssigneeId) {
+        const fisio = await prisma.professional.findUnique({
+          where: { id: finalAssigneeId },
+          select: { fullName: true },
+        });
+        if (fisio) fisioLabel = `Fisio asignado: ${fisio.fullName}`;
+      }
+      await notifyHeadSuccess({
+        type: "patient_new_unassigned",
+        title: "Nuevo paciente (alta manual)",
+        body: `${user.fullName} ha añadido a ${patient.fullName}. ${fisioLabel}.`,
+        actionUrl: `/fisio/paciente/${patient.id}/ficha`,
+      });
+    } catch (err) {
+      console.error("[patients] Error notificando a head_success:", err);
+    }
   }
 
   return NextResponse.json({ ok: true, patientId: patient.id });
