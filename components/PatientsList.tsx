@@ -585,6 +585,10 @@ function CreatePatientModal({
           phone: phone.trim() || undefined,
           productCode,
           amountEuros,
+          // Extras del form: cuando pague, el webhook los aplica al Patient
+          // para que el alta quede exactamente como la diseñaste aquí.
+          assignedProfessionalId: assignedProfessionalId || undefined,
+          diagnosis: diagnosis.trim() || undefined,
         }),
       });
       const data = await res.json();
@@ -904,8 +908,9 @@ function CreatePatientModal({
                   </div>
                   <p className="text-[11px]" style={{ color: "#0C4A6E" }}>
                     En vez de marcar el cobro aquí, generamos un link Stripe.
-                    Cuando el paciente pague, el alta se crea sola con sus
-                    datos (email, teléfono, Instagram).
+                    Cuando el paciente pague, el alta se crea sola con los
+                    datos que has rellenado arriba (nombre, email, teléfono,
+                    fisio asignado, diagnóstico).
                   </p>
                   {!canStripe && (
                     <div className="text-xs px-2 py-1.5 rounded" style={{ background: "#FEF3C7", color: "#7C2D12", border: "1px solid #FCD34D" }}>

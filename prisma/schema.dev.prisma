@@ -1912,6 +1912,10 @@ model Sale {
   paymentToken    String   @unique
   tokenExpiresAt  DateTime
 
+  // Datos extra del formulario "Nuevo paciente" cuando el Sale se generó
+  // desde alta manual. JSON con assignedProfessionalId/diagnosis/etc.
+  manualAltaData  String?
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

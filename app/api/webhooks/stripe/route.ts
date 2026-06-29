@@ -193,6 +193,22 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     ? session.payment_method_types[0]
     : null;
 
+  // Datos extra que vienen del modal "Nuevo paciente" cuando el Sale se
+  // generó como alta manual (assignedProfessionalId, diagnosis...). Si el
+  // Sale viene de la agenda de leads, este campo es null y nada cambia.
+  let manualAlta: {
+    assignedProfessionalId?: string;
+    diagnosis?: string;
+  } = {};
+  if (sale.manualAltaData) {
+    try {
+      const parsed = JSON.parse(sale.manualAltaData);
+      if (parsed && typeof parsed === "object") manualAlta = parsed;
+    } catch (e) {
+      console.warn("[stripe-webhook] manualAltaData JSON inválido", { saleId: sale.id });
+    }
+  }
+
   // Transacción: Patient + Sale + Lead atómicos
   const result = await prisma.$transaction(async (tx) => {
     // Crear Patient heredando del Lead
@@ -217,7 +233,18 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
         subscriptionTotalMonths: sale.durationMonths,
         programType: sale.programType,
         programMode: "fixed",
-        onboardingStatus: "pending_assignment",
+        // Si el alta es manual y el CEO eligió fisio, pasa directo a
+        // "active" (saltamos el paso de asignación). Si no, queda en
+        // "pending_assignment" como siempre.
+        onboardingStatus: manualAlta.assignedProfessionalId
+          ? "active"
+          : "pending_assignment",
+        ...(manualAlta.assignedProfessionalId
+          ? { assignedProfessionalId: manualAlta.assignedProfessionalId }
+          : {}),
+        ...(manualAlta.diagnosis
+          ? { diagnosis: manualAlta.diagnosis }
+          : {}),
         programDurationMonths: sale.durationMonths,
         programStartDate: now,
         programEndDate: programEndDate,

@@ -2011,6 +2011,16 @@ model Sale {
   paymentToken    String   @unique
   tokenExpiresAt  DateTime
 
+  // Datos extra del formulario "Nuevo paciente" cuando el Sale se generó
+  // desde el alta manual (botón "Generar link de pago Stripe"). JSON
+  // serializado con campos opcionales: assignedProfessionalId, diagnosis,
+  // programMode ("fixed"|"rolling"), rollingProgramId.
+  // Se aplican al Patient al ejecutarse el webhook Stripe — así el alta
+  // queda con el fisio asignado y el diagnóstico que metió el CEO en el
+  // form, en vez de recrearse con valores por defecto.
+  // Para Sales venidos de la agenda de leads este campo es null.
+  manualAltaData  String?
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

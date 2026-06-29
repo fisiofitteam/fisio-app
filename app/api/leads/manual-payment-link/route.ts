@@ -131,6 +131,20 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // ── Datos extra del formulario "Nuevo paciente" ─────────────────────────
+  // Estos campos los rellena el CEO/head/fisio en el modal. Los guardamos
+  // en Sale.manualAltaData y los aplicará el webhook Stripe al crear el
+  // Patient — para que el alta quede tal cual la diseñó el closer, en
+  // vez de reconstruirse con valores por defecto.
+  const assignedProfessionalId = typeof body?.assignedProfessionalId === "string"
+    ? body.assignedProfessionalId.trim()
+    : "";
+  const diagnosis = typeof body?.diagnosis === "string" ? body.diagnosis.trim() : "";
+  const manualAltaData = JSON.stringify({
+    ...(assignedProfessionalId ? { assignedProfessionalId } : {}),
+    ...(diagnosis ? { diagnosis } : {}),
+  });
+
   // ── Crear Lead minimal + Sale en una transacción ────────────────────────
   const token = generatePaymentToken();
   const tokenExpiresAt = new Date(Date.now() + TOKEN_VALIDITY_DAYS * 86400 * 1000);
@@ -166,6 +180,7 @@ export async function POST(req: NextRequest) {
         paymentToken: token,
         tokenExpiresAt,
         status: "pending",
+        manualAltaData: manualAltaData === "{}" ? null : manualAltaData,
       },
     });
 
