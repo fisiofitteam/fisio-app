@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
@@ -485,6 +485,122 @@ function CreatePatientModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  // ── Generación de link de pago Stripe (alternativa a "Crear paciente") ──
+  // Si el CEO/head/fisio prefiere que el paciente pague online en vez de
+  // marcar el cobro manualmente, abrimos esta sección. Cuando paga, el
+  // webhook Stripe convierte el Lead → Patient heredando phone/instagram.
+  const [showStripe, setShowStripe] = useState(false);
+  const [stripePrice, setStripePrice] = useState("");
+  const [stripeSuggested, setStripeSuggested] = useState<number | null>(null);
+  const [loadingStripePrice, setLoadingStripePrice] = useState(false);
+  const [generatingLink, setGeneratingLink] = useState(false);
+  const [generatedLink, setGeneratedLink] = useState<{ url: string; productLabel: string } | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  // Stripe solo tiene precios configurados para RECUPERA/CONSOLIDA × 4M/6M.
+  // Cualquier otro programa o duración → el botón de Stripe queda deshabilitado.
+  const canStripe =
+    (programType === "RECUPERA" || programType === "CONSOLIDA") &&
+    (subscriptionPeriodMonths === "4" || subscriptionPeriodMonths === "6");
+  const productCode = canStripe
+    ? (`${programType}_${subscriptionPeriodMonths}M` as
+        | "RECUPERA_4M"
+        | "RECUPERA_6M"
+        | "CONSOLIDA_4M"
+        | "CONSOLIDA_6M")
+    : null;
+
+  // Al abrir la sección Stripe (o cambiar programa/duración con la sección
+  // abierta), consultamos el precio sugerido y prellenamos el input.
+  useEffect(() => {
+    if (!showStripe || !productCode) return;
+    let cancelled = false;
+    setLoadingStripePrice(true);
+    fetch(`/api/products/price-suggestion?productCode=${productCode}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (typeof data?.amountCents === "number") {
+          setStripeSuggested(data.amountCents);
+          setStripePrice((data.amountCents / 100).toFixed(2).replace(".", ","));
+        } else {
+          setStripeSuggested(null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setStripeSuggested(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingStripePrice(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showStripe, productCode]);
+
+  function buildWhatsAppLink(fullUrl: string): string | null {
+    if (!phone.trim()) return null;
+    const raw = phone.replace(/[^\d+]/g, "");
+    if (!raw) return null;
+    const first = fullName.split(" ")[0] || "";
+    const msg = `Hola ${first}, aquí tienes tu link para contratar el programa: ${fullUrl}`;
+    return `https://wa.me/${raw.replace(/^\+/, "")}?text=${encodeURIComponent(msg)}`;
+  }
+
+  async function copyLink(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {}
+  }
+
+  async function generateStripeLink() {
+    setError("");
+    if (!fullName.trim()) {
+      setError("El nombre es obligatorio para generar el link");
+      return;
+    }
+    if (!email.trim() && !phone.trim()) {
+      setError("Indica al menos email o teléfono para el lead");
+      return;
+    }
+    if (!productCode) {
+      setError("Stripe solo soporta RECUPERA o CONSOLIDA en 4 o 6 meses");
+      return;
+    }
+    const amountEuros = stripePrice ? Number(stripePrice.replace(",", ".")) : NaN;
+    if (!Number.isFinite(amountEuros) || amountEuros <= 0) {
+      setError("Indica un importe válido (> 0)");
+      return;
+    }
+    setGeneratingLink(true);
+    try {
+      const res = await fetch("/api/leads/manual-payment-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullName: fullName.trim(),
+          email: email.trim() || undefined,
+          phone: phone.trim() || undefined,
+          productCode,
+          amountEuros,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "No se pudo generar el link");
+      const fullUrl = `https://app.fisiofitteam.com${data.landingUrl}`;
+      setGeneratedLink({ url: fullUrl, productLabel: data.productLabel });
+      // Si hay teléfono, abrir WhatsApp en otra pestaña con el mensaje listo.
+      const wa = buildWhatsAppLink(fullUrl);
+      if (wa) window.open(wa, "_blank", "noopener,noreferrer");
+    } catch (e: any) {
+      setError(e?.message || "Error generando link");
+    } finally {
+      setGeneratingLink(false);
+    }
+  }
+
   // Si cambia el programType a algo distinto de ADVANCE, forzar modo fijo
   function selectProgramType(p: string) {
     setProgramType(p);
@@ -515,6 +631,7 @@ function CreatePatientModal({
       body: JSON.stringify({
         fullName: fullName.trim(),
         email: email.trim(),
+        phone: phone.trim() || null,
         shippingPhone: phone.trim() || null,
         diagnosis: diagnosis.trim() || null,
         assignedProfessionalId: assignedProfessionalId || null,
@@ -731,30 +848,157 @@ function CreatePatientModal({
             </p>
           )}
 
-          {error && (
+          {error && !generatedLink && (
             <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
               {error}
             </div>
           )}
 
-          <button
-            onClick={save}
-            disabled={saving || !fullName.trim() || !email.trim()}
-            className="btn btn-accent w-full disabled:opacity-50"
-            style={{
-              background: "#0A0A0A",
-              color: "#FAFAFA",
-              padding: "11px",
-              borderRadius: 10,
-              fontWeight: 500,
-              fontSize: 14,
-              border: "none",
-              cursor: saving ? "wait" : "pointer",
-              width: "100%",
-            }}
-          >
-            {saving ? "Creando..." : "Crear paciente"}
-          </button>
+          {!generatedLink && (
+            <button
+              onClick={save}
+              disabled={saving || !fullName.trim() || !email.trim()}
+              className="btn btn-accent w-full disabled:opacity-50"
+              style={{
+                background: "#0A0A0A",
+                color: "#FAFAFA",
+                padding: "11px",
+                borderRadius: 10,
+                fontWeight: 500,
+                fontSize: 14,
+                border: "none",
+                cursor: saving ? "wait" : "pointer",
+                width: "100%",
+              }}
+            >
+              {saving ? "Creando..." : "Crear paciente"}
+            </button>
+          )}
+
+          {/* ── Alternativa: link de pago Stripe ────────────────────────── */}
+          {!generatedLink && (
+            <div className="border-t border-neutral-200 pt-3 mt-1">
+              {!showStripe ? (
+                <button
+                  type="button"
+                  onClick={() => setShowStripe(true)}
+                  className="text-xs text-neutral-600 hover:text-neutral-900 underline"
+                  title="En vez de crear el paciente ya, genera un link Stripe. Cuando pague, el paciente se crea automáticamente."
+                >
+                  💳 ¿Prefieres que pague online con Stripe?
+                </button>
+              ) : (
+                <div className="rounded-lg p-3 space-y-2" style={{ background: "#F0F9FF", border: "1px solid #BAE6FD" }}>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="text-xs font-semibold" style={{ color: "#075985" }}>
+                      💳 Link de pago Stripe
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => { setShowStripe(false); setStripePrice(""); setError(""); }}
+                      className="text-[11px]"
+                      style={{ color: "#0369A1" }}
+                    >
+                      cancelar
+                    </button>
+                  </div>
+                  <p className="text-[11px]" style={{ color: "#0C4A6E" }}>
+                    En vez de marcar el cobro aquí, generamos un link Stripe.
+                    Cuando el paciente pague, el alta se crea sola con sus
+                    datos (email, teléfono, Instagram).
+                  </p>
+                  {!canStripe && (
+                    <div className="text-xs px-2 py-1.5 rounded" style={{ background: "#FEF3C7", color: "#7C2D12", border: "1px solid #FCD34D" }}>
+                      Stripe solo está configurado para RECUPERA o CONSOLIDA en
+                      4 o 6 meses. Ajusta programa y duración para activarlo.
+                    </div>
+                  )}
+                  {canStripe && (
+                    <>
+                      <div className="text-[11px]" style={{ color: "#075985" }}>
+                        Producto: <strong>{productCode}</strong>
+                      </div>
+                      <div>
+                        <label className="text-[11px] block mb-1" style={{ color: "#0C4A6E" }}>
+                          Importe a cobrar (€)
+                          {loadingStripePrice && <span className="italic ml-1">· consultando sugerido…</span>}
+                          {!loadingStripePrice && stripeSuggested !== null && (
+                            <span className="italic ml-1">
+                              · sugerido {(stripeSuggested / 100).toFixed(2).replace(".", ",")} €
+                            </span>
+                          )}
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          className="input text-sm w-full"
+                          value={stripePrice}
+                          onChange={(e) => setStripePrice(e.target.value.replace(/[^\d.,]/g, ""))}
+                          placeholder="Ej: 749 o 749,00"
+                        />
+                      </div>
+                      {error && (
+                        <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1.5">
+                          {error}
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={generateStripeLink}
+                        disabled={generatingLink || !stripePrice.trim()}
+                        className="w-full text-sm font-semibold rounded-lg py-2 disabled:opacity-50"
+                        style={{ background: "#0369A1", color: "#FFFFFF", border: "none" }}
+                      >
+                        {generatingLink ? "Generando link…" : "✨ Generar link de pago"}
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Resultado: link generado ───────────────────────────────── */}
+          {generatedLink && (
+            <div className="space-y-3">
+              <div className="rounded-lg p-3" style={{ background: "#F0FDF4", border: "1px solid #BBF7D0" }}>
+                <p className="text-sm font-medium" style={{ color: "#065F46" }}>✓ Link generado</p>
+                <p className="text-xs mt-1" style={{ color: "#047857" }}>
+                  {generatedLink.productLabel} · válido 3 días. Cuando el
+                  paciente pague, el alta se hace sola.
+                </p>
+              </div>
+              {phone.trim() && (
+                <div className="rounded-lg p-3 text-xs" style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", color: "#1E3A8A" }}>
+                  📱 Te he abierto WhatsApp en otra pestaña con el mensaje listo.
+                </div>
+              )}
+              <div>
+                <label className="text-xs text-neutral-500 block mb-1">URL del link</label>
+                <div className="flex gap-2">
+                  <input
+                    className="input text-xs flex-1"
+                    value={generatedLink.url}
+                    readOnly
+                    onClick={(e) => (e.target as HTMLInputElement).select()}
+                  />
+                  <button
+                    onClick={() => copyLink(generatedLink.url)}
+                    className="btn btn-primary text-xs whitespace-nowrap"
+                  >
+                    {linkCopied ? "✓ Copiado" : "Copiar"}
+                  </button>
+                </div>
+              </div>
+              <button
+                onClick={onClose}
+                className="btn w-full text-sm"
+                style={{ background: "#0A0A0A", color: "#FAFAFA", padding: "10px", borderRadius: 10 }}
+              >
+                Cerrar
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
