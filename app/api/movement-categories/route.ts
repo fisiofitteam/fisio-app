@@ -26,8 +26,33 @@ export async function POST(req: NextRequest) {
   if (!name) return NextResponse.json({ error: "Nombre requerido" }, { status: 400 });
   const dup = await prisma.movementCategory.findUnique({ where: { name } });
   if (dup) return NextResponse.json({ error: "Ya existe un bloque con ese nombre" }, { status: 409 });
-  const created = await prisma.movementCategory.create({ data: { name, slug: await uniqueSlug(slugify(name)) } });
+  // El nuevo bloque va al final del orden actual.
+  const last = await prisma.movementCategory.findFirst({
+    orderBy: { order: "desc" },
+    select: { order: true },
+  });
+  const nextOrder = (last?.order ?? -1) + 1;
+  const created = await prisma.movementCategory.create({
+    data: { name, slug: await uniqueSlug(slugify(name)), order: nextOrder },
+  });
   return NextResponse.json({ id: created.id, name: created.name });
+}
+
+// PUT — reordenar bloques. body: { orderedIds: string[] }
+// Asigna `order` = índice del array a cada categoría en una transacción.
+// Las categorías no incluidas en orderedIds se quedan como estaban.
+export async function PUT(req: NextRequest) {
+  const user = await getActiveProfessional();
+  if (!user || !canManage(user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const b = await req.json().catch(() => ({}));
+  const ids = Array.isArray(b?.orderedIds) ? b.orderedIds.filter((x: unknown) => typeof x === "string") : [];
+  if (ids.length === 0) return NextResponse.json({ error: "orderedIds requerido" }, { status: 400 });
+  await prisma.$transaction(
+    ids.map((id: string, idx: number) =>
+      prisma.movementCategory.update({ where: { id }, data: { order: idx } })
+    )
+  );
+  return NextResponse.json({ ok: true, count: ids.length });
 }
 
 // PATCH — renombrar bloque. body: { id, name }

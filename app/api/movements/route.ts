@@ -60,19 +60,48 @@ export async function PATCH(req: NextRequest) {
   return NextResponse.json({ id: updated.id });
 }
 
-// DELETE ?id= — borra un ejercicio (si no está en uso en adaptaciones/perfiles).
+// DELETE ?id= — borra un ejercicio en cascada.
+// Antes bloqueábamos el borrado si tenía adaptaciones de pacientes o reglas
+// de nivel. El CEO pidió poder borrar siempre, así que ahora limpiamos las
+// referencias en una transacción y devolvemos cuántas tocamos para auditoría.
+// Las adaptaciones se pierden — el cliente avisa antes con un confirm.
 export async function DELETE(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user || !canManage(user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id requerido" }, { status: 400 });
-  try {
-    await prisma.movement.delete({ where: { id } });
-    return NextResponse.json({ ok: true });
-  } catch {
-    return NextResponse.json(
-      { error: "Este ejercicio está en uso (adaptaciones o perfiles). No se puede eliminar." },
-      { status: 409 }
-    );
-  }
+
+  const exists = await prisma.movement.findUnique({ where: { id }, select: { id: true } });
+  if (!exists) return NextResponse.json({ error: "Ejercicio no encontrado" }, { status: 404 });
+
+  const result = await prisma.$transaction(async (tx) => {
+    const adaptations = await tx.patientAdaptation.deleteMany({ where: { movementId: id } });
+    const clinicalRules = await tx.clinicalLevelRule.deleteMany({ where: { movementId: id } });
+    const categoryRules = await tx.categoryLevelRule.deleteMany({ where: { movementId: id } });
+    await tx.movement.delete({ where: { id } });
+    return {
+      adaptations: adaptations.count,
+      clinicalRules: clinicalRules.count,
+      categoryRules: categoryRules.count,
+    };
+  });
+
+  return NextResponse.json({ ok: true, cleaned: result });
+}
+
+// GET ?id=<movementId>/usage — cuántas referencias tiene un ejercicio.
+// Lo usa el cliente para mostrar un confirm honesto antes de borrar.
+export async function GET(req: NextRequest) {
+  const user = await getActiveProfessional();
+  if (!user || !canManage(user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const id = req.nextUrl.searchParams.get("id");
+  const usage = req.nextUrl.searchParams.get("usage");
+  if (!id || usage !== "1") return NextResponse.json({ error: "params requeridos" }, { status: 400 });
+
+  const [adaptations, clinicalRules, categoryRules] = await Promise.all([
+    prisma.patientAdaptation.count({ where: { movementId: id } }),
+    prisma.clinicalLevelRule.count({ where: { movementId: id } }),
+    prisma.categoryLevelRule.count({ where: { movementId: id } }),
+  ]);
+  return NextResponse.json({ adaptations, clinicalRules, categoryRules });
 }

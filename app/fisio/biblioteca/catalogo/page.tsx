@@ -11,7 +11,9 @@ export default async function CatalogoPage() {
   if (user.role !== "ceo" && user.role !== "head_success") redirect("/fisio/biblioteca");
 
   const [categories, movements] = await Promise.all([
-    prisma.movementCategory.findMany({ orderBy: { name: "asc" } }),
+    // order es el campo editable con ↑/↓; usamos name como desempate para
+    // bloques antiguos que todavía comparten order=0.
+    prisma.movementCategory.findMany({ orderBy: [{ order: "asc" }, { name: "asc" }] }),
     prisma.movement.findMany({ orderBy: { displayName: "asc" } }),
   ]);
 

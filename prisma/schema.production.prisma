@@ -443,6 +443,12 @@ model MovementCategory {
   slug        String     @unique
   description String?
 
+  // Orden en el que se muestra el bloque en /fisio/biblioteca/catalogo
+  // y en los controles de cargas. Lo edita el CEO con ↑/↓; al crear un
+  // bloque nuevo, va al final automáticamente. 0 por defecto para
+  // bloques antiguos: se ordenan luego por name asc como fallback.
+  order       Int        @default(0)
+
   movements   Movement[]
   levels      CategoryLevel[]
   patientSelections PatientCategoryLevel[]

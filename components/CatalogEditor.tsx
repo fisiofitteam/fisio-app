@@ -40,10 +40,48 @@ export function CatalogEditor({ categories, movements }: { categories: Category[
     else alert((await res.json().catch(() => ({}))).error || "No se pudo eliminar");
   }
   async function deleteMovement(m: Movement) {
-    if (!confirm(`¿Eliminar el ejercicio "${m.displayName}"?`)) return;
+    // Antes de pedir confirmación, miramos cuántas referencias tiene para
+    // que el CEO vea qué datos perderá. La API hace luego el borrado en
+    // cascada (adaptaciones de pacientes + reglas de nivel).
+    let warning = "";
+    try {
+      const u = await fetch(`/api/movements?id=${m.id}&usage=1`);
+      if (u.ok) {
+        const d = await u.json();
+        const total = (d.adaptations ?? 0) + (d.clinicalRules ?? 0) + (d.categoryRules ?? 0);
+        if (total > 0) {
+          const parts: string[] = [];
+          if (d.adaptations) parts.push(`${d.adaptations} adaptación(es) de paciente`);
+          if (d.clinicalRules) parts.push(`${d.clinicalRules} regla(s) de nivel clínico`);
+          if (d.categoryRules) parts.push(`${d.categoryRules} regla(s) de nivel de categoría`);
+          warning = `\n\nSe eliminarán también: ${parts.join(", ")}.`;
+        }
+      }
+    } catch {
+      // si falla el conteo, seguimos sin warning detallado
+    }
+    if (!confirm(`¿Eliminar el ejercicio "${m.displayName}"?${warning}\n\nEsta acción no se puede deshacer.`)) return;
     const res = await fetch(`/api/movements?id=${m.id}`, { method: "DELETE" });
     if (res.ok) router.refresh();
     else alert((await res.json().catch(() => ({}))).error || "No se pudo eliminar");
+  }
+
+  // ── Reordenar bloques con ↑/↓ ────────────────────────────────────────
+  // Mandamos siempre la lista completa al endpoint PUT — más simple que
+  // mover un elemento concreto y más robusto si dos personas reordenan
+  // al mismo tiempo.
+  async function moveCategory(idx: number, dir: -1 | 1) {
+    const target = idx + dir;
+    if (target < 0 || target >= categories.length) return;
+    const next = categories.map((c) => c.id);
+    [next[idx], next[target]] = [next[target], next[idx]];
+    const res = await fetch("/api/movement-categories", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderedIds: next }),
+    });
+    if (res.ok) router.refresh();
+    else alert((await res.json().catch(() => ({}))).error || "No se pudo reordenar");
   }
 
   const byCat: Record<string, Movement[]> = {};
@@ -63,12 +101,28 @@ export function CatalogEditor({ categories, movements }: { categories: Category[
         <p className="text-sm text-neutral-500 text-center py-12">No hay bloques todavía. Crea el primero.</p>
       ) : (
         <div className="space-y-3">
-          {categories.map((c) => {
+          {categories.map((c, idx) => {
             const movs = byCat[c.id] ?? [];
+            const isFirst = idx === 0;
+            const isLast = idx === categories.length - 1;
             return (
               <section key={c.id} className="card">
                 <div className="flex justify-between items-center gap-2 mb-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <div className="flex flex-col -my-1">
+                      <button
+                        onClick={() => moveCategory(idx, -1)}
+                        disabled={isFirst}
+                        className="text-neutral-400 hover:text-neutral-900 disabled:opacity-20 disabled:cursor-not-allowed leading-none px-1"
+                        title="Subir bloque"
+                      >▲</button>
+                      <button
+                        onClick={() => moveCategory(idx, 1)}
+                        disabled={isLast}
+                        className="text-neutral-400 hover:text-neutral-900 disabled:opacity-20 disabled:cursor-not-allowed leading-none px-1"
+                        title="Bajar bloque"
+                      >▼</button>
+                    </div>
                     <h3 className="font-medium text-sm">{c.name}</h3>
                     <span className="text-xs text-neutral-400">{movs.length}</span>
                   </div>

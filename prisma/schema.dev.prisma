@@ -423,6 +423,9 @@ model MovementCategory {
   slug        String     @unique
   description String?
 
+  // Orden visual (editable con ↑/↓ desde el catálogo)
+  order       Int        @default(0)
+
   movements   Movement[]
   levels      CategoryLevel[]
   patientSelections PatientCategoryLevel[]
