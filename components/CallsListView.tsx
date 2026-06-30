@@ -5,6 +5,7 @@ import { PaymentLinkModal } from "@/components/PaymentLinkModal";
 import { RescheduleLinkButton } from "@/components/RescheduleLinkButton";
 import { SendCaseFlow, type SendCaseTemplate, type SuccessCaseOption } from "@/components/SendCaseFlow";
 import { SendDirectButton } from "@/components/SendDirectButton";
+import { SendAppLinkButton } from "@/components/SendAppLinkButton";
 import type { TemplateActionType } from "@/lib/resource-roles";
 
 type DirectTemplate = { id: string; name: string; body: string; actionType: TemplateActionType };
@@ -430,13 +431,19 @@ function CallRow({
             <div className="text-[11px] text-red-600 mt-1">Razón: {lead.lostReason}</div>
           )}
           {lead.convertedPatient && (
-            <Link
-              href={`/fisio/paciente/${lead.convertedPatient.id}`}
-              onClick={(e) => e.stopPropagation()}
-              className="text-[11px] text-emerald-700 mt-1 inline-block hover:underline"
-            >
-              → Ver ficha de {lead.convertedPatient.fullName}
-            </Link>
+            <div className="flex flex-col">
+              <Link
+                href={`/fisio/paciente/${lead.convertedPatient.id}`}
+                onClick={(e) => e.stopPropagation()}
+                className="text-[11px] text-emerald-700 mt-1 inline-block hover:underline"
+              >
+                → Ver ficha de {lead.convertedPatient.fullName}
+              </Link>
+              <SendAppLinkButton
+                patientId={lead.convertedPatient.id}
+                patientName={lead.convertedPatient.fullName}
+              />
+            </div>
           )}
 
           {/* Botones de acción rápida de workflow (no abren el modal, son inline) */}
