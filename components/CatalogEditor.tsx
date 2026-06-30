@@ -34,7 +34,29 @@ export function CatalogEditor({ categories, movements }: { categories: Category[
     else alert((await res.json().catch(() => ({}))).error || "No se pudo renombrar");
   }
   async function deleteCategory(c: Category) {
-    if (!confirm(`¿Eliminar el bloque "${c.name}"?`)) return;
+    // Pedimos al server cuánto se va a perder con el borrado en cascada
+    // (movimientos, niveles, reglas, adaptaciones de pacientes, selecciones).
+    // Lo mostramos en el confirm para que la decisión sea informada.
+    let warning = "";
+    try {
+      const u = await fetch(`/api/movement-categories?id=${c.id}&usage=1`);
+      if (u.ok) {
+        const d = await u.json();
+        const parts: string[] = [];
+        if (d.movements) parts.push(`${d.movements} ejercicio(s)`);
+        if (d.levels) parts.push(`${d.levels} nivel(es)`);
+        if (d.categoryRules) parts.push(`${d.categoryRules} regla(s) de nivel`);
+        if (d.patientSelections) parts.push(`${d.patientSelections} selección(es) de paciente`);
+        if (d.adaptations) parts.push(`${d.adaptations} adaptación(es) de paciente`);
+        if (d.clinicalRules) parts.push(`${d.clinicalRules} regla(s) de nivel clínico`);
+        if (parts.length > 0) {
+          warning = `\n\nSe eliminarán también: ${parts.join(", ")}.`;
+        }
+      }
+    } catch {
+      // si falla el conteo, seguimos sin warning detallado
+    }
+    if (!confirm(`¿Eliminar el bloque "${c.name}"?${warning}\n\nEsta acción no se puede deshacer.`)) return;
     const res = await fetch(`/api/movement-categories?id=${c.id}`, { method: "DELETE" });
     if (res.ok) router.refresh();
     else alert((await res.json().catch(() => ({}))).error || "No se pudo eliminar");

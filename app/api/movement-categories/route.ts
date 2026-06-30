@@ -67,14 +67,86 @@ export async function PATCH(req: NextRequest) {
   return NextResponse.json({ id: updated.id, name: updated.name });
 }
 
-// DELETE ?id= — borra un bloque vacío (sin movimientos).
+// DELETE ?id= — borra un bloque en cascada.
+// Antes bloqueábamos si tenía movimientos. El CEO pidió poder borrar
+// siempre, incluso con niveles y movimientos configurados. Hacemos el
+// limpiado manual de lo que no tiene onDelete:Cascade en el schema:
+//   - PatientCategoryLevel: selección de un paciente a un nivel de esta
+//     categoría (no cascade).
+//   - PatientAdaptation: adaptaciones del paciente sobre movimientos de
+//     esta categoría (no cascade).
+//   - ClinicalLevelRule: reglas del sistema antiguo de perfiles sobre
+//     esos movimientos.
+//   - Movement: los ejercicios de la categoría.
+// Luego borramos la categoría; sus CategoryLevel (y por cascada sus
+// CategoryLevelRule) caen solos.
 export async function DELETE(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user || !canManage(user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id requerido" }, { status: 400 });
-  const count = await prisma.movement.count({ where: { categoryId: id } });
-  if (count > 0) return NextResponse.json({ error: "El bloque tiene ejercicios. Muévelos o elimínalos primero." }, { status: 409 });
-  await prisma.movementCategory.delete({ where: { id } });
-  return NextResponse.json({ ok: true });
+
+  const exists = await prisma.movementCategory.findUnique({ where: { id }, select: { id: true } });
+  if (!exists) return NextResponse.json({ error: "Bloque no encontrado" }, { status: 404 });
+
+  const result = await prisma.$transaction(async (tx) => {
+    const movements = await tx.movement.findMany({ where: { categoryId: id }, select: { id: true } });
+    const movIds = movements.map((m) => m.id);
+
+    const patientSelections = await tx.patientCategoryLevel.deleteMany({ where: { categoryId: id } });
+
+    let adaptations = 0;
+    let clinicalRules = 0;
+    if (movIds.length > 0) {
+      const a = await tx.patientAdaptation.deleteMany({ where: { movementId: { in: movIds } } });
+      const c = await tx.clinicalLevelRule.deleteMany({ where: { movementId: { in: movIds } } });
+      adaptations = a.count;
+      clinicalRules = c.count;
+      await tx.movement.deleteMany({ where: { id: { in: movIds } } });
+    }
+
+    await tx.movementCategory.delete({ where: { id } });
+
+    return {
+      movements: movIds.length,
+      patientSelections: patientSelections.count,
+      adaptations,
+      clinicalRules,
+    };
+  });
+
+  return NextResponse.json({ ok: true, cleaned: result });
+}
+
+// GET ?id=X&usage=1 — qué se va a perder si borro el bloque.
+// Lo usa la UI para mostrar el detalle antes del confirm.
+export async function GET(req: NextRequest) {
+  const user = await getActiveProfessional();
+  if (!user || !canManage(user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const id = req.nextUrl.searchParams.get("id");
+  const usage = req.nextUrl.searchParams.get("usage");
+  if (!id || usage !== "1") return NextResponse.json({ error: "params requeridos" }, { status: 400 });
+
+  const [movements, levels, patientSelections] = await Promise.all([
+    prisma.movement.findMany({ where: { categoryId: id }, select: { id: true } }),
+    prisma.categoryLevel.count({ where: { categoryId: id } }),
+    prisma.patientCategoryLevel.count({ where: { categoryId: id } }),
+  ]);
+  const movIds = movements.map((m) => m.id);
+  const [adaptations, clinicalRules, categoryRules] = movIds.length > 0
+    ? await Promise.all([
+        prisma.patientAdaptation.count({ where: { movementId: { in: movIds } } }),
+        prisma.clinicalLevelRule.count({ where: { movementId: { in: movIds } } }),
+        prisma.categoryLevelRule.count({ where: { movementId: { in: movIds } } }),
+      ])
+    : [0, 0, 0];
+
+  return NextResponse.json({
+    movements: movIds.length,
+    levels,
+    patientSelections,
+    adaptations,
+    clinicalRules,
+    categoryRules,
+  });
 }
