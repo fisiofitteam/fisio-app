@@ -13,9 +13,15 @@ import { getActiveProfessional } from "@/lib/session";
 
 function forbidden() { return NextResponse.json({ error: "Forbidden" }, { status: 403 }); }
 
+// CEO, head_success y fisio pueden editar reglas de niveles de categoría.
+// El catálogo base de movimientos sigue siendo solo de managers.
+function canEditLevels(role: string) {
+  return role === "ceo" || role === "head_success" || role === "fisio";
+}
+
 export async function PUT(req: NextRequest) {
   const user = await getActiveProfessional();
-  if (!user || !user.isManager) return forbidden();
+  if (!user || !canEditLevels(user.role)) return forbidden();
   const data = await req.json().catch(() => ({}));
   const categoryLevelId = typeof data?.categoryLevelId === "string" ? data.categoryLevelId : "";
   const movementId = typeof data?.movementId === "string" ? data.movementId : "";
@@ -42,7 +48,7 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const user = await getActiveProfessional();
-  if (!user || !user.isManager) return forbidden();
+  if (!user || !canEditLevels(user.role)) return forbidden();
   const categoryLevelId = req.nextUrl.searchParams.get("categoryLevelId");
   const movementId = req.nextUrl.searchParams.get("movementId");
   if (!categoryLevelId || !movementId) {

@@ -1,5 +1,9 @@
 /**
- * CRUD de niveles por categoría (CEO + Head Success).
+ * CRUD de niveles por categoría.
+ *
+ * Acceso: CEO + Head Success + Fisio. Los fisios también pueden editar los
+ * niveles para que iteren sus propias plantillas de carga sin depender del
+ * CEO. El catálogo base de movimientos sigue siendo solo de managers.
  *
  * GET /api/category-levels[?categoryId=…]
  *   → lista todos los niveles con sus reglas (o solo los de una categoría).
@@ -16,9 +20,14 @@ import { getActiveProfessional } from "@/lib/session";
 
 function forbidden() { return NextResponse.json({ error: "Forbidden" }, { status: 403 }); }
 
+// CEO, head_success y fisio pueden editar niveles de categoría.
+function canEditLevels(role: string) {
+  return role === "ceo" || role === "head_success" || role === "fisio";
+}
+
 export async function GET(req: NextRequest) {
   const user = await getActiveProfessional();
-  if (!user || !user.isManager) return forbidden();
+  if (!user || !canEditLevels(user.role)) return forbidden();
   const categoryId = req.nextUrl.searchParams.get("categoryId");
   const levels = await prisma.categoryLevel.findMany({
     where: categoryId ? { categoryId } : undefined,
@@ -30,7 +39,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const user = await getActiveProfessional();
-  if (!user || !user.isManager) return forbidden();
+  if (!user || !canEditLevels(user.role)) return forbidden();
   const data = await req.json().catch(() => ({}));
   const categoryId = typeof data?.categoryId === "string" ? data.categoryId : "";
   const name = typeof data?.name === "string" ? data.name.trim() : "";
@@ -51,7 +60,7 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   const user = await getActiveProfessional();
-  if (!user || !user.isManager) return forbidden();
+  if (!user || !canEditLevels(user.role)) return forbidden();
   const data = await req.json().catch(() => ({}));
   const id = typeof data?.id === "string" ? data.id : "";
   if (!id) return NextResponse.json({ error: "id requerido" }, { status: 400 });
@@ -65,7 +74,7 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const user = await getActiveProfessional();
-  if (!user || !user.isManager) return forbidden();
+  if (!user || !canEditLevels(user.role)) return forbidden();
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id requerido" }, { status: 400 });
   await prisma.categoryLevel.delete({ where: { id } });

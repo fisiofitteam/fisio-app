@@ -8,7 +8,10 @@ export const dynamic = "force-dynamic";
 export default async function NivelesCategoriaPage() {
   const user = await getActiveProfessional();
   if (!user) redirect("/login");
-  if (!user.isManager) redirect("/fisio/biblioteca/programas");
+  // Abierto a CEO + head_success + fisio. Fuera el resto de roles.
+  if (user.role !== "ceo" && user.role !== "head_success" && user.role !== "fisio") {
+    redirect("/fisio/biblioteca/programas");
+  }
 
   const categories = await prisma.movementCategory.findMany({
     include: {
@@ -26,8 +29,11 @@ export default async function NivelesCategoriaPage() {
       <header>
         <h2 className="text-base font-semibold">🪜 Niveles por categoría</h2>
         <p className="text-xs text-neutral-500 mt-1">
-          Para cada categoría del catálogo, define los niveles disponibles. Por cada nivel,
-          marca qué reglas se aplican a los movimientos de esa categoría (OK / CONDICIONAL / BLOQUEADO + carga + sustitución + warning). La IA elegirá un nivel por categoría cuando le pidas un control de cargas.
+          Para cada categoría del catálogo, define los niveles disponibles. Por
+          cada nivel, marca qué reglas se aplican a los movimientos de esa
+          categoría (OK / CONDICIONAL / BLOQUEADO + carga + sustitución +
+          warning). Luego, en la pestaña Cargas del paciente, eliges el nivel
+          que le corresponde por categoría.
         </p>
       </header>
       <CategoryLevelsEditor

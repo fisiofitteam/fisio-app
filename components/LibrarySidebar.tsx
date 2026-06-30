@@ -87,7 +87,10 @@ export function LibrarySidebar({ showOnboarding = false, showCatalog = false }: 
   const pathname = usePathname() ?? "";
   const sections = [
     ...SECTIONS,
-    ...(showCatalog ? [CATALOGO_SECTION, CONTROLES_CARGAS_SECTION, CASOS_EXITO_SECTION] : []),
+    // Controles de cargas: lo pueden editar todos los fisios.
+    CONTROLES_CARGAS_SECTION,
+    // Catálogo de movimientos y casos de éxito: solo managers (CEO/head_success).
+    ...(showCatalog ? [CATALOGO_SECTION, CASOS_EXITO_SECTION] : []),
     ...(showOnboarding ? [METRICAS_SECTION, ONBOARDING_SECTION, LANDINGS_SECTION, MENSAJES_SECTION] : []),
   ];
 
