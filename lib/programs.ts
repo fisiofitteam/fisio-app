@@ -1,9 +1,16 @@
 import { prisma } from "./prisma";
 
-export const DAY_NAMES = ["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
-export const DAY_SHORT = ["", "L", "M", "X", "J", "V", "S", "D"];
+// Etiquetas de día relativas al inicio del programa. El "dayOfWeek" en
+// ProgramDay ya NO representa el día absoluto de la semana, sino la
+// posición dentro del programa (1 = primer día, 7 = séptimo día). Las
+// constantes mantienen el nombre por compatibilidad histórica.
+export const DAY_NAMES = ["", "Día 1", "Día 2", "Día 3", "Día 4", "Día 5", "Día 6", "Día 7"];
+export const DAY_SHORT = ["", "D1", "D2", "D3", "D4", "D5", "D6", "D7"];
 
-// Devuelve el lunes de la semana que contiene a `date`
+// Helper histórico — devuelve el lunes de la semana que contiene a `date`.
+// Ya no se usa en generateSessions (el programa empieza el día que elija el
+// fisio, no se alinea al lunes), pero se exporta por si otros módulos
+// quieren localizar "el lunes de…" para semanas de calendario.
 export function getMondayOfWeek(date: Date): Date {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
@@ -49,7 +56,12 @@ export async function generateSessions(assignmentId: string) {
     where: { assignmentId, completedAt: null },
   });
 
-  const startMonday = getMondayOfWeek(assignment.startDate);
+  // startDate ya NO se alinea al lunes. Es el día real que el fisio
+  // eligió como inicio del programa para este paciente. Por tanto,
+  // ProgramDay.dayOfWeek=1 cae en assignment.startDate, dayOfWeek=2
+  // al día siguiente, etc.
+  const startDay = new Date(assignment.startDate);
+  startDay.setHours(0, 0, 0, 0);
 
   // Mapa semana → días
   const weekDaysMap = new Map<number, typeof assignment.program.weeks[number]["days"]>();
@@ -114,8 +126,8 @@ export async function generateSessions(assignmentId: string) {
         return { id: t.id, type: t.type, title: t.title, order: t.order };
       });
 
-      const sessionDate = new Date(startMonday);
-      sessionDate.setDate(startMonday.getDate() + (week - 1) * 7 + (day.dayOfWeek - 1));
+      const sessionDate = new Date(startDay);
+      sessionDate.setDate(startDay.getDate() + (week - 1) * 7 + (day.dayOfWeek - 1));
 
       await prisma.programSession.create({
         data: {

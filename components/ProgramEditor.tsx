@@ -15,7 +15,10 @@ import {
 import { TaskTypeModal } from "./TaskTypeModal";
 import { TaskEditorModal } from "./TaskEditorModal";
 
-const DAY_HEADERS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
+// Etiquetas relativas al inicio del programa. Cuando el fisio asigna el
+// programa a un paciente, "Día 1" cae en el día que elija como inicio,
+// "Día 2" al siguiente, etc. Ya no se ata a lunes-viernes naturales.
+const DAY_HEADERS = ["Día 1", "Día 2", "Día 3", "Día 4", "Día 5"];
 
 const TYPE_LABELS: Record<string, string> = {
   WORKOUT: "Workout",

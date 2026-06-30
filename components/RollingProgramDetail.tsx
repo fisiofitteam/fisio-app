@@ -52,6 +52,10 @@ type WeekFull = {
   days: Day[];
 };
 
+// En rolling el paciente entra siempre en la "semana actual" (lunes-viernes
+// natural), no hay startDate por paciente. Por eso aquí MANTENEMOS los
+// nombres de la semana — el cambio "Día 1...Día N" solo aplica a programas
+// fijos (ProgramEditor.tsx), donde la posición es relativa al inicio.
 const DAY_HEADERS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
 
 const TYPE_LABELS: Record<string, string> = {

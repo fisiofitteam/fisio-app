@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { generateSessions, getMondayOfWeek } from "@/lib/programs";
+import { generateSessions } from "@/lib/programs";
+
+// Normaliza una fecha al inicio del día (sin tocar la zona horaria).
+// startDate ahora se respeta tal cual (día exacto que el fisio eligió),
+// ya no se fuerza el lunes anterior.
+function startOfDay(input: string | Date): Date {
+  const d = new Date(input);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
 
 export async function POST(req: NextRequest) {
   const { patientId, programId, startDate, weeksCount } = await req.json();
@@ -10,8 +19,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "program not found" }, { status: 404 });
   }
 
-  // Forzar inicio en lunes
-  const start = getMondayOfWeek(new Date(startDate));
+  // El programa empieza el día EXACTO que eligió el fisio. "Día 1" del
+  // programa = ese día. Día 3 = ese día + 2. Si elige domingo, día 1 es
+  // domingo y día 3 cae en martes.
+  const start = startOfDay(startDate);
 
   const assignment = await prisma.programAssignment.create({
     data: {
@@ -54,7 +65,7 @@ export async function PATCH(req: NextRequest) {
 
   // Cambio de fecha → mover sesiones futuras no completadas
   if (startDate !== undefined) {
-    const newStart = getMondayOfWeek(new Date(startDate));
+    const newStart = startOfDay(startDate);
     const oldStart = current.startDate;
     const diffDays = Math.round((newStart.getTime() - oldStart.getTime()) / 86400000);
 
