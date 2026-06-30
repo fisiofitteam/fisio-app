@@ -100,6 +100,10 @@ export function CalendarMonth({
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [assignmentModal, setAssignmentModal] = useState<{ date: string } | null>(null);
   const [addChoice, setAddChoice] = useState<{ date: string } | null>(null);
+  // Modal de "Sesión suelta" con opción de recurrencia. Aparece tras
+  // pulsar ⚡ Sesión suelta en AddOrAssignModal. Si el fisio elige
+  // "solo este día" crea 1; si activa recurrencia, crea varias.
+  const [standaloneRecurrenceModal, setStandaloneRecurrenceModal] = useState<{ date: string } | null>(null);
   const [editingSession, setEditingSession] = useState<Session | null>(null);
   const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null);
   const [dragging, setDragging] = useState<Session | null>(null);
@@ -378,14 +382,28 @@ export function CalendarMonth({
           onPickStandalone={() => {
             const date = addChoice.date;
             setAddChoice(null);
-            createStandalone(patientId, date).then((newSession) => {
-              setEditingSession(newSession);
-              router.refresh();
-            });
+            setStandaloneRecurrenceModal({ date });
           }}
           onPickProgram={(date) => {
             setAddChoice(null);
             setAssignmentModal({ date });
+          }}
+        />
+      )}
+
+      {standaloneRecurrenceModal && (
+        <StandaloneRecurrenceModal
+          patientId={patientId}
+          date={standaloneRecurrenceModal.date}
+          onClose={() => setStandaloneRecurrenceModal(null)}
+          onCreatedSingle={(newSession) => {
+            setStandaloneRecurrenceModal(null);
+            setEditingSession(newSession);
+            router.refresh();
+          }}
+          onCreatedMany={() => {
+            setStandaloneRecurrenceModal(null);
+            router.refresh();
           }}
         />
       )}
@@ -1384,6 +1402,233 @@ function EditAssignmentModal({
             <p className="text-[10px] text-neutral-500 mt-1 italic text-center">
               Sesiones pasadas y completadas se conservan. Futuras se borran.
             </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Modal de creación de sesión suelta con opción de recurrencia.
+ *
+ * Dos modos:
+ *  - "single": crea una sola sesión en la fecha clicada (comportamiento
+ *    histórico). Tras crear, la abre en EditSessionModal vía onCreatedSingle
+ *    para que el fisio meta tareas.
+ *  - "recurring": pide días de la semana y N semanas, llama al endpoint
+ *    con `recurrence` y crea N sesiones. Avisa al padre con onCreatedMany
+ *    para que refresque (no abrimos editor: serían muchos).
+ */
+function StandaloneRecurrenceModal({
+  patientId,
+  date,
+  onClose,
+  onCreatedSingle,
+  onCreatedMany,
+}: {
+  patientId: string;
+  date: string;
+  onClose: () => void;
+  onCreatedSingle: (session: Session) => void;
+  onCreatedMany: () => void;
+}) {
+  const d = parseKey(date);
+  const baseDow = d.getDay() === 0 ? 7 : d.getDay();
+
+  const [mode, setMode] = useState<"single" | "recurring">("single");
+  // Por defecto, el día clicado queda preseleccionado en la recurrencia
+  // para que el fisio solo añada o quite días.
+  const [daysOfWeek, setDaysOfWeek] = useState<number[]>([baseDow]);
+  const [weeks, setWeeks] = useState<number>(4);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function toggleDay(dow: number) {
+    setDaysOfWeek((prev) =>
+      prev.includes(dow) ? prev.filter((x) => x !== dow) : [...prev, dow].sort((a, b) => a - b)
+    );
+  }
+
+  // Cálculo de "te van a salir N sesiones" para el preview honesto.
+  // Replicamos la regla del backend: en la 1ª semana solo cuenta días
+  // >= baseDate; el día clicado siempre cuenta aunque caiga "antes".
+  const previewCount = (() => {
+    if (mode === "single") return 1;
+    if (daysOfWeek.length === 0) return 0;
+    let n = 0;
+    for (let w = 0; w < weeks; w++) {
+      for (const dx of daysOfWeek) {
+        if (w === 0 && dx < baseDow) continue;
+        n++;
+      }
+    }
+    return n;
+  })();
+
+  async function create() {
+    setError(null);
+    setSaving(true);
+    const baseDateIso = (() => {
+      const dt = parseKey(date);
+      dt.setHours(10, 0, 0, 0);
+      return dt.toISOString();
+    })();
+    const body: any = {
+      patientId,
+      scheduledDate: baseDateIso,
+      title: `Sesión ${d.toLocaleDateString("es-ES")}`,
+      tasksSnapshot: [],
+    };
+    if (mode === "recurring") {
+      if (daysOfWeek.length === 0) {
+        setError("Selecciona al menos un día de la semana");
+        setSaving(false);
+        return;
+      }
+      body.recurrence = { daysOfWeek, weeks };
+    }
+    try {
+      const res = await fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "No se pudo crear la sesión");
+
+      if (mode === "single") {
+        // Compat: backend devuelve la sesión pelada cuando no hay recurrencia.
+        const session: Session = {
+          id: data.id,
+          scheduledDate: data.scheduledDate,
+          completedAt: null,
+          weekNumber: 1,
+          programName: `Sesión ${d.toLocaleDateString("es-ES")}`,
+          programType: "Suelta",
+          tasksSnapshot: "[]",
+          responses: null,
+          formReviewedAt: null,
+          isStandalone: true,
+        };
+        onCreatedSingle(session);
+      } else {
+        onCreatedMany();
+      }
+    } catch (e: any) {
+      setError(e?.message || "Error inesperado");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl max-w-md w-full p-4" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3">
+          <h3 className="font-medium">⚡ Sesión suelta</h3>
+          <p className="text-xs text-neutral-500 mt-0.5">
+            Empezando el {d.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          {/* Toggle modo */}
+          <div className="flex gap-1 p-1 bg-neutral-100 rounded-lg">
+            <button
+              type="button"
+              onClick={() => setMode("single")}
+              className={`flex-1 text-xs px-2 py-1.5 rounded font-medium transition ${
+                mode === "single" ? "bg-white shadow-sm" : "text-neutral-500"
+              }`}
+            >
+              Solo este día
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("recurring")}
+              className={`flex-1 text-xs px-2 py-1.5 rounded font-medium transition ${
+                mode === "recurring" ? "bg-white shadow-sm" : "text-neutral-500"
+              }`}
+            >
+              🔁 Repetir varias semanas
+            </button>
+          </div>
+
+          {mode === "recurring" && (
+            <>
+              <div>
+                <label className="text-xs text-neutral-500 block mb-1.5">Días de la semana</label>
+                <div className="flex gap-1 flex-wrap">
+                  {[
+                    { dow: 1, label: "L" },
+                    { dow: 2, label: "M" },
+                    { dow: 3, label: "X" },
+                    { dow: 4, label: "J" },
+                    { dow: 5, label: "V" },
+                    { dow: 6, label: "S" },
+                    { dow: 7, label: "D" },
+                  ].map(({ dow, label }) => {
+                    const active = daysOfWeek.includes(dow);
+                    return (
+                      <button
+                        key={dow}
+                        type="button"
+                        onClick={() => toggleDay(dow)}
+                        className={`flex-1 min-w-[36px] py-2 rounded-lg border text-sm font-medium ${
+                          active
+                            ? "bg-neutral-900 text-white border-neutral-900"
+                            : "bg-white border-neutral-200 text-neutral-700"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs text-neutral-500 block mb-1">Durante</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={52}
+                    className="input w-24 text-sm"
+                    value={weeks}
+                    onChange={(e) => setWeeks(Math.max(1, Math.min(52, Number(e.target.value) || 1)))}
+                  />
+                  <span className="text-sm text-neutral-600">semana{weeks === 1 ? "" : "s"}</span>
+                </div>
+              </div>
+
+              <div className="rounded-lg p-2 text-xs" style={{ background: "#F0F9FF", border: "1px solid #BAE6FD", color: "#075985" }}>
+                Se crearán <strong>{previewCount}</strong> sesión{previewCount === 1 ? "" : "es"} a partir de esta fecha.
+                Cada una vacía: se editan después desde el calendario.
+              </div>
+            </>
+          )}
+
+          {error && (
+            <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+              {error}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-neutral-100">
+            <button onClick={onClose} className="text-sm text-neutral-500 px-3 py-2">Cancelar</button>
+            <button
+              onClick={create}
+              disabled={saving || (mode === "recurring" && previewCount === 0)}
+              className="btn btn-primary text-sm disabled:opacity-50"
+            >
+              {saving
+                ? "Creando…"
+                : mode === "single"
+                  ? "Crear sesión"
+                  : `Crear ${previewCount} sesion${previewCount === 1 ? "" : "es"}`}
+            </button>
           </div>
         </div>
       </div>
