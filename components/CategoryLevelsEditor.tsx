@@ -39,7 +39,14 @@ const DEFAULT_RULE = (movementId: string): Rule => ({
   physioWarning: null,
 });
 
-export function CategoryLevelsEditor({ initial }: { initial: Category[] }) {
+export function CategoryLevelsEditor({
+  initial,
+  isCeo = false,
+}: {
+  initial: Category[];
+  /** Si true, cada nivel muestra el botón "Duplicar". Solo CEO. */
+  isCeo?: boolean;
+}) {
   const [cats, setCats] = useState<Category[]>(initial);
 
   async function addLevel(catId: string) {
@@ -77,6 +84,40 @@ export function CategoryLevelsEditor({ initial }: { initial: Category[] }) {
     setCats((arr) => arr.map((c) => c.id === catId ? { ...c, levels: c.levels.filter((l) => l.id !== levelId) } : c));
   }
 
+  // Duplicar un nivel completo: copia las reglas para que el CEO arranque
+  // desde una plantilla y solo afine lo que cambie. El nuevo aparece al
+  // final con "(copia)" en el nombre y se queda colapsado.
+  async function duplicateLevel(catId: string, levelId: string) {
+    const r = await fetch("/api/category-levels", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "duplicate", id: levelId }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { alert(d?.error ?? "No se pudo duplicar"); return; }
+    setCats((arr) => arr.map((c) => c.id === catId
+      ? {
+          ...c,
+          levels: [
+            ...c.levels,
+            {
+              id: d.level.id,
+              name: d.level.name,
+              order: d.level.order,
+              description: d.level.description,
+              rules: (d.level.rules ?? []).map((rr: any) => ({
+                movementId: rr.movementId,
+                state: rr.state as "OK" | "CONDITIONAL" | "BLOCKED",
+                loadConstraint: rr.loadConstraint,
+                substitutionText: rr.substitutionText,
+                physioWarning: rr.physioWarning,
+              })),
+            },
+          ],
+        }
+      : c));
+  }
+
   return (
     <div className="space-y-6">
       {cats.length === 0 && (
@@ -97,8 +138,10 @@ export function CategoryLevelsEditor({ initial }: { initial: Category[] }) {
                   key={l.id}
                   category={c}
                   level={l}
+                  canDuplicate={isCeo}
                   onRename={() => renameLevel(c.id, l.id, l.name)}
                   onDelete={() => deleteLevel(c.id, l.id)}
+                  onDuplicate={() => duplicateLevel(c.id, l.id)}
                   onRulesChange={(newRules) => {
                     setCats((arr) => arr.map((cc) => cc.id === c.id
                       ? { ...cc, levels: cc.levels.map((ll) => ll.id === l.id ? { ...ll, rules: newRules } : ll) }
@@ -115,12 +158,14 @@ export function CategoryLevelsEditor({ initial }: { initial: Category[] }) {
 }
 
 function LevelBlock({
-  category, level, onRename, onDelete, onRulesChange,
+  category, level, canDuplicate, onRename, onDelete, onDuplicate, onRulesChange,
 }: {
   category: Category;
   level: Level;
+  canDuplicate: boolean;
   onRename: () => void;
   onDelete: () => void;
+  onDuplicate: () => void;
   onRulesChange: (next: Rule[]) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -187,6 +232,15 @@ function LevelBlock({
         </button>
         <div className="flex gap-1 pr-2">
           <button onClick={onRename} className="text-[11px] text-neutral-500 hover:text-neutral-900 px-2">Renombrar</button>
+          {canDuplicate && (
+            <button
+              onClick={onDuplicate}
+              className="text-[11px] text-neutral-500 hover:text-neutral-900 px-2"
+              title="Duplicar nivel con todas sus reglas"
+            >
+              Duplicar
+            </button>
+          )}
           <button onClick={onDelete} className="text-[11px] text-red-700 hover:underline px-2">Borrar</button>
         </div>
       </div>

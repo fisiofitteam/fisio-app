@@ -80,3 +80,78 @@ export async function DELETE(req: NextRequest) {
   await prisma.categoryLevel.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }
+
+/**
+ * PUT /api/category-levels  body: { action: "duplicate", id: string, newName?: string }
+ *
+ * Duplica un nivel completo: crea un CategoryLevel nuevo en la misma
+ * categoría con un nombre "X (copia)" (o el que pase el cliente) y
+ * copia TODAS sus CategoryLevelRule asociadas (estado + carga +
+ * sustituto + warning para cada movimiento).
+ *
+ * NO copia las selecciones de paciente (PatientCategoryLevel) — el
+ * nivel duplicado nace sin pacientes asignados.
+ *
+ * Solo CEO. Es una operación de plantilla, no de uso clínico diario.
+ */
+export async function PUT(req: NextRequest) {
+  const user = await getActiveProfessional();
+  if (!user) return forbidden();
+  if (user.role !== "ceo") return forbidden();
+
+  const data = await req.json().catch(() => ({}));
+  if (data?.action !== "duplicate") {
+    return NextResponse.json({ error: "action 'duplicate' requerida" }, { status: 400 });
+  }
+  const id = typeof data?.id === "string" ? data.id : "";
+  if (!id) return NextResponse.json({ error: "id requerido" }, { status: 400 });
+
+  const source = await prisma.categoryLevel.findUnique({
+    where: { id },
+    include: { rules: true },
+  });
+  if (!source) return NextResponse.json({ error: "Nivel no encontrado" }, { status: 404 });
+
+  const requestedName = typeof data?.newName === "string" ? data.newName.trim() : "";
+  const newName = requestedName || `${source.name} (copia)`;
+
+  // El nuevo nivel va al final del orden actual de la categoría.
+  const last = await prisma.categoryLevel.findFirst({
+    where: { categoryId: source.categoryId },
+    orderBy: { order: "desc" },
+    select: { order: true },
+  });
+  const nextOrder = (last?.order ?? -1) + 1;
+
+  const created = await prisma.$transaction(async (tx) => {
+    const newLevel = await tx.categoryLevel.create({
+      data: {
+        categoryId: source.categoryId,
+        name: newName,
+        description: source.description,
+        order: nextOrder,
+      },
+    });
+    if (source.rules.length > 0) {
+      await tx.categoryLevelRule.createMany({
+        data: source.rules.map((r) => ({
+          categoryLevelId: newLevel.id,
+          movementId: r.movementId,
+          state: r.state,
+          loadConstraint: r.loadConstraint,
+          substitutionText: r.substitutionText,
+          physioWarning: r.physioWarning,
+        })),
+      });
+    }
+    return newLevel;
+  });
+
+  // Devolvemos el nivel con sus reglas para que el cliente lo inserte
+  // sin tener que hacer otra fetch.
+  const full = await prisma.categoryLevel.findUnique({
+    where: { id: created.id },
+    include: { rules: true },
+  });
+  return NextResponse.json({ level: full, copiedRules: source.rules.length });
+}

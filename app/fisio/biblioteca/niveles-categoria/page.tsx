@@ -37,6 +37,7 @@ export default async function NivelesCategoriaPage() {
         </p>
       </header>
       <CategoryLevelsEditor
+        isCeo={user.role === "ceo"}
         initial={categories.map((c) => ({
           id: c.id,
           name: c.name,
