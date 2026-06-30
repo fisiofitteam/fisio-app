@@ -84,14 +84,24 @@ export function LegacyCreatePatientModal({
     }
   }
 
-  // Fecha estimada de fin (visual)
-  const periodEnd = (() => {
+  // Resumen del periodo: fecha de fin + cuántos días le quedan (positivo)
+  // o si ya está vencido (negativo). Útil al migrar para que el fisio
+  // confirme que ha cuadrado bien las fechas antes de guardar.
+  const periodSummary = (() => {
     if (!startDate) return null;
     const d = new Date(startDate);
     if (isNaN(d.getTime())) return null;
     const m = Number(subscriptionPeriodMonths) || 4;
-    d.setMonth(d.getMonth() + m);
-    return d.toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" });
+    const end = new Date(d);
+    end.setMonth(end.getMonth() + m);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    end.setHours(0, 0, 0, 0);
+    const daysLeft = Math.round((end.getTime() - today.getTime()) / 86400000);
+    return {
+      endLabel: end.toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" }),
+      daysLeft,
+    };
   })();
 
   return (
@@ -189,10 +199,24 @@ export function LegacyCreatePatientModal({
               <input className="input text-sm" type="number" min={1} max={24} value={subscriptionPeriodMonths} onChange={(e) => setSubscriptionPeriodMonths(e.target.value)} />
             </div>
           </div>
-          {periodEnd && (
-            <p className="text-[11px] text-neutral-500 italic -mt-2">
-              Renovará alrededor del <strong>{periodEnd}</strong>.
-            </p>
+          {periodSummary && (
+            <div
+              className="rounded-lg p-2 text-[11px] -mt-2"
+              style={{
+                background: periodSummary.daysLeft < 0 ? "#FEF2F2" : periodSummary.daysLeft <= 30 ? "#FFFBEB" : "#F0FDF4",
+                border: `1px solid ${periodSummary.daysLeft < 0 ? "#FCA5A5" : periodSummary.daysLeft <= 30 ? "#FCD34D" : "#BBF7D0"}`,
+                color: periodSummary.daysLeft < 0 ? "#991B1B" : periodSummary.daysLeft <= 30 ? "#78350F" : "#065F46",
+              }}
+            >
+              Renovará alrededor del <strong>{periodSummary.endLabel}</strong>.{" "}
+              {periodSummary.daysLeft < 0 ? (
+                <>El periodo ya está <strong>vencido hace {-periodSummary.daysLeft} días</strong>. Quizá quieras corregir la fecha de inicio o la duración.</>
+              ) : periodSummary.daysLeft === 0 ? (
+                <>Renueva <strong>hoy mismo</strong>.</>
+              ) : (
+                <>Le quedan <strong>{periodSummary.daysLeft} días</strong>.</>
+              )}
+            </div>
           )}
 
           <div>
