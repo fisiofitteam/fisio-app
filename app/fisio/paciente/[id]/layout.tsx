@@ -9,6 +9,7 @@ import { GoToPatient } from "@/components/GoToPatient";
 import { LoadReviewIntervalSelector } from "@/components/LoadReviewIntervalSelector";
 import { PatientNotesButton } from "@/components/PatientNotesButton";
 import { PatientAccessLinkButton } from "@/components/PatientAccessLinkButton";
+import { SendLoginCodeButton } from "@/components/SendLoginCodeButton";
 import { PatientAgendaButton } from "@/components/PatientAgendaButton";
 import { calculateAdherence } from "@/lib/adherence";
 import { getActiveProfessional } from "@/lib/session";
@@ -137,6 +138,9 @@ export default async function PatientLayout({
           <PatientSidebar patientId={patient.id} hasClinicalCase={!!clinicalCase} />
           <div className="flex flex-col gap-1.5 mt-2 md:mt-3 md:pt-3 md:border-t md:border-neutral-200">
             <PatientAccessLinkButton patientId={patient.id} patientName={patient.fullName} />
+            {(user.role === "ceo" || user.role === "head_success") && (
+              <SendLoginCodeButton patientId={patient.id} />
+            )}
             <Link
               href={`/fisio/paciente/${patient.id}/exportar`}
               className="btn btn-ghost text-xs justify-start"
