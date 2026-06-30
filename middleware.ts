@@ -10,6 +10,9 @@ const PUBLIC_PATHS = [
   "/api/auth/reset",
   "/api/auth/patient-code",
   "/api/auth/patient-verify",
+  "/acceso",        // magic link 1-clic del paciente (/acceso/[token]) — el
+                    //   propio route handler crea la sesión y redirige; si
+                    //   el middleware lo bloquea, el handler nunca corre.
   "/agenda",        // landing pública de reserva
   "/api/agenda",    // endpoints públicos slots + book
   "/contratar",     // landing pública de contratación post-pago
