@@ -65,6 +65,16 @@ export function PatientsList({
   // Managers y fisios pueden crear pacientes (de momento).
   const canCreate = currentUser.isManager || currentUser.role === "fisio";
 
+  // Buscador por nombre, visible para todos los roles. Filtra la lista
+  // de la pestaña activa sin tocar las cuentas de las tabs ni el resumen
+  // por programa/dificultad — esos siempre reflejan el total de la pestaña.
+  const [search, setSearch] = useState("");
+  const visiblePatients = (() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return patients;
+    return patients.filter((p) => p.fullName.toLowerCase().includes(q));
+  })();
+
   function switchTab(newTab: string) {
     const url = new URL(window.location.href);
     if (newTab === "all") url.searchParams.delete("tab");
@@ -132,6 +142,29 @@ export function PatientsList({
         <FisioSummary patients={patients} isManager={currentUser.isManager} />
       )}
 
+      {/* Buscador por nombre. Disponible para cualquier rol. Se aplica
+          sobre los pacientes ya filtrados por pestaña. */}
+      {patients.length > 0 && (
+        <div className="mb-3 relative">
+          <input
+            type="search"
+            className="input pl-8 text-sm w-full"
+            placeholder="🔍 Buscar paciente por nombre…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          {search && (
+            <button
+              onClick={() => setSearch("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 text-xs"
+              type="button"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      )}
+
       {patients.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-sm text-neutral-500 italic mb-4">
@@ -151,9 +184,13 @@ export function PatientsList({
             </button>
           )}
         </div>
+      ) : visiblePatients.length === 0 ? (
+        <p className="text-sm text-neutral-500 italic text-center py-8">
+          Ningún paciente coincide con "{search}".
+        </p>
       ) : (
         <div className="space-y-3">
-          {patients.map((p) => (
+          {visiblePatients.map((p) => (
             <PatientRow
               key={p.id}
               patient={p}
