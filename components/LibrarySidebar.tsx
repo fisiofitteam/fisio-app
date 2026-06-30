@@ -75,13 +75,6 @@ const CONTROLES_CARGAS_SECTION = {
   icon: "🏋️",
   desc: "Niveles que tiene cada categoría y reglas por movimiento. La IA usa esto para sugerir el nivel de cada paciente.",
 };
-// Brief metodológico que alimenta la IA de control de cargas.
-const LOAD_REVIEW_SECTION = {
-  id: "control-cargas-ia",
-  label: "Brief cargas IA",
-  icon: "🧠",
-  desc: "Metodología que usa la IA para sugerir controles de carga",
-};
 // Casos de éxito que el closer envía a leads (CEO + Head Success).
 const CASOS_EXITO_SECTION = {
   id: "casos-exito",
@@ -95,7 +88,7 @@ export function LibrarySidebar({ showOnboarding = false, showCatalog = false }: 
   const sections = [
     ...SECTIONS,
     ...(showCatalog ? [CATALOGO_SECTION, CONTROLES_CARGAS_SECTION, CASOS_EXITO_SECTION] : []),
-    ...(showOnboarding ? [METRICAS_SECTION, LOAD_REVIEW_SECTION, ONBOARDING_SECTION, LANDINGS_SECTION, MENSAJES_SECTION] : []),
+    ...(showOnboarding ? [METRICAS_SECTION, ONBOARDING_SECTION, LANDINGS_SECTION, MENSAJES_SECTION] : []),
   ];
 
   function isActive(id: string) {

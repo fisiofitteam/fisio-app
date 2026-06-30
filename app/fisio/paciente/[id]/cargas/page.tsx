@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { AdaptationEditor } from "@/components/AdaptationEditor";
-import { LoadReviewSuggestionPanel } from "@/components/LoadReviewSuggestionPanel";
 import { PatientCategoryLevelsPanel } from "@/components/PatientCategoryLevelsPanel";
 
 export default async function PatientCargasTab({ params }: { params: { id: string } }) {
@@ -43,7 +42,6 @@ export default async function PatientCargasTab({ params }: { params: { id: strin
 
   return (
     <div className="space-y-4">
-      <LoadReviewSuggestionPanel patientId={patient.id} />
       <PatientCategoryLevelsPanel
         patientId={patient.id}
         catalog={catalog}
