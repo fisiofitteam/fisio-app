@@ -36,6 +36,14 @@ export default async function PatientSuscripcionTab({ params }: { params: { id: 
     },
   });
 
+  // ¿Puede el usuario editar/eliminar periodos de suscripción?
+  //  - CEO y head_success: siempre.
+  //  - Fisio: solo si el paciente NO tiene ningún Sale Stripe. Es decir,
+  //    fue dado de alta manualmente (alta directa o legacy). Los que
+  //    pagaron por Stripe se gestionan vía renovación con link de pago.
+  const canEditSubscription =
+    user.isManager || (user.role === "fisio" && !sale);
+
   // Histórico de transactions del paciente
   const transactions = await prisma.transaction.findMany({
     where: { patientId: patient.id },
@@ -72,6 +80,7 @@ export default async function PatientSuscripcionTab({ params }: { params: { id: 
       metrics={metrics}
       totalDaysExtended={totalDaysExtended}
       isManager={user.isManager}
+      canEditSubscription={canEditSubscription}
       patient={{
         id: patient.id,
         fullName: patient.fullName,

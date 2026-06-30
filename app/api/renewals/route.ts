@@ -3,6 +3,29 @@ import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 
 /**
+ * Regla de edición de periodos de suscripción:
+ *  - CEO y head_success: siempre.
+ *  - Fisio: solo si el paciente NO vino por Stripe (es decir, no tiene
+ *    ningún Sale asociado). Esto cubre los pacientes añadidos manualmente
+ *    o como "paciente existente" (legacy).
+ *
+ * patientId puede ser null si la llamada es ambigua (caso PATCH lo
+ * obtiene del renewal). En ese caso resolvemos antes de llamar aquí.
+ */
+async function canEditPatientSubscription(
+  user: { role: string; isManager: boolean },
+  patientId: string
+): Promise<boolean> {
+  if (user.isManager) return true;
+  if (user.role !== "fisio") return false;
+  const stripeSale = await prisma.sale.findFirst({
+    where: { patientId },
+    select: { id: true },
+  });
+  return !stripeSale;
+}
+
+/**
  * GET /api/renewals?patientId=xxx
  * Lista los periodos de suscripción del paciente, ordenados cronológicamente.
  */
@@ -148,15 +171,15 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  if (!(user.role === "ceo" || user.role === "head_success")) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
 
   const { id, programType, periodMonths, startDate, endDate, amountPaid, notes, status } = await req.json();
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
   const current = await prisma.subscriptionRenewal.findUnique({ where: { id } });
   if (!current) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const allowed = await canEditPatientSubscription(user, current.patientId);
+  if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   // Si solo cambian meses sin tocar endDate, recalcular endDate
   let computedEndDate: Date | undefined;
@@ -208,15 +231,15 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  if (!(user.role === "ceo" || user.role === "head_success")) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
 
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
   const current = await prisma.subscriptionRenewal.findUnique({ where: { id } });
   if (!current) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const allowed = await canEditPatientSubscription(user, current.patientId);
+  if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   await prisma.subscriptionRenewal.delete({ where: { id } });
 

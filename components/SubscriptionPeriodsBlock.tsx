@@ -37,7 +37,21 @@ const TYPE_COLORS: Record<string, { bg: string; color: string }> = {
   ADVANCE: { bg: "#E0F2FE", color: "#075985" },
 };
 
-export function SubscriptionPeriodsBlock({ patientId, isManager, isCeo }: { patientId: string; isManager: boolean; isCeo: boolean }) {
+export function SubscriptionPeriodsBlock({
+  patientId,
+  isManager,
+  isCeo,
+  canEdit,
+}: {
+  patientId: string;
+  isManager: boolean;
+  isCeo: boolean;
+  // Habilita los botones de editar/borrar en cada periodo. Para fisio se
+  // pasa true solo cuando el paciente fue añadido manualmente o legacy
+  // (sin Sale Stripe). Si no se pasa, cae al permiso histórico (manager).
+  canEdit?: boolean;
+}) {
+  const allowEdit = canEdit ?? isManager;
   const [renewals, setRenewals] = useState<Renewal[]>([]);
   const [pauses, setPauses] = useState<Pause[]>([]);
   const [loading, setLoading] = useState(true);
@@ -153,7 +167,7 @@ export function SubscriptionPeriodsBlock({ patientId, isManager, isCeo }: { pati
                       </span>
                     )}
                   </div>
-                  {isManager && (
+                  {allowEdit && (
                     <div className="flex gap-1 shrink-0">
                       <button
                         onClick={() => setEditing(r)}

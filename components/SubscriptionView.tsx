@@ -87,6 +87,7 @@ export function SubscriptionView({
   isCeo,
   metrics,
   totalDaysExtended,
+  canEditSubscription,
 }: {
   patient: Patient;
   sale: Sale | null;
@@ -95,6 +96,10 @@ export function SubscriptionView({
   isCeo: boolean;
   metrics: Metrics;
   totalDaysExtended: number;
+  // True si el usuario actual puede editar/borrar periodos de suscripción.
+  // Managers siempre; fisios solo si el paciente no vino por Stripe (alta
+  // manual o legacy). Se calcula en el server.
+  canEditSubscription: boolean;
 }) {
   // Calcular la fecha de fin REAL del programa sumando los días de pausa
   // a programEndDate. La BD no la actualiza al crear pausas, lo hacemos aquí.
@@ -148,7 +153,12 @@ export function SubscriptionView({
       {/* Bloque 3: Periodos de suscripción (renovaciones, etc) */}
       <section className="card space-y-3">
         <h2 className="font-medium">🔁 Periodos de suscripción</h2>
-        <SubscriptionPeriodsBlock patientId={patient.id} isManager={isManager} isCeo={isCeo} />
+        <SubscriptionPeriodsBlock
+          patientId={patient.id}
+          isManager={isManager}
+          isCeo={isCeo}
+          canEdit={canEditSubscription}
+        />
       </section>
 
       {/* Bloque 4: Pausas y vacaciones */}
