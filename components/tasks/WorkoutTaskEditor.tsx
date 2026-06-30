@@ -2,6 +2,24 @@
 
 import { useEffect, useState } from "react";
 import { youtubeThumbnail } from "@/lib/youtube";
+import {
+  DndContext,
+  PointerSensor,
+  TouchSensor,
+  KeyboardSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+  sortableKeyboardCoordinates,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 type Template = { id: string; title: string; bodyText: string; exerciseIds: string[] };
 
@@ -59,6 +77,27 @@ export function WorkoutTaskEditor({ task, onClose, onSave }: { task: any; onClos
 
   function unlinkExercise(id: string) {
     setLinkedExercises((prev) => prev.filter((e) => e.id !== id));
+  }
+
+  // ── Drag & drop para reordenar vídeos vinculados ─────────────────────
+  // Usamos PointerSensor + TouchSensor con un delay corto para no
+  // interferir con los taps en mobile. Activamos por un pequeño umbral
+  // de distancia para que un click en la X de borrar no inicie un drag.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  function handleDragEnd(e: DragEndEvent) {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    setLinkedExercises((prev) => {
+      const oldIdx = prev.findIndex((x) => x.id === active.id);
+      const newIdx = prev.findIndex((x) => x.id === over.id);
+      if (oldIdx < 0 || newIdx < 0) return prev;
+      return arrayMove(prev, oldIdx, newIdx);
+    });
   }
 
   async function save() {
@@ -159,25 +198,20 @@ export function WorkoutTaskEditor({ task, onClose, onSave }: { task: any; onClos
       <div>
         <label className="text-xs text-neutral-500 block mb-2">Ejercicios vinculados (vídeos que verá el paciente)</label>
 
-        <div className="space-y-1 mb-2">
-          {linkedExercises.map((ex) => {
-            const thumb = ex.youtubeUrl ? youtubeThumbnail(ex.youtubeUrl) : null;
-            return (
-              <div key={ex.id} className="flex items-center gap-2 p-2 bg-neutral-50 rounded-lg">
-                {thumb ? (
-                  <img src={thumb} alt="" className="w-16 h-10 object-cover rounded flex-shrink-0" />
-                ) : (
-                  <div className="w-16 h-10 bg-neutral-200 rounded flex-shrink-0" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium truncate">{ex.name}</div>
-                  <div className="text-xs text-neutral-500 truncate">{ex.category}</div>
-                </div>
-                <button onClick={() => unlinkExercise(ex.id)} className="text-xs text-red-600 px-2">✕</button>
-              </div>
-            );
-          })}
-        </div>
+        {linkedExercises.length > 1 && (
+          <p className="text-[10px] text-neutral-400 mb-1">
+            Arrastra ⠿ para reordenar los vídeos. El paciente los verá en este orden.
+          </p>
+        )}
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={linkedExercises.map((e) => e.id)} strategy={verticalListSortingStrategy}>
+            <div className="space-y-1 mb-2">
+              {linkedExercises.map((ex) => (
+                <SortableExerciseRow key={ex.id} exercise={ex} onUnlink={() => unlinkExercise(ex.id)} />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
 
         {!showSearch ? (
           <button onClick={() => setShowSearch(true)} className="btn btn-ghost text-xs w-full">
@@ -243,6 +277,50 @@ export function WorkoutTaskEditor({ task, onClose, onSave }: { task: any; onClos
           {saving ? "Guardando..." : "Guardar tarea"}
         </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Una fila de ejercicio vinculado, draggable. El ⠿ es el único handle:
+ * el resto de la fila no inicia drag, así el botón de borrar sigue siendo
+ * clickable sin confusión.
+ */
+function SortableExerciseRow({ exercise, onUnlink }: { exercise: any; onUnlink: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: exercise.id });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+    zIndex: isDragging ? 10 : undefined,
+  };
+  const thumb = exercise.youtubeUrl ? youtubeThumbnail(exercise.youtubeUrl) : null;
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center gap-2 p-2 bg-neutral-50 rounded-lg"
+    >
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        className="text-neutral-400 hover:text-neutral-700 cursor-grab active:cursor-grabbing select-none px-1 leading-none touch-none"
+        title="Arrastrar para reordenar"
+        aria-label="Arrastrar para reordenar"
+      >
+        ⠿
+      </button>
+      {thumb ? (
+        <img src={thumb} alt="" className="w-16 h-10 object-cover rounded flex-shrink-0" />
+      ) : (
+        <div className="w-16 h-10 bg-neutral-200 rounded flex-shrink-0" />
+      )}
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-medium truncate">{exercise.name}</div>
+        <div className="text-xs text-neutral-500 truncate">{exercise.category}</div>
+      </div>
+      <button onClick={onUnlink} className="text-xs text-red-600 px-2">✕</button>
     </div>
   );
 }
