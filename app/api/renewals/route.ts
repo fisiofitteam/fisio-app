@@ -64,12 +64,23 @@ export async function POST(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const { patientId, programType, periodMonths, amountPaid, notes, strategy } = await req.json();
+  const {
+    patientId,
+    programType,
+    periodMonths,
+    amountPaid,
+    notes,
+    strategy,
+    startDate: customStartRaw,
+  } = await req.json();
 
   if (!patientId) return NextResponse.json({ error: "patientId required" }, { status: 400 });
   if (!programType) return NextResponse.json({ error: "programType required" }, { status: 400 });
 
-  const months = Number(periodMonths) || 4;
+  const months = Number(periodMonths);
+  if (!Number.isFinite(months) || months <= 0) {
+    return NextResponse.json({ error: "Duración inválida (meses debe ser > 0)" }, { status: 400 });
+  }
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -83,7 +94,27 @@ export async function POST(req: NextRequest) {
   let startDate: Date;
   let status: "active" | "scheduled";
 
-  if (strategy === "replace" && activePeriod) {
+  // Fecha custom: si el cliente la pasa, la respetamos. Puede ser pasada
+  // o futura. Regla:
+  //   - futura: dejamos el nuevo como "scheduled". Si hay activo vigente,
+  //     no lo tocamos (que termine por su fecha natural).
+  //   - hoy o pasada: cerramos cualquier "active" colgado y el nuevo pasa
+  //     a "active" desde esa fecha.
+  const customStart = customStartRaw ? new Date(customStartRaw) : null;
+  if (customStart && !isNaN(customStart.getTime())) {
+    customStart.setHours(0, 0, 0, 0);
+    if (customStart <= today) {
+      await prisma.subscriptionRenewal.updateMany({
+        where: { patientId, status: "active" },
+        data: { status: "finished", endDate: customStart },
+      });
+      startDate = customStart;
+      status = "active";
+    } else {
+      startDate = customStart;
+      status = "scheduled";
+    }
+  } else if (strategy === "replace" && activePeriod) {
     // SUSTITUIR: borramos el actual (típicamente porque se creó mal) y empezamos hoy
     await prisma.subscriptionRenewal.delete({ where: { id: activePeriod.id } });
     startDate = today;

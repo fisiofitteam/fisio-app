@@ -265,6 +265,10 @@ function AddRenewalModal({
   const [periodMonths, setPeriodMonths] = useState("4");
   const [amountEuros, setAmountEuros] = useState("");
   const [notes, setNotes] = useState("");
+  // Fecha de inicio opcional solo en modo manual. Si se rellena, el
+  // endpoint la respeta (puede ser pasada o futura). Si se deja vacía,
+  // aplica la lógica antigua: activo empieza hoy, scheduled tras el actual.
+  const [customStartDate, setCustomStartDate] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [link, setLink] = useState<string | null>(null);
@@ -293,6 +297,11 @@ function AddRenewalModal({
 
   async function saveManual() {
     setError("");
+    const months = Number(periodMonths);
+    if (!Number.isFinite(months) || months <= 0) {
+      setError("Indica una duración en meses (mayor que 0).");
+      return;
+    }
     setSaving(true);
     const res = await fetch("/api/renewals", {
       method: "POST",
@@ -300,9 +309,12 @@ function AddRenewalModal({
       body: JSON.stringify({
         patientId,
         programType,
-        periodMonths: Number(periodMonths),
+        periodMonths: months,
         amountPaid: amountEuros || null,
         notes: notes.trim() || null,
+        startDate: customStartDate
+          ? new Date(customStartDate).toISOString()
+          : undefined,
       }),
     });
     if (res.ok) {
@@ -402,18 +414,16 @@ function AddRenewalModal({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-neutral-500 block mb-1">Duración (meses)</label>
-                <select
+                <input
+                  type="number"
+                  min="1"
+                  max="60"
+                  step="1"
                   className="input text-sm w-full"
                   value={periodMonths}
                   onChange={(e) => setPeriodMonths(e.target.value)}
-                >
-                  <option value="1">1 mes</option>
-                  <option value="2">2 meses</option>
-                  <option value="3">3 meses</option>
-                  <option value="4">4 meses</option>
-                  <option value="6">6 meses</option>
-                  <option value="12">12 meses</option>
-                </select>
+                  placeholder="Ej. 4"
+                />
               </div>
               <div>
                 <label className="text-xs text-neutral-500 block mb-1">Importe (€)</label>
@@ -431,6 +441,22 @@ function AddRenewalModal({
 
             {mode === "manual" && (
               <>
+                <div>
+                  <label className="text-xs text-neutral-500 block mb-1">
+                    Fecha de inicio (opcional)
+                  </label>
+                  <input
+                    type="date"
+                    className="input text-sm w-full"
+                    value={customStartDate}
+                    onChange={(e) => setCustomStartDate(e.target.value)}
+                  />
+                  <p className="text-[11px] text-neutral-500 mt-1">
+                    Si la dejas vacía: empieza hoy (o al terminar el periodo
+                    actual si aún está vigente). Si la rellenas, respetamos
+                    ese día — puede ser futura o pasada.
+                  </p>
+                </div>
                 <div>
                   <label className="text-xs text-neutral-500 block mb-1">Notas (opcional)</label>
                   <input
@@ -557,18 +583,16 @@ function EditRenewalModal({
             </div>
             <div>
               <label className="text-xs text-neutral-500 block mb-1">Duración (meses)</label>
-              <select
+              <input
+                type="number"
+                min="1"
+                max="60"
+                step="1"
                 className="input text-sm w-full"
                 value={periodMonths}
                 onChange={(e) => setPeriodMonths(e.target.value)}
-              >
-                <option value="1">1 mes</option>
-                <option value="2">2 meses</option>
-                <option value="3">3 meses</option>
-                <option value="4">4 meses</option>
-                <option value="6">6 meses</option>
-                <option value="12">12 meses</option>
-              </select>
+                placeholder="Ej. 4"
+              />
             </div>
           </div>
 
