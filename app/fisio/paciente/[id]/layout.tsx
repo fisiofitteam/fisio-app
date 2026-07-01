@@ -10,6 +10,7 @@ import { LoadReviewIntervalSelector } from "@/components/LoadReviewIntervalSelec
 import { PatientNotesButton } from "@/components/PatientNotesButton";
 import { PatientAccessLinkButton } from "@/components/PatientAccessLinkButton";
 import { SendLoginCodeButton } from "@/components/SendLoginCodeButton";
+import { MarkAsLegacyButton } from "@/components/MarkAsLegacyButton";
 import { PatientAgendaButton } from "@/components/PatientAgendaButton";
 import { calculateAdherence } from "@/lib/adherence";
 import { getActiveProfessional } from "@/lib/session";
@@ -141,6 +142,17 @@ export default async function PatientLayout({
             {(user.role === "ceo" || user.role === "head_success") && (
               <SendLoginCodeButton patientId={patient.id} />
             )}
+            {(user.role === "ceo" || user.role === "head_success") &&
+              !patient.giftsAlreadySent &&
+              patient.onboardingTasks != null && (
+                <MarkAsLegacyButton
+                  patientId={patient.id}
+                  patientName={patient.fullName}
+                  currentSubscriptionStartDate={
+                    patient.subscriptionStartDate?.toISOString() ?? null
+                  }
+                />
+              )}
             <Link
               href={`/fisio/paciente/${patient.id}/exportar`}
               className="btn btn-ghost text-xs justify-start"
