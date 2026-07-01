@@ -288,3 +288,39 @@ export async function PATCH(req: NextRequest) {
 
   return NextResponse.json({ error: "Acción desconocida" }, { status: 400 });
 }
+
+// DELETE ?pauseId=xxx — eliminar completamente una pausa creada por error
+// -----------------------------------------------------------------------
+// A diferencia del PATCH action="cancel" (que solo funcionaba con pausas
+// no terminadas y las dejaba en BD con status="cancelled"), este DELETE:
+//   - Funciona con pausas en cualquier estado (scheduled, active, ended
+//     e incluso cancelled).
+//   - Revierte el shift de sesiones y la extensión de suscripción si la
+//     pausa había llegado a aplicarlos (status active o ended).
+//   - Borra el registro de la BD.
+//
+// Uso típico: el fisio creó una pausa con fechas incorrectas o para el
+// paciente equivocado y quiere que desaparezca sin dejar rastro.
+export async function DELETE(req: NextRequest) {
+  const user = await getActiveProfessional();
+  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const pauseId = req.nextUrl.searchParams.get("pauseId");
+  if (!pauseId) return NextResponse.json({ error: "pauseId requerido" }, { status: 400 });
+
+  const pause = await prisma.programPause.findUnique({ where: { id: pauseId } });
+  if (!pause) return NextResponse.json({ error: "Pausa no encontrada" }, { status: 404 });
+
+  // Si la pausa YA aplicó efectos (status active / ended), los revertimos
+  // antes de borrar. Las scheduled tienen daysExtended pero también se
+  // aplicaron al crearse (POST llama a extendSubscriptionByDays y
+  // shiftFutureSessions inmediatamente) — así que la regla es simple:
+  // si daysExtended > 0 Y status != "cancelled", hay que revertir.
+  if (pause.status !== "cancelled" && pause.daysExtended > 0) {
+    await shiftFutureSessions(pause.patientId, pause.startDate, -pause.daysExtended);
+    await extendSubscriptionByDays(pause.patientId, -pause.daysExtended);
+  }
+
+  await prisma.programPause.delete({ where: { id: pauseId } });
+  return NextResponse.json({ ok: true });
+}

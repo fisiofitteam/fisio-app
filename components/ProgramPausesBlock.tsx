@@ -65,6 +65,26 @@ export function ProgramPausesBlock({ patientId, programMode }: { patientId: stri
 
   const activeOrScheduled = pauses.filter((p) => p.status === "active" || p.status === "scheduled");
 
+  async function remove(pauseId: string) {
+    if (
+      !confirm(
+        "¿Eliminar esta pausa? Si el paciente había recibido días extra por ella, se revertirán. No queda rastro."
+      )
+    )
+      return;
+    const res = await fetch(`/api/program-pauses?pauseId=${pauseId}`, {
+      method: "DELETE",
+    });
+    if (res.ok) {
+      // Refrescamos: la pausa desaparece y el fin de suscripción vuelve
+      // a su fecha original.
+      await load();
+      window.location.reload();
+    } else {
+      alert("No se pudo eliminar la pausa");
+    }
+  }
+
   async function cancel(pauseId: string) {
     if (!confirm("¿Cancelar esta pausa? Si ya estaba activa, se revertirá la extensión de suscripción.")) return;
     await fetch("/api/program-pauses", {
@@ -112,12 +132,26 @@ export function ProgramPausesBlock({ patientId, programMode }: { patientId: stri
               <div key={p.id} className={`rounded-lg px-3 py-2 text-sm border ${s.box}`}>
                 <div className="flex items-center justify-between mb-1 gap-2">
                   <span className={`text-[10px] font-bold tracking-wider ${s.label}`}>{s.text}</span>
-                  {p.status === "scheduled" && (
-                    <button onClick={() => cancel(p.id)} className="text-[11px] text-red-600 hover:underline">Cancelar</button>
-                  )}
-                  {p.status === "active" && (
-                    <button onClick={() => endNow(p.id)} className="text-[11px] text-amber-700 hover:underline">Finalizar hoy</button>
-                  )}
+                  <div className="flex gap-2">
+                    {p.status === "active" && (
+                      <button
+                        onClick={() => endNow(p.id)}
+                        className="text-[11px] text-amber-700 hover:underline"
+                      >
+                        Finalizar hoy
+                      </button>
+                    )}
+                    {/* Eliminar disponible siempre, sea cual sea el estado.
+                        Útil cuando se creó una pausa por error. Revierte
+                        todos los efectos y borra el registro. */}
+                    <button
+                      onClick={() => remove(p.id)}
+                      className="text-[11px] text-red-600 hover:underline"
+                      title="Eliminar la pausa y revertir sus efectos"
+                    >
+                      Eliminar
+                    </button>
+                  </div>
                 </div>
                 <div className="text-xs">
                   Del <strong>{formatDate(p.startDate)}</strong> al <strong>{formatDate(p.actualEndDate || p.endDate)}</strong>
