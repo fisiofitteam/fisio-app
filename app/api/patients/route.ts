@@ -245,6 +245,7 @@ export async function PATCH(req: NextRequest) {
     rollingProgramId,
     rollingAccessoriesId,
     rollingTrainingId,
+    week0Completed,
   } = body;
 
   // Si se intenta cambiar email, validar que no esté ocupado por otro paciente
@@ -360,6 +361,11 @@ export async function PATCH(req: NextRequest) {
       ...(rollingProgramId !== undefined && { rollingProgramId: rollingProgramId || null }),
       ...(rollingAccessoriesId !== undefined && { rollingAccessoriesId: rollingAccessoriesId || null }),
       ...(rollingTrainingId !== undefined && { rollingTrainingId: rollingTrainingId || null }),
+      // Toggle "Semana 0 completada" desde la lista de pacientes. true →
+      // fecha actual, false → null (por si el fisio quiere revertir).
+      ...(week0Completed !== undefined && {
+        week0CompletedAt: week0Completed ? new Date() : null,
+      }),
       // Si se cambia a fixed, limpiamos los tres rollings
       ...(programMode === "fixed" && {
         rollingProgramId: null,

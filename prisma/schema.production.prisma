@@ -117,6 +117,13 @@ model Patient {
   //   "finished"           → programa terminado
   onboardingStatus       String   @default("active")
 
+  // Fecha en la que el fisio marcó "Semana 0 completada" desde la lista
+  // de pacientes. Los pacientes NO legacy con este campo NULL y con
+  // subscriptionStartDate < 14 días aparecen en el recuadro amarillo
+  // "Onboarding / Semana 0" arriba del todo. Al marcar la casilla,
+  // sale de ese recuadro.
+  week0CompletedAt       DateTime?
+
   // Quién y cuándo asignó al fisio (típicamente Miguel = head_success)
   assignedByUserId       String?
   assignedByUser         Professional? @relation("PatientAssignedBy", fields: [assignedByUserId], references: [id])

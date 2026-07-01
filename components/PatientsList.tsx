@@ -18,6 +18,8 @@ type Patient = {
   subscriptionStartDate: string | null;
   subscriptionTotalMonths: number;
   renewalDays: number | null;
+  /** Etapa del paciente para agruparlo visualmente en la lista. */
+  stage: "onboarding" | "first_weeks" | "steady";
   consumedMonths: number;
   adherenceCompleted: number;
   adherenceTotal: number;
@@ -189,16 +191,11 @@ export function PatientsList({
           Ningún paciente coincide con "{search}".
         </p>
       ) : (
-        <div className="space-y-3">
-          {visiblePatients.map((p) => (
-            <PatientRow
-              key={p.id}
-              patient={p}
-              isManager={currentUser.isManager}
-              onReassign={() => setReassigning(p)}
-            />
-          ))}
-        </div>
+        <StagedPatientList
+          patients={visiblePatients}
+          isManager={currentUser.isManager}
+          onReassign={setReassigning}
+        />
       )}
 
       {reassigning && currentUser.isManager && (
@@ -1044,5 +1041,157 @@ function CreatePatientModal({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Renderiza los pacientes agrupados por etapa:
+ *   1. Onboarding / Semana 0 (recuadro amarillo destacado).
+ *   2. Primeras semanas (gris claro, menos protagonismo).
+ *   3. Resto (sin marco, como toda la vida).
+ *
+ * El orden interno de cada grupo respeta el que llegue en la lista
+ * original (se ordena por fullName en el server). Si un grupo está
+ * vacío no se dibuja.
+ */
+function StagedPatientList({
+  patients,
+  isManager,
+  onReassign,
+}: {
+  patients: Patient[];
+  isManager: boolean;
+  onReassign: (p: Patient) => void;
+}) {
+  const onboarding = patients.filter((p) => p.stage === "onboarding");
+  const firstWeeks = patients.filter((p) => p.stage === "first_weeks");
+  const steady = patients.filter((p) => p.stage === "steady");
+
+  return (
+    <div className="space-y-4">
+      {onboarding.length > 0 && (
+        <section
+          className="rounded-2xl p-3"
+          style={{ background: "#FEF3C7", border: "1px solid #FCD34D" }}
+        >
+          <header className="flex items-baseline justify-between gap-2 mb-2 px-1">
+            <div>
+              <h2 className="text-sm font-semibold" style={{ color: "#78350F" }}>
+                🚀 Onboarding · Semana 0
+              </h2>
+              <p className="text-[11px]" style={{ color: "#92400E" }}>
+                Pacientes recién entrados (desde ventas o alta manual).
+                Marca "Semana 0 completada" cuando terminen sus tareas
+                iniciales para sacarlos de aquí.
+              </p>
+            </div>
+            <span
+              className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
+              style={{ background: "#FDE68A", color: "#78350F" }}
+            >
+              {onboarding.length}
+            </span>
+          </header>
+          <div className="space-y-3">
+            {onboarding.map((p) => (
+              <div key={p.id} className="relative">
+                <PatientRow
+                  patient={p}
+                  isManager={isManager}
+                  onReassign={() => onReassign(p)}
+                />
+                <Week0Toggle patientId={p.id} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {firstWeeks.length > 0 && (
+        <section
+          className="rounded-2xl p-3"
+          style={{ background: "#F5F5F5", border: "1px solid #E5E5E5" }}
+        >
+          <header className="flex items-baseline justify-between gap-2 mb-2 px-1">
+            <div>
+              <h2 className="text-sm font-semibold text-neutral-700">
+                📈 Primeras semanas
+              </h2>
+              <p className="text-[11px] text-neutral-500">
+                Pacientes en sus primeras 4 semanas de programa.
+                Prioriza revisar formularios y adaptaciones.
+              </p>
+            </div>
+            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-white text-neutral-600 border border-neutral-200">
+              {firstWeeks.length}
+            </span>
+          </header>
+          <div className="space-y-3">
+            {firstWeeks.map((p) => (
+              <PatientRow
+                key={p.id}
+                patient={p}
+                isManager={isManager}
+                onReassign={() => onReassign(p)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {steady.length > 0 && (
+        <div className="space-y-3">
+          {steady.map((p) => (
+            <PatientRow
+              key={p.id}
+              patient={p}
+              isManager={isManager}
+              onReassign={() => onReassign(p)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Casilla "Semana 0 completada" que se pinta bajo cada tarjeta de paciente
+ * enន el bloque amarillo. Al marcarla, PATCH al paciente con
+ * week0Completed: true → el server anota la fecha actual y el paciente
+ * sale del bloque en el próximo refresh.
+ */
+function Week0Toggle({ patientId }: { patientId: string }) {
+  const router = useRouter();
+  const [saving, setSaving] = useState(false);
+
+  async function markDone() {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/patients", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: patientId, week0Completed: true }),
+      });
+      if (res.ok) router.refresh();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <label
+      className="flex items-center gap-2 text-xs mt-2 pl-3 cursor-pointer select-none"
+      style={{ color: "#78350F" }}
+    >
+      <input
+        type="checkbox"
+        onChange={markDone}
+        disabled={saving}
+        className="w-4 h-4 accent-amber-500"
+      />
+      <span>{saving ? "Guardando…" : "Semana 0 completada"}</span>
+    </label>
   );
 }

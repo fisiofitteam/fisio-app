@@ -103,6 +103,9 @@ model Patient {
   //   "finished"           → programa terminado
   onboardingStatus       String   @default("active")
 
+  // Fecha en la que el fisio marcó "Semana 0 completada" desde la lista.
+  week0CompletedAt       DateTime?
+
   // Quién y cuándo asignó al fisio (típicamente Miguel = head_success)
   assignedByUserId       String?
   assignedByUser         Professional? @relation("PatientAssignedBy", fields: [assignedByUserId], references: [id])

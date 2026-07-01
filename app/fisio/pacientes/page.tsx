@@ -146,6 +146,30 @@ export default async function PatientsListPage({
     if (r.endDate) activeEndByPatient.set(r.patientId, r.endDate);
   }
 
+  // Grupo del paciente para la vista escalonada por etapa:
+  //   - "onboarding": NO legacy, week0CompletedAt null, subscriptionStartDate
+  //     dentro de los últimos 14 días. Recuadro amarillo arriba.
+  //   - "first_weeks": no onboarding, subscriptionStartDate dentro de las
+  //     últimas 4 semanas. Recuadro gris claro.
+  //   - "steady": el resto. Vista habitual.
+  const now = Date.now();
+  const DAYS_14_MS = 14 * 86400000;
+  const WEEKS_4_MS = 28 * 86400000;
+  function groupFor(p: (typeof patients)[number]): "onboarding" | "first_weeks" | "steady" {
+    const start = p.subscriptionStartDate?.getTime() ?? null;
+    if (start === null) return "steady";
+    const elapsed = now - start;
+    // Legacies (migrados) nunca entran en onboarding. Los detectamos por
+    // giftsAlreadySent que se marca en el POST legacy y en el flujo de
+    // migración masiva.
+    const isLegacy = p.giftsAlreadySent === true;
+    if (!isLegacy && !p.week0CompletedAt && elapsed <= DAYS_14_MS) {
+      return "onboarding";
+    }
+    if (elapsed <= WEEKS_4_MS) return "first_weeks";
+    return "steady";
+  }
+
   const mapped = patients.map((p, idx) => {
     const activeEnd = activeEndByPatient.get(p.id);
     const renewalDays = activeEnd
@@ -156,6 +180,7 @@ export default async function PatientsListPage({
             Date.now()) / 86400000
         )
       : null;
+    const stage = groupFor(p);
     return {
       id: p.id,
       fullName: p.fullName,
@@ -166,6 +191,7 @@ export default async function PatientsListPage({
       subscriptionStartDate: p.subscriptionStartDate?.toISOString() ?? null,
       subscriptionTotalMonths: p.subscriptionTotalMonths,
       renewalDays,
+      stage,
       consumedMonths: monthsConsumed(p.subscriptionStartDate),
       adherenceCompleted: adherences[idx].completed,
       adherenceTotal: adherences[idx].total,
