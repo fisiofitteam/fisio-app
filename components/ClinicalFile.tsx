@@ -416,9 +416,11 @@ export function ClinicalFile({
         </div>
       )}
 
-      {isCeo && (
-        <DeletePatientButton patientId={patient.id} fullName={patient.fullName} />
-      )}
+      {/* Borrar paciente: abierto a cualquier profesional del equipo.
+          La red de seguridad la pone el propio botón (pedir teclear el
+          nombre completo como confirmación) y el endpoint (misma
+          verificación server-side). */}
+      <DeletePatientButton patientId={patient.id} fullName={patient.fullName} />
     </div>
   );
 }

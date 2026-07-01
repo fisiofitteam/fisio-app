@@ -4,8 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 /**
- * Bloque "Zona de peligro" para borrar un paciente. Solo se renderiza si el
- * usuario es CEO.
+ * Bloque "Zona de peligro" para borrar un paciente. Abierto a cualquier
+ * profesional del equipo — la red de seguridad la pone la doble
+ * confirmación (teclear el fullName exacto).
  *
  * Flujo:
  *  1. Estado colapsado: solo un texto pequeño "Borrar paciente" (rojo, pequeño).

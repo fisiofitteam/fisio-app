@@ -1,7 +1,10 @@
 /**
  * DELETE /api/patients/[id]
  *
- * Borra un paciente y TODOS sus datos derivados de la BD. Solo CEO.
+ * Borra un paciente y TODOS sus datos derivados de la BD. Abierto a
+ * cualquier profesional del equipo. La red de seguridad es tener que
+ * teclear el fullName exacto como confirmación (el cliente lo obliga,
+ * el server lo verifica).
  *
  * Estrategia de borrado:
  *  - La mayoría de relaciones a Patient tienen onDelete: Cascade en el schema
@@ -25,8 +28,8 @@ import { getActiveProfessional } from "@/lib/session";
 
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   const user = await getActiveProfessional();
-  if (!user || user.role !== "ceo") {
-    return NextResponse.json({ error: "Solo el CEO puede borrar pacientes" }, { status: 403 });
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   // Body de confirmación: cliente debe pegar el nombre exacto del paciente.
