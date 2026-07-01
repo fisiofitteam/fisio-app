@@ -159,10 +159,13 @@ export default async function PatientsListPage({
     const start = p.subscriptionStartDate?.getTime() ?? null;
     if (start === null) return "steady";
     const elapsed = now - start;
-    // Legacies (migrados) nunca entran en onboarding. Los detectamos por
-    // giftsAlreadySent que se marca en el POST legacy y en el flujo de
-    // migración masiva.
-    const isLegacy = p.giftsAlreadySent === true;
+    // Legacies (migrados) nunca entran en onboarding. Doble criterio:
+    //   - giftsAlreadySent = true: lo marcan las altas legacy modernas.
+    //   - onboardingTasks == null: los legacies NO rellenan el JSON de
+    //     tareas de onboarding (ventas + alta manual sí lo hacen para
+    //     pasar por el gate de anamnesis + contrato). Cubre los legacies
+    //     antiguos que no marcaban giftsAlreadySent.
+    const isLegacy = p.giftsAlreadySent === true || p.onboardingTasks == null;
     if (!isLegacy && !p.week0CompletedAt && elapsed <= DAYS_14_MS) {
       return "onboarding";
     }
