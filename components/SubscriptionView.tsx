@@ -88,6 +88,7 @@ export function SubscriptionView({
   metrics,
   totalDaysExtended,
   canEditSubscription,
+  activePeriodEndDate,
 }: {
   patient: Patient;
   sale: Sale | null;
@@ -100,10 +101,16 @@ export function SubscriptionView({
   // Managers siempre; fisios solo si el paciente no vino por Stripe (alta
   // manual o legacy). Se calcula en el server.
   canEditSubscription: boolean;
+  // Fin del periodo activo según SubscriptionRenewal.endDate. Ya incluye
+  // las extensiones por pausas (el endpoint /api/program-pauses las
+  // aplica ahí). Es la fuente de verdad para "Fin previsto".
+  activePeriodEndDate: string | null;
 }) {
-  // Calcular la fecha de fin REAL del programa sumando los días de pausa
-  // a programEndDate. La BD no la actualiza al crear pausas, lo hacemos aquí.
+  // Fin real: preferimos el SubscriptionRenewal.endDate (ya extendido
+  // por las pausas). Fallback al programEndDate del Patient + suma
+  // manual — solo por si un paciente antiguo no tiene periodo activo.
   const realProgramEndDate = (() => {
+    if (activePeriodEndDate) return activePeriodEndDate;
     if (!patient.programEndDate) return null;
     if (!totalDaysExtended) return patient.programEndDate;
     const d = new Date(patient.programEndDate);

@@ -57,6 +57,16 @@ export default async function PatientSuscripcionTab({ params }: { params: { id: 
     select: { periodMonths: true, amountPaid: true },
   });
 
+  // Fin real del periodo actual: lo lee del SubscriptionRenewal activo. Es
+  // la fuente de verdad — /api/program-pauses ya suma los días de la pausa
+  // a este endDate. Fallback al programEndDate del Patient si no hay
+  // periodo activo (raro, pero cubre pacientes antiguos sin renewal).
+  const activePeriod = await prisma.subscriptionRenewal.findFirst({
+    where: { patientId: patient.id, status: "active" },
+    select: { endDate: true },
+    orderBy: { startDate: "desc" },
+  });
+
   // Pausas activas o programadas: sumamos sus daysExtended a programEndDate
   // para mostrar la fecha de fin REAL (la BD no la actualiza al crear pausas)
   const activePauses = await prisma.programPause.findMany({
@@ -81,6 +91,7 @@ export default async function PatientSuscripcionTab({ params }: { params: { id: 
       totalDaysExtended={totalDaysExtended}
       isManager={user.isManager}
       canEditSubscription={canEditSubscription}
+      activePeriodEndDate={activePeriod?.endDate?.toISOString() ?? null}
       patient={{
         id: patient.id,
         fullName: patient.fullName,

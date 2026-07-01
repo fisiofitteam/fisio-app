@@ -110,6 +110,14 @@ export async function POST(req: NextRequest) {
   // manualmente deben pasar por el gate igual que los que llegan desde Stripe.
   // Si dejamos onboardingTasks = null el gate los considera legacy y NO les
   // exige nada — eso era el bug.
+  // programStart/EndDate son la fuente que usa SubscriptionView para
+  // "Fin previsto". Antes se dejaban null en el alta manual → los legacies
+  // veían "—" y no reflejaban las extensiones por pausas. Los rellenamos
+  // consistentes con el flujo Stripe.
+  const months = Number(subscriptionPeriodMonths) || 4;
+  const programEndDate = new Date(startDate);
+  programEndDate.setMonth(programEndDate.getMonth() + months);
+
   const patient = await prisma.patient.create({
     data: {
       fullName: fullName.trim(),
@@ -120,8 +128,11 @@ export async function POST(req: NextRequest) {
       diagnosis: diagnosis?.trim() || null,
       shippingPhone: shippingPhone?.trim() || null,
       subscriptionStartDate: startDate,
-      subscriptionPeriodMonths: Number(subscriptionPeriodMonths) || 4,
-      subscriptionTotalMonths: Number(subscriptionPeriodMonths) || 4,
+      subscriptionPeriodMonths: months,
+      subscriptionTotalMonths: months,
+      programStartDate: startDate,
+      programEndDate: programEndDate,
+      programDurationMonths: months,
       assignedProfessionalId: finalAssigneeId,
       programType: programType || null,
       programMode: mode,

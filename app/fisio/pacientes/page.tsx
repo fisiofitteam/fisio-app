@@ -132,8 +132,25 @@ export default async function PatientsListPage({
 
   const adherences = await Promise.all(patients.map((p) => calculateAdherence(p.id)));
 
+  // Fin del periodo activo por paciente. Es la fuente de verdad porque
+  // /api/program-pauses actualiza SubscriptionRenewal.endDate cuando el
+  // fisio añade una pausa; hasta ahora la lista ignoraba ese campo y
+  // calculaba renewalDays desde subscriptionStartDate + periodMonths,
+  // que no reflejaba las pausas cortas (< 30 días).
+  const activePeriods = await prisma.subscriptionRenewal.findMany({
+    where: { patientId: { in: patients.map((p) => p.id) }, status: "active" },
+    select: { patientId: true, endDate: true },
+  });
+  const activeEndByPatient = new Map<string, Date>();
+  for (const r of activePeriods) {
+    if (r.endDate) activeEndByPatient.set(r.patientId, r.endDate);
+  }
+
   const mapped = patients.map((p, idx) => {
-    const renewalDays = p.subscriptionStartDate
+    const activeEnd = activeEndByPatient.get(p.id);
+    const renewalDays = activeEnd
+      ? Math.round((activeEnd.getTime() - Date.now()) / 86400000)
+      : p.subscriptionStartDate
       ? Math.round(
           (new Date(new Date(p.subscriptionStartDate).setMonth(new Date(p.subscriptionStartDate).getMonth() + p.subscriptionPeriodMonths)).getTime() -
             Date.now()) / 86400000
