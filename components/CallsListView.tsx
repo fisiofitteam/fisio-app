@@ -451,6 +451,15 @@ function CallRow({
             <WorkflowActionButtons lead={lead} currentUser={currentUser} sendCaseProps={sendCaseProps} />
           )}
 
+          {/* Acciones libres siempre disponibles para CEO y closer:
+              enviar caso de éxito y recordatorio de cita, sea cual sea el
+              estado del lead o si es una llamada añadida manualmente. */}
+          <AlwaysAvailableCallActions
+            lead={lead}
+            currentUser={currentUser}
+            sendCaseProps={sendCaseProps}
+          />
+
           {/* Toggle "Agendado por IA" (visible siempre, clicable sin abrir modal) */}
           <AiScheduledToggle lead={lead} />
         </div>
@@ -494,6 +503,87 @@ function AiScheduledToggle({ lead }: { lead: Lead }) {
         🤖 {lead.aiScheduled ? "Agendado por IA" : "¿IA?"}
       </button>
     </div>
+  );
+}
+
+// ============================================================================
+// Acciones libres SIEMPRE disponibles para CEO y closer asignado.
+// Estos botones NO se atan al estado del workflow (Notificado / Contactado /
+// Recordatorio) — el CEO o el closer pueden mandar caso de éxito o
+// recordatorio de cita en cualquier momento, con el lead en cualquier
+// estado (scheduled, won, lost, cancelled, no_show) y venga de la landing
+// o se haya añadido manualmente.
+// ============================================================================
+function AlwaysAvailableCallActions({
+  lead,
+  currentUser,
+  sendCaseProps,
+}: {
+  lead: Lead;
+  currentUser: { id: string; fullName: string; role: string };
+  sendCaseProps: SendCaseProps;
+}) {
+  const [sendingTemplate, setSendingTemplate] = useState<SendCaseTemplate | null>(null);
+
+  // Permisos:
+  //   - CEO: siempre.
+  //   - Closer: solo si es el closer asignado a este lead.
+  //   - Head success: por ahora fuera (si lo quieres dentro, se abre).
+  const canUse =
+    currentUser.role === "ceo" ||
+    (currentUser.role === "closer" && lead.closer?.id === currentUser.id);
+  if (!canUse) return null;
+
+  const hasCaseTemplates = sendCaseProps.successCaseTemplates.length > 0;
+  const hasReminderTemplates = sendCaseProps.meetingReminderTemplates.length > 0;
+  if (!hasCaseTemplates && !hasReminderTemplates) return null;
+
+  return (
+    <>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {sendCaseProps.successCaseTemplates.map((t) => (
+          <button
+            key={`case-${t.id}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              setSendingTemplate(t);
+            }}
+            className="text-xs font-medium px-2.5 py-1 rounded-md border border-neutral-200 bg-white hover:bg-neutral-50"
+            title={`Abre WhatsApp de ${lead.fullName} con esta plantilla`}
+          >
+            📤 {t.name}
+          </button>
+        ))}
+        {sendCaseProps.meetingReminderTemplates.map((t) => (
+          <SendDirectButton
+            key={`rem-${t.id}`}
+            template={t}
+            target={{
+              leadName: lead.fullName.split(" ")[0],
+              leadPhone: lead.phone,
+              closerFullName: currentUser.fullName,
+              closerIntro: sendCaseProps.currentUserCloserIntro,
+              callDate: new Date(lead.callScheduledAt),
+              meetingUrl: lead.meetingUrl,
+            }}
+          />
+        ))}
+      </div>
+      {sendingTemplate && (
+        <SendCaseFlow
+          open={true}
+          onClose={() => setSendingTemplate(null)}
+          template={sendingTemplate}
+          target={{
+            leadName: lead.fullName.split(" ")[0],
+            leadPhone: lead.phone,
+            closerFullName: currentUser.fullName,
+            closerIntro: sendCaseProps.currentUserCloserIntro,
+          }}
+          cases={sendCaseProps.successCases}
+        />
+      )}
+    </>
   );
 }
 
@@ -566,43 +656,21 @@ function WorkflowActionButtons({
     lead.setterNotifiedAt &&
     !lead.closerContactedAt
   ) {
+    // Los botones "📤 (plantilla)" ya los pinta AlwaysAvailableCallActions
+    // arriba, así que aquí solo dejamos el check de "Caso enviado" para no
+    // duplicar la fila y mantener el orden visual (plantillas primero,
+    // check de workflow después).
     return (
-      <>
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {sendCaseProps.successCaseTemplates.map((t) => (
-            <button
-              key={t.id}
-              onClick={(e) => { e.stopPropagation(); setSendingTemplate(t); }}
-              className="text-xs font-medium px-2.5 py-1 rounded-md border border-neutral-200 bg-white hover:bg-neutral-50"
-              title={`Abre WhatsApp de ${lead.fullName} con esta plantilla`}
-            >
-              📤 {t.name}
-            </button>
-          ))}
-          <button
-            onClick={markCloserContacted}
-            disabled={loading}
-            className="text-xs font-medium px-2.5 py-1 rounded-md"
-            style={{ background: "#0A0A0A", color: "#FAFAFA" }}
-          >
-            ✓ Caso de éxito enviado
-          </button>
-        </div>
-        {sendingTemplate && (
-          <SendCaseFlow
-            open={true}
-            onClose={() => setSendingTemplate(null)}
-            template={sendingTemplate}
-            target={{
-              leadName: lead.fullName.split(" ")[0],
-              leadPhone: lead.phone,
-              closerFullName: currentUser.fullName,
-              closerIntro: sendCaseProps.currentUserCloserIntro,
-            }}
-            cases={sendCaseProps.successCases}
-          />
-        )}
-      </>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        <button
+          onClick={markCloserContacted}
+          disabled={loading}
+          className="text-xs font-medium px-2.5 py-1 rounded-md"
+          style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+        >
+          ✓ Caso de éxito enviado
+        </button>
+      </div>
     );
   }
 
@@ -621,21 +689,9 @@ function WorkflowActionButtons({
     tomorrowEnd.setHours(23, 59, 59, 999);
     if (callDate >= tomorrow && callDate <= tomorrowEnd) {
       return (
+        // Los botones de "📤 Enviar recordatorio" también los pinta ya
+        // AlwaysAvailableCallActions. Aquí solo dejamos el check.
         <div className="mt-2 flex flex-wrap gap-1.5">
-          {sendCaseProps.meetingReminderTemplates.map((t) => (
-            <SendDirectButton
-              key={t.id}
-              template={t}
-              target={{
-                leadName: lead.fullName.split(" ")[0],
-                leadPhone: lead.phone,
-                closerFullName: currentUser.fullName,
-                closerIntro: sendCaseProps.currentUserCloserIntro,
-                callDate: new Date(lead.callScheduledAt),
-                meetingUrl: lead.meetingUrl,
-              }}
-            />
-          ))}
           <button
             onClick={markReminderSent}
             disabled={loading}
