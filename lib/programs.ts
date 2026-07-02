@@ -78,6 +78,15 @@ export async function generateSessions(assignmentId: string) {
     const days = weekDaysMap.get(sourceWeekNum) ?? [];
 
     for (const day of days) {
+      // Los ProgramDay del editor siempre se crean para los 7 días de
+      // la semana, aunque el fisio solo ponga tareas en algunos. Si un
+      // día está vacío, NO generamos ProgramSession para él — así el
+      // paciente no ve tarjetas "0 tareas" y, sobre todo, no aparecen
+      // días "en blanco" cuando tiene varios programas asignados a la
+      // vez (antes cada programa generaba 7 sesiones/semana y las
+      // vacías tapaban las llenas del otro programa).
+      if (day.tasks.length === 0) continue;
+
       const tasksSnapshot = day.tasks.map((t) => {
         if (t.type === "WORKOUT" && t.workout) {
           return {
