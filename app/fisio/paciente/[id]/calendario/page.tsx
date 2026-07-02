@@ -52,6 +52,7 @@ export default async function PatientCalendarTab({
         scheduledDate: s.scheduledDate.toISOString(),
         completedAt: s.completedAt?.toISOString() ?? null,
         weekNumber: s.weekNumber,
+        assignmentId: s.assignmentId,
         programName: s.assignment.program.name,
         programType: s.assignment.program.type,
         tasksSnapshot: s.tasksSnapshot,

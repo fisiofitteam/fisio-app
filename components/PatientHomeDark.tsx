@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { colorForSession, PROGRAM_PALETTE } from "@/lib/session-colors";
 import {
   Zap,
   Calendar,
@@ -39,6 +40,8 @@ type TodaySession = {
   programName: string;
   completed: boolean;
   tasksCount: number;
+  tasksSnapshot: string;
+  assignmentId: string;
 };
 
 type NextSession = {
@@ -46,6 +49,8 @@ type NextSession = {
   date: string;
   programName: string;
   tasksCount: number;
+  tasksSnapshot: string;
+  assignmentId: string;
 };
 
 type Patient = {
@@ -77,6 +82,7 @@ export function PatientHomeDark({
   notifications,
   welcomeLine1 = "Lo difícil era empezar.",
   welcomeLine2 = "Ya estás aquí.",
+  assignmentIndexEntries = [],
 }: {
   patient: Patient;
   todaySessions: TodaySession[];
@@ -86,7 +92,11 @@ export function PatientHomeDark({
   notifications?: { id: string; type: string; title: string; body: string }[];
   welcomeLine1?: string;
   welcomeLine2?: string;
+  /** Pares [assignmentId, index] para pintar cada sesión con el color
+   *  de su programa (paleta rotativa verde/amarillo/violeta/naranja). */
+  assignmentIndexEntries?: Array<[string, number]>;
 }) {
+  const assignmentIndex = new Map<string, number>(assignmentIndexEntries);
   const dow = new Date().getDay() === 0 ? 7 : new Date().getDay();
   const todayDate = new Date();
   const initial = patient.firstName[0]?.toUpperCase() ?? "?";
@@ -333,28 +343,38 @@ export function PatientHomeDark({
               <p className="text-sm py-2" style={{ color: "var(--p-text-dim)" }}>
                 💤 Hoy descansas. ¡Aprovecha!
               </p>
-              {nextSession && (
-                <Link
-                  href={`/paciente/${patient.id}/sesion/${nextSession.id}`}
-                  className="block mt-3 pt-3"
-                  style={{ borderTop: "1px solid var(--p-border)" }}
-                >
-                  <div className="text-[10px] uppercase mb-1.5" style={{ color: "var(--p-text-faint)", letterSpacing: "0.1em" }}>
-                    Próxima sesión
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <div className="text-sm font-medium capitalize" style={{ letterSpacing: "-0.015em" }}>
-                        {new Date(nextSession.date).toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
-                      </div>
-                      <div className="text-xs mt-0.5" style={{ color: "var(--p-text-dim)" }}>
-                        {nextSession.programName} · {nextSession.tasksCount} tareas
-                      </div>
+              {nextSession && (() => {
+                const c = colorForSession({
+                  tasksSnapshot: nextSession.tasksSnapshot,
+                  assignmentIndex: assignmentIndex.get(nextSession.assignmentId) ?? 0,
+                });
+                return (
+                  <Link
+                    href={`/paciente/${patient.id}/sesion/${nextSession.id}`}
+                    className="block mt-3 pt-3 pl-3 relative"
+                    style={{
+                      borderTop: "1px solid var(--p-border)",
+                      borderLeft: `4px solid ${c.accent}`,
+                      marginLeft: -4,
+                    }}
+                  >
+                    <div className="text-[10px] uppercase mb-1.5" style={{ color: "var(--p-text-faint)", letterSpacing: "0.1em" }}>
+                      Próxima sesión
                     </div>
-                    <ChevronRight size={18} style={{ color: "var(--p-accent)" }} />
-                  </div>
-                </Link>
-              )}
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <div className="text-sm font-medium capitalize" style={{ letterSpacing: "-0.015em" }}>
+                          {new Date(nextSession.date).toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
+                        </div>
+                        <div className="text-xs mt-0.5" style={{ color: "var(--p-text-dim)" }}>
+                          {nextSession.programName} · {nextSession.tasksCount} tareas
+                        </div>
+                      </div>
+                      <ChevronRight size={18} style={{ color: "var(--p-accent)" }} />
+                    </div>
+                  </Link>
+                );
+              })()}
             </>
           ) : (() => {
             // Si todas las sesiones de hoy están completadas, las mostramos en
@@ -363,6 +383,15 @@ export function PatientHomeDark({
             const pending = todaySessions.filter((s) => !s.completed);
             const done = todaySessions.filter((s) => s.completed);
             const totalTasksPending = pending.reduce((acc, s) => acc + (s.tasksCount ?? 0), 0);
+            // Colores de las sesiones pendientes — se usan para pintar
+            // una franja lateral (1 pendiente) o varios chips (multi).
+            const pendingColors = pending.map((s) =>
+              colorForSession({
+                tasksSnapshot: s.tasksSnapshot,
+                assignmentIndex: assignmentIndex.get(s.assignmentId) ?? 0,
+              })
+            );
+            const uniqueAccents = Array.from(new Set(pendingColors.map((c) => c.accent)));
             return (
               <div className="space-y-2">
                 {pending.length > 0 && (
@@ -370,16 +399,30 @@ export function PatientHomeDark({
                     href={pending.length === 1
                       ? `/paciente/${patient.id}/sesion/${pending[0].id}`
                       : `/paciente/${patient.id}/sesion-combinada-hoy`}
-                    className="block p-3 rounded-xl"
+                    className="block p-3 rounded-xl relative overflow-hidden"
                     style={{
                       background: "rgba(0,0,0,0.3)",
                       border: "1px solid var(--p-surface-2)",
+                      borderLeft: pending.length === 1
+                        ? `4px solid ${pendingColors[0].accent}`
+                        : "1px solid var(--p-surface-2)",
                     }}
                   >
                     <div className="flex justify-between items-start">
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium" style={{ letterSpacing: "-0.015em" }}>
+                        <div className="text-sm font-medium flex items-center gap-2" style={{ letterSpacing: "-0.015em" }}>
                           Sesión de hoy
+                          {pending.length > 1 && (
+                            <span className="flex gap-1">
+                              {uniqueAccents.map((a, i) => (
+                                <span
+                                  key={i}
+                                  className="inline-block w-2 h-2 rounded-full"
+                                  style={{ background: a }}
+                                />
+                              ))}
+                            </span>
+                          )}
                         </div>
                         <div className="text-xs mt-0.5" style={{ color: "var(--p-text-dim)" }}>
                           {totalTasksPending} {totalTasksPending === 1 ? "tarea" : "tareas"}
@@ -392,34 +435,42 @@ export function PatientHomeDark({
                     </div>
                   </Link>
                 )}
-                {done.map((s) => (
-                  <div
-                    key={s.id}
-                    className="block p-3 rounded-xl"
-                    style={{
-                      background: "rgba(0,0,0,0.18)",
-                      border: "1px solid var(--p-surface-2)",
-                      opacity: 0.7,
-                    }}
-                  >
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium" style={{ letterSpacing: "-0.015em" }}>
-                          {s.programName}
+                {done.map((s) => {
+                  const c = colorForSession({
+                    tasksSnapshot: s.tasksSnapshot,
+                    assignmentIndex: assignmentIndex.get(s.assignmentId) ?? 0,
+                    completed: true,
+                  });
+                  return (
+                    <div
+                      key={s.id}
+                      className="block p-3 rounded-xl"
+                      style={{
+                        background: "rgba(0,0,0,0.18)",
+                        border: "1px solid var(--p-surface-2)",
+                        borderLeft: `4px solid ${c.accent}`,
+                        opacity: 0.7,
+                      }}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium" style={{ letterSpacing: "-0.015em" }}>
+                            {s.programName}
+                          </div>
+                          <div className="text-xs mt-0.5" style={{ color: "var(--p-text-dim)" }}>
+                            {s.tasksCount} {s.tasksCount === 1 ? "tarea" : "tareas"}
+                          </div>
                         </div>
-                        <div className="text-xs mt-0.5" style={{ color: "var(--p-text-dim)" }}>
-                          {s.tasksCount} {s.tasksCount === 1 ? "tarea" : "tareas"}
-                        </div>
+                        <span
+                          className="text-[11px] font-medium px-2 py-0.5 rounded-full"
+                          style={{ background: "var(--p-accent)", color: "var(--p-accent-ink)" }}
+                        >
+                          ✓ Hecho
+                        </span>
                       </div>
-                      <span
-                        className="text-[11px] font-medium px-2 py-0.5 rounded-full"
-                        style={{ background: "var(--p-accent)", color: "var(--p-accent-ink)" }}
-                      >
-                        ✓ Hecho
-                      </span>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             );
           })()}

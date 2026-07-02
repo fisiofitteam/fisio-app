@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PatientNav } from "@/components/PatientNav";
+import { buildAssignmentIndexMap, colorForSession } from "@/lib/session-colors";
 
 const DAY_NAMES = ["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 
@@ -63,6 +64,17 @@ export default async function PatientWeekPage({
     },
     orderBy: { scheduledDate: "asc" },
   });
+
+  // Índice estable por assignment del paciente. Ordenado por startDate
+  // así el orden verde/amarillo/violeta/naranja se mantiene entre visitas.
+  const allActiveAssignments = await prisma.programAssignment.findMany({
+    where: { patientId: patient.id, isActive: true },
+    select: { id: true, startDate: true },
+    orderBy: { startDate: "asc" },
+  });
+  const assignmentIndex = buildAssignmentIndexMap(
+    allActiveAssignments.map((a) => ({ id: a.id, startDate: a.startDate }))
+  );
 
   const sessionsByDay: Record<string, typeof sessions> = {};
   for (const s of sessions) {
@@ -132,7 +144,9 @@ export default async function PatientWeekPage({
       )}
 
       <div className="space-y-3">
-        {days.map((d) => <DayCard key={d.key} patientId={patient.id} day={d} />)}
+        {days.map((d) => (
+          <DayCard key={d.key} patientId={patient.id} day={d} assignmentIndex={assignmentIndex} />
+        ))}
       </div>
 
       {nextDays.length > 0 && (
@@ -148,7 +162,9 @@ export default async function PatientWeekPage({
             Adelantamos tu siguiente semana para que la vayas viendo venir.
           </p>
           <div className="space-y-3">
-            {nextDays.map((d) => <DayCard key={d.key} patientId={patient.id} day={d} />)}
+            {nextDays.map((d) => (
+              <DayCard key={d.key} patientId={patient.id} day={d} assignmentIndex={assignmentIndex} />
+            ))}
           </div>
         </>
       )}
@@ -161,9 +177,15 @@ export default async function PatientWeekPage({
 function DayCard({
   patientId,
   day,
+  assignmentIndex,
 }: {
   patientId: string;
-  day: { date: Date; key: string; sessions: { id: string; completedAt: Date | null; tasksSnapshot: string }[] };
+  day: {
+    date: Date;
+    key: string;
+    sessions: { id: string; completedAt: Date | null; tasksSnapshot: string; assignmentId: string }[];
+  };
+  assignmentIndex: Map<string, number>;
 }) {
   const { date, sessions: daySessions } = day;
   const dow = date.getDay() === 0 ? 7 : date.getDay();
@@ -186,24 +208,30 @@ function DayCard({
         <div className="space-y-2">
           {daySessions.map((s) => {
             const tasks = JSON.parse(s.tasksSnapshot) as any[];
+            const idx = assignmentIndex.get(s.assignmentId) ?? 0;
+            const c = colorForSession({
+              tasksSnapshot: s.tasksSnapshot,
+              assignmentIndex: idx,
+              completed: !!s.completedAt,
+            });
             return (
               <Link
                 key={s.id}
                 href={`/paciente/${patientId}/sesion/${s.id}`}
-                className="block p-3 bg-neutral-50 rounded-lg hover:bg-neutral-100"
+                className={`block p-3 rounded-lg hover:opacity-90 border ${c.bgClass} ${c.textClass} ${c.borderClass}`}
               >
                 <div className="flex justify-between items-start">
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium">
                       {tasks.length} tarea{tasks.length !== 1 && "s"}
                     </div>
-                    <div className="text-xs text-neutral-500 mt-0.5 flex gap-1 flex-wrap">
+                    <div className="text-xs opacity-80 mt-0.5 flex gap-1 flex-wrap">
                       {tasks.slice(0, 4).map((t, i) => (
                         <span key={i}>{TYPE_ICONS[t.type] ?? "•"} {t.title}</span>
                       ))}
                     </div>
                   </div>
-                  {s.completedAt ? <span className="pill-ok">✓</span> : <span className="text-neutral-300">→</span>}
+                  {s.completedAt ? <span className="pill-ok">✓</span> : <span className="opacity-60">→</span>}
                 </div>
               </Link>
             );

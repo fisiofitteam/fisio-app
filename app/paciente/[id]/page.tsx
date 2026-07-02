@@ -228,6 +228,15 @@ export default async function PatientHome({ params }: { params: { id: string } }
   // --- 3. Vista normal (programa fijo) ---
   const adherence = await calculateAdherence(patient.id);
 
+  // Índice estable por assignment (para el color rotativo verde /
+  // amarillo / violeta / naranja de cada programa asignado).
+  const allActiveAssignments = await prisma.programAssignment.findMany({
+    where: { patientId: patient.id, isActive: true },
+    select: { id: true, startDate: true },
+    orderBy: { startDate: "asc" },
+  });
+  const assignmentIndexEntries: Array<[string, number]> = allActiveAssignments.map((a, i) => [a.id, i]);
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const tomorrow = new Date(today);
@@ -313,6 +322,7 @@ export default async function PatientHome({ params }: { params: { id: string } }
 
   return (
     <PatientHomeDark
+      assignmentIndexEntries={assignmentIndexEntries}
       welcomeLine1={welcomeLine1}
       welcomeLine2={welcomeLine2}
       patient={{
@@ -333,6 +343,8 @@ export default async function PatientHome({ params }: { params: { id: string } }
         programName: s.assignment.program.name,
         completed: s.completedAt !== null,
         tasksCount: (JSON.parse(s.tasksSnapshot) as any[]).length,
+        tasksSnapshot: s.tasksSnapshot,
+        assignmentId: s.assignmentId,
       }))}
       nextSession={
         nextSession
@@ -341,6 +353,8 @@ export default async function PatientHome({ params }: { params: { id: string } }
               date: nextSession.scheduledDate.toISOString(),
               programName: nextSession.assignment.program.name,
               tasksCount: (JSON.parse(nextSession.tasksSnapshot) as any[]).length,
+              tasksSnapshot: nextSession.tasksSnapshot,
+              assignmentId: nextSession.assignmentId,
             }
           : null
       }

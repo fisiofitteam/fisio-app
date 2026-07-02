@@ -19,12 +19,18 @@ import { WorkoutTaskEditor } from "./tasks/WorkoutTaskEditor";
 import { VideoTaskEditor } from "./tasks/VideoTaskEditor";
 import { FormTaskEditor } from "./tasks/FormTaskEditor";
 import { EvolutionTaskEditor } from "./tasks/EvolutionTaskEditor";
+import { colorForSession, buildAssignmentIndexMap } from "@/lib/session-colors";
 
 type Session = {
   id: string;
   scheduledDate: string;
   completedAt: string | null;
   weekNumber: number;
+  /** Programa (assignment) al que pertenece — se usa para asignar
+   *  color rotativo verde/amarillo/violeta/naranja entre programas del
+   *  paciente. Opcional para compat retro; si falta cae al color por
+   *  defecto. */
+  assignmentId?: string;
   programName: string;
   programType: string;
   tasksSnapshot: string;
@@ -54,6 +60,11 @@ type ProgramOption = {
 const MONTH_NAMES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 const DAY_HEADERS = ["L","M","X","J","V"];
 
+// TYPE_COLORS legacy: se conserva únicamente para el overlay del drag
+// (donde se dibuja un chip con el nombre del programa fuera del contexto
+// de la sesión concreta). Todas las tarjetas de sesión pasan por
+// colorForSession (lib/session-colors), que decide por tarea + índice
+// de asignación.
 const TYPE_COLORS: Record<string, string> = {
   Movilidad: "bg-blue-100 text-blue-800",
   Tendinoso: "bg-purple-100 text-purple-800",
@@ -171,6 +182,13 @@ export function CalendarMonth({
     }
     return map;
   }, [sessions]);
+
+  // Índice estable por assignment del paciente (para asignar el color
+  // verde/amarillo/violeta/naranja). Ordenado por startDate.
+  const assignmentIndex = useMemo(
+    () => buildAssignmentIndexMap(activeAssignments),
+    [activeAssignments]
+  );
 
   const grid = useMemo(() => buildMonthGrid(currentYear, currentMonth), [currentYear, currentMonth]);
   const prevMonth = currentMonth === 0 ? { y: currentYear - 1, m: 11 } : { y: currentYear, m: currentMonth - 1 };
@@ -333,6 +351,7 @@ export function CalendarMonth({
                   today={today}
                   dayNumber={day.date.getDate()}
                   sessions={daySessions}
+                  assignmentIndex={assignmentIndex}
                   onClick={() => {
                     if (!day.inMonth) return;
                     if (daySessions.length > 0) setSelectedDay(key);
@@ -628,6 +647,7 @@ function DroppableDay({
   today,
   dayNumber,
   sessions,
+  assignmentIndex,
   onClick,
   onMoveToDate,
 }: {
@@ -636,6 +656,7 @@ function DroppableDay({
   today: boolean;
   dayNumber: number;
   sessions: Session[];
+  assignmentIndex: Map<string, number>;
   onClick: () => void;
   onMoveToDate: (s: Session) => void;
 }) {
@@ -663,7 +684,12 @@ function DroppableDay({
               programas asignados), la celda crece hacia abajo — el user
               prefiere ver la lista completa antes que el resumen "+N". */}
           {sessions.map((s) => (
-            <DraggableSession key={s.id} session={s} onMoveToDate={() => onMoveToDate(s)} />
+            <DraggableSession
+              key={s.id}
+              session={s}
+              assignmentIndex={assignmentIndex}
+              onMoveToDate={() => onMoveToDate(s)}
+            />
           ))}
         </div>
       )}
@@ -671,7 +697,15 @@ function DroppableDay({
   );
 }
 
-function DraggableSession({ session, onMoveToDate }: { session: Session; onMoveToDate: () => void }) {
+function DraggableSession({
+  session,
+  assignmentIndex,
+  onMoveToDate,
+}: {
+  session: Session;
+  assignmentIndex: Map<string, number>;
+  onMoveToDate: () => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: session.id });
   const style = transform
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, opacity: isDragging ? 0.4 : 1 }
@@ -700,15 +734,20 @@ function DraggableSession({ session, onMoveToDate }: { session: Session; onMoveT
   if (!displayTitle) return null;
 
   const isCompleted = !!session.completedAt;
+  // Color por sesión: prioridad VIDEO > métricas > paleta por asignación.
+  const idx = session.assignmentId ? (assignmentIndex.get(session.assignmentId) ?? 0) : 0;
+  const c = colorForSession({
+    tasksSnapshot: session.tasksSnapshot,
+    assignmentIndex: idx,
+    completed: isCompleted,
+  });
   return (
     <div
       ref={setNodeRef}
       style={style}
       {...listeners}
       {...attributes}
-      className={`relative text-[10px] px-1 py-0.5 pr-4 rounded truncate cursor-grab active:cursor-grabbing group ${
-        isCompleted ? "bg-emerald-100 text-emerald-800" : colorFor(session.programType)
-      }`}
+      className={`relative text-[10px] px-1 py-0.5 pr-4 rounded truncate cursor-grab active:cursor-grabbing group ${c.bgClass} ${c.textClass}`}
       title={isCompleted ? "Arrastra para duplicar esta sesión completada en otro día" : "Arrastra para mover o duplicar"}
     >
       {isCompleted && "✓ "}
