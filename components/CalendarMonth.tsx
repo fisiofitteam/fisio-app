@@ -659,10 +659,12 @@ function DroppableDay({
       <div className={`text-xs ${today ? "font-bold" : ""}`}>{dayNumber}</div>
       {sessions.length > 0 && (
         <div className="mt-1 space-y-0.5">
-          {sessions.slice(0, 2).map((s) => (
+          {/* Pintamos TODAS las sesiones. Si un día tiene muchas (varios
+              programas asignados), la celda crece hacia abajo — el user
+              prefiere ver la lista completa antes que el resumen "+N". */}
+          {sessions.map((s) => (
             <DraggableSession key={s.id} session={s} onMoveToDate={() => onMoveToDate(s)} />
           ))}
-          {sessions.length > 2 && <div className="text-[10px] text-neutral-500">+{sessions.length - 2}</div>}
         </div>
       )}
     </button>
