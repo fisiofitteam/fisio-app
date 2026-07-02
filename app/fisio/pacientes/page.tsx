@@ -75,9 +75,13 @@ export default async function PatientsListPage({
   const defaultTab = user.role === "head_success" ? "mine" : "all";
   const tab = user.isManager ? (searchParams.tab ?? defaultTab) : "mine";
 
+  // Incluimos también al CEO como profesional al que se le pueden asignar
+  // pacientes (aparece como pestaña propia y como opción en el selector
+  // de "Fisio asignado" al crear/reasignar). PatientsList ya oculta la
+  // pestaña del propio usuario para no duplicar "Míos".
   const professionals = user.isManager
     ? await prisma.professional.findMany({
-        where: { role: { in: ["fisio", "head_success"] } },
+        where: { role: { in: ["fisio", "head_success", "ceo"] } },
         orderBy: { fullName: "asc" },
       })
     : [];
