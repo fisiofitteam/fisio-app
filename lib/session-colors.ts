@@ -77,6 +77,30 @@ export function colorForSession(input: {
 }
 
 /**
+ * Color de una tarea concreta. Mismas reglas que colorForSession, pero
+ * aplicadas por tipo de esa tarea:
+ *   VIDEO             → rojo.
+ *   EVOLUTION o FORM  → azul claro (métrica).
+ *   Resto (WORKOUT…)  → paleta por asignación.
+ * completed pinta la tarea con el color verde tenue como en las sesiones.
+ */
+export function colorForTask(input: {
+  taskType: string | undefined;
+  assignmentIndex: number;
+  completed?: boolean;
+}): SessionColor {
+  if (input.completed) return COMPLETED_COLOR;
+  if (input.taskType === "VIDEO") return VIDEO_COLOR;
+  if (input.taskType === "EVOLUTION" || input.taskType === "FORM") {
+    return METRICS_COLOR;
+  }
+  const idx = input.assignmentIndex >= 0
+    ? input.assignmentIndex % PROGRAM_PALETTE.length
+    : 0;
+  return PROGRAM_PALETTE[idx];
+}
+
+/**
  * Dada una lista de asignaciones ordenadas de forma estable
  * (por startDate asc, luego por id), devuelve un mapa
  * assignmentId → índice para pasarlo a colorForSession.

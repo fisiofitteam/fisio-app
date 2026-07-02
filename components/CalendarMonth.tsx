@@ -19,7 +19,7 @@ import { WorkoutTaskEditor } from "./tasks/WorkoutTaskEditor";
 import { VideoTaskEditor } from "./tasks/VideoTaskEditor";
 import { FormTaskEditor } from "./tasks/FormTaskEditor";
 import { EvolutionTaskEditor } from "./tasks/EvolutionTaskEditor";
-import { colorForSession, buildAssignmentIndexMap } from "@/lib/session-colors";
+import { colorForSession, colorForTask, buildAssignmentIndexMap } from "@/lib/session-colors";
 
 type Session = {
   id: string;
@@ -711,52 +711,76 @@ function DraggableSession({
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, opacity: isDragging ? 0.4 : 1 }
     : undefined;
 
-  // Sacar el título visible de la sesión: primer task (o nombre programa si es standalone)
-  let displayTitle: string | null = null;
+  // Parseamos las tareas y las mostramos como filas independientes,
+  // cada una con su propio color según su tipo (VIDEO=rojo,
+  // EVOLUTION/FORM=azul claro, resto=color de la asignación). Así el
+  // fisio ve directamente cada tarea en el calendario, sin "+N".
+  let tasks: any[] = [];
   try {
-    const tasks = JSON.parse(session.tasksSnapshot);
-    if (Array.isArray(tasks) && tasks.length > 0) {
-      // Si solo hay una tarea: ese es el título
-      // Si hay varias: el de la primera (orden=0)
-      const first = tasks[0];
-      displayTitle = first.title || null;
-      // Si hay más de una tarea, añadimos contador
-      if (tasks.length > 1) {
-        displayTitle = `${displayTitle} +${tasks.length - 1}`;
-      }
-    }
+    const parsed = JSON.parse(session.tasksSnapshot);
+    if (Array.isArray(parsed)) tasks = parsed;
   } catch {}
-  // Si es standalone (sesión suelta sin programa) usamos su programName
-  if (!displayTitle && session.isStandalone) {
-    displayTitle = session.programName;
-  }
-  // Si no hay nada que mostrar, no rendereamos (día de descanso, sesión vacía)
-  if (!displayTitle) return null;
+
+  // Si es sesión standalone sin tareas, dejamos la fila con el nombre
+  // del programa (comportamiento histórico).
+  const fallbackLabel = tasks.length === 0 && session.isStandalone
+    ? session.programName
+    : null;
+  if (tasks.length === 0 && !fallbackLabel) return null;
 
   const isCompleted = !!session.completedAt;
-  // Color por sesión: prioridad VIDEO > métricas > paleta por asignación.
   const idx = session.assignmentId ? (assignmentIndex.get(session.assignmentId) ?? 0) : 0;
-  const c = colorForSession({
-    tasksSnapshot: session.tasksSnapshot,
-    assignmentIndex: idx,
-    completed: isCompleted,
-  });
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       {...listeners}
       {...attributes}
-      className={`relative text-[10px] px-1 py-0.5 pr-4 rounded truncate cursor-grab active:cursor-grabbing group ${c.bgClass} ${c.textClass}`}
+      className="relative group cursor-grab active:cursor-grabbing space-y-0.5"
       title={isCompleted ? "Arrastra para duplicar esta sesión completada en otro día" : "Arrastra para mover o duplicar"}
     >
-      {isCompleted && "✓ "}
-      {displayTitle}
+      {fallbackLabel ? (
+        // Sesión sin tareas: una sola fila neutra con el nombre.
+        (() => {
+          const cSess = colorForSession({
+            tasksSnapshot: session.tasksSnapshot,
+            assignmentIndex: idx,
+            completed: isCompleted,
+          });
+          return (
+            <div
+              className={`text-[10px] px-1 py-0.5 pr-4 rounded truncate ${cSess.bgClass} ${cSess.textClass}`}
+            >
+              {isCompleted && "✓ "}
+              {fallbackLabel}
+            </div>
+          );
+        })()
+      ) : (
+        tasks.map((t, i) => {
+          const c = colorForTask({
+            taskType: t?.type,
+            assignmentIndex: idx,
+            completed: isCompleted,
+          });
+          const title = String(t?.title ?? "").trim() || "(sin título)";
+          return (
+            <div
+              key={t?.id ?? i}
+              className={`text-[10px] px-1 py-0.5 rounded truncate ${c.bgClass} ${c.textClass} ${i === 0 ? "pr-4" : ""}`}
+            >
+              {isCompleted && i === 0 && "✓ "}
+              {title}
+            </div>
+          );
+        })
+      )}
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); onMoveToDate(); }}
         onPointerDown={(e) => e.stopPropagation()}
-        className="absolute right-0.5 top-1/2 -translate-y-1/2 px-1 text-[10px] leading-none rounded hover:bg-black/10"
+        className="absolute right-0.5 top-0 px-1 text-[10px] leading-none rounded hover:bg-black/10"
         title={isCompleted ? "Duplicar a otra fecha" : "Mover a otra fecha (cualquier mes)"}
       >
         ↗

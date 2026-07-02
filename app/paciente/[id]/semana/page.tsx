@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PatientNav } from "@/components/PatientNav";
-import { buildAssignmentIndexMap, colorForSession } from "@/lib/session-colors";
+import { buildAssignmentIndexMap, colorForSession, colorForTask } from "@/lib/session-colors";
 
 const DAY_NAMES = ["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 
@@ -220,18 +220,33 @@ function DayCard({
                 href={`/paciente/${patientId}/sesion/${s.id}`}
                 className={`block p-3 rounded-lg hover:opacity-90 border ${c.bgClass} ${c.textClass} ${c.borderClass}`}
               >
-                <div className="flex justify-between items-start">
+                <div className="flex justify-between items-start gap-2">
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium">
                       {tasks.length} tarea{tasks.length !== 1 && "s"}
                     </div>
-                    <div className="text-xs opacity-80 mt-0.5 flex gap-1 flex-wrap">
-                      {tasks.slice(0, 4).map((t, i) => (
-                        <span key={i}>{TYPE_ICONS[t.type] ?? "•"} {t.title}</span>
-                      ))}
+                    {/* Cada tarea como chip independiente con su color:
+                        VIDEO=rojo, EVOLUTION/FORM=azul claro, resto=color
+                        de este programa (paleta rotativa). */}
+                    <div className="mt-1.5 flex gap-1 flex-wrap">
+                      {tasks.map((t, i) => {
+                        const tc = colorForTask({
+                          taskType: t.type,
+                          assignmentIndex: idx,
+                          completed: !!s.completedAt,
+                        });
+                        return (
+                          <span
+                            key={i}
+                            className={`text-[11px] px-1.5 py-0.5 rounded-md border ${tc.bgClass} ${tc.textClass} ${tc.borderClass}`}
+                          >
+                            {TYPE_ICONS[t.type] ?? "•"} {t.title}
+                          </span>
+                        );
+                      })}
                     </div>
                   </div>
-                  {s.completedAt ? <span className="pill-ok">✓</span> : <span className="opacity-60">→</span>}
+                  {s.completedAt ? <span className="pill-ok flex-shrink-0">✓</span> : <span className="opacity-60 flex-shrink-0">→</span>}
                 </div>
               </Link>
             );
