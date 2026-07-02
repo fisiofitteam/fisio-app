@@ -20,6 +20,11 @@ type Patient = {
   renewalDays: number | null;
   /** Etapa del paciente para agruparlo visualmente en la lista. */
   stage: "onboarding" | "first_weeks" | "steady";
+  /** True si su suscripción ya terminó (sin periodo activo vigente). */
+  isFinished: boolean;
+  /** Fecha del último endDate de cualquier renewal. Sirve para
+   *  "Terminó el X" y para el filtro "últimos 30 días". */
+  finishedAt: string | null;
   consumedMonths: number;
   adherenceCompleted: number;
   adherenceTotal: number;
@@ -56,7 +61,7 @@ export function PatientsList({
   patients: Patient[];
   currentUser: CurrentUser;
   tab: string;
-  counts: { all: number; unassigned: number; mine: number; byPro: Record<string, number> };
+  counts: { all: number; unassigned: number; mine: number; finished: number; byPro: Record<string, number> };
   professionals: ProInfo[];
   rollingPrograms: { id: string; name: string }[];
 }) {
@@ -136,6 +141,31 @@ export function PatientsList({
                 />
               );
             })}
+          <TabButton
+            active={tab === "finished"}
+            label="🏁 Terminados"
+            count={counts.finished}
+            onClick={() => switchTab("finished")}
+          />
+        </div>
+      )}
+
+      {/* Fisios normales: mostramos también la pestaña Terminados aunque
+          no vean el resto de tabs. Solo alterna con la vista principal. */}
+      {!currentUser.isManager && counts.finished > 0 && (
+        <div className="mb-4 flex gap-1 -mx-4 px-4">
+          <TabButton
+            active={tab === "mine"}
+            label="Míos activos"
+            count={undefined}
+            onClick={() => switchTab("mine")}
+          />
+          <TabButton
+            active={tab === "finished"}
+            label="🏁 Terminados"
+            count={counts.finished}
+            onClick={() => switchTab("finished")}
+          />
         </div>
       )}
 
@@ -190,6 +220,11 @@ export function PatientsList({
         <p className="text-sm text-neutral-500 italic text-center py-8">
           Ningún paciente coincide con "{search}".
         </p>
+      ) : tab === "finished" ? (
+        <FinishedPatientList
+          patients={visiblePatients}
+          currentUser={currentUser}
+        />
       ) : (
         <StagedPatientList
           patients={visiblePatients}
@@ -246,7 +281,8 @@ function TabButton({
 }: {
   active: boolean;
   label: string;
-  count: number;
+  /** Si es undefined no se pinta el badge del número. */
+  count: number | undefined;
   onClick: () => void;
   highlight?: boolean;
 }) {
@@ -262,7 +298,9 @@ function TabButton({
       }`}
     >
       <span>{label}</span>
-      <span className={`text-[10px] px-1.5 rounded-full ${active ? "bg-white/20" : "bg-neutral-100"}`}>{count}</span>
+      {count !== undefined && (
+        <span className={`text-[10px] px-1.5 rounded-full ${active ? "bg-white/20" : "bg-neutral-100"}`}>{count}</span>
+      )}
     </button>
   );
 }
@@ -1193,5 +1231,148 @@ function Week0Toggle({ patientId }: { patientId: string }) {
       />
       <span>{saving ? "Guardando…" : "Semana 0 completada"}</span>
     </label>
+  );
+}
+
+/**
+ * Vista de la pestaña "🏁 Terminados". Muestra los pacientes cuyo
+ * SubscriptionRenewal activo ya venció (o no existe). Añade dos cosas
+ * respecto a la vista habitual:
+ *
+ *  - Toggle "Últimos 30 días" que filtra por finishedAt >= hoy - 30d.
+ *  - Botón "🔄 Reactivar paciente" en cada tarjeta, solo para managers.
+ *    Los fisios normales lo ven deshabilitado con tooltip explicando
+ *    que tienen que avisar a un manager.
+ */
+function FinishedPatientList({
+  patients,
+  currentUser,
+}: {
+  patients: Patient[];
+  currentUser: CurrentUser;
+}) {
+  const router = useRouter();
+  const [onlyRecent, setOnlyRecent] = useState(false);
+  const [reactivating, setReactivating] = useState<string | null>(null);
+
+  const DAYS_30_MS = 30 * 86400000;
+  const now = Date.now();
+  const visible = onlyRecent
+    ? patients.filter((p) => {
+        if (!p.finishedAt) return false;
+        return now - new Date(p.finishedAt).getTime() <= DAYS_30_MS;
+      })
+    : patients;
+
+  async function reactivate(patientId: string) {
+    if (!confirm("¿Reactivar al paciente? Se crea un periodo activo desde hoy con la duración que tenía antes.")) return;
+    setReactivating(patientId);
+    try {
+      const res = await fetch(`/api/patients/${patientId}/reactivate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data?.error || "No se pudo reactivar");
+        return;
+      }
+      router.refresh();
+    } finally {
+      setReactivating(null);
+    }
+  }
+
+  const canReactivate = currentUser.role === "ceo" || currentUser.role === "head_success";
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <label className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={onlyRecent}
+            onChange={(e) => setOnlyRecent(e.target.checked)}
+            className="w-4 h-4 accent-neutral-900"
+          />
+          Últimos 30 días
+        </label>
+        <span className="text-xs text-neutral-500">
+          {visible.length} paciente{visible.length === 1 ? "" : "s"}
+        </span>
+      </div>
+
+      {visible.length === 0 ? (
+        <p className="text-sm text-neutral-500 italic text-center py-8">
+          {onlyRecent
+            ? "Nadie terminó en los últimos 30 días."
+            : "No hay pacientes terminados."}
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {visible.map((p) => {
+            const finished = p.finishedAt ? new Date(p.finishedAt) : null;
+            const daysAgo = finished
+              ? Math.max(0, Math.round((now - finished.getTime()) / 86400000))
+              : null;
+            const finishedLabel = finished
+              ? finished.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })
+              : "Sin fecha";
+            return (
+              <li
+                key={p.id}
+                className="rounded-xl border border-neutral-200 bg-white p-3 flex items-center justify-between gap-3 flex-wrap"
+              >
+                <div className="min-w-0 flex-1">
+                  <Link
+                    href={`/fisio/paciente/${p.id}/ficha`}
+                    className="text-sm font-medium hover:underline"
+                  >
+                    {p.fullName}
+                  </Link>
+                  <div className="text-[11px] text-neutral-500 mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
+                    <span>
+                      🏁 Terminó el <strong>{finishedLabel}</strong>
+                      {daysAgo !== null && (
+                        <span className="text-neutral-400"> · hace {daysAgo}d</span>
+                      )}
+                    </span>
+                    {p.assignedProfessional && (
+                      <span>
+                        {ROLE_ICON[p.assignedProfessional.role] ?? "🩺"}{" "}
+                        {p.assignedProfessional.fullName}
+                      </span>
+                    )}
+                    {p.programType && <span>{p.programType}</span>}
+                  </div>
+                </div>
+                <button
+                  onClick={() => reactivate(p.id)}
+                  disabled={!canReactivate || reactivating === p.id}
+                  className="text-xs font-medium px-3 py-1.5 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{
+                    background: canReactivate ? "#0A0A0A" : "#F5F5F5",
+                    color: canReactivate ? "#FAFAFA" : "#737373",
+                    border: canReactivate ? "none" : "1px solid #E5E5E5",
+                  }}
+                  title={
+                    canReactivate
+                      ? "Reactivar: crea un periodo activo desde hoy"
+                      : "Avisa al CEO o head success para reactivar"
+                  }
+                >
+                  {reactivating === p.id
+                    ? "Reactivando…"
+                    : canReactivate
+                    ? "🔄 Reactivar paciente"
+                    : "🔒 Pide reactivar"}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
   );
 }

@@ -73,7 +73,14 @@ export default async function PatientsListPage({
   // pestañas "Todos" / "Por asignar" siguen disponibles si las necesita.
   // CEO: default a "all" como antes.
   const defaultTab = user.role === "head_success" ? "mine" : "all";
-  const tab = user.isManager ? (searchParams.tab ?? defaultTab) : "mine";
+  // Fisios normales solo pueden estar en "mine" o "finished". El resto
+  // de tabs son solo-manager.
+  const requestedTab = searchParams.tab ?? defaultTab;
+  const tab = user.isManager
+    ? requestedTab
+    : requestedTab === "finished"
+      ? "finished"
+      : "mine";
 
   // Incluimos también al CEO como profesional al que se le pueden asignar
   // pacientes (aparece como pestaña propia y como opción en el selector
@@ -104,6 +111,16 @@ export default async function PatientsListPage({
   } else if (tab.startsWith("pro:")) {
     const proId = tab.slice(4);
     where = { assignedProfessionalId: proId };
+  } else if (tab === "finished") {
+    // Pacientes terminados: sin ningún SubscriptionRenewal activo con
+    // endDate en el futuro. Filtramos por el patient.id abajo después
+    // de resolver quiénes cumplen la condición.
+    if (user.isManager) {
+      // Manager ve todos. Aplicamos el filtro real más abajo.
+    } else {
+      // Fisios normales solo ven los suyos.
+      where = { assignedProfessionalId: user.id };
+    }
   }
   // tab === "all" → sin filtro
 
@@ -118,20 +135,44 @@ export default async function PatientsListPage({
   });
 
   // Contar por pestaña (solo si es manager)
-  let counts: { all: number; unassigned: number; mine: number; byPro: Record<string, number> } = {
+  let counts: { all: number; unassigned: number; mine: number; finished: number; byPro: Record<string, number> } = {
     all: 0,
     unassigned: 0,
     mine: 0,
+    finished: 0,
     byPro: {},
   };
   if (user.isManager) {
-    const all = await prisma.patient.findMany({ select: { assignedProfessionalId: true } });
+    const all = await prisma.patient.findMany({ select: { id: true, assignedProfessionalId: true } });
     counts.all = all.length;
     counts.unassigned = all.filter((p) => p.assignedProfessionalId === null).length;
     counts.mine = all.filter((p) => p.assignedProfessionalId === user.id).length;
     for (const pro of professionals) {
       counts.byPro[pro.id] = all.filter((p) => p.assignedProfessionalId === pro.id).length;
     }
+    // Terminados: sin ningún SubscriptionRenewal active con endDate > hoy.
+    const allActive = await prisma.subscriptionRenewal.findMany({
+      where: { patientId: { in: all.map((p) => p.id) }, status: "active" },
+      select: { patientId: true, endDate: true },
+    });
+    const vigentes = new Set(
+      allActive.filter((r) => r.endDate && r.endDate.getTime() > Date.now()).map((r) => r.patientId)
+    );
+    counts.finished = all.filter((p) => !vigentes.has(p.id)).length;
+  } else {
+    // Fisios normales: contar solo sus terminados para el badge.
+    const mine = await prisma.patient.findMany({
+      where: { assignedProfessionalId: user.id },
+      select: { id: true },
+    });
+    const active = await prisma.subscriptionRenewal.findMany({
+      where: { patientId: { in: mine.map((p) => p.id) }, status: "active" },
+      select: { patientId: true, endDate: true },
+    });
+    const vigentes = new Set(
+      active.filter((r) => r.endDate && r.endDate.getTime() > Date.now()).map((r) => r.patientId)
+    );
+    counts.finished = mine.filter((p) => !vigentes.has(p.id)).length;
   }
 
   const adherences = await Promise.all(patients.map((p) => calculateAdherence(p.id)));
@@ -148,6 +189,21 @@ export default async function PatientsListPage({
   const activeEndByPatient = new Map<string, Date>();
   for (const r of activePeriods) {
     if (r.endDate) activeEndByPatient.set(r.patientId, r.endDate);
+  }
+
+  // Para el bloque "Terminados": último endDate de cualquier
+  // SubscriptionRenewal del paciente (independiente del status). Sirve
+  // para mostrar "Terminó el X" y para el filtro "últimos 30 días".
+  const allRenewalsForPatients = await prisma.subscriptionRenewal.findMany({
+    where: { patientId: { in: patients.map((p) => p.id) } },
+    select: { patientId: true, endDate: true },
+    orderBy: { endDate: "desc" },
+  });
+  const lastEndByPatient = new Map<string, Date>();
+  for (const r of allRenewalsForPatients) {
+    if (r.endDate && !lastEndByPatient.has(r.patientId)) {
+      lastEndByPatient.set(r.patientId, r.endDate);
+    }
   }
 
   // Grupo del paciente para la vista escalonada por etapa:
@@ -188,6 +244,14 @@ export default async function PatientsListPage({
         )
       : null;
     const stage = groupFor(p);
+    // "Terminado" = sin periodo activo con endDate en el futuro. Cubre
+    // ambos casos: (1) no hay ningún SubscriptionRenewal activo,
+    // (2) hay uno pero su endDate ya pasó (sanitize aún no lo cerró).
+    const isFinished = !activeEnd || activeEnd.getTime() <= now;
+    // Fecha en la que "terminó": el endDate más reciente de cualquier
+    // renewal del paciente (incluso los finished antiguos). Sirve para
+    // mostrar "Terminó el X" y para el filtro "últimos 30 días".
+    const finishedAt = lastEndByPatient.get(p.id) ?? null;
     return {
       id: p.id,
       fullName: p.fullName,
@@ -199,6 +263,8 @@ export default async function PatientsListPage({
       subscriptionTotalMonths: p.subscriptionTotalMonths,
       renewalDays,
       stage,
+      isFinished,
+      finishedAt: finishedAt?.toISOString() ?? null,
       consumedMonths: monthsConsumed(p.subscriptionStartDate),
       adherenceCompleted: adherences[idx].completed,
       adherenceTotal: adherences[idx].total,
@@ -212,9 +278,15 @@ export default async function PatientsListPage({
     };
   });
 
+  // Aplicar filtro de pestaña "Terminados": solo pacientes con isFinished.
+  // En otras pestañas, ocultamos los terminados para que no ensucien.
+  const filtered = tab === "finished"
+    ? mapped.filter((p) => p.isFinished)
+    : mapped.filter((p) => !p.isFinished);
+
   return (
     <PatientsList
-      patients={mapped}
+      patients={filtered}
       currentUser={{ id: user.id, fullName: user.fullName, isManager: user.isManager, role: user.role }}
       tab={tab}
       counts={counts}
