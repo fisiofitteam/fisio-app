@@ -14,6 +14,7 @@ export async function POST(req: NextRequest) {
     programType,
     email,
     phone,
+    paymentMethod,
   } = await req.json();
 
   const lead = await prisma.lead.findUnique({ where: { id: leadId } });
@@ -95,11 +96,14 @@ export async function POST(req: NextRequest) {
 
   // 3) Crear ingreso "Nueva alta" en Transaction
   if (amountPaid && Number(amountPaid) > 0) {
+    const methodTag = typeof paymentMethod === "string" && paymentMethod.trim()
+      ? ` · ${paymentMethod.trim()}`
+      : "";
     await prisma.transaction.create({
       data: {
         type: "income_new",
         amount: Number(amountPaid),
-        description: `Alta - ${lead.fullName}`,
+        description: `Alta - ${lead.fullName}${methodTag}`,
         occurredAt: new Date(),
         patientId: patient.id,
         professionalId: lead.closerId,

@@ -6,6 +6,7 @@ import { RescheduleLinkButton } from "@/components/RescheduleLinkButton";
 import { SendCaseFlow, type SendCaseTemplate, type SuccessCaseOption } from "@/components/SendCaseFlow";
 import { SendDirectButton } from "@/components/SendDirectButton";
 import { SendAppLinkButton } from "@/components/SendAppLinkButton";
+import { ManualSaleButton } from "@/components/ManualSaleButton";
 import type { TemplateActionType } from "@/lib/resource-roles";
 
 type DirectTemplate = { id: string; name: string; body: string; actionType: TemplateActionType };
@@ -241,6 +242,7 @@ export function CallsListView({
                 key={lead.id}
                 lead={lead}
                 currentUser={currentUser}
+                fisios={fisios}
                 onClick={() => setEditing(lead)}
                 sendCaseProps={{ successCaseTemplates, meetingReminderTemplates, successCases, currentUserCloserIntro }}
               />
@@ -334,11 +336,13 @@ function CallsGroup({
 function CallRow({
   lead,
   currentUser,
+  fisios,
   onClick,
   sendCaseProps,
 }: {
   lead: Lead;
   currentUser: { id: string; fullName: string; role: string };
+  fisios?: Pro[];
   onClick: () => void;
   sendCaseProps: SendCaseProps;
 }) {
@@ -442,6 +446,21 @@ function CallRow({
               <SendAppLinkButton
                 patientId={lead.convertedPatient.id}
                 patientName={lead.convertedPatient.fullName}
+              />
+            </div>
+          )}
+          {lead.status === "won" && !lead.convertedPatient && (
+            <div className="flex flex-col">
+              <ManualSaleButton
+                lead={{
+                  id: lead.id,
+                  fullName: lead.fullName,
+                  contactType: lead.contactType,
+                  contactValue: lead.contactValue,
+                  email: lead.email,
+                  phone: lead.phone,
+                }}
+                fisios={fisios ?? []}
               />
             </div>
           )}
