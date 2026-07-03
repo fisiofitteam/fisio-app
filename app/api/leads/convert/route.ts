@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
+import { notifyHeadSuccess } from "@/lib/notifications";
 
 export async function POST(req: NextRequest) {
   const user = await getActiveProfessional();
@@ -114,6 +115,29 @@ export async function POST(req: NextRequest) {
         professionalId: lead.closerId,
       },
     });
+  }
+
+  // 4) Notificar al head_success de que entra paciente nuevo. Mismo tipo
+  // (`patient_new_unassigned`) que las altas manuales desde el modal
+  // "Añadir paciente" y que el webhook Stripe, para que los head_success
+  // no tengan que configurar toggles distintos.
+  try {
+    let fisioLabel = "Sin fisio asignado · falta asignarle uno";
+    if (assignedProfessionalId) {
+      const fisio = await prisma.professional.findUnique({
+        where: { id: assignedProfessionalId },
+        select: { fullName: true },
+      });
+      if (fisio) fisioLabel = `Fisio asignado: ${fisio.fullName}`;
+    }
+    await notifyHeadSuccess({
+      type: "patient_new_unassigned",
+      title: "Nuevo paciente (alta desde lead)",
+      body: `${user.fullName} ha convertido a ${patient.fullName}. ${fisioLabel}.`,
+      actionUrl: `/fisio/paciente/${patient.id}/ficha`,
+    });
+  } catch (err) {
+    console.error("[leads/convert] Error notificando a head_success:", err);
   }
 
   return NextResponse.json({ ok: true, patientId: patient.id });
