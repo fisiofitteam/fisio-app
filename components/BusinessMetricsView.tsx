@@ -209,10 +209,13 @@ function MesesView({ monthly, goals, onYear }: { monthly: MonthlyMetrics; goals:
 
   return (
     <>
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
         <button onClick={() => onYear(year - 1)} className="text-sm px-2.5 py-1 border border-neutral-200 rounded hover:bg-neutral-50">←</button>
         <span className="text-sm font-medium">{year}</span>
         <button onClick={() => onYear(year + 1)} className="text-sm px-2.5 py-1 border border-neutral-200 rounded hover:bg-neutral-50">→</button>
+        <div className="ml-auto">
+          <MetaSyncButton />
+        </div>
       </div>
 
       <section className="card p-0 overflow-x-auto">
@@ -527,6 +530,66 @@ function Kpi({ label, value, sub, tone = "neutral" }: { label: string; value: st
       <div className="text-xs text-neutral-500 mb-1">{label}</div>
       <div className={`text-2xl font-semibold ${color}`}>{value}</div>
       {sub && <div className="text-[11px] text-neutral-400 mt-0.5">{sub}</div>}
+    </div>
+  );
+}
+
+// ─── Botón "Sincronizar desde Meta" ─────────────────────────────────────────
+// Vuelca al MES ACTUAL los datos de Meta/IG en las filas de Publicidad:
+// Follow me ADs, Conversión ADs, Nuevos seguidores y Total seguidores.
+// Usa las clasificaciones de campaña ya hechas en Ajustes → Integraciones → Meta.
+function MetaSyncButton() {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<"idle" | "ok" | "error">("idle");
+  const [msg, setMsg] = useState<string | null>(null);
+
+  async function sync() {
+    setBusy(true);
+    setStatus("idle");
+    setMsg(null);
+    try {
+      const res = await fetch("/api/integrations/meta/ads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "sync-month" }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d?.error || "error");
+      const parts: string[] = [];
+      if (typeof d.follow === "number") parts.push(`Follow ${Math.round(d.follow)}€`);
+      if (typeof d.conversion === "number") parts.push(`Conv ${Math.round(d.conversion)}€`);
+      if (typeof d.newFollowers === "number") parts.push(`+${d.newFollowers} seg`);
+      if (typeof d.totalFollowers === "number") parts.push(`total ${d.totalFollowers.toLocaleString("es-ES")}`);
+      setMsg(parts.join(" · ") || "Sincronizado");
+      setStatus("ok");
+      router.refresh();
+    } catch (e: any) {
+      setMsg(String(e?.message || e));
+      setStatus("error");
+    } finally {
+      setBusy(false);
+      setTimeout(() => setStatus("idle"), 4000);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      {msg && (
+        <span className={`text-[11px] ${status === "error" ? "text-red-600" : "text-emerald-700"}`}>
+          {status === "error" ? "⚠ " : "✓ "}
+          {msg}
+        </span>
+      )}
+      <button
+        onClick={sync}
+        disabled={busy}
+        className="text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-50"
+        style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+        title="Vuelca Follow/Conversión ADs + seguidores del mes actual desde Meta"
+      >
+        {busy ? "Sincronizando…" : "🔄 Sincronizar desde Meta"}
+      </button>
     </div>
   );
 }

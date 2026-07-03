@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
-import { metaConfigured, getCampaignInsights } from "@/lib/meta";
+import {
+  metaConfigured,
+  getCampaignInsights,
+  getDailyNewFollowers,
+  getInstagramAccount,
+} from "@/lib/meta";
 
 function monthRange() {
   const now = new Date();
@@ -41,6 +46,7 @@ export async function POST(req: NextRequest) {
   if (b?.action === "sync-month") {
     const { since, until, year, month } = monthRange();
     try {
+      // Gasto por bucket (usa las clasificaciones ya hechas por el CEO).
       const campaigns = await getCampaignInsights(since, until);
       const tags = await prisma.adCampaignTag.findMany();
       const bucketOf = new Map(tags.map((t) => [t.campaignId, t.bucket]));
@@ -50,12 +56,41 @@ export async function POST(req: NextRequest) {
         if (bk === "follow") follow += c.spend;
         else if (bk === "conversion") conversion += c.spend;
       }
+
+      // Followers: sumamos altas diarias que caen dentro del mes actual
+      // (IG solo devuelve últimos 30 días — para el mes en curso es suficiente).
+      // totalFollowers es la foto actual del contador de la cuenta.
+      let newFollowers: number | null = null;
+      let totalFollowers: number | null = null;
+      try {
+        const daily = await getDailyNewFollowers(30);
+        newFollowers = daily
+          .filter((d) => d.date >= since && d.date <= until)
+          .reduce((a, d) => a + d.value, 0);
+      } catch { /* si falla IG insights, dejamos newFollowers en null */ }
+      try {
+        const acc = await getInstagramAccount();
+        totalFollowers = acc.followersCount ?? null;
+      } catch { /* si falla IG account, no tocamos totalFollowers */ }
+
       await prisma.businessMonthlyInput.upsert({
         where: { year_month: { year, month } },
-        create: { year, month, adsSpend: follow, adsConversion: conversion },
-        update: { adsSpend: follow, adsConversion: conversion },
+        create: {
+          year,
+          month,
+          adsSpend: follow,
+          adsConversion: conversion,
+          ...(newFollowers != null && { newFollowers }),
+          ...(totalFollowers != null && { totalFollowers }),
+        },
+        update: {
+          adsSpend: follow,
+          adsConversion: conversion,
+          ...(newFollowers != null && { newFollowers }),
+          ...(totalFollowers != null && { totalFollowers }),
+        },
       });
-      return NextResponse.json({ ok: true, follow, conversion });
+      return NextResponse.json({ ok: true, follow, conversion, newFollowers, totalFollowers });
     } catch (e: any) {
       return NextResponse.json({ error: e.message }, { status: 502 });
     }
