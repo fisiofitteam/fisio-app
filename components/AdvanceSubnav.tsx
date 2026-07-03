@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 const SUBTABS = [
   { id: "pulso", label: "📊 Pulso", href: "/fisio/advance" },
+  { id: "atletas", label: "🏋 Atletas", href: "/fisio/advance/atletas" },
   { id: "rolling", label: "⚡ Rolling", href: "/fisio/advance/rolling" },
   { id: "retos", label: "🎯 Retos", href: "/fisio/advance/retos" },
 ];
