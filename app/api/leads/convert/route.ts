@@ -64,6 +64,11 @@ export async function POST(req: NextRequest) {
       assignedProfessionalId: assignedProfessionalId || null,
       programType: programType || null,
       programMode: "fixed",
+      // Marca al paciente como onboarding real (no legacy) para que aparezca
+      // en el bloque "🚀 Onboarding · Semana 0" hasta que se marque como
+      // completada. Sin esto, la vista de pacientes lo trata como legacy
+      // porque onboardingTasks queda null.
+      onboardingTasks: { anamnesis: false, contract: false, firstSession: false },
     },
   });
 
