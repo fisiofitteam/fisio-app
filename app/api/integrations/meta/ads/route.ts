@@ -8,11 +8,17 @@ import {
   getInstagramAccount,
 } from "@/lib/meta";
 
-function monthRange() {
+function monthRange(year?: number, month?: number) {
   const now = new Date();
-  const since = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10);
-  const until = now.toISOString().slice(0, 10);
-  return { since, until, year: now.getUTCFullYear(), month: now.getUTCMonth() };
+  const y = year ?? now.getUTCFullYear();
+  const m = month ?? now.getUTCMonth();
+  const start = new Date(Date.UTC(y, m, 1));
+  // Fin del mes: si es el mes en curso, hasta hoy; si es pasado, último día del mes.
+  const isCurrent = y === now.getUTCFullYear() && m === now.getUTCMonth();
+  const end = isCurrent ? now : new Date(Date.UTC(y, m + 1, 0));
+  const since = start.toISOString().slice(0, 10);
+  const until = end.toISOString().slice(0, 10);
+  return { since, until, year: y, month: m, isCurrent };
 }
 
 // GET — campañas del mes con su gasto y su clasificación (follow/conversion).
@@ -44,7 +50,12 @@ export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => ({}));
 
   if (b?.action === "sync-month") {
-    const { since, until, year, month } = monthRange();
+    const reqYear = Number.isInteger(b?.year) ? Number(b.year) : undefined;
+    const reqMonth = Number.isInteger(b?.month) ? Number(b.month) : undefined;
+    if (reqMonth != null && (reqMonth < 0 || reqMonth > 11)) {
+      return NextResponse.json({ error: "month debe ir de 0 a 11" }, { status: 400 });
+    }
+    const { since, until, year, month, isCurrent } = monthRange(reqYear, reqMonth);
     try {
       // Gasto por bucket (usa las clasificaciones ya hechas por el CEO).
       const campaigns = await getCampaignInsights(since, until);
@@ -57,9 +68,9 @@ export async function POST(req: NextRequest) {
         else if (bk === "conversion") conversion += c.spend;
       }
 
-      // Followers: sumamos altas diarias que caen dentro del mes actual
-      // (IG solo devuelve últimos 30 días — para el mes en curso es suficiente).
-      // totalFollowers es la foto actual del contador de la cuenta.
+      // Followers: IG solo devuelve últimos 30 días — para el mes en curso
+      // suele cubrir todo el mes; para el anterior cubre solo la parte que
+      // caiga dentro de esa ventana (aviso al usuario en la UI).
       let newFollowers: number | null = null;
       let totalFollowers: number | null = null;
       try {
@@ -68,10 +79,14 @@ export async function POST(req: NextRequest) {
           .filter((d) => d.date >= since && d.date <= until)
           .reduce((a, d) => a + d.value, 0);
       } catch { /* si falla IG insights, dejamos newFollowers en null */ }
-      try {
-        const acc = await getInstagramAccount();
-        totalFollowers = acc.followersCount ?? null;
-      } catch { /* si falla IG account, no tocamos totalFollowers */ }
+      // totalFollowers es una foto del contador actual — solo tiene sentido
+      // si estamos sincronizando el mes en curso. Para meses pasados lo dejamos.
+      if (isCurrent) {
+        try {
+          const acc = await getInstagramAccount();
+          totalFollowers = acc.followersCount ?? null;
+        } catch { /* si falla IG account, no tocamos totalFollowers */ }
+      }
 
       await prisma.businessMonthlyInput.upsert({
         where: { year_month: { year, month } },

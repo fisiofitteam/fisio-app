@@ -214,7 +214,7 @@ function MesesView({ monthly, goals, onYear }: { monthly: MonthlyMetrics; goals:
         <span className="text-sm font-medium">{year}</span>
         <button onClick={() => onYear(year + 1)} className="text-sm px-2.5 py-1 border border-neutral-200 rounded hover:bg-neutral-50">→</button>
         <div className="ml-auto">
-          <MetaSyncButton />
+          <MetaSyncButton year={year} />
         </div>
       </div>
 
@@ -535,11 +535,15 @@ function Kpi({ label, value, sub, tone = "neutral" }: { label: string; value: st
 }
 
 // ─── Botón "Sincronizar desde Meta" ─────────────────────────────────────────
-// Vuelca al MES ACTUAL los datos de Meta/IG en las filas de Publicidad:
-// Follow me ADs, Conversión ADs, Nuevos seguidores y Total seguidores.
-// Usa las clasificaciones de campaña ya hechas en Ajustes → Integraciones → Meta.
-function MetaSyncButton() {
+// Vuelca al mes seleccionado los datos de Meta/IG en las filas de Publicidad:
+// Follow me ADs, Conversión ADs, Nuevos seguidores y (solo mes actual) Total
+// seguidores. Meta Ads ofrece histórico completo, pero IG insights solo cubre
+// los últimos 30 días (aviso: meses > 1 atrás llegan con 0 seguidores).
+function MetaSyncButton({ year }: { year: number }) {
   const router = useRouter();
+  const now = new Date();
+  const currentMonth = now.getUTCFullYear() === year ? now.getUTCMonth() : 11;
+  const [month, setMonth] = useState(currentMonth);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<"idle" | "ok" | "error">("idle");
   const [msg, setMsg] = useState<string | null>(null);
@@ -552,16 +556,16 @@ function MetaSyncButton() {
       const res = await fetch("/api/integrations/meta/ads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "sync-month" }),
+        body: JSON.stringify({ action: "sync-month", year, month }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d?.error || "error");
-      const parts: string[] = [];
+      const parts: string[] = [`${MONTH_ABBR[month]} ${year}`];
       if (typeof d.follow === "number") parts.push(`Follow ${Math.round(d.follow)}€`);
       if (typeof d.conversion === "number") parts.push(`Conv ${Math.round(d.conversion)}€`);
       if (typeof d.newFollowers === "number") parts.push(`+${d.newFollowers} seg`);
       if (typeof d.totalFollowers === "number") parts.push(`total ${d.totalFollowers.toLocaleString("es-ES")}`);
-      setMsg(parts.join(" · ") || "Sincronizado");
+      setMsg(parts.join(" · "));
       setStatus("ok");
       router.refresh();
     } catch (e: any) {
@@ -569,24 +573,37 @@ function MetaSyncButton() {
       setStatus("error");
     } finally {
       setBusy(false);
-      setTimeout(() => setStatus("idle"), 4000);
+      setTimeout(() => setStatus("idle"), 5000);
     }
   }
 
+  // Solo permitimos meses pasados o el actual (no futuros).
+  const maxMonth = now.getUTCFullYear() === year ? now.getUTCMonth() : 11;
+
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 flex-wrap justify-end">
       {msg && (
         <span className={`text-[11px] ${status === "error" ? "text-red-600" : "text-emerald-700"}`}>
           {status === "error" ? "⚠ " : "✓ "}
           {msg}
         </span>
       )}
+      <select
+        value={month}
+        onChange={(e) => setMonth(Number(e.target.value))}
+        className="text-xs px-2 py-1.5 rounded-lg border border-neutral-200 bg-white"
+        title="Mes a sincronizar"
+      >
+        {MONTH_ABBR.slice(0, maxMonth + 1).map((mo, i) => (
+          <option key={i} value={i}>{mo} {year}</option>
+        ))}
+      </select>
       <button
         onClick={sync}
         disabled={busy}
         className="text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-50"
         style={{ background: "#0A0A0A", color: "#FAFAFA" }}
-        title="Vuelca Follow/Conversión ADs + seguidores del mes actual desde Meta"
+        title="Vuelca Follow/Conversión ADs + seguidores del mes seleccionado desde Meta"
       >
         {busy ? "Sincronizando…" : "🔄 Sincronizar desde Meta"}
       </button>
