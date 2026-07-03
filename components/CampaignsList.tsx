@@ -63,9 +63,19 @@ export function CampaignsList({ campaigns }: { campaigns: CampaignItem[] }) {
         <p className="text-sm text-neutral-500">
           {campaigns.length} campaña{campaigns.length !== 1 && "s"}
         </p>
-        <button onClick={() => setShowNew(true)} className="btn btn-primary text-xs">
-          + Nueva campaña
-        </button>
+        <div className="flex items-center gap-2">
+          <a
+            href="/api/ads/export-scripts"
+            download
+            className="text-xs px-3 py-1.5 rounded-lg border border-neutral-200 bg-white hover:bg-neutral-50 whitespace-nowrap"
+            title="Descarga un .md con todos los guiones agrupados por campaña, adset y anuncio"
+          >
+            📥 Exportar guiones
+          </a>
+          <button onClick={() => setShowNew(true)} className="btn btn-primary text-xs">
+            + Nueva campaña
+          </button>
+        </div>
       </div>
 
       {campaigns.length === 0 ? (
