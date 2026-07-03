@@ -82,7 +82,7 @@ export function RollingAssignmentBlock({
     <div className="mt-3 pt-3" style={{ borderTop: "1px dashed #E5E5E5" }}>
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-sm font-medium">Programas Rolling de ADVANCE</h3>
-        {isManager && !editing && (
+        {!editing && (
           <button
             onClick={() => setEditing(true)}
             className="text-xs hover:underline"
