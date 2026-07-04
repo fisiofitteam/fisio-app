@@ -1,10 +1,13 @@
 // Seed inicial del AiTrainingBrief destilado a partir de 230 sesiones reales
 // del CEO (semanas 21-80 del programa ADVANCE). Se aplica solo a los campos
 // que estén vacíos — así el usuario puede sobrescribir sin miedo.
+//
+// De momento solo tenemos seed para "accesorios" (fue lo que se importó).
+// Para "entrenamiento" el CEO subirá su propio HTML y editará el brief a mano.
 
-import type { AiTrainingBriefData } from "@/lib/ai-training-brief";
+import type { AiTrainingBriefData, BriefKind } from "@/lib/ai-training-brief";
 
-export const TRAINING_BRIEF_SEED: AiTrainingBriefData = {
+const TRAINING_BRIEF_SEED_ACCESORIOS: AiTrainingBriefData = {
   systemPrompt: `Eres el coach de FisioFit Team generando sesiones de ADVANCE (atletas de CrossFit / Hyrox que ya están sanos y siguen un programa rolling).
 Tu trabajo es diseñar UNA sesión concreta siguiendo el estilo del CEO. Devuelve JSON estructurado usando la tool provista.
 
@@ -164,4 +167,10 @@ Bloque 2 · GYMNASTICS COMPLEX:
 - Bloques sin duración ("hacer varias rondas de esto") — todo tiene que ser cuantificable.
 - Mezclar 2 patrones olímpicos en una sesión de técnica (ej. snatch + jerk el mismo día).
 - Poner CORE cuando la sesión ya es movilidad + core cortita (redundante).`,
+};
+
+// Todavía no tenemos histórico destilado para "entrenamiento". Cuando el CEO
+// suba su HTML de sesiones de fuerza/metcon, generaremos una seed equivalente.
+export const TRAINING_BRIEF_SEED_BY_KIND: Partial<Record<BriefKind, AiTrainingBriefData>> = {
+  accesorios: TRAINING_BRIEF_SEED_ACCESORIOS,
 };

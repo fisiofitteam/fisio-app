@@ -1,10 +1,21 @@
-// Lectura/escritura del singleton AiTrainingBrief.
-// Rige el estilo con el que la IA genera sesiones de ADVANCE.
+// Lectura/escritura del brief de estilo de sesiones ADVANCE. Hay uno por
+// kind: "accesorios" (sesiones cortas de movilidad/técnica/activación) y
+// "entrenamiento" (sesión principal de fuerza/metcon).
 
 import { prisma } from "@/lib/prisma";
-import { TRAINING_BRIEF_SEED } from "@/lib/ai-training-brief-seed";
+import { TRAINING_BRIEF_SEED_BY_KIND } from "@/lib/ai-training-brief-seed";
 
-export const AI_TRAINING_BRIEF_ID = "singleton";
+export type BriefKind = "accesorios" | "entrenamiento";
+export const BRIEF_KINDS: BriefKind[] = ["accesorios", "entrenamiento"];
+
+export function isBriefKind(x: unknown): x is BriefKind {
+  return x === "accesorios" || x === "entrenamiento";
+}
+
+export const BRIEF_KIND_LABEL: Record<BriefKind, string> = {
+  accesorios: "Accesorios (movilidad · técnica · activación)",
+  entrenamiento: "Entrenamiento (fuerza · metcon)",
+};
 
 export type AiTrainingBriefData = {
   systemPrompt: string;
@@ -62,42 +73,46 @@ function toData(row: {
   };
 }
 
-export async function getAiTrainingBrief(): Promise<AiTrainingBriefData> {
-  const row = await prisma.aiTrainingBrief.findUnique({ where: { id: AI_TRAINING_BRIEF_ID } });
+export async function getAiTrainingBrief(kind: BriefKind): Promise<AiTrainingBriefData> {
+  const row = await prisma.aiTrainingBrief.findUnique({ where: { id: kind } });
   if (!row) return EMPTY;
   return toData(row);
 }
 
 export async function updateAiTrainingBrief(
+  kind: BriefKind,
   patch: Partial<AiTrainingBriefData>,
   updatedById?: string | null,
 ): Promise<AiTrainingBriefData> {
   const row = await prisma.aiTrainingBrief.upsert({
-    where: { id: AI_TRAINING_BRIEF_ID },
+    where: { id: kind },
     update: { ...patch, updatedById: updatedById ?? undefined },
-    create: { id: AI_TRAINING_BRIEF_ID, ...patch, updatedById: updatedById ?? undefined },
+    create: { id: kind, ...patch, updatedById: updatedById ?? undefined },
   });
   return toData(row);
 }
 
 /**
- * Rellena el brief con la seed destilada del histórico (si algún campo está
- * vacío). Idempotente: no pisa lo que ya escribió el usuario.
+ * Rellena el brief con la seed destilada (si algún campo está vacío).
+ * Idempotente: no pisa lo que ya escribió el usuario. Si no hay seed para
+ * ese kind (p. ej. "entrenamiento" aún no destilado) devuelve sin hacer nada.
  */
-export async function seedAiTrainingBriefIfEmpty(updatedById?: string | null): Promise<{
-  createdOrUpdated: boolean;
-  filledFields: string[];
-}> {
-  const current = await getAiTrainingBrief();
+export async function seedAiTrainingBriefIfEmpty(
+  kind: BriefKind,
+  updatedById?: string | null,
+): Promise<{ createdOrUpdated: boolean; filledFields: string[]; noSeed?: boolean }> {
+  const seed = TRAINING_BRIEF_SEED_BY_KIND[kind];
+  if (!seed) return { createdOrUpdated: false, filledFields: [], noSeed: true };
+  const current = await getAiTrainingBrief(kind);
   const patch: Partial<AiTrainingBriefData> = {};
   const filled: string[] = [];
-  for (const key of Object.keys(TRAINING_BRIEF_SEED) as (keyof AiTrainingBriefData)[]) {
-    if (!current[key]?.trim()) {
-      patch[key] = TRAINING_BRIEF_SEED[key];
+  for (const key of Object.keys(seed) as (keyof AiTrainingBriefData)[]) {
+    if (!current[key]?.trim() && seed[key]?.trim()) {
+      patch[key] = seed[key];
       filled.push(key);
     }
   }
   if (filled.length === 0) return { createdOrUpdated: false, filledFields: [] };
-  await updateAiTrainingBrief(patch, updatedById);
+  await updateAiTrainingBrief(kind, patch, updatedById);
   return { createdOrUpdated: true, filledFields: filled };
 }

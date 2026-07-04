@@ -2108,7 +2108,7 @@ model AiAdsBrief {
 // Brief de estilo para generar sesiones ADVANCE con IA. Singleton editable
 // por el CEO/head_success desde /fisio/advance/brief-ia.
 model AiTrainingBrief {
-  id              String   @id @default("singleton")
+  id              String   @id
   systemPrompt    String   @default("")
   philosophy      String   @default("")
   voiceTone       String   @default("")
@@ -2128,6 +2128,7 @@ model AiTrainingBrief {
 // El generador las usa como few-shot para mantener el estilo.
 model AiSessionExample {
   id            String   @id @default(cuid())
+  kind          String   @default("accesorios")
   source        String   @default("html-import")
   weekNumber    Int?
   dayNumber     Int?
@@ -2140,6 +2141,7 @@ model AiSessionExample {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  @@index([kind])
   @@index([title])
   @@index([focusTags])
 }

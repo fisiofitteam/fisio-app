@@ -1,20 +1,20 @@
 /**
- * POST /api/ai/training-brief/import-html
+ * POST /api/ai/training-brief/import-html?kind=accesorios|entrenamiento
  *
  * Recibe un HTML (multipart/form-data, campo "file") con el histórico de
- * sesiones ADVANCE del CEO y lo importa a AiSessionExample. Es idempotente:
- * cada sesión se identifica por (source="html-import", dayNumber) y se
- * upsertea. Subir el mismo archivo dos veces no duplica.
+ * sesiones ADVANCE del CEO y lo importa a AiSessionExample con el kind
+ * indicado. Es idempotente: cada sesión se identifica por (kind,
+ * source="html-import", dayNumber) y se upsertea.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 import { parseAdvanceHtml, classifySession } from "@/lib/parse-advance-html";
+import { isBriefKind } from "@/lib/ai-training-brief";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// Tope defensivo — un HTML de 200k-500k está bien; más suena a error.
 const MAX_BYTES = 5 * 1024 * 1024;
 
 export async function POST(req: NextRequest) {
@@ -22,6 +22,11 @@ export async function POST(req: NextRequest) {
   if (!user || (user.role !== "ceo" && user.role !== "head_success")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  const kindParam = req.nextUrl.searchParams.get("kind");
+  if (!isBriefKind(kindParam)) {
+    return NextResponse.json({ error: "kind requerido (accesorios | entrenamiento)" }, { status: 400 });
+  }
+  const kind = kindParam;
 
   let raw: string;
   try {
@@ -54,6 +59,7 @@ export async function POST(req: NextRequest) {
     const { summary, focusTags } = classifySession(s.title, s.blocks);
     const exerciseNames = [...new Set(s.blocks.flatMap((b) => b.exercises))].join(", ");
     const data = {
+      kind,
       source: "html-import",
       weekNumber: s.week,
       dayNumber: s.dayNumber,
@@ -64,8 +70,10 @@ export async function POST(req: NextRequest) {
       blocksJSON: JSON.stringify(s.blocks),
       exerciseNames,
     };
+    // Deduplicamos por (kind, source, dayNumber). El mismo dayNumber en dos
+    // kinds distintos NO se pisa entre sí.
     const existing = await prisma.aiSessionExample.findFirst({
-      where: { source: "html-import", dayNumber: s.dayNumber },
+      where: { kind, source: "html-import", dayNumber: s.dayNumber },
       select: { id: true },
     });
     if (existing) {
@@ -77,5 +85,5 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, inserted, updated, skipped, total: sessions.length });
+  return NextResponse.json({ ok: true, kind, inserted, updated, skipped, total: sessions.length });
 }

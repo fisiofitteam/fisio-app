@@ -39,6 +39,7 @@ async function main() {
       select: { id: true },
     });
     const data = {
+      kind: "accesorios",
       source: "html-import",
       weekNumber: s.week,
       dayNumber: s.dayNumber,

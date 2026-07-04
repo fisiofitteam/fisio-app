@@ -37,10 +37,16 @@ const FIELDS: {
 ];
 
 export function AiTrainingBriefEditor({
+  kind,
+  kindLabel,
+  allKinds,
   brief,
   totalExamples,
   exampleSummary,
 }: {
+  kind: string;
+  kindLabel: string;
+  allKinds: { kind: string; label: string; count: number }[];
   brief: Brief;
   totalExamples: number;
   exampleSummary: { summary: string; count: number }[];
@@ -54,10 +60,12 @@ export function AiTrainingBriefEditor({
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
 
+  const qs = `?kind=${encodeURIComponent(kind)}`;
+
   async function save(key: keyof Brief) {
     setSavingKey(key);
     try {
-      const res = await fetch("/api/ai/training-brief", {
+      const res = await fetch(`/api/ai/training-brief${qs}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ [key]: values[key] }),
@@ -76,7 +84,7 @@ export function AiTrainingBriefEditor({
     try {
       const form = new FormData();
       form.append("file", file);
-      const res = await fetch("/api/ai/training-brief/import-html", {
+      const res = await fetch(`/api/ai/training-brief/import-html${qs}`, {
         method: "POST",
         body: form,
       });
@@ -100,7 +108,7 @@ export function AiTrainingBriefEditor({
     setSeeding(true);
     setSeedMsg(null);
     try {
-      const res = await fetch("/api/ai/training-brief", {
+      const res = await fetch(`/api/ai/training-brief${qs}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "seed-empty-fields" }),
@@ -120,12 +128,16 @@ export function AiTrainingBriefEditor({
           goodExamples: d.goodExamples,
           badExamples: d.badExamples,
         });
-        const filled: string[] = d._seedResult?.filledFields ?? [];
-        setSeedMsg(
-          filled.length > 0
-            ? `✓ Se rellenaron ${filled.length} campo${filled.length === 1 ? "" : "s"}: ${filled.join(", ")}`
-            : "Ningún campo estaba vacío. No se sobreescribe."
-        );
+        if (d._seedResult?.noSeed) {
+          setSeedMsg("Aún no hay seed pre-cargada para este brief. Redáctalo tú o sube el HTML correspondiente.");
+        } else {
+          const filled: string[] = d._seedResult?.filledFields ?? [];
+          setSeedMsg(
+            filled.length > 0
+              ? `✓ Se rellenaron ${filled.length} campo${filled.length === 1 ? "" : "s"}: ${filled.join(", ")}`
+              : "Ningún campo estaba vacío. No se sobreescribe."
+          );
+        }
         router.refresh();
       } else {
         setSeedMsg(`⚠ Error: ${d?.error ?? "desconocido"}`);
@@ -135,21 +147,49 @@ export function AiTrainingBriefEditor({
     }
   }
 
+  function switchKind(nextKind: string) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("kind", nextKind);
+    router.push(url.pathname + url.search);
+    router.refresh();
+  }
+
   return (
     <section className="space-y-4">
       <header>
         <h2 className="text-base font-semibold">✨ Brief IA · Generador de sesiones ADVANCE</h2>
         <p className="text-xs text-neutral-500 mt-0.5">
-          Define el estilo con el que la IA compondrá cada sesión. El generador combinará este brief con las {totalExamples} sesiones de tu histórico
-          como few-shot para no perder tu voz.
+          Cada tipo de sesión tiene su propio brief y su propio banco de ejemplos.
+          El generador combinará el brief activo con las sesiones del banco como few-shot.
         </p>
       </header>
+
+      {/* Tabs por kind */}
+      <div className="flex gap-1 border-b border-neutral-200">
+        {allKinds.map((k) => {
+          const active = k.kind === kind;
+          return (
+            <button
+              key={k.kind}
+              onClick={() => switchKind(k.kind)}
+              className={`px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
+                active ? "border-neutral-900 text-neutral-900" : "border-transparent text-neutral-500 hover:text-neutral-900"
+              }`}
+            >
+              {k.label}
+              <span className={`ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full ${active ? "bg-neutral-100" : "bg-neutral-50"}`}>
+                {k.count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
 
       {/* Panel resumen del banco */}
       <div className="card">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
-            <div className="text-xs uppercase tracking-wider text-neutral-500">Banco de ejemplos</div>
+            <div className="text-xs uppercase tracking-wider text-neutral-500">Banco · {kindLabel}</div>
             <div className="text-xl font-semibold">{totalExamples.toLocaleString("es-ES")} sesiones</div>
             {exampleSummary.length > 0 && (
               <div className="text-[11px] text-neutral-500 mt-1 flex flex-wrap gap-2">
@@ -165,9 +205,9 @@ export function AiTrainingBriefEditor({
             <div className="flex items-center gap-2">
               <label
                 className={`text-xs font-medium px-3 py-1.5 rounded-lg border border-neutral-300 bg-white cursor-pointer ${uploading ? "opacity-50" : "hover:bg-neutral-50"}`}
-                title="Sube tu HTML con el histórico de sesiones. Idempotente: subir el mismo archivo dos veces no duplica."
+                title="Sube tu HTML con el histórico de sesiones de este tipo. Idempotente: subir dos veces no duplica."
               >
-                {uploading ? "Cargando…" : "📥 Cargar HTML del histórico"}
+                {uploading ? "Cargando…" : `📥 Cargar HTML de ${kind}`}
                 <input
                   type="file"
                   accept=".html,text/html"
@@ -185,7 +225,7 @@ export function AiTrainingBriefEditor({
                 disabled={seeding}
                 className="text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-50"
                 style={{ background: "#0A0A0A", color: "#FAFAFA" }}
-                title="Rellena los campos vacíos con la destilación de tu histórico. No sobreescribe lo que ya has escrito."
+                title="Rellena los campos vacíos con la destilación de tu histórico (si la hay para este kind). No sobreescribe lo tuyo."
               >
                 {seeding ? "Sembrando…" : "🌱 Sembrar campos vacíos"}
               </button>
@@ -212,8 +252,7 @@ export function AiTrainingBriefEditor({
       </div>
 
       <p className="text-[11px] text-neutral-400 italic mt-4">
-        💡 Los cambios se autoguardan cuando sales del campo. Si necesitas ver cómo un modelo interpretará el brief,
-        genera una sesión de prueba desde el editor rolling (próximamente) y ajusta desde aquí.
+        💡 Los cambios se autoguardan cuando sales del campo. El generador (próximo hito) usará el brief del kind activo cuando pulses "✨ Generar con IA" desde el editor de sesiones.
       </p>
     </section>
   );
