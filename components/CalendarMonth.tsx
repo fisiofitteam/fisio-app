@@ -58,7 +58,9 @@ type ProgramOption = {
 };
 
 const MONTH_NAMES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
-const DAY_HEADERS = ["L","M","X","J","V"];
+const DAY_HEADERS_WEEKDAYS = ["L","M","X","J","V"];
+const DAY_HEADERS_FULL = ["L","M","X","J","V","S","D"];
+const WEEKEND_TOGGLE_STORAGE_KEY = "calendarMonth:showWeekends";
 
 // TYPE_COLORS legacy: se conserva únicamente para el overlay del drag
 // (donde se dibuja un chip con el nombre del programa fuera del contexto
@@ -107,6 +109,23 @@ export function CalendarMonth({
     setCurrentYear(year);
     setCurrentMonth(month);
   }, [year, month]);
+
+  // Toggle "mostrar sábado y domingo". Por defecto ON; persistimos elección
+  // por navegador para que no haya que volver a activarlo cada vez.
+  const [showWeekends, setShowWeekends] = useState(true);
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(WEEKEND_TOGGLE_STORAGE_KEY);
+      if (stored === "false") setShowWeekends(false);
+    } catch { /* localStorage bloqueado → nos quedamos con ON */ }
+  }, []);
+  function toggleWeekends() {
+    setShowWeekends((v) => {
+      const next = !v;
+      try { window.localStorage.setItem(WEEKEND_TOGGLE_STORAGE_KEY, String(next)); } catch {}
+      return next;
+    });
+  }
 
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [assignmentModal, setAssignmentModal] = useState<{ date: string } | null>(null);
@@ -190,7 +209,12 @@ export function CalendarMonth({
     [activeAssignments]
   );
 
-  const grid = useMemo(() => buildMonthGrid(currentYear, currentMonth), [currentYear, currentMonth]);
+  const grid = useMemo(
+    () => buildMonthGrid(currentYear, currentMonth, showWeekends),
+    [currentYear, currentMonth, showWeekends]
+  );
+  const dayHeaders = showWeekends ? DAY_HEADERS_FULL : DAY_HEADERS_WEEKDAYS;
+  const gridColsClass = showWeekends ? "grid-cols-7" : "grid-cols-5";
   const prevMonth = currentMonth === 0 ? { y: currentYear - 1, m: 11 } : { y: currentYear, m: currentMonth - 1 };
   const nextMonth = currentMonth === 11 ? { y: currentYear + 1, m: 0 } : { y: currentYear, m: currentMonth + 1 };
 
@@ -335,9 +359,16 @@ export function CalendarMonth({
               dragging={!!dragging}
             />
           </div>
-          <div className="grid grid-cols-5 gap-1">
-            {DAY_HEADERS.map((d) => (
-              <div key={d} className="text-center text-xs text-neutral-400 py-1 font-medium">{d}</div>
+          <div className={`grid ${gridColsClass} gap-1`}>
+            {dayHeaders.map((d, i) => (
+              <div
+                key={d + i}
+                className={`text-center text-xs py-1 font-medium ${
+                  i >= 5 ? "text-neutral-300" : "text-neutral-400"
+                }`}
+              >
+                {d}
+              </div>
             ))}
             {grid.map((day, i) => {
               const key = dayKey(day.date);
@@ -373,6 +404,16 @@ export function CalendarMonth({
 
         <div className="mt-3 text-xs text-neutral-500 italic">
           💡 Click en día vacío → crea sesión o asigna programa · Arrastra entre días para mover/duplicar (las ✓ completadas siempre se duplican) · Mantén el arrastre sobre ← o → para cambiar de mes · Usa el botón ↗ del chip para saltar a cualquier fecha
+        </div>
+        <div className="mt-2 text-right">
+          <button
+            type="button"
+            onClick={toggleWeekends}
+            className="text-[11px] text-neutral-400 hover:text-neutral-700 hover:underline"
+            title={showWeekends ? "Ocultar sábado y domingo del calendario" : "Mostrar sábado y domingo en el calendario"}
+          >
+            {showWeekends ? "Ocultar fin de semana" : "Mostrar fin de semana"}
+          </button>
         </div>
       </section>
 
@@ -1316,41 +1357,55 @@ function DropActionModal({
   );
 }
 
-function buildMonthGrid(year: number, month: number) {
-  // Generamos un grid de solo días laborables (L-V).
-  // Empezamos por el primer lunes ≤ día 1 del mes.
+function buildMonthGrid(year: number, month: number, showWeekends: boolean) {
+  // Grid de días del mes alineado a un múltiplo de columnas.
+  // Si showWeekends=true: 7 columnas L-D, incluye sábados y domingos.
+  // Si showWeekends=false: 5 columnas L-V, salta fines de semana.
   const first = new Date(year, month, 1);
   const last = new Date(year, month + 1, 0);
   const firstDow = first.getDay() === 0 ? 7 : first.getDay(); // 1=L .. 7=D
   const grid: { date: Date; inMonth: boolean }[] = [];
+  const columns = showWeekends ? 7 : 5;
+  const isWeekend = (d: Date) => d.getDay() === 0 || d.getDay() === 6;
 
-  // Padding inicial: si el día 1 no es lunes, añadimos los laborables del mes anterior
-  if (firstDow >= 2 && firstDow <= 5) {
+  if (showWeekends) {
+    // Padding inicial: retroceder hasta el lunes previo (o del mes anterior).
     for (let i = firstDow - 1; i > 0; i--) {
       const d = new Date(first);
       d.setDate(first.getDate() - i);
       grid.push({ date: d, inMonth: false });
     }
+    // Días del mes (todos)
+    for (let i = 1; i <= last.getDate(); i++) {
+      const d = new Date(year, month, i);
+      grid.push({ date: d, inMonth: true });
+    }
+  } else {
+    // Padding inicial: solo laborables del mes anterior
+    if (firstDow >= 2 && firstDow <= 5) {
+      for (let i = firstDow - 1; i > 0; i--) {
+        const d = new Date(first);
+        d.setDate(first.getDate() - i);
+        grid.push({ date: d, inMonth: false });
+      }
+    }
+    // Si día 1 es sábado o domingo, saltamos al siguiente lunes
+    const startOffset = firstDow >= 6 ? 8 - firstDow : 0;
+    // Días del mes (solo L-V)
+    for (let i = 1 + startOffset; i <= last.getDate(); i++) {
+      const d = new Date(year, month, i);
+      if (isWeekend(d)) continue;
+      grid.push({ date: d, inMonth: true });
+    }
   }
-  // Si día 1 es sábado o domingo, no añadimos padding (la semana empieza con el lunes siguiente)
-  // y mostramos los días en mes desde ese lunes
-  const startOffset = firstDow >= 6 ? 8 - firstDow : 0; // 6=sa→2 días skip; 7=do→1 día skip
 
-  // Días del mes (solo L-V)
-  for (let i = 1 + startOffset; i <= last.getDate(); i++) {
-    const d = new Date(year, month, i);
-    const dow = d.getDay();
-    if (dow === 0 || dow === 6) continue; // Saltar domingos y sábados
-    grid.push({ date: d, inMonth: true });
-  }
-
-  // Padding final: completar hasta múltiplo de 5
-  while (grid.length % 5 !== 0) {
+  // Padding final: completar hasta múltiplo de columnas
+  while (grid.length % columns !== 0) {
     const lastDate = grid[grid.length - 1].date;
     let d = new Date(lastDate);
     d.setDate(lastDate.getDate() + 1);
-    while (d.getDay() === 0 || d.getDay() === 6) {
-      d.setDate(d.getDate() + 1);
+    if (!showWeekends) {
+      while (isWeekend(d)) d.setDate(d.getDate() + 1);
     }
     grid.push({ date: d, inMonth: false });
   }
