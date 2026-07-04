@@ -40,6 +40,10 @@ export default async function BriefIaPage({
 
   return (
     <AiTrainingBriefEditor
+      // Forzamos remount al cambiar de kind — así la useState del cliente
+      // se reinicializa con el brief correcto y no arrastra los valores del
+      // brief anterior en los textareas.
+      key={kind}
       kind={kind}
       kindLabel={BRIEF_KIND_LABEL[kind]}
       allKinds={BRIEF_KINDS.map((k) => ({

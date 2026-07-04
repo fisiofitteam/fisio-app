@@ -59,6 +59,7 @@ export function AiTrainingBriefEditor({
   const [seedMsg, setSeedMsg] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
+  const [clearing, setClearing] = useState(false);
 
   const qs = `?kind=${encodeURIComponent(kind)}`;
 
@@ -101,6 +102,38 @@ export function AiTrainingBriefEditor({
       setUploadMsg(`⚠ ${e?.message ?? "Error de red"}`);
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function clearAll() {
+    if (!confirm(`¿Vaciar todos los campos del brief "${kindLabel}"? Podrás volver a sembrar después. No afecta al banco de ejemplos.`)) return;
+    setClearing(true);
+    try {
+      const res = await fetch(`/api/ai/training-brief${qs}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "clear-all-fields" }),
+      });
+      if (res.ok) {
+        const d = await res.json();
+        setValues({
+          systemPrompt: d.systemPrompt,
+          philosophy: d.philosophy,
+          voiceTone: d.voiceTone,
+          structureHints: d.structureHints,
+          formats: d.formats,
+          intensityRules: d.intensityRules,
+          vocabulary: d.vocabulary,
+          dos: d.dos,
+          donts: d.donts,
+          goodExamples: d.goodExamples,
+          badExamples: d.badExamples,
+        });
+        setSeedMsg("✓ Brief vaciado. Pulsa 🌱 Sembrar para volver a rellenar.");
+        router.refresh();
+      }
+    } finally {
+      setClearing(false);
     }
   }
 
@@ -228,6 +261,14 @@ export function AiTrainingBriefEditor({
                 title="Rellena los campos vacíos con la destilación de tu histórico (si la hay para este kind). No sobreescribe lo tuyo."
               >
                 {seeding ? "Sembrando…" : "🌱 Sembrar campos vacíos"}
+              </button>
+              <button
+                onClick={clearAll}
+                disabled={clearing}
+                className="text-xs text-neutral-500 hover:text-red-700 hover:underline disabled:opacity-50"
+                title="Vacía TODOS los campos de este brief. Útil si por error se rellenaron con el brief del otro tipo."
+              >
+                {clearing ? "Vaciando…" : "🗑 Vaciar este brief"}
               </button>
             </div>
             {uploadMsg && <span className="text-[11px] text-neutral-600 text-right">{uploadMsg}</span>}

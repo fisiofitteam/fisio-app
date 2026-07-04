@@ -63,6 +63,15 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ ...brief, _seedResult: result });
   }
 
+  // Reset: pone todos los campos a "" (para que "🌱 Sembrar" pueda volver a
+  // rellenarlos limpio). No borra la fila — solo la vacía.
+  if (body?.action === "clear-all-fields") {
+    const empty: Record<string, string> = {};
+    for (const k of ALLOWED_FIELDS) empty[k] = "";
+    const updated = await updateAiTrainingBrief(kind, empty, user.id);
+    return NextResponse.json({ ...updated, _cleared: true });
+  }
+
   const patch: Record<string, string> = {};
   for (const k of ALLOWED_FIELDS) {
     if (typeof body?.[k] === "string") patch[k] = body[k];
