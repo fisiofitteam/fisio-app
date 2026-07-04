@@ -8,6 +8,7 @@ const SUBTABS = [
   { id: "atletas", label: "🏋 Atletas", href: "/fisio/advance/atletas" },
   { id: "rolling", label: "⚡ Rolling", href: "/fisio/advance/rolling" },
   { id: "retos", label: "🎯 Retos", href: "/fisio/advance/retos" },
+  { id: "brief-ia", label: "✨ Brief IA", href: "/fisio/advance/brief-ia" },
 ];
 
 // Sub-navegación dentro de la pestaña "Advance" del sidebar.

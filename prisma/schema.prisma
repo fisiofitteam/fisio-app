@@ -2105,6 +2105,45 @@ model AiAdsBrief {
   updatedById     String?
 }
 
+// Brief de estilo para generar sesiones ADVANCE con IA. Singleton editable
+// por el CEO/head_success desde /fisio/advance/brief-ia.
+model AiTrainingBrief {
+  id              String   @id @default("singleton")
+  systemPrompt    String   @default("")
+  philosophy      String   @default("")
+  voiceTone       String   @default("")
+  structureHints  String   @default("")
+  formats         String   @default("")
+  intensityRules  String   @default("")
+  vocabulary      String   @default("")
+  dos             String   @default("")
+  donts           String   @default("")
+  goodExamples    String   @default("")
+  badExamples     String   @default("")
+  updatedAt       DateTime @updatedAt
+  updatedById     String?
+}
+
+// Banco de sesiones históricas de ADVANCE cargadas desde un HTML del CEO.
+// El generador las usa como few-shot para mantener el estilo.
+model AiSessionExample {
+  id            String   @id @default(cuid())
+  source        String   @default("html-import")
+  weekNumber    Int?
+  dayNumber     Int?
+  title         String
+  summary       String   @default("")
+  focusTags     String   @default("")
+  description   String?
+  blocksJSON    String   @default("[]")
+  exerciseNames String   @default("")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([title])
+  @@index([focusTags])
+}
+
 // Reuniones → Sesiones clínicas: tabla viva de casos clínicos que el equipo
 // comenta cada semana. assignedToId es el id del Professional (sin relación FK).
 model ClinicalSessionCase {
