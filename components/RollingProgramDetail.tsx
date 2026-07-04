@@ -12,6 +12,7 @@ import {
   useDroppable,
   DragOverlay,
 } from "@dnd-kit/core";
+import { AiGenerateSessionModal } from "@/components/AiGenerateSessionModal";
 
 type Program = {
   id: string;
@@ -120,6 +121,7 @@ export function RollingProgramDetail({
   // Modales add/edit task
   const [typeModal, setTypeModal] = useState<{ dayOfWeek: number } | null>(null);
   const [editTask, setEditTask] = useState<Task | null>(null);
+  const [aiModal, setAiModal] = useState<{ dayOfWeek: number } | null>(null);
 
   // Cargar semana
   async function loadWeek(monday: Date) {
@@ -336,12 +338,22 @@ export function RollingProgramDetail({
                       onDelete={() => deleteTask(t.id)}
                     />
                   ))}
-                  <button
-                    onClick={() => setTypeModal({ dayOfWeek: dow })}
-                    className="text-xs text-neutral-400 border border-dashed border-neutral-300 rounded py-1.5 hover:bg-white hover:text-neutral-700 w-full"
-                  >
-                    + tarea
-                  </button>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => setTypeModal({ dayOfWeek: dow })}
+                      className="text-xs text-neutral-400 border border-dashed border-neutral-300 rounded py-1.5 hover:bg-white hover:text-neutral-700 flex-1"
+                    >
+                      + tarea
+                    </button>
+                    <button
+                      onClick={() => setAiModal({ dayOfWeek: dow })}
+                      className="text-xs px-2 py-1.5 rounded font-medium shrink-0"
+                      style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+                      title="Generar sesión con IA para este día"
+                    >
+                      ✨ IA
+                    </button>
+                  </div>
                 </DroppableDayCell>
               );
             })}
@@ -384,6 +396,18 @@ export function RollingProgramDetail({
           onClose={() => setMoveModal(null)}
           onMove={() => executeMoveOrDuplicate("move")}
           onDuplicate={() => executeMoveOrDuplicate("duplicate")}
+        />
+      )}
+
+      {aiModal && week && (
+        <AiGenerateSessionModal
+          weekId={week.id}
+          dayOfWeek={aiModal.dayOfWeek}
+          onClose={() => setAiModal(null)}
+          onSaved={async () => {
+            setAiModal(null);
+            await loadWeek(currentMonday);
+          }}
         />
       )}
     </main>
