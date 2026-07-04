@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { AiSessionTester } from "@/components/AiSessionTester";
 
 type Brief = {
   systemPrompt: string;
@@ -276,6 +277,9 @@ export function AiTrainingBriefEditor({
           </div>
         </div>
       </div>
+
+      {/* Panel de prueba del generador */}
+      <AiSessionTester kind={kind} />
 
       {/* Campos */}
       <div className="space-y-4">
