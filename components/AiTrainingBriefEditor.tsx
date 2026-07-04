@@ -51,6 +51,8 @@ export function AiTrainingBriefEditor({
   const [savedAt, setSavedAt] = useState<Record<string, number>>({});
   const [seeding, setSeeding] = useState(false);
   const [seedMsg, setSeedMsg] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState<string | null>(null);
 
   async function save(key: keyof Brief) {
     setSavingKey(key);
@@ -65,6 +67,32 @@ export function AiTrainingBriefEditor({
       }
     } finally {
       setSavingKey(null);
+    }
+  }
+
+  async function uploadHtml(file: File) {
+    setUploading(true);
+    setUploadMsg(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/ai/training-brief/import-html", {
+        method: "POST",
+        body: form,
+      });
+      const d = await res.json();
+      if (res.ok) {
+        setUploadMsg(
+          `✓ ${d.total} sesiones detectadas · ${d.inserted} nuevas · ${d.updated} actualizadas${d.skipped ? ` · ${d.skipped} saltadas` : ""}`
+        );
+        router.refresh();
+      } else {
+        setUploadMsg(`⚠ ${d?.error ?? "Error"}`);
+      }
+    } catch (e: any) {
+      setUploadMsg(`⚠ ${e?.message ?? "Error de red"}`);
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -134,16 +162,36 @@ export function AiTrainingBriefEditor({
             )}
           </div>
           <div className="flex flex-col items-end gap-2">
-            <button
-              onClick={seedEmpty}
-              disabled={seeding}
-              className="text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-50"
-              style={{ background: "#0A0A0A", color: "#FAFAFA" }}
-              title="Rellena los campos vacíos con la destilación de tu histórico. No sobreescribe lo que ya has escrito."
-            >
-              {seeding ? "Sembrando…" : "🌱 Sembrar campos vacíos"}
-            </button>
-            {seedMsg && <span className="text-[11px] text-neutral-600">{seedMsg}</span>}
+            <div className="flex items-center gap-2">
+              <label
+                className={`text-xs font-medium px-3 py-1.5 rounded-lg border border-neutral-300 bg-white cursor-pointer ${uploading ? "opacity-50" : "hover:bg-neutral-50"}`}
+                title="Sube tu HTML con el histórico de sesiones. Idempotente: subir el mismo archivo dos veces no duplica."
+              >
+                {uploading ? "Cargando…" : "📥 Cargar HTML del histórico"}
+                <input
+                  type="file"
+                  accept=".html,text/html"
+                  disabled={uploading}
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) uploadHtml(f);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+              <button
+                onClick={seedEmpty}
+                disabled={seeding}
+                className="text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-50"
+                style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+                title="Rellena los campos vacíos con la destilación de tu histórico. No sobreescribe lo que ya has escrito."
+              >
+                {seeding ? "Sembrando…" : "🌱 Sembrar campos vacíos"}
+              </button>
+            </div>
+            {uploadMsg && <span className="text-[11px] text-neutral-600 text-right">{uploadMsg}</span>}
+            {seedMsg && <span className="text-[11px] text-neutral-600 text-right">{seedMsg}</span>}
           </div>
         </div>
       </div>
