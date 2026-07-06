@@ -7,6 +7,11 @@ import { SendCaseFlow, type SendCaseTemplate, type SuccessCaseOption } from "@/c
 import { SendDirectButton } from "@/components/SendDirectButton";
 import { SendAppLinkButton } from "@/components/SendAppLinkButton";
 import { ManualSaleButton } from "@/components/ManualSaleButton";
+import {
+  datetimeLocalInputToUtcIso,
+  utcIsoToDatetimeLocalInput,
+  nowPlusHoursForInput,
+} from "@/lib/datetime-local";
 import type { TemplateActionType } from "@/lib/resource-roles";
 
 type DirectTemplate = { id: string; name: string; body: string; actionType: TemplateActionType };
@@ -752,7 +757,7 @@ function CallEditModal({
   const [phone, setPhone] = useState(lead.phone ?? "");
   const [aiSummary, setAiSummary] = useState(lead.aiSummary ?? "");
   const [callScheduledAt, setCallScheduledAt] = useState(
-    new Date(lead.callScheduledAt).toISOString().slice(0, 16)
+    utcIsoToDatetimeLocalInput(lead.callScheduledAt)
   );
   const [closerId, setCloserId] = useState(lead.closer?.id ?? "");
 
@@ -776,7 +781,7 @@ function CallEditModal({
         email,
         phone,
         aiSummary,
-        callScheduledAt,
+        callScheduledAt: datetimeLocalInputToUtcIso(callScheduledAt),
         closerId: closerId || null,
         status,
         ...(status === "lost" && { lostReason }),
@@ -1156,13 +1161,7 @@ function AddCallModal({
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [aiSummary, setAiSummary] = useState("");
-  const [callScheduledAt, setCallScheduledAt] = useState(() => {
-    // Por defecto: dentro de 1h
-    const d = new Date();
-    d.setMinutes(0, 0, 0);
-    d.setHours(d.getHours() + 1);
-    return d.toISOString().slice(0, 16);
-  });
+  const [callScheduledAt, setCallScheduledAt] = useState(() => nowPlusHoursForInput(1));
   const [closerId, setCloserId] = useState(currentUser.role === "closer" ? currentUser.id : currentUser.id);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -1184,7 +1183,7 @@ function AddCallModal({
         email: email.trim() || null,
         phone: phone.trim() || null,
         aiSummary: aiSummary.trim() || null,
-        callScheduledAt: new Date(callScheduledAt).toISOString(),
+        callScheduledAt: datetimeLocalInputToUtcIso(callScheduledAt),
         closerId: closerId || null,
       }),
     });

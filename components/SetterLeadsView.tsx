@@ -3,6 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { RescheduleLinkButton } from "@/components/RescheduleLinkButton";
+import {
+  datetimeLocalInputToUtcIso,
+  utcIsoToDatetimeLocalInput,
+  nowPlusHoursForInput,
+} from "@/lib/datetime-local";
 
 type Pro = { id: string; fullName: string; role: string };
 
@@ -297,8 +302,8 @@ function SetterLeadModal({
   const [aiSummary, setAiSummary] = useState(editingLead?.aiSummary ?? "");
   const [callScheduledAt, setCallScheduledAt] = useState(
     editingLead
-      ? new Date(editingLead.callScheduledAt).toISOString().slice(0, 16)
-      : new Date().toISOString().slice(0, 16)
+      ? utcIsoToDatetimeLocalInput(editingLead.callScheduledAt)
+      : nowPlusHoursForInput(0)
   );
   const [closerId, setCloserId] = useState(editingLead?.closer?.id ?? "");
   const [aiScheduled, setAiScheduled] = useState(editingLead?.aiScheduled ?? false);
@@ -323,7 +328,7 @@ function SetterLeadModal({
         phone: trimmedPhone || null,
         email: trimmedEmail || null,
         aiSummary,
-        callScheduledAt,
+        callScheduledAt: datetimeLocalInputToUtcIso(callScheduledAt),
         closerId: closerId || null,
         aiScheduled,
       }),

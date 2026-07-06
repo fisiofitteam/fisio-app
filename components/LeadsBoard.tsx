@@ -3,6 +3,11 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import {
+  datetimeLocalInputToUtcIso,
+  utcIsoToDatetimeLocalInput,
+  nowPlusHoursForInput,
+} from "@/lib/datetime-local";
 
 type Pro = { id: string; fullName: string; role: string };
 
@@ -337,8 +342,8 @@ function LeadModal({
   const [aiSummary, setAiSummary] = useState(editingLead?.aiSummary ?? "");
   const [callScheduledAt, setCallScheduledAt] = useState(
     editingLead
-      ? new Date(editingLead.callScheduledAt).toISOString().slice(0, 16)
-      : new Date().toISOString().slice(0, 16)
+      ? utcIsoToDatetimeLocalInput(editingLead.callScheduledAt)
+      : nowPlusHoursForInput(0)
   );
   const [closerId, setCloserId] = useState(editingLead?.closer?.id ?? "");
   const [status, setStatus] = useState(editingLead?.status ?? "scheduled");
@@ -362,7 +367,7 @@ function LeadModal({
           contactType,
           contactValue,
           aiSummary,
-          callScheduledAt,
+          callScheduledAt: datetimeLocalInputToUtcIso(callScheduledAt),
           closerId: closerId || null,
           ...(isEdit && { status, ...(status === "lost" && { lostReason }) }),
           inFollowUp,

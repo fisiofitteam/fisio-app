@@ -4,6 +4,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, X, Edit2, Calendar, CheckCircle2 } from "lucide-react";
 import type { MeetingCategory } from "@/lib/team-meetings";
+import {
+  datetimeLocalInputToUtcIso,
+  utcIsoToDatetimeLocalInput,
+} from "@/lib/datetime-local";
 
 type Meeting = {
   id: string;
@@ -230,7 +234,7 @@ function MeetingForm({
 }) {
   const [title, setTitle] = useState(meeting?.title ?? "");
   const [scheduledAt, setScheduledAt] = useState(
-    meeting?.scheduledAt ? new Date(meeting.scheduledAt).toISOString().slice(0, 16) : ""
+    meeting?.scheduledAt ? utcIsoToDatetimeLocalInput(meeting.scheduledAt) : ""
   );
   const [preparation, setPreparation] = useState(meeting?.preparation ?? "");
   const [summary, setSummary] = useState(meeting?.summary ?? "");
@@ -253,7 +257,7 @@ function MeetingForm({
     setSaving(true);
     const body: any = {
       title: title.trim(),
-      scheduledAt: scheduledAt || null,
+      scheduledAt: scheduledAt ? datetimeLocalInputToUtcIso(scheduledAt) : null,
       preparation: preparation.trim() || null,
       summary: summary.trim() || null,
     };
