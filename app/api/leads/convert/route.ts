@@ -51,6 +51,13 @@ export async function POST(req: NextRequest) {
   const startDate = new Date();
   startDate.setHours(0, 0, 0, 0);
 
+  // Teléfono: preferimos el que llega del modal; si no viene, caemos al que
+  // ya trae el lead (o al contactValue si el lead se registró por teléfono).
+  const phoneFromLead = lead.contactType === "phone" ? lead.contactValue : lead.phone;
+  const finalPhone = (typeof phone === "string" && phone.trim())
+    ? phone.trim()
+    : (phoneFromLead?.trim() || null);
+
   const patient = await prisma.patient.create({
     data: {
       fullName: lead.fullName,
@@ -58,7 +65,11 @@ export async function POST(req: NextRequest) {
       sport: "CrossFit",
       diagnosis: lead.aiSummary ?? null,
       country: lead.country ?? null,
-      shippingPhone: phone?.trim() || null,
+      phone: finalPhone,
+      // shippingPhone también, para que si el equipo manda algún regalo/camiseta
+      // no tenga que pedirlo otra vez. El fisio puede cambiarlo después si
+      // quiere distinguir móvil personal vs. envíos.
+      shippingPhone: finalPhone,
       subscriptionStartDate: startDate,
       subscriptionPeriodMonths: months,
       subscriptionTotalMonths: months,
