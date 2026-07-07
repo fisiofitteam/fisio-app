@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type Patient = {
   id: string;
@@ -52,8 +53,10 @@ function hasShipping(p: Patient): boolean {
  * ficha clínica ni a programas.
  */
 export function SetterPatientsView({ patients }: { patients: Patient[] }) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [showOnlyMissing, setShowOnlyMissing] = useState(false);
+  const [editing, setEditing] = useState<Patient | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -117,16 +120,27 @@ export function SetterPatientsView({ patients }: { patients: Patient[] }) {
         ) : (
           <div className="divide-y divide-neutral-100">
             {filtered.map((p) => (
-              <PatientRow key={p.id} patient={p} />
+              <PatientRow key={p.id} patient={p} onEdit={() => setEditing(p)} />
             ))}
           </div>
         )}
       </section>
+
+      {editing && (
+        <EditPatientModal
+          patient={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            router.refresh();
+          }}
+        />
+      )}
     </main>
   );
 }
 
-function PatientRow({ patient }: { patient: Patient }) {
+function PatientRow({ patient, onEdit }: { patient: Patient; onEdit: () => void }) {
   const has = hasShipping(patient);
   return (
     <div className="py-3 px-2 -mx-2">
@@ -147,6 +161,13 @@ function PatientRow({ patient }: { patient: Patient }) {
             Camiseta {patient.shirtSize}
           </span>
         )}
+        <button
+          onClick={onEdit}
+          className="ml-auto text-[11px] text-blue-700 hover:underline"
+          title="Editar datos y dirección"
+        >
+          ✏️ Editar
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
@@ -180,6 +201,162 @@ function PatientRow({ patient }: { patient: Patient }) {
           ) : (
             <div className="text-amber-700 italic">⚠ Sin dirección postal</div>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const SHIRT_SIZES = ["XS", "S", "M", "L", "XL", "XXL"];
+const COUNTRIES = ["España", "Portugal", "Francia", "Italia", "Alemania", "Reino Unido", "Estados Unidos", "México", "Argentina", "Colombia", "Chile", "Otro"];
+
+function EditPatientModal({
+  patient,
+  onClose,
+  onSaved,
+}: {
+  patient: Patient;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [email, setEmail] = useState(patient.email ?? "");
+  const [shippingPhone, setShippingPhone] = useState(patient.shippingPhone ?? "");
+  const [country, setCountry] = useState(patient.country ?? "España");
+  const [shirtSize, setShirtSize] = useState(patient.shirtSize ?? "");
+  const [shippingStreet, setShippingStreet] = useState(patient.shippingStreet ?? "");
+  const [shippingNumber, setShippingNumber] = useState(patient.shippingNumber ?? "");
+  const [shippingFloor, setShippingFloor] = useState(patient.shippingFloor ?? "");
+  const [shippingStaircase, setShippingStaircase] = useState(patient.shippingStaircase ?? "");
+  const [shippingDoor, setShippingDoor] = useState(patient.shippingDoor ?? "");
+  const [shippingPostalCode, setShippingPostalCode] = useState(patient.shippingPostalCode ?? "");
+  const [shippingCity, setShippingCity] = useState(patient.shippingCity ?? "");
+  const [shippingProvince, setShippingProvince] = useState(patient.shippingProvince ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function save() {
+    setError("");
+    setSaving(true);
+    const res = await fetch("/api/patients", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: patient.id,
+        email: email.trim() || null,
+        // También el "phone" principal para que quede sincronizado con la ficha.
+        phone: shippingPhone.trim() || null,
+        shippingPhone: shippingPhone.trim() || null,
+        country: country || null,
+        shirtSize: shirtSize || null,
+        shippingStreet: shippingStreet.trim() || null,
+        shippingNumber: shippingNumber.trim() || null,
+        shippingFloor: shippingFloor.trim() || null,
+        shippingStaircase: shippingStaircase.trim() || null,
+        shippingDoor: shippingDoor.trim() || null,
+        shippingCity: shippingCity.trim() || null,
+        shippingProvince: shippingProvince.trim() || null,
+        shippingPostalCode: shippingPostalCode.trim() || null,
+      }),
+    });
+    if (res.ok) {
+      onSaved();
+      return;
+    }
+    const data = await res.json().catch(() => ({}));
+    setError(data?.error || "No se pudieron guardar los cambios");
+    setSaving(false);
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-start justify-center z-50 p-4 overflow-y-auto" onClick={onClose}>
+      <div className="bg-white rounded-2xl max-w-lg w-full p-4 my-8" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-semibold">Editar · {patient.fullName}</h3>
+          <button onClick={onClose} className="text-neutral-400 text-xl">✕</button>
+        </div>
+
+        <div className="space-y-3">
+          {/* Contacto */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[11px] text-neutral-500 block mb-1">Email</label>
+              <input type="email" className="input text-sm w-full" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-[11px] text-neutral-500 block mb-1">Teléfono</label>
+              <input type="tel" className="input text-sm w-full" value={shippingPhone} onChange={(e) => setShippingPhone(e.target.value)} />
+            </div>
+          </div>
+
+          {/* País / Camiseta */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[11px] text-neutral-500 block mb-1">País</label>
+              <select className="input text-sm w-full" value={country} onChange={(e) => setCountry(e.target.value)}>
+                {COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-[11px] text-neutral-500 block mb-1">Camiseta</label>
+              <select className="input text-sm w-full" value={shirtSize} onChange={(e) => setShirtSize(e.target.value)}>
+                <option value="">—</option>
+                {SHIRT_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* Dirección */}
+          <div className="text-[11px] text-neutral-500 font-medium border-t border-neutral-100 pt-2 mt-2">Dirección de envío</div>
+
+          <div className="grid grid-cols-[1fr_auto] gap-2">
+            <div>
+              <label className="text-[11px] text-neutral-500 block mb-1">Calle</label>
+              <input type="text" className="input text-sm w-full" value={shippingStreet} onChange={(e) => setShippingStreet(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-[11px] text-neutral-500 block mb-1">Nº</label>
+              <input type="text" className="input text-sm w-16" value={shippingNumber} onChange={(e) => setShippingNumber(e.target.value)} />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label className="text-[11px] text-neutral-500 block mb-1">Piso</label>
+              <input type="text" className="input text-sm w-full" value={shippingFloor} onChange={(e) => setShippingFloor(e.target.value)} placeholder="1º" />
+            </div>
+            <div>
+              <label className="text-[11px] text-neutral-500 block mb-1">Escalera</label>
+              <input type="text" className="input text-sm w-full" value={shippingStaircase} onChange={(e) => setShippingStaircase(e.target.value)} placeholder="A" />
+            </div>
+            <div>
+              <label className="text-[11px] text-neutral-500 block mb-1">Puerta</label>
+              <input type="text" className="input text-sm w-full" value={shippingDoor} onChange={(e) => setShippingDoor(e.target.value)} placeholder="Izq" />
+            </div>
+          </div>
+          <div className="grid grid-cols-[100px_1fr] gap-2">
+            <div>
+              <label className="text-[11px] text-neutral-500 block mb-1">CP</label>
+              <input type="text" className="input text-sm w-full" value={shippingPostalCode} onChange={(e) => setShippingPostalCode(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-[11px] text-neutral-500 block mb-1">Ciudad</label>
+              <input type="text" className="input text-sm w-full" value={shippingCity} onChange={(e) => setShippingCity(e.target.value)} />
+            </div>
+          </div>
+          <div>
+            <label className="text-[11px] text-neutral-500 block mb-1">Provincia</label>
+            <input type="text" className="input text-sm w-full" value={shippingProvince} onChange={(e) => setShippingProvince(e.target.value)} />
+          </div>
+
+          {error && (
+            <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-md px-2 py-1.5">{error}</div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-neutral-100">
+            <button onClick={onClose} className="text-xs text-neutral-600 hover:underline px-2">Cancelar</button>
+            <button onClick={save} disabled={saving} className="btn btn-primary text-xs disabled:opacity-50">
+              {saving ? "Guardando…" : "💾 Guardar"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -40,7 +40,7 @@ type Item = {
 
 const PANEL: Item = { id: "panel", label: "Panel", Icon: LayoutDashboard, href: "/fisio", match: (p) => p === "/fisio" };
 const PACIENTES: Item = { id: "pacientes", label: "Pacientes", Icon: Users, href: "/fisio/pacientes", match: (p) => p.startsWith("/fisio/pacientes") || p.startsWith("/fisio/paciente/") };
-const LEADS: Item = { id: "leads", label: "Leads", Icon: Target, href: "/fisio/leads", match: (p) => p.startsWith("/fisio/leads") };
+const LEADS: Item = { id: "leads", label: "Llamadas", Icon: Target, href: "/fisio/leads", match: (p) => p.startsWith("/fisio/leads") };
 const LLAMADAS_VENTA: Item = { id: "llamadas-venta", label: "Llamadas", Icon: PhoneCall, href: "/fisio/llamadas-venta", match: (p) => p.startsWith("/fisio/llamadas-venta") };
 const FOLLOWUP: Item = { id: "followup", label: "Follow-up", Icon: Repeat, href: "/fisio/followup", match: (p) => p.startsWith("/fisio/followup") };
 const REGALOS: Item = { id: "regalos", label: "Regalos", Icon: Gift, href: "/fisio/regalos", match: (p) => p.startsWith("/fisio/regalos") || p.startsWith("/fisio/parches") };
@@ -67,7 +67,7 @@ function itemsForRole(role: string): Item[] {
     return [PANEL, PACIENTES, ADVANCE, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, CHAT, AJUSTES];
   }
   if (role === "setter") {
-    return [PANEL, LEADS, LLAMADAS_VENTA, PACIENTES, REGALOS, CONTENIDO, COMUNIDAD, REUNIONES, CALENDARIO, EQUIPO, CHAT, AJUSTES];
+    return [PANEL, LEADS, PACIENTES, REGALOS, CONTENIDO, COMUNIDAD, REUNIONES, CALENDARIO, EQUIPO, CHAT, AJUSTES];
   }
   if (role === "closer") {
     return [PANEL, LLAMADAS_VENTA, FOLLOWUP, COMUNIDAD, REUNIONES, CALENDARIO, EQUIPO, CHAT, AJUSTES];
