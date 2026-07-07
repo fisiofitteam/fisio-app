@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 import { ContentNav } from "@/components/ContentNav";
 import { MetricsView } from "@/components/MetricsView";
+import { MarketerAiPanel } from "@/components/MarketerAiPanel";
 
 type Range = "week" | "month" | "quarter" | "custom";
 
@@ -277,6 +278,37 @@ export default async function MetricsPage({
           </div>
         </div>
       </a>
+
+      {/* Marketer IA: consultor de contenido con Claude Opus alimentado con las
+          métricas reales del rango + brief de marca. */}
+      <MarketerAiPanel
+        context={{
+          rangeLabel: label,
+          totals: currentTotals,
+          deltas: deltas,
+          piecesCount: piecesCurrent.length,
+          formatRows: formatRows,
+          zoneRows: zoneRows,
+          topHooks: topHooks.map((h) => ({
+            hook: h.hook,
+            format: h.format,
+            bodyZone: h.bodyZone,
+            weekTheme: h.weekTheme,
+            reach: h.reach ?? null,
+            saves: h.saves ?? null,
+            dmKeyword: h.dmKeyword ?? null,
+            conversions: h.conversions ?? null,
+            score: h.score,
+          })),
+          weeklyComparison: weeklyComparison,
+          leadMagnets: lmRows.map((lm) => ({
+            name: lm.name,
+            keyword: lm.keyword ?? "",
+            active: lm.active,
+            lastPromotedAt: lm.lastPromotedAt,
+          })),
+        }}
+      />
 
       <MetricsView
         range={range}
