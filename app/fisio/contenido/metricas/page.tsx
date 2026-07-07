@@ -258,6 +258,26 @@ export default async function MetricsPage({
   return (
     <main>
       <ContentNav active="metrics" role={user.role} />
+
+      {/* Enlace externo a la app de estadísticas de reels (proyecto reel-stats).
+          Se abre en pestaña nueva porque es otra app deployada aparte. */}
+      <a
+        href="https://reel-stats-kappa.vercel.app/"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block mb-4 rounded-xl border border-neutral-200 bg-white hover:bg-neutral-50 hover:border-neutral-300 transition-colors p-3"
+      >
+        <div className="flex items-center gap-3">
+          <div className="text-2xl">📊</div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-semibold">Reels Stats · Análisis de temas y engagement</div>
+            <div className="text-xs text-neutral-500">
+              Panel externo con métricas y análisis IA de los reels de @fisiofitcross · Se abre en pestaña nueva ↗
+            </div>
+          </div>
+        </div>
+      </a>
+
       <MetricsView
         range={range}
         rangeLabel={label}
