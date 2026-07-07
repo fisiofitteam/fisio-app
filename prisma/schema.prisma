@@ -372,11 +372,29 @@ model Lead {
   sales           Sale[]
   fisioTasks      FisioTask[] @relation("LeadFisioTasks")
 
+  sourceTagId     String?
+  sourceTag       LeadSourceTag? @relation(fields: [sourceTagId], references: [id], onDelete: SetNull)
+
   @@index([status])
   @@index([callScheduledAt])
   @@index([closerId])
   @@index([inFollowUp])
   @@index([adUtmCampaign])
+  @@index([sourceTagId])
+}
+
+model LeadSourceTag {
+  id        String   @id @default(cuid())
+  label     String   @unique
+  color     String?
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  leads     Lead[]
+
+  @@index([active])
 }
 
 model ClinicalProfile {

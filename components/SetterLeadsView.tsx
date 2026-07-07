@@ -8,6 +8,7 @@ import {
   utcIsoToDatetimeLocalInput,
   nowPlusHoursForInput,
 } from "@/lib/datetime-local";
+import { LeadSourceTagPicker, LeadSourceTagChip } from "@/components/LeadSourceTagPicker";
 
 type Pro = { id: string; fullName: string; role: string };
 
@@ -27,6 +28,7 @@ type Lead = {
   aiScheduled: boolean;
   callScheduledAt: string;
   closer: Pro | null;
+  sourceTag: { id: string; label: string; color: string | null } | null;
 };
 
 const CONTACT_ICON: Record<string, string> = {
@@ -142,6 +144,7 @@ export function SetterLeadsView({
                         LANDING
                       </span>
                     )}
+                    <LeadSourceTagChip tag={lead.sourceTag} />
                   </div>
 
                   {/* Datos de contacto siempre visibles */}
@@ -307,6 +310,7 @@ function SetterLeadModal({
   );
   const [closerId, setCloserId] = useState(editingLead?.closer?.id ?? "");
   const [aiScheduled, setAiScheduled] = useState(editingLead?.aiScheduled ?? false);
+  const [sourceTagId, setSourceTagId] = useState<string | null>(editingLead?.sourceTag?.id ?? null);
   const [saving, setSaving] = useState(false);
 
   async function save() {
@@ -331,6 +335,7 @@ function SetterLeadModal({
         callScheduledAt: datetimeLocalInputToUtcIso(callScheduledAt),
         closerId: closerId || null,
         aiScheduled,
+        sourceTagId,
       }),
     });
     onSaved();
@@ -459,6 +464,11 @@ function SetterLeadModal({
                 ))}
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">🏷️ Origen del lead</label>
+            <LeadSourceTagPicker value={sourceTagId} onChange={setSourceTagId} compact />
           </div>
 
           {/* Marcar si esta llamada la agendó la IA (para métricas a futuro) */}

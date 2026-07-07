@@ -40,6 +40,7 @@ export default async function LeadsPage({
     where,
     include: {
       closer: { select: { id: true, fullName: true, role: true } },
+      sourceTag: { select: { id: true, label: true, color: true } },
     },
     orderBy: { callScheduledAt: "asc" },
   });
@@ -75,6 +76,7 @@ export default async function LeadsPage({
         aiScheduled: l.aiScheduled,
         callScheduledAt: l.callScheduledAt.toISOString(),
         closer: l.closer,
+        sourceTag: l.sourceTag,
       }))}
     />
   );
