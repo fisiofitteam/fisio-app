@@ -547,6 +547,7 @@ function AlwaysAvailableCallActions({
   currentUser: { id: string; fullName: string; role: string };
   sendCaseProps: SendCaseProps;
 }) {
+  const router = useRouter();
   const [sendingTemplate, setSendingTemplate] = useState<SendCaseTemplate | null>(null);
 
   // Permisos:
@@ -562,6 +563,23 @@ function AlwaysAvailableCallActions({
   const hasReminderTemplates = sendCaseProps.meetingReminderTemplates.length > 0;
   if (!hasCaseTemplates && !hasReminderTemplates) return null;
 
+  const caseAlreadySent = !!lead.closerContactedAt;
+  const reminderAlreadySent = !!lead.reminderSentAt;
+
+  async function markCaseSent() {
+    // Idempotente: si ya está marcado, el endpoint devuelve alreadyDone.
+    await fetch(`/api/leads/${lead.id}/mark-closer-contacted`, { method: "POST" }).catch(() => null);
+    router.refresh();
+  }
+  async function markReminderSent() {
+    await fetch(`/api/leads/${lead.id}/mark-reminder-sent`, { method: "POST" }).catch(() => null);
+    router.refresh();
+  }
+
+  const caseBtnClass = caseAlreadySent
+    ? "text-xs font-medium px-2.5 py-1 rounded-md border bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100"
+    : "text-xs font-medium px-2.5 py-1 rounded-md border border-neutral-200 bg-white hover:bg-neutral-50";
+
   return (
     <>
       <div className="mt-2 flex flex-wrap gap-1.5">
@@ -572,16 +590,22 @@ function AlwaysAvailableCallActions({
               e.stopPropagation();
               setSendingTemplate(t);
             }}
-            className="text-xs font-medium px-2.5 py-1 rounded-md border border-neutral-200 bg-white hover:bg-neutral-50"
-            title={`Abre WhatsApp de ${lead.fullName} con esta plantilla`}
+            className={caseBtnClass}
+            title={
+              caseAlreadySent
+                ? "Ya enviado. Pulsa para reenviar."
+                : `Abre WhatsApp de ${lead.fullName} con esta plantilla`
+            }
           >
-            📤 {t.name}
+            {caseAlreadySent ? "✅" : "📤"} {t.name}
           </button>
         ))}
         {sendCaseProps.meetingReminderTemplates.map((t) => (
           <SendDirectButton
             key={`rem-${t.id}`}
             template={t}
+            alreadySent={reminderAlreadySent}
+            onSent={markReminderSent}
             target={{
               leadName: lead.fullName.split(" ")[0],
               leadPhone: lead.phone,
@@ -598,6 +622,7 @@ function AlwaysAvailableCallActions({
           open={true}
           onClose={() => setSendingTemplate(null)}
           template={sendingTemplate}
+          onSent={markCaseSent}
           target={{
             leadName: lead.fullName.split(" ")[0],
             leadPhone: lead.phone,

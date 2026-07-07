@@ -80,11 +80,17 @@ export function SendDirectButton({
   target,
   className,
   children,
+  alreadySent = false,
+  onSent,
 }: {
   template: Template;
   target: Target;
   className?: string;
   children?: React.ReactNode;
+  /** Si true, se pinta en verde para marcar visualmente que ya se envió. Igual permite reenviar. */
+  alreadySent?: boolean;
+  /** Se llama justo después de abrir WhatsApp (o de copiar al portapapeles). Ideal para marcar en BD. */
+  onSent?: () => void;
 }) {
   const [feedback, setFeedback] = useState<string | null>(null);
 
@@ -126,19 +132,29 @@ export function SendDirectButton({
         setFeedback("Sin teléfono y no pude copiar.");
       });
       setTimeout(() => setFeedback(null), 4000);
+      onSent?.();
       return;
     }
     window.open(url, "_blank", "noopener");
+    onSent?.();
   }
+
+  const defaultClass = alreadySent
+    ? "text-xs font-medium px-2.5 py-1 rounded-md border bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100"
+    : "text-xs font-medium px-2.5 py-1 rounded-md border border-neutral-200 bg-white hover:bg-neutral-50";
 
   return (
     <>
       <button
         onClick={send}
-        className={className ?? "text-xs font-medium px-2.5 py-1 rounded-md border border-neutral-200 bg-white hover:bg-neutral-50"}
-        title={`Abre WhatsApp de ${target.leadName} con esta plantilla`}
+        className={className ?? defaultClass}
+        title={
+          alreadySent
+            ? `Ya enviado. Pulsa para reenviar por WhatsApp.`
+            : `Abre WhatsApp de ${target.leadName} con esta plantilla`
+        }
       >
-        {children ?? `📤 ${template.name}`}
+        {children ?? `${alreadySent ? "✅" : "📤"} ${template.name}`}
       </button>
       {feedback && (
         <span className="text-[11px] text-amber-700 ml-2 self-center">{feedback}</span>

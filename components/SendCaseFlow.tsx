@@ -37,12 +37,15 @@ export function SendCaseFlow({
   template,
   target,
   cases,
+  onSent,
 }: {
   open: boolean;
   onClose: () => void;
   template: SendCaseTemplate;
   target: SendCaseTarget;
   cases: SuccessCaseOption[];
+  /** Se llama al abrir WhatsApp (o copiar al portapapeles). Ideal para marcar en BD. */
+  onSent?: () => void;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [copiedFallback, setCopiedFallback] = useState(false);
@@ -71,9 +74,11 @@ export function SendCaseFlow({
         // Pequeño hack: muestro el texto debajo para que pueda copiarlo a mano.
         setCopiedFallback(false);
       });
+      onSent?.();
       return;
     }
     window.open(url, "_blank", "noopener");
+    onSent?.();
     onClose();
   }
 
