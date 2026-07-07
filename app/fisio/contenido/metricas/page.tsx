@@ -4,6 +4,7 @@ import { getActiveProfessional } from "@/lib/session";
 import { ContentNav } from "@/components/ContentNav";
 import { MetricsView } from "@/components/MetricsView";
 import { MarketerAiPanel } from "@/components/MarketerAiPanel";
+import { SyncMetricsButton } from "@/components/SyncMetricsButton";
 
 type Range = "week" | "month" | "quarter" | "custom";
 
@@ -260,24 +261,13 @@ export default async function MetricsPage({
     <main>
       <ContentNav active="metrics" role={user.role} />
 
-      {/* Enlace externo a la app de estadísticas de reels (proyecto reel-stats).
-          Se abre en pestaña nueva porque es otra app deployada aparte. */}
-      <a
-        href="https://reel-stats-kappa.vercel.app/"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="block mb-4 rounded-xl border border-neutral-200 bg-white hover:bg-neutral-50 hover:border-neutral-300 transition-colors p-3"
-      >
-        <div className="flex items-center gap-3">
-          <div className="text-2xl">📊</div>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-semibold">Reels Stats · Análisis de temas y engagement</div>
-            <div className="text-xs text-neutral-500">
-              Panel externo con métricas y análisis IA de los reels de @fisiofitcross · Se abre en pestaña nueva ↗
-            </div>
-          </div>
-        </div>
-      </a>
+      {/* Sincronización de métricas desde Instagram (cron diario + botón manual) */}
+      <div className="mb-3">
+        <SyncMetricsButton />
+        <p className="text-[10px] text-neutral-400 mt-1">
+          🔁 Se ejecuta solo cada día a las 5:00 (Madrid). Pulsa el botón para forzar un refresco ahora mismo.
+        </p>
+      </div>
 
       {/* Marketer IA: consultor de contenido con Claude Opus alimentado con las
           métricas reales del rango + brief de marca. */}
