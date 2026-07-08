@@ -8,6 +8,14 @@ type Meta = { model: string; kind: string; exampleIds: string[]; inputTokens: nu
 
 const DAY_LABELS = ["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
 
+// Duraciones fijas por tipo de sesión (decisión de la CEO): entrenamiento
+// principal siempre ~60 min, accesorios siempre ~15 min. El slider de
+// duración libre se quitó del modal para no dar pie a excepciones.
+export const FIXED_DURATION_BY_KIND: Record<"accesorios" | "entrenamiento", number> = {
+  accesorios: 15,
+  entrenamiento: 60,
+};
+
 /**
  * Modal completo del flujo "Generar con IA":
  *  1. Elige kind (accesorios/entrenamiento) + prompt + duración opcional.
@@ -31,7 +39,6 @@ export function AiGenerateSessionModal({
 }) {
   const [kind, setKind] = useState<"accesorios" | "entrenamiento">(defaultKind);
   const [prompt, setPrompt] = useState("");
-  const [durationMin, setDurationMin] = useState("");
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -52,7 +59,7 @@ export function AiGenerateSessionModal({
           kind,
           prompt: prompt.trim(),
           dayOfWeek,
-          durationMin: durationMin ? Number(durationMin) : null,
+          durationMin: FIXED_DURATION_BY_KIND[kind],
         }),
       });
       const d = await res.json();
@@ -139,20 +146,10 @@ export function AiGenerateSessionModal({
           />
         </div>
 
-        <div className="flex gap-2 items-end flex-wrap mb-3">
-          <div>
-            <label className="text-[11px] text-neutral-500 block mb-1">Duración (opcional)</label>
-            <input
-              type="number"
-              min={5}
-              max={240}
-              step={5}
-              value={durationMin}
-              onChange={(e) => setDurationMin(e.target.value)}
-              placeholder="min"
-              className="text-xs px-2 py-1.5 rounded-lg border border-neutral-200 bg-white w-24"
-            />
-          </div>
+        <div className="flex gap-2 items-center justify-between flex-wrap mb-3">
+          <p className="text-[11px] text-neutral-500 italic">
+            ⏱ Duración fija · {FIXED_DURATION_BY_KIND[kind]} min ({kind === "accesorios" ? "accesorios" : "entrenamiento principal"})
+          </p>
           <button
             onClick={generate}
             disabled={busy || saving || !prompt.trim()}

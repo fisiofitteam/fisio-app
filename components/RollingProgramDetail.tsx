@@ -13,6 +13,7 @@ import {
   DragOverlay,
 } from "@dnd-kit/core";
 import { AiGenerateSessionModal } from "@/components/AiGenerateSessionModal";
+import { AiGenerateWeekModal } from "@/components/AiGenerateWeekModal";
 
 type Program = {
   id: string;
@@ -131,6 +132,7 @@ export function RollingProgramDetail({
   const [typeModal, setTypeModal] = useState<{ dayOfWeek: number } | null>(null);
   const [editTask, setEditTask] = useState<Task | null>(null);
   const [aiModal, setAiModal] = useState<{ dayOfWeek: number } | null>(null);
+  const [aiWeekModal, setAiWeekModal] = useState(false);
 
   // Cargar semana
   async function loadWeek(monday: Date) {
@@ -301,6 +303,14 @@ export function RollingProgramDetail({
           </button>
           {week && (
             <div className="flex items-center gap-3">
+              <button
+                onClick={() => setAiWeekModal(true)}
+                className="text-xs font-medium px-2.5 py-1 rounded-md"
+                style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+                title="Generar los 5 días de esta semana con IA"
+              >
+                ✨ Generar semana con IA
+              </button>
               {week.publishedAt ? (
                 <span className="text-emerald-600 font-medium">● Publicada</span>
               ) : (
@@ -415,6 +425,17 @@ export function RollingProgramDetail({
           onClose={() => setAiModal(null)}
           onSaved={async () => {
             setAiModal(null);
+            await loadWeek(currentMonday);
+          }}
+        />
+      )}
+
+      {aiWeekModal && week && (
+        <AiGenerateWeekModal
+          weekId={week.id}
+          onClose={() => setAiWeekModal(false)}
+          onSaved={async () => {
+            setAiWeekModal(false);
             await loadWeek(currentMonday);
           }}
         />
