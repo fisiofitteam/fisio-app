@@ -75,3 +75,72 @@ export function generatePaymentToken(): string {
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// FisioFit Prevention: planes recurrentes + consulta puntual
+// ────────────────────────────────────────────────────────────────────────────
+// A diferencia de RECUPERA/CONSOLIDA (one-shot con acceso finito), Prevention
+// es una suscripción recurrente vía Stripe Subscriptions. Tres planes con
+// intervalos distintos + una consulta 45 min con la CEO como upsell one-shot.
+
+export type PreventionPlan = "quarterly" | "semiannual" | "annual";
+
+export const PREVENTION_PLAN_CONFIG: Record<PreventionPlan, {
+  label: string;
+  months: number;
+  amountCents: number;               // importe facturado por periodo
+  monthlyEffectiveCents: number;     // €/mes efectivo (para copy comercial)
+  intervalMonths: number;            // longitud del ciclo de facturación
+  priceEnvKey: string;
+  isHighlighted: boolean;            // el semestral lleva el badge "el más elegido"
+}> = {
+  quarterly: {
+    label: "Trimestral",
+    months: 3,
+    amountCents: 8700,
+    monthlyEffectiveCents: 2900,
+    intervalMonths: 3,
+    priceEnvKey: "STRIPE_PRICE_PREVENTION_QUARTERLY",
+    isHighlighted: false,
+  },
+  semiannual: {
+    label: "Semestral",
+    months: 6,
+    amountCents: 11900,
+    monthlyEffectiveCents: 1983, // 119 / 6
+    intervalMonths: 6,
+    priceEnvKey: "STRIPE_PRICE_PREVENTION_SEMIANNUAL",
+    isHighlighted: true,
+  },
+  annual: {
+    label: "Anual",
+    months: 12,
+    amountCents: 19900,
+    monthlyEffectiveCents: 1658, // 199 / 12
+    intervalMonths: 12,
+    priceEnvKey: "STRIPE_PRICE_PREVENTION_ANNUAL",
+    isHighlighted: false,
+  },
+};
+
+/** Env key del price para la consulta puntual 45 min por 17 €. */
+export const PREVENTION_CONSULTATION_ENV_KEY = "STRIPE_PRICE_PREVENTION_CONSULTATION";
+export const PREVENTION_CONSULTATION_AMOUNT_CENTS = 1700;
+export const PREVENTION_CONSULTATION_DURATION_MIN = 45;
+
+/** Días de prueba gratuita al arrancar una suscripción Prevention nueva. */
+export const PREVENTION_TRIAL_DAYS = 4;
+
+export function isPreventionPlan(x: unknown): x is PreventionPlan {
+  return x === "quarterly" || x === "semiannual" || x === "annual";
+}
+
+export function getPreventionPriceId(plan: PreventionPlan): string | null {
+  const cfg = PREVENTION_PLAN_CONFIG[plan];
+  if (!cfg) return null;
+  return process.env[cfg.priceEnvKey] || null;
+}
+
+export function getPreventionConsultationPriceId(): string | null {
+  return process.env[PREVENTION_CONSULTATION_ENV_KEY] || null;
+}

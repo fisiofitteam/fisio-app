@@ -1034,7 +1034,7 @@ model SubscriptionRenewal {
   patient       Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
   // Tipo de periodo y duración
-  programType   String?                                  // "RECUPERA" | "CONSOLIDA" | "ADVANCE"
+  programType   String?                                  // "RECUPERA" | "CONSOLIDA" | "ADVANCE" | "PREVENTION"
   periodMonths  Int      @default(4)                     // duración en meses
   startDate     DateTime?                                // inicio del periodo
   endDate       DateTime?                                // fin previsto (puede moverse si hay pausas)
@@ -1053,6 +1053,42 @@ model SubscriptionRenewal {
   @@index([patientId])
   @@index([decidedAt])
   @@index([status])
+}
+
+model PatientSubscription {
+  id                     String    @id @default(cuid())
+  patientId              String
+  patient                Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  productType            String    @default("prevention")
+  plan                   String
+  amountCents            Int
+  currency               String    @default("eur")
+
+  status                 String    @default("trialing")
+  trialEndsAt            DateTime?
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  cancelAtPeriodEnd      Boolean   @default(false)
+  canceledAt             DateTime?
+
+  scheduledStartAt       DateTime?
+
+  stripeSubscriptionId   String?   @unique
+  stripeCustomerId       String?
+  stripePriceId          String?
+  stripeLatestInvoiceId  String?
+
+  originSource           String?
+
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  @@index([patientId])
+  @@index([status])
+  @@index([stripeCustomerId])
+  @@index([scheduledStartAt])
+  @@index([currentPeriodEnd])
 }
 
 // ============================================================================
@@ -1518,18 +1554,18 @@ model ProgramPause {
 
 model RollingProgram {
   id          String   @id @default(cuid())
-  name        String                          // "Rolling Strength"
+  name        String
   description String?
   isActive    Boolean  @default(true)
+  role        String   @default("")
   createdAt   DateTime @default(now())
 
   weeks       RollingWeek[]
-  // Pacientes con asignación legacy (1 solo rolling). Mantenido por compat.
   patientsLegacy     Patient[] @relation("PatientLegacyRolling")
-  // Pacientes que tienen este programa como Accesorios
   patientsAccessories Patient[] @relation("PatientAccessoriesRolling")
-  // Pacientes que tienen este programa como Entrenamiento
   patientsTraining    Patient[] @relation("PatientTrainingRolling")
+
+  @@index([role])
 }
 
 model RollingWeek {

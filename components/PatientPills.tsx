@@ -1,12 +1,13 @@
 // Constantes y etiquetas para Programa y Dificultad
 
-export const PROGRAM_TYPES = ["RECUPERA", "CONSOLIDA", "ADVANCE"] as const;
+export const PROGRAM_TYPES = ["RECUPERA", "CONSOLIDA", "ADVANCE", "PREVENTION"] as const;
 export const DIFFICULTIES = ["FACIL", "MEDIO", "DIFICIL"] as const;
 
 export const PROGRAM_LABELS: Record<string, { label: string; color: string }> = {
   RECUPERA: { label: "RECUPERA", color: "bg-neutral-100 text-neutral-700 border-neutral-300" },
   CONSOLIDA: { label: "CONSOLIDA", color: "bg-neutral-100 text-neutral-700 border-neutral-300" },
   ADVANCE: { label: "ADVANCE", color: "bg-neutral-100 text-neutral-700 border-neutral-300" },
+  PREVENTION: { label: "PREVENTION", color: "bg-emerald-50 text-emerald-800 border-emerald-200" },
 };
 
 export const DIFFICULTY_LABELS: Record<string, { label: string; color: string }> = {
