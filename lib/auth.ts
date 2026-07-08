@@ -252,3 +252,51 @@ export async function getRealProfessional(): Promise<ActiveProfessional | null> 
 export async function destroySession(token: string) {
   await prisma.session.delete({ where: { token } }).catch(() => {});
 }
+
+// ============================================================================
+// MAGIC LINK del paciente (1-clic)
+// ============================================================================
+
+const ACCESS_TOKEN_VALIDITY_DAYS = 365;
+
+/**
+ * Devuelve el path `/acceso/<token>` de un paciente, reutilizando el token
+ * vigente si aún no ha caducado. Si no hay o caducó, genera uno nuevo.
+ *
+ * Lo usa el flujo de bienvenida de Prevention (webhook + alta manual +
+ * reenvío desde el panel admin), y el endpoint `access-link` que ya tenían
+ * los reenvíos por WhatsApp. Un único punto para no divergir.
+ */
+export async function getOrCreatePatientAccessPath(patientId: string): Promise<{
+  path: string;
+  token: string;
+  expiresAt: Date;
+}> {
+  const patient = await prisma.patient.findUnique({
+    where: { id: patientId },
+    select: { accessToken: true, accessTokenExpiresAt: true },
+  });
+  if (!patient) throw new Error(`Patient ${patientId} not found`);
+
+  const now = new Date();
+  const stillValid =
+    !!patient.accessToken &&
+    !!patient.accessTokenExpiresAt &&
+    patient.accessTokenExpiresAt.getTime() > now.getTime();
+
+  if (stillValid) {
+    return {
+      path: `/acceso/${patient.accessToken}`,
+      token: patient.accessToken!,
+      expiresAt: patient.accessTokenExpiresAt!,
+    };
+  }
+
+  const token = randomBytes(24).toString("base64url");
+  const expiresAt = new Date(now.getTime() + ACCESS_TOKEN_VALIDITY_DAYS * 86400 * 1000);
+  await prisma.patient.update({
+    where: { id: patientId },
+    data: { accessToken: token, accessTokenExpiresAt: expiresAt },
+  });
+  return { path: `/acceso/${token}`, token, expiresAt };
+}

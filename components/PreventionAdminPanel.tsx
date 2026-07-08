@@ -391,6 +391,38 @@ function SubscriberRow({ sub }: { sub: SubscriberRow }) {
           ? `${sub.cancelAtPeriodEnd ? "Termina" : "Renueva"} ${fmtDate(sub.currentPeriodEnd)}`
           : null;
 
+  const [resending, setResending] = useState(false);
+  const [resendMsg, setResendMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function resendAccess() {
+    if (!sub.patient.email) {
+      setResendMsg({ ok: false, text: "El paciente no tiene email en su ficha." });
+      return;
+    }
+    setResending(true);
+    setResendMsg(null);
+    try {
+      const res = await fetch(`/api/prevention/subscribers/${sub.id}/resend-access`, {
+        method: "POST",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) {
+        setResendMsg({
+          ok: true,
+          text: data.previewMode ? "Modo preview (log)" : `Enviado a ${data.sentTo}`,
+        });
+      } else {
+        setResendMsg({ ok: false, text: data.error || "No se ha podido enviar" });
+      }
+    } catch (e: any) {
+      setResendMsg({ ok: false, text: e?.message || "Error de red" });
+    } finally {
+      setResending(false);
+      // Escondemos el mensaje tras 4s
+      setTimeout(() => setResendMsg(null), 4000);
+    }
+  }
+
   return (
     <div className="p-3 flex items-center gap-3 flex-wrap">
       <div className="flex-1 min-w-0">
@@ -415,6 +447,14 @@ function SubscriberRow({ sub }: { sub: SubscriberRow }) {
         <div className="text-[11px] text-neutral-500 mt-0.5 truncate">
           {sub.patient.email ?? "—"} {sub.patient.phone && `· ${sub.patient.phone}`}
         </div>
+        {resendMsg && (
+          <div
+            className={`text-[11px] mt-1 ${resendMsg.ok ? "text-emerald-700" : "text-red-600"}`}
+          >
+            {resendMsg.ok ? "✓ " : "✗ "}
+            {resendMsg.text}
+          </div>
+        )}
       </div>
       <div className="text-right shrink-0">
         <div className="text-sm font-semibold tabular-nums">
@@ -433,6 +473,14 @@ function SubscriberRow({ sub }: { sub: SubscriberRow }) {
             🎯 {sub.originSource}
           </div>
         )}
+        <button
+          onClick={resendAccess}
+          disabled={resending || !sub.patient.email}
+          title={sub.patient.email ? "Reenviar magic link por email" : "Sin email en la ficha"}
+          className="mt-1.5 text-[10px] font-medium px-2 py-1 rounded border border-neutral-200 hover:border-neutral-400 hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {resending ? "Enviando…" : "📧 Reenviar acceso"}
+        </button>
       </div>
     </div>
   );
@@ -470,6 +518,7 @@ function AddManualSubscriberModal({ onClose }: { onClose: () => void }) {
   const [plan, setPlan] = useState<"quarterly" | "semiannual" | "annual" | "indefinite">("semiannual");
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [originSource, setOriginSource] = useState("");
+  const [sendWelcome, setSendWelcome] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -503,6 +552,7 @@ function AddManualSubscriberModal({ onClose }: { onClose: () => void }) {
       plan,
       startDate,
       originSource: originSource.trim() || undefined,
+      sendWelcome,
     };
     if (mode === "existing") {
       payload.patientId = selected!.id;
@@ -698,6 +748,22 @@ function AddManualSubscriberModal({ onClose }: { onClose: () => void }) {
               placeholder="regalo, beta, embajador… (default: manual)"
             />
           </div>
+
+          <label className="flex items-start gap-2 text-xs text-neutral-700 cursor-pointer select-none rounded-lg bg-emerald-50 border border-emerald-200 p-3">
+            <input
+              type="checkbox"
+              checked={sendWelcome}
+              onChange={(e) => setSendWelcome(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              <strong className="text-emerald-900">Enviar email de bienvenida con acceso 1-clic</strong>
+              <span className="block text-[11px] text-emerald-700/80 mt-0.5">
+                Le llega un email con el link mágico — entra sin códigos ni contraseñas.
+                {mode === "new" ? " Solo se envía si has puesto email." : ""}
+              </span>
+            </span>
+          </label>
 
           {error && (
             <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">

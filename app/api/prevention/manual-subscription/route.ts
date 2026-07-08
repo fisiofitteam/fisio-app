@@ -20,6 +20,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 import { PREVENTION_PLAN_CONFIG, type PreventionPlan } from "@/lib/stripe";
+import { getOrCreatePatientAccessPath } from "@/lib/auth";
+import { sendEmail } from "@/lib/email";
+import { welcomeEmail } from "@/lib/emails/prevention";
 
 export const runtime = "nodejs";
 
@@ -159,9 +162,35 @@ export async function POST(req: Request) {
     },
   });
 
+  // Email de bienvenida con magic link 1-clic si el paciente tiene email
+  // y no lo hemos deshabilitado explícitamente desde el modal.
+  const sendWelcome = body?.sendWelcome !== false;
+  let welcomeEmailSent = false;
+  let welcomeEmailError: string | null = null;
+  if (sendWelcome && patient.email) {
+    try {
+      const { path: accessPath } = await getOrCreatePatientAccessPath(patient.id);
+      const first = patient.fullName.split(" ")[0];
+      const mail = welcomeEmail({
+        firstName: first,
+        plan: planKey,
+        patientId: patient.id,
+        accessPath,
+      });
+      const res: any = await sendEmail({ to: patient.email, subject: mail.subject, html: mail.html, text: mail.text });
+      welcomeEmailSent = !!res?.ok;
+      welcomeEmailError = res?.error ?? null;
+    } catch (err: any) {
+      console.error("[manual-subscription] welcome email failed:", err);
+      welcomeEmailError = err?.message ?? String(err);
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     patientId: patient.id,
     subscriptionId: subscription.id,
+    welcomeEmailSent,
+    welcomeEmailError,
   });
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
+import { getOrCreatePatientAccessPath } from "@/lib/auth";
 
 const TOKEN_VALIDITY_DAYS = 365;
 
@@ -17,35 +18,32 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const patient = await prisma.patient.findUnique({
     where: { id: params.id },
-    select: { id: true, fullName: true, accessToken: true, accessTokenExpiresAt: true },
+    select: { id: true },
   });
   if (!patient) return NextResponse.json({ error: "Paciente no encontrado" }, { status: 404 });
 
   const body = await req.json().catch(() => ({}));
   const forceRegenerate = body?.regenerate === true;
 
-  const now = new Date();
-  const stillValid =
-    !forceRegenerate &&
-    patient.accessToken &&
-    patient.accessTokenExpiresAt &&
-    patient.accessTokenExpiresAt.getTime() > now.getTime();
-
-  let token = patient.accessToken!;
-  let expiresAt = patient.accessTokenExpiresAt!;
-
-  if (!stillValid) {
-    token = randomBytes(24).toString("base64url"); // URL-safe, 32 chars
-    expiresAt = new Date(now.getTime() + TOKEN_VALIDITY_DAYS * 86400 * 1000);
+  if (forceRegenerate) {
+    // Regeneración explícita: crea un token nuevo aunque el actual sea válido.
+    const token = randomBytes(24).toString("base64url");
+    const expiresAt = new Date(Date.now() + TOKEN_VALIDITY_DAYS * 86400 * 1000);
     await prisma.patient.update({
       where: { id: patient.id },
       data: { accessToken: token, accessTokenExpiresAt: expiresAt },
     });
+    return NextResponse.json({
+      url: `/acceso/${token}`,
+      expiresAt: expiresAt.toISOString(),
+      regenerated: true,
+    });
   }
 
+  const { path, expiresAt } = await getOrCreatePatientAccessPath(patient.id);
   return NextResponse.json({
-    url: `/acceso/${token}`,
+    url: path,
     expiresAt: expiresAt.toISOString(),
-    regenerated: !stillValid,
+    regenerated: false,
   });
 }

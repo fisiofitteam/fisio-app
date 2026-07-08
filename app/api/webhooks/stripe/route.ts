@@ -27,6 +27,7 @@ import { notifyHeadSuccess, notifyProfessional } from "@/lib/notifications";
 import { applyRenewal } from "@/lib/renewals";
 import { isPreventionPlan } from "@/lib/stripe";
 import { createPreventionSubscription } from "@/lib/prevention";
+import { getOrCreatePatientAccessPath } from "@/lib/auth";
 import { sendEmail } from "@/lib/email";
 import {
   welcomeEmail,
@@ -524,15 +525,18 @@ async function handlePreventionCheckoutCompleted(session: Stripe.Checkout.Sessio
   // Sync los datos frescos de Stripe una vez creada la fila local
   await handlePreventionSubscriptionSync({ id: stripeSubId } as Stripe.Subscription);
 
-  // Email de bienvenida
+  // Email de bienvenida con magic link 1-clic (más fiable que depender del
+  // código secundario si el paciente cambia de dispositivo).
   try {
     const first = patient.fullName.split(" ")[0];
+    const { path: accessPath } = await getOrCreatePatientAccessPath(patient.id);
     const mail = welcomeEmail({
       firstName: first,
       plan,
       patientId: patient.id,
       trialEndsAt: sub.trialEndsAt?.toISOString() ?? null,
       scheduledStartAt: sub.scheduledStartAt?.toISOString() ?? null,
+      accessPath,
     });
     await sendEmail({ to: email, subject: mail.subject, html: mail.html, text: mail.text });
   } catch (err) {

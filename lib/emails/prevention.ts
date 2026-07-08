@@ -55,33 +55,74 @@ function fmtDate(iso: string | Date): string {
   return d.toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" });
 }
 
-/** 1. Bienvenida — al arrancar la suscripción o el trial. */
+/** 1. Bienvenida — al arrancar la suscripción o el trial.
+ *
+ * `accessPath` (opcional) es el magic link 1-clic del paciente
+ * (`/acceso/<token>`). Si viene, el CTA lleva al link directo sin pedir
+ * código. Es lo recomendado para no depender del código secundario.
+ *
+ * `plan` acepta cualquier string por si el alta manual usa "indefinite"
+ * o algo custom — en ese caso mostramos "Suscripción manual" en lugar
+ * del label del plan comercial.
+ */
 export function welcomeEmail(input: {
   firstName: string;
-  plan: PreventionPlan;
+  plan: PreventionPlan | string;
   patientId: string;
   trialEndsAt?: string | null;
   scheduledStartAt?: string | null;
+  accessPath?: string | null;
 }): Email {
   const first = input.firstName || "hola";
-  const appUrl = `${BASE_URL}/paciente/${input.patientId}`;
+  const appUrl = input.accessPath
+    ? `${BASE_URL}${input.accessPath}`
+    : `${BASE_URL}/paciente/${input.patientId}`;
   const scheduled = input.scheduledStartAt
     ? `<p>Como tenías otro programa activo, tu Prevention arrancará el <strong>${fmtDate(input.scheduledStartAt)}</strong>, justo al terminar el anterior. Sin cortes, sin esperas.</p>`
     : input.trialEndsAt
       ? `<p>Tienes <strong>4 días gratis</strong> para probarlo todo. Si te encaja, no tienes que hacer nada — el primer cobro será el <strong>${fmtDate(input.trialEndsAt)}</strong>. Si no, cancela desde tu panel y no hay ningún cargo.</p>`
       : `<p>Ya tienes acceso completo. Entra cuando quieras y monta la rutina.</p>`;
+  const planCfg = (PREVENTION_PLAN_CONFIG as any)[input.plan];
+  const planLine = planCfg
+    ? `<p style="font-size:14px;color:#374151"><strong>Plan:</strong> ${planCfg.label} · ${priceLabel(input.plan as PreventionPlan)}</p>`
+    : `<p style="font-size:14px;color:#374151"><strong>Plan:</strong> Suscripción Prevention (cortesía)</p>`;
   const inner = `
     <h1 style="font-size:24px;font-weight:700;letter-spacing:-0.02em;margin:0 0 12px 0">¡Bienvenida a Prevention, ${first}!</h1>
     <p style="font-size:15px;line-height:1.6;color:#374151">Acabas de dar un pasito enorme por tu cuerpo. Te preparamos <strong>15 minutos al día</strong> de movilidad, activación y técnica — todo pensado para que te mantengas fuerte y prevenir lo que aún no ha pasado.</p>
     ${scheduled}
-    <p style="font-size:14px;color:#374151"><strong>Plan:</strong> ${PREVENTION_PLAN_CONFIG[input.plan].label} · ${priceLabel(input.plan)}</p>
+    ${planLine}
     ${cta(appUrl, "Entrar a mi app")}
     <p style="font-size:12px;color:#9CA3AF;margin-top:20px">Cualquier duda, respóndenos a este email. Estamos aquí.</p>
   `;
+  const planTxt = planCfg ? `Tu plan ${planCfg.label} está activo (${priceLabel(input.plan as PreventionPlan)}).` : `Tu suscripción Prevention está activa.`;
   return {
     subject: "🛡 ¡Bienvenida a FisioFit Prevention!",
     html: shell(inner),
-    text: `¡Bienvenida a FisioFit Prevention, ${first}!\n\nTu plan ${PREVENTION_PLAN_CONFIG[input.plan].label} está activo (${priceLabel(input.plan)}).\nEntra a tu app: ${appUrl}`,
+    text: `¡Bienvenida a FisioFit Prevention, ${first}!\n\n${planTxt}\nEntra a tu app: ${appUrl}`,
+  };
+}
+
+/** 6. Reenvío del link de acceso.
+ *
+ * Email corto para cuando el paciente dice "no me llega el código" o cambia
+ * de dispositivo. `accessPath` es el magic link 1-clic (`/acceso/<token>`).
+ */
+export function accessLinkEmail(input: {
+  firstName: string;
+  accessPath: string;
+}): Email {
+  const first = input.firstName || "hola";
+  const appUrl = `${BASE_URL}${input.accessPath}`;
+  const inner = `
+    <h1 style="font-size:22px;font-weight:700;letter-spacing:-0.02em;margin:0 0 12px 0">Tu acceso a Prevention</h1>
+    <p style="font-size:15px;line-height:1.6;color:#374151">Hola ${first}, aquí tienes el enlace directo a tu app. Un clic y estás dentro — sin códigos ni contraseñas.</p>
+    ${cta(appUrl, "Entrar a mi app")}
+    <p style="font-size:12px;color:#9CA3AF;margin-top:20px">El enlace es privado. No lo compartas. Guarda este email a mano.</p>
+  `;
+  return {
+    subject: "🔓 Tu acceso a FisioFit Prevention",
+    html: shell(inner),
+    text: `Hola ${first}, tu acceso a FisioFit Prevention: ${appUrl}`,
   };
 }
 
