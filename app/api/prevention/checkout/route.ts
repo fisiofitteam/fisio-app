@@ -48,12 +48,20 @@ export async function POST(req: Request) {
   }
   const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
   const fullName = typeof body?.fullName === "string" ? body.fullName.trim() : "";
+  const phoneRaw = typeof body?.phone === "string" ? body.phone.trim() : "";
   if (!EMAIL_RE.test(email)) {
     return NextResponse.json({ error: "Email no válido" }, { status: 400 });
   }
   if (!fullName || fullName.length < 2) {
     return NextResponse.json({ error: "Nombre demasiado corto" }, { status: 400 });
   }
+  const phoneDigits = phoneRaw.replace(/\D/g, "");
+  if (phoneDigits.length < 9) {
+    return NextResponse.json({ error: "WhatsApp no válido — incluye prefijo del país" }, { status: 400 });
+  }
+  // Normalizamos: si trae + delante lo mantenemos, si no, asumimos que ya
+  // trae el prefijo internacional pegado (34...) y le anteponemos +.
+  const phone = phoneRaw.startsWith("+") ? phoneRaw : `+${phoneDigits}`;
 
   const priceId = getPreventionPriceId(plan);
   if (!priceId) {
@@ -82,13 +90,15 @@ export async function POST(req: Request) {
         },
       },
       customer_email: email,
-      // Pistamos el nombre en los metadatos de la sesión — Stripe no tiene
-      // un campo estándar para "nombre completo" en Checkout público, así
-      // que lo llevamos por metadata para recuperarlo en confirm/webhook.
+      // Pistamos nombre y WhatsApp en los metadatos de la sesión — Stripe
+      // no tiene campos estándar para "nombre completo" ni phone en
+      // Checkout público. En confirm/webhook los leemos para crear el
+      // Patient con phone ya guardado.
       metadata: {
         plan,
         productType: "prevention",
         fullName,
+        phone,
       },
       allow_promotion_codes: true,
       billing_address_collection: "required",

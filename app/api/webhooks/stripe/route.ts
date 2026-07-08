@@ -484,6 +484,7 @@ async function handlePreventionCheckoutCompleted(session: Stripe.Checkout.Sessio
     return;
   }
   const fullName = (session.metadata?.fullName ?? "").toString().trim();
+  const phoneFromMeta = (session.metadata?.phone ?? "").toString().trim();
   const email = (session.customer_details?.email ?? session.customer_email ?? "").toString().trim().toLowerCase();
   if (!email) {
     console.warn("[stripe-webhook] Prevention checkout sin email", { sessionId: session.id });
@@ -500,12 +501,19 @@ async function handlePreventionCheckoutCompleted(session: Stripe.Checkout.Sessio
       data: {
         fullName: fullName || email.split("@")[0],
         email,
+        phone: phoneFromMeta || null,
         programType: "PREVENTION",
         programMode: "rolling",
         subscriptionPeriodMonths: 0,
         subscriptionTotalMonths: 0,
         onboardingTasks: { anamnesis: false, contract: false, firstSession: false },
       },
+    });
+  } else if (phoneFromMeta && !patient.phone) {
+    // Paciente existente sin phone → aprovechamos el checkout para rellenarlo.
+    patient = await prisma.patient.update({
+      where: { id: patient.id },
+      data: { phone: phoneFromMeta },
     });
   }
 

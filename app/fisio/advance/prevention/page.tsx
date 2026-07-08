@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 import { PreventionAdminPanel } from "@/components/PreventionAdminPanel";
+import { getPreventionLandingCopy } from "@/lib/landing-config";
 
 export const dynamic = "force-dynamic";
 
@@ -16,10 +17,15 @@ export default async function PreventionAdminPage({
   const user = (await getActiveProfessional())!;
   if (user.role !== "ceo" && user.role !== "head_success") redirect("/fisio");
 
-  const activeTab = searchParams.tab === "suscriptores" ? "suscriptores" : "rolling";
+  const activeTab =
+    searchParams.tab === "suscriptores"
+      ? "suscriptores"
+      : searchParams.tab === "landing"
+        ? "landing"
+        : "rolling";
 
   // Datos comunes que necesita cualquier sub-tab
-  const [programs, subscribers] = await Promise.all([
+  const [programs, subscribers, landingCopy] = await Promise.all([
     prisma.rollingProgram.findMany({
       where: { role: "prevention" },
       orderBy: [{ isActive: "desc" }, { name: "asc" }],
@@ -49,6 +55,7 @@ export default async function PreventionAdminPage({
         },
       },
     }),
+    getPreventionLandingCopy(),
   ]);
 
   return (
@@ -86,6 +93,7 @@ export default async function PreventionAdminPage({
         originSource: s.originSource,
         createdAt: s.createdAt.toISOString(),
       }))}
+      landingCopy={landingCopy}
     />
   );
 }

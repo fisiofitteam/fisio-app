@@ -4,6 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PREVENTION_PLAN_CONFIG } from "@/lib/stripe";
+import type { PreventionLandingCopy } from "@/lib/landing-content";
+import { PreventionLandingEditor } from "@/components/PreventionLandingEditor";
 
 type ProgramRow = {
   id: string;
@@ -42,18 +44,22 @@ type SubscriberRow = {
  *  - Rolling Prevention: catálogo de programas rolling con role="prevention".
  *  - Suscriptores: lista de pacientes con PatientSubscription activa/histórica.
  */
+type Tab = "rolling" | "suscriptores" | "landing";
+
 export function PreventionAdminPanel({
   activeTab,
   programs,
   subscribers,
+  landingCopy,
 }: {
-  activeTab: "rolling" | "suscriptores";
+  activeTab: Tab;
   programs: ProgramRow[];
   subscribers: SubscriberRow[];
+  landingCopy: PreventionLandingCopy;
 }) {
   const router = useRouter();
 
-  function switchTab(tab: "rolling" | "suscriptores") {
+  function switchTab(tab: Tab) {
     const url = new URL(window.location.href);
     if (tab === "rolling") url.searchParams.delete("tab");
     else url.searchParams.set("tab", tab);
@@ -77,7 +83,7 @@ export function PreventionAdminPanel({
       </header>
 
       {/* Sub-tabs */}
-      <div className="flex gap-1 border-b border-neutral-200">
+      <div className="flex gap-1 border-b border-neutral-200 overflow-x-auto">
         <TabButton
           active={activeTab === "rolling"}
           onClick={() => switchTab("rolling")}
@@ -88,10 +94,16 @@ export function PreventionAdminPanel({
           onClick={() => switchTab("suscriptores")}
           label={`👥 Suscriptores (${activeSubs.length})`}
         />
+        <TabButton
+          active={activeTab === "landing"}
+          onClick={() => switchTab("landing")}
+          label="🎨 Landing"
+        />
       </div>
 
       {activeTab === "rolling" && <RollingCatalog programs={programs} />}
       {activeTab === "suscriptores" && <SubscribersList subscribers={subscribers} />}
+      {activeTab === "landing" && <PreventionLandingEditor initialCopy={landingCopy} />}
     </section>
   );
 }
@@ -393,6 +405,7 @@ function SubscriberRow({ sub }: { sub: SubscriberRow }) {
 
   const [resending, setResending] = useState(false);
   const [resendMsg, setResendMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [waLoading, setWaLoading] = useState(false);
 
   async function resendAccess() {
     if (!sub.patient.email) {
@@ -419,6 +432,31 @@ function SubscriberRow({ sub }: { sub: SubscriberRow }) {
     } finally {
       setResending(false);
       // Escondemos el mensaje tras 4s
+      setTimeout(() => setResendMsg(null), 4000);
+    }
+  }
+
+  async function openWhatsApp() {
+    if (!sub.patient.phone) {
+      setResendMsg({ ok: false, text: "El paciente no tiene WhatsApp guardado." });
+      return;
+    }
+    setWaLoading(true);
+    try {
+      const res = await fetch(`/api/prevention/subscribers/${sub.id}/magic-link`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        setResendMsg({ ok: false, text: data.error || "No se pudo generar el link" });
+        return;
+      }
+      // wa.me exige el número sin + y sin espacios/guiones
+      const cleanPhone = data.phone.replace(/\D/g, "");
+      const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(data.waText)}`;
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e: any) {
+      setResendMsg({ ok: false, text: e?.message || "Error de red" });
+    } finally {
+      setWaLoading(false);
       setTimeout(() => setResendMsg(null), 4000);
     }
   }
@@ -473,14 +511,24 @@ function SubscriberRow({ sub }: { sub: SubscriberRow }) {
             🎯 {sub.originSource}
           </div>
         )}
-        <button
-          onClick={resendAccess}
-          disabled={resending || !sub.patient.email}
-          title={sub.patient.email ? "Reenviar magic link por email" : "Sin email en la ficha"}
-          className="mt-1.5 text-[10px] font-medium px-2 py-1 rounded border border-neutral-200 hover:border-neutral-400 hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {resending ? "Enviando…" : "📧 Reenviar acceso"}
-        </button>
+        <div className="mt-1.5 flex gap-1 justify-end">
+          <button
+            onClick={resendAccess}
+            disabled={resending || !sub.patient.email}
+            title={sub.patient.email ? "Reenviar magic link por email" : "Sin email en la ficha"}
+            className="text-[10px] font-medium px-2 py-1 rounded border border-neutral-200 hover:border-neutral-400 hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {resending ? "Enviando…" : "📧 Email"}
+          </button>
+          <button
+            onClick={openWhatsApp}
+            disabled={waLoading || !sub.patient.phone}
+            title={sub.patient.phone ? "Abrir WhatsApp con el magic link" : "Sin WhatsApp en la ficha"}
+            className="text-[10px] font-medium px-2 py-1 rounded border border-emerald-200 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 hover:border-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {waLoading ? "…" : "💬 WhatsApp"}
+          </button>
+        </div>
       </div>
     </div>
   );

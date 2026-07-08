@@ -70,6 +70,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Plan en metadata no válido" }, { status: 500 });
   }
   const fullName = (session.metadata?.fullName ?? "").toString().trim();
+  const phoneFromMeta = (session.metadata?.phone ?? "").toString().trim();
   const email = (session.customer_details?.email ?? session.customer_email ?? "").toString().trim().toLowerCase();
   if (!email) {
     return NextResponse.json({ error: "Sesión sin email" }, { status: 500 });
@@ -90,6 +91,7 @@ export async function POST(req: Request) {
       data: {
         fullName: fullName || email.split("@")[0],
         email,
+        phone: phoneFromMeta || null,
         programType: "PREVENTION",
         programMode: "rolling",
         subscriptionPeriodMonths: 0, // Prevention no usa el modelo fixed
@@ -98,6 +100,13 @@ export async function POST(req: Request) {
       },
     });
     createdNew = true;
+  } else if (phoneFromMeta && !patient.phone) {
+    // Paciente existente sin phone: aprovechamos que ha completado el
+    // checkout para rellenarlo. No pisamos si ya tenía uno guardado.
+    patient = await prisma.patient.update({
+      where: { id: patient.id },
+      data: { phone: phoneFromMeta },
+    });
   }
 
   // ─── 2. Crear PatientSubscription (idempotente) ───────────────────────

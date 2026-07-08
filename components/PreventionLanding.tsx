@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { PreventionLandingCopy } from "@/lib/landing-content";
 
 type Plan = {
   key: "quarterly" | "semiannual" | "annual";
@@ -11,21 +12,36 @@ type Plan = {
   isHighlighted: boolean;
 };
 
+// Sustituye {clave} en un texto. Local para evitar la dependencia de
+// applyVars() que exige objeto tipado — aquí las variables son fijas.
+function tpl(text: string, trialDays: number): string {
+  return text
+    .replace(/\{trialDays\}/g, String(trialDays))
+    .replace(/\{year\}/g, String(new Date().getFullYear()));
+}
+
 /**
  * Landing pública de FisioFit Prevention. La CEO la pasará manualmente al
  * lead (no hay SEO/CAC público). Objetivo: convertir de un vistazo.
- * Tres tarjetas de precio, el semestral con badge "Más elegido",
- * pequeña FAQ y el checkout en un click.
+ *
+ * Todos los textos y colores brand se leen del copy (editable en admin,
+ * lib/landing-content.ts). Los precios y bullets por plan vienen de
+ * PREVENTION_PLAN_CONFIG y no son editables aquí (para no divergir con
+ * los Prices de Stripe).
  */
 export function PreventionLanding({
   plans,
   trialDays,
   cancelled,
+  copy,
 }: {
   plans: Plan[];
   trialDays: number;
   cancelled?: boolean;
+  copy: PreventionLandingCopy;
 }) {
+  const gradient = `linear-gradient(135deg, ${copy.brandPrimary} 0%, ${copy.brandPrimaryDark} 100%)`;
+
   return (
     <main className="min-h-screen bg-white text-neutral-900">
       {/* Cabecera fija minimal */}
@@ -33,15 +49,15 @@ export function PreventionLanding({
         <div className="flex items-center gap-2 text-sm font-semibold" style={{ letterSpacing: "-0.02em" }}>
           <span>🛡</span>
           <span>
-            FisioFit <span className="text-emerald-600">Prevention</span>
+            {copy.brandName} <span style={{ color: copy.brandPrimary }}>{copy.brandSuffix}</span>
           </span>
         </div>
         <a
           href="#planes"
           className="text-xs font-medium px-3 py-1.5 rounded-full text-white"
-          style={{ background: "linear-gradient(135deg, #10B981 0%, #059669 100%)" }}
+          style={{ background: gradient }}
         >
-          Ver planes →
+          {copy.headerCtaLabel}
         </a>
       </header>
 
@@ -55,48 +71,49 @@ export function PreventionLanding({
 
       {/* Hero */}
       <section className="max-w-3xl mx-auto px-5 pt-10 pb-8 text-center">
-        <div className="inline-flex items-center text-[11px] font-bold tracking-wider px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 uppercase mb-4">
-          Servicio recurrente · desde 17 €/mes
+        <div
+          className="inline-flex items-center text-[11px] font-bold tracking-wider px-3 py-1 rounded-full uppercase mb-4"
+          style={{
+            background: copy.brandAccentSoft,
+            color: copy.brandPrimaryDark,
+            border: `1px solid ${copy.brandPrimary}40`,
+          }}
+        >
+          {tpl(copy.heroBadge, trialDays)}
         </div>
         <h1
           className="text-4xl sm:text-5xl font-bold leading-tight"
           style={{ letterSpacing: "-0.03em" }}
         >
-          Cuídate en 15 minutos al día.
+          {tpl(copy.heroTitle, trialDays)}
         </h1>
-        <p className="text-lg text-neutral-600 mt-4 max-w-2xl mx-auto leading-relaxed">
-          Rolling semanal de movilidad, técnica y activación diseñado para
-          atletas de CrossFit y Hyrox que ya están sanos y quieren
-          <strong> mantenerse ahí.</strong> Sin pasos, sin excusas, sin sobre-entrenar.
+        <p className="text-lg text-neutral-600 mt-4 max-w-2xl mx-auto leading-relaxed whitespace-pre-line">
+          {tpl(copy.heroSubtitle, trialDays)}
         </p>
         <p className="text-sm text-neutral-500 mt-3">
-          {trialDays} días gratis. Cancela cuando quieras.
+          {tpl(copy.heroTrialLine, trialDays)}
         </p>
         <div className="mt-8 flex items-center justify-center gap-3 flex-wrap">
           <a
             href="#planes"
             className="inline-flex items-center gap-2 text-sm font-semibold px-5 py-3 rounded-xl text-white shadow-sm"
-            style={{ background: "linear-gradient(135deg, #10B981 0%, #059669 100%)" }}
+            style={{ background: gradient }}
           >
-            Empezar ahora →
+            {tpl(copy.heroCtaPrimary, trialDays)}
           </a>
           <a href="#preguntas" className="text-sm text-neutral-500 hover:underline">
-            ¿Cómo funciona?
+            {tpl(copy.heroCtaSecondary, trialDays)}
           </a>
         </div>
       </section>
 
       {/* Bloque de valor */}
       <section className="max-w-4xl mx-auto px-5 py-10 grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <ValueCard emoji="🧘" title="15 min al día">
-          Micro-sesiones diarias de lunes a viernes. Se integran en tu warm-up o cool-down. No pierdes tiempo.
-        </ValueCard>
-        <ValueCard emoji="🎥" title="Vídeos de referencia">
-          Cada ejercicio con su vídeo de técnica. Nunca dudas cómo se hace.
-        </ValueCard>
-        <ValueCard emoji="🔄" title="Se actualiza cada semana">
-          Programación viva. No es un curso estático — evoluciona contigo.
-        </ValueCard>
+        {copy.valueCards.map((c, i) => (
+          <ValueCard key={i} emoji={c.emoji} title={c.title}>
+            {tpl(c.body, trialDays)}
+          </ValueCard>
+        ))}
       </section>
 
       {/* Planes */}
@@ -105,15 +122,24 @@ export function PreventionLanding({
           className="text-3xl sm:text-4xl font-bold text-center mb-2"
           style={{ letterSpacing: "-0.02em" }}
         >
-          Elige tu plan
+          {copy.planesTitle}
         </h2>
         <p className="text-center text-neutral-500 mb-8 max-w-xl mx-auto">
-          Puedes cancelar cuando quieras. Los primeros {trialDays} días son gratis y no cobramos si cancelas antes.
+          {tpl(copy.planesSubtitle, trialDays)}
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {plans.map((p) => (
-            <PlanCard key={p.key} plan={p} trialDays={trialDays} />
+            <PlanCard
+              key={p.key}
+              plan={p}
+              trialDays={trialDays}
+              bullets={copy.planBullets.map((b) => tpl(b, trialDays))}
+              highlightBadgeLabel={copy.highlightBadgeLabel}
+              ctaTemplate={copy.ctaPlanTemplate}
+              gradient={gradient}
+              brandPrimary={copy.brandPrimary}
+            />
           ))}
         </div>
       </section>
@@ -124,30 +150,19 @@ export function PreventionLanding({
           className="text-2xl sm:text-3xl font-bold text-center mb-6"
           style={{ letterSpacing: "-0.02em" }}
         >
-          Preguntas frecuentes
+          {copy.faqTitle}
         </h2>
-        <FaqItem q={`¿Cómo funcionan los ${trialDays} días gratis?`}>
-          Introduces tu método de pago pero no se cobra nada durante los primeros{" "}
-          {trialDays} días. Puedes cancelar en cualquier momento antes de que termine la prueba y no se hará ningún cargo.
-        </FaqItem>
-        <FaqItem q="¿Puedo cancelar cuando quiera?">
-          Sí. Desde tu panel puedes cancelar la renovación con un click. Mantienes el acceso hasta el final del periodo ya pagado.
-        </FaqItem>
-        <FaqItem q="¿Qué diferencia hay con RECUPERA o CONSOLIDA?">
-          Prevention es un servicio recurrente low-ticket para gente ya sana que quiere mantenerse. No hay fisio asignado ni seguimiento personalizado — es contenido rolling con vídeos. Si tienes una lesión o quieres acompañamiento 1:1, cuéntanoslo y te derivamos al programa RECUPERA o CONSOLIDA.
-        </FaqItem>
-        <FaqItem q="¿Puedo consultar con un fisio si me surge algo?">
-          Sí. Desde la app puedes reservar una consulta de 45 min por 17 € cuando lo necesites. Sin compromiso de continuidad.
-        </FaqItem>
-        <FaqItem q="¿Se renueva automáticamente?">
-          Sí, para que no te quedes sin acceso por olvido. Te avisamos con 7 días de antelación por email y siempre puedes desactivar la renovación desde tu panel.
-        </FaqItem>
+        {copy.faqItems.map((f, i) => (
+          <FaqItem key={i} q={tpl(f.q, trialDays)}>
+            {tpl(f.a, trialDays)}
+          </FaqItem>
+        ))}
       </section>
 
       {/* Footer */}
       <footer className="max-w-4xl mx-auto px-5 py-10 text-center text-xs text-neutral-400 border-t border-neutral-100">
         <div className="mb-1">
-          © {new Date().getFullYear()} FisioFit Team · fisiofitteam.com
+          {tpl(copy.footerCopyright, trialDays)}
         </div>
         <div className="flex items-center justify-center gap-3">
           <a href="/privacidad" className="hover:text-neutral-700 hover:underline">Privacidad</a>
@@ -174,29 +189,51 @@ function ValueCard({
       <div className="font-semibold text-base mb-1" style={{ letterSpacing: "-0.01em" }}>
         {title}
       </div>
-      <p className="text-sm text-neutral-600 leading-relaxed">{children}</p>
+      <p className="text-sm text-neutral-600 leading-relaxed whitespace-pre-line">{children}</p>
     </div>
   );
 }
 
-function PlanCard({ plan, trialDays }: { plan: Plan; trialDays: number }) {
+function PlanCard({
+  plan,
+  trialDays,
+  bullets,
+  highlightBadgeLabel,
+  ctaTemplate,
+  gradient,
+  brandPrimary,
+}: {
+  plan: Plan;
+  trialDays: number;
+  bullets: string[];
+  highlightBadgeLabel: string;
+  ctaTemplate: string;
+  gradient: string;
+  brandPrimary: string;
+}) {
   const [busy, setBusy] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
   const [err, setErr] = useState<string | null>(null);
 
   const isHighlight = plan.isHighlighted;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length < 9) {
+      setErr("El WhatsApp no parece válido. Incluye el prefijo del país (ej. +34).");
+      return;
+    }
     setBusy(true);
     setErr(null);
     try {
       const res = await fetch("/api/prevention/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan: plan.key, email, fullName }),
+        body: JSON.stringify({ plan: plan.key, email, fullName, phone }),
       });
       const d = await res.json();
       if (!res.ok || !d.url) throw new Error(d?.error || "No pudimos iniciar el pago");
@@ -207,19 +244,25 @@ function PlanCard({ plan, trialDays }: { plan: Plan; trialDays: number }) {
     }
   }
 
+  const ctaLabel = ctaTemplate.replace(/\{plan\}/g, plan.label.toLowerCase());
+
   return (
     <div
-      className={`rounded-2xl p-5 flex flex-col ${
-        isHighlight ? "shadow-lg ring-2 ring-emerald-500" : "border border-neutral-200"
-      }`}
-      style={{ background: "#FFFFFF", position: "relative" }}
+      className={`rounded-2xl p-5 flex flex-col ${isHighlight ? "shadow-lg" : "border border-neutral-200"}`}
+      style={{
+        background: "#FFFFFF",
+        position: "relative",
+        ...(isHighlight
+          ? { boxShadow: `0 10px 25px -5px ${brandPrimary}30`, border: `2px solid ${brandPrimary}` }
+          : {}),
+      }}
     >
       {isHighlight && (
         <div
           className="absolute -top-3 left-1/2 -translate-x-1/2 text-[10px] font-bold tracking-wider text-white px-2.5 py-1 rounded-full uppercase"
-          style={{ background: "linear-gradient(135deg, #10B981 0%, #059669 100%)" }}
+          style={{ background: gradient }}
         >
-          Más elegido
+          {highlightBadgeLabel}
         </div>
       )}
 
@@ -229,7 +272,7 @@ function PlanCard({ plan, trialDays }: { plan: Plan; trialDays: number }) {
       <div className="flex items-baseline gap-1 mb-1">
         <span
           className="text-4xl font-bold tabular-nums"
-          style={{ letterSpacing: "-0.02em", color: isHighlight ? "#10B981" : "#0A0A0A" }}
+          style={{ letterSpacing: "-0.02em", color: isHighlight ? brandPrimary : "#0A0A0A" }}
         >
           {plan.amountEuros}
         </span>
@@ -240,11 +283,9 @@ function PlanCard({ plan, trialDays }: { plan: Plan; trialDays: number }) {
       </div>
 
       <ul className="text-sm text-neutral-700 space-y-1.5 mb-5 flex-1">
-        <li>✅ Contenido semanal renovado</li>
-        <li>✅ Vídeos de cada ejercicio</li>
-        <li>✅ Comunidad + reto del mes</li>
-        <li>✅ {trialDays} días gratis</li>
-        <li>✅ Cancela cuando quieras</li>
+        {bullets.map((b, i) => (
+          <li key={i}>✅ {b}</li>
+        ))}
       </ul>
 
       {!showForm ? (
@@ -254,13 +295,9 @@ function PlanCard({ plan, trialDays }: { plan: Plan; trialDays: number }) {
           className={`w-full text-sm font-semibold py-3 rounded-xl transition-transform active:scale-[0.98] ${
             isHighlight ? "text-white shadow-md" : "border border-neutral-200 bg-white hover:bg-neutral-50"
           }`}
-          style={
-            isHighlight
-              ? { background: "linear-gradient(135deg, #10B981 0%, #059669 100%)" }
-              : undefined
-          }
+          style={isHighlight ? { background: gradient } : undefined}
         >
-          Empezar {plan.label.toLowerCase()}
+          {ctaLabel}
         </button>
       ) : (
         <form onSubmit={submit} className="space-y-2">
@@ -280,6 +317,16 @@ function PlanCard({ plan, trialDays }: { plan: Plan; trialDays: number }) {
             onChange={(e) => setEmail(e.target.value)}
             className="w-full text-sm px-3 py-2 border border-neutral-200 rounded-lg focus:border-neutral-400 outline-none"
           />
+          <input
+            type="tel"
+            required
+            placeholder="WhatsApp (ej. +34 600 123 456)"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="w-full text-sm px-3 py-2 border border-neutral-200 rounded-lg focus:border-neutral-400 outline-none"
+            inputMode="tel"
+            autoComplete="tel"
+          />
           {err && (
             <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-2 py-1.5">
               ⚠ {err}
@@ -287,15 +334,11 @@ function PlanCard({ plan, trialDays }: { plan: Plan; trialDays: number }) {
           )}
           <button
             type="submit"
-            disabled={busy || !email || !fullName}
+            disabled={busy || !email || !fullName || !phone}
             className={`w-full text-sm font-semibold py-3 rounded-xl disabled:opacity-50 ${
               isHighlight ? "text-white" : "bg-neutral-900 text-white"
             }`}
-            style={
-              isHighlight
-                ? { background: "linear-gradient(135deg, #10B981 0%, #059669 100%)" }
-                : undefined
-            }
+            style={isHighlight ? { background: gradient } : undefined}
           >
             {busy ? "Redirigiendo…" : "Ir a pago seguro (Stripe) →"}
           </button>
@@ -324,7 +367,7 @@ function FaqItem({ q, children }: { q: string; children: React.ReactNode }) {
           +
         </span>
       </summary>
-      <div className="px-4 pb-4 text-sm text-neutral-600 leading-relaxed">{children}</div>
+      <div className="px-4 pb-4 text-sm text-neutral-600 leading-relaxed whitespace-pre-line">{children}</div>
     </details>
   );
 }

@@ -282,3 +282,181 @@ export function normalizeAgendaCopy(raw: unknown): AgendaLandingCopy {
     blocks,
   };
 }
+
+// ============================================================================
+// Landing de PREVENTION (público, prevention.fisiofitteam.com)
+// ============================================================================
+//
+// Placeholders disponibles en cualquier campo:
+//   {trialDays}  → nº de días de prueba (4 por defecto)
+//   {year}       → año actual
+// Los 3 precios y bullets por plan se generan desde PREVENTION_PLAN_CONFIG,
+// no se editan aquí (para no divergir con Stripe).
+
+export type PreventionValueCard = { emoji: string; title: string; body: string };
+export type PreventionFaqItem = { q: string; a: string };
+
+export type PreventionLandingCopy = {
+  // Colores del brand (permite cambiar el look completo sin tocar código)
+  brandPrimary: string;      // "#10B981"
+  brandPrimaryDark: string;  // "#059669"
+  brandAccentSoft: string;   // "#ECFDF5" — fondos suaves de badge
+
+  // Header
+  brandName: string;
+  brandSuffix: string;
+  headerCtaLabel: string;
+
+  // Hero
+  heroBadge: string;
+  heroTitle: string;
+  heroSubtitle: string;
+  heroTrialLine: string;
+  heroCtaPrimary: string;
+  heroCtaSecondary: string;
+
+  // Bloque de valor (3-4 cards)
+  valueCards: PreventionValueCard[];
+
+  // Planes
+  planesTitle: string;
+  planesSubtitle: string;
+  planBullets: string[];
+  highlightBadgeLabel: string;
+  ctaPlanTemplate: string;   // ej. "Empezar {plan}"
+
+  // FAQ
+  faqTitle: string;
+  faqItems: PreventionFaqItem[];
+
+  // Footer
+  footerCopyright: string;
+};
+
+export const PREVENTION_LANDING_DEFAULTS: PreventionLandingCopy = {
+  brandPrimary: "#10B981",
+  brandPrimaryDark: "#059669",
+  brandAccentSoft: "#ECFDF5",
+
+  brandName: "FisioFit",
+  brandSuffix: "Prevention",
+  headerCtaLabel: "Ver planes →",
+
+  heroBadge: "Servicio recurrente · desde 17 €/mes",
+  heroTitle: "Cuídate en 15 minutos al día.",
+  heroSubtitle:
+    "Rolling semanal de movilidad, técnica y activación diseñado para atletas de CrossFit y Hyrox que ya están sanos y quieren mantenerse ahí. Sin pasos, sin excusas, sin sobre-entrenar.",
+  heroTrialLine: "{trialDays} días gratis. Cancela cuando quieras.",
+  heroCtaPrimary: "Empezar ahora →",
+  heroCtaSecondary: "¿Cómo funciona?",
+
+  valueCards: [
+    { emoji: "🧘", title: "15 min al día", body: "Micro-sesiones diarias de lunes a viernes. Se integran en tu warm-up o cool-down. No pierdes tiempo." },
+    { emoji: "🎥", title: "Vídeos de referencia", body: "Cada ejercicio con su vídeo de técnica. Nunca dudas cómo se hace." },
+    { emoji: "🔄", title: "Se actualiza cada semana", body: "Programación viva. No es un curso estático — evoluciona contigo." },
+  ],
+
+  planesTitle: "Elige tu plan",
+  planesSubtitle:
+    "Puedes cancelar cuando quieras. Los primeros {trialDays} días son gratis y no cobramos si cancelas antes.",
+  planBullets: [
+    "Contenido semanal renovado",
+    "Vídeos de cada ejercicio",
+    "Comunidad + reto del mes",
+    "{trialDays} días gratis",
+    "Cancela cuando quieras",
+  ],
+  highlightBadgeLabel: "Más elegido",
+  ctaPlanTemplate: "Empezar {plan}",
+
+  faqTitle: "Preguntas frecuentes",
+  faqItems: [
+    {
+      q: "¿Cómo funcionan los {trialDays} días gratis?",
+      a: "Introduces tu método de pago pero no se cobra nada durante los primeros {trialDays} días. Puedes cancelar en cualquier momento antes de que termine la prueba y no se hará ningún cargo.",
+    },
+    {
+      q: "¿Puedo cancelar cuando quiera?",
+      a: "Sí. Desde tu panel puedes cancelar la renovación con un click. Mantienes el acceso hasta el final del periodo ya pagado.",
+    },
+    {
+      q: "¿Qué diferencia hay con RECUPERA o CONSOLIDA?",
+      a: "Prevention es un servicio recurrente low-ticket para gente ya sana que quiere mantenerse. No hay fisio asignado ni seguimiento personalizado — es contenido rolling con vídeos. Si tienes una lesión o quieres acompañamiento 1:1, cuéntanoslo y te derivamos al programa RECUPERA o CONSOLIDA.",
+    },
+    {
+      q: "¿Puedo consultar con un fisio si me surge algo?",
+      a: "Sí. Desde la app puedes reservar una consulta de 45 min por 17 € cuando lo necesites. Sin compromiso de continuidad.",
+    },
+    {
+      q: "¿Se renueva automáticamente?",
+      a: "Sí, para que no te quedes sin acceso por olvido. Te avisamos con 7 días de antelación por email y siempre puedes desactivar la renovación desde tu panel.",
+    },
+  ],
+
+  footerCopyright: "© {year} FisioFit Team · fisiofitteam.com",
+};
+
+export function normalizePreventionCopy(raw: unknown): PreventionLandingCopy {
+  const d = PREVENTION_LANDING_DEFAULTS;
+  const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const str = (v: unknown, fallback: string) =>
+    typeof v === "string" && v.trim() ? v : fallback;
+  const hex = (v: unknown, fallback: string) =>
+    typeof v === "string" && /^#[0-9A-Fa-f]{3,8}$/.test(v.trim()) ? v.trim() : fallback;
+
+  const valueCards: PreventionValueCard[] = Array.isArray(o.valueCards)
+    ? (o.valueCards as unknown[])
+        .map((c) => {
+          const cc = (c && typeof c === "object" ? c : {}) as Record<string, unknown>;
+          return {
+            emoji: str(cc.emoji, "✨"),
+            title: str(cc.title, ""),
+            body: str(cc.body, ""),
+          };
+        })
+        .filter((c) => c.title.trim() !== "" || c.body.trim() !== "")
+    : d.valueCards;
+
+  const planBullets: string[] = Array.isArray(o.planBullets)
+    ? (o.planBullets as unknown[]).map((b) => String(b)).filter((b) => b.trim() !== "")
+    : d.planBullets;
+
+  const faqItems: PreventionFaqItem[] = Array.isArray(o.faqItems)
+    ? (o.faqItems as unknown[])
+        .map((f) => {
+          const ff = (f && typeof f === "object" ? f : {}) as Record<string, unknown>;
+          return { q: str(ff.q, ""), a: str(ff.a, "") };
+        })
+        .filter((f) => f.q.trim() !== "" && f.a.trim() !== "")
+    : d.faqItems;
+
+  return {
+    brandPrimary: hex(o.brandPrimary, d.brandPrimary),
+    brandPrimaryDark: hex(o.brandPrimaryDark, d.brandPrimaryDark),
+    brandAccentSoft: hex(o.brandAccentSoft, d.brandAccentSoft),
+
+    brandName: str(o.brandName, d.brandName),
+    brandSuffix: str(o.brandSuffix, d.brandSuffix),
+    headerCtaLabel: str(o.headerCtaLabel, d.headerCtaLabel),
+
+    heroBadge: str(o.heroBadge, d.heroBadge),
+    heroTitle: str(o.heroTitle, d.heroTitle),
+    heroSubtitle: str(o.heroSubtitle, d.heroSubtitle),
+    heroTrialLine: str(o.heroTrialLine, d.heroTrialLine),
+    heroCtaPrimary: str(o.heroCtaPrimary, d.heroCtaPrimary),
+    heroCtaSecondary: str(o.heroCtaSecondary, d.heroCtaSecondary),
+
+    valueCards: valueCards.length ? valueCards : d.valueCards,
+
+    planesTitle: str(o.planesTitle, d.planesTitle),
+    planesSubtitle: str(o.planesSubtitle, d.planesSubtitle),
+    planBullets: planBullets.length ? planBullets : d.planBullets,
+    highlightBadgeLabel: str(o.highlightBadgeLabel, d.highlightBadgeLabel),
+    ctaPlanTemplate: str(o.ctaPlanTemplate, d.ctaPlanTemplate),
+
+    faqTitle: str(o.faqTitle, d.faqTitle),
+    faqItems: faqItems.length ? faqItems : d.faqItems,
+
+    footerCopyright: str(o.footerCopyright, d.footerCopyright),
+  };
+}

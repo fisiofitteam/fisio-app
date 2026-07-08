@@ -1,5 +1,8 @@
 import { PreventionLanding } from "@/components/PreventionLanding";
 import { PREVENTION_PLAN_CONFIG, PREVENTION_TRIAL_DAYS } from "@/lib/stripe";
+import { getPreventionLandingCopy } from "@/lib/landing-config";
+
+export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "FisioFit Prevention · Cuídate cada semana",
@@ -7,7 +10,7 @@ export const metadata = {
     "Suscripción low-ticket para atletas ya sanos que quieren mantenerse. Rolling semanal de movilidad, técnica y activación por menos de 17 €/mes.",
 };
 
-export default function PreventionLandingPage({
+export default async function PreventionLandingPage({
   searchParams,
 }: {
   searchParams: { cancelled?: string };
@@ -29,5 +32,14 @@ export default function PreventionLandingPage({
     };
   });
 
-  return <PreventionLanding plans={plans} trialDays={PREVENTION_TRIAL_DAYS} cancelled={cancelled} />;
+  const copy = await getPreventionLandingCopy();
+
+  return (
+    <PreventionLanding
+      plans={plans}
+      trialDays={PREVENTION_TRIAL_DAYS}
+      cancelled={cancelled}
+      copy={copy}
+    />
+  );
 }
