@@ -36,6 +36,7 @@ export default async function SesionHoyPage({ params }: { params: { id: string }
     select: {
       id: true,
       fullName: true,
+      programType: true,
       rollingAccessoriesId: true,
       rollingTrainingId: true,
       rollingProgramId: true,
@@ -47,8 +48,12 @@ export default async function SesionHoyPage({ params }: { params: { id: string }
   const todayDow = today.getDay(); // 0..6 (0=domingo). Las tareas usan 1..5.
   const thisMonday = weekStartDate(today);
 
-  const accId = patient.rollingAccessoriesId;
-  const trnId = patient.rollingTrainingId || patient.rollingProgramId;
+  const isPrevention = patient.programType === "PREVENTION";
+  // Prevention: single-rolling en el campo legacy rollingProgramId.
+  const accId = isPrevention ? null : patient.rollingAccessoriesId;
+  const trnId = isPrevention
+    ? patient.rollingProgramId
+    : (patient.rollingTrainingId || patient.rollingProgramId);
 
   async function fetchDayTasks(programId: string | null) {
     if (!programId) return [];
@@ -132,16 +137,27 @@ export default async function SesionHoyPage({ params }: { params: { id: string }
             {DAY_NAMES[todayDow]} · {today.toLocaleDateString("es-ES", { day: "numeric", month: "long" })}
           </div>
           <h1 className="text-3xl font-bold flex items-center gap-2" style={{ letterSpacing: "-0.03em" }}>
-            💪 Sesión de hoy
+            {isPrevention ? "🧘 Tu sesión" : "💪 Sesión de hoy"}
           </h1>
         </header>
 
-        {accTasks.length > 0 && (
-          <SectionBlock label="Accesorios" color="#3B82F6" tasks={accTasks} />
-        )}
+        {isPrevention ? (
+          // Prevention: un único tramo, sin etiqueta de bloque
+          trnTasks.length > 0 && (
+            <div className="space-y-2">
+              {trnTasks.map((t) => <TaskCard key={t.id} task={t} />)}
+            </div>
+          )
+        ) : (
+          <>
+            {accTasks.length > 0 && (
+              <SectionBlock label="Accesorios" color="#3B82F6" tasks={accTasks} />
+            )}
 
-        {trnTasks.length > 0 && (
-          <SectionBlock label="Entrenamiento" color="#F59E0B" tasks={trnTasks} />
+            {trnTasks.length > 0 && (
+              <SectionBlock label="Entrenamiento" color="#F59E0B" tasks={trnTasks} />
+            )}
+          </>
         )}
 
         {hasAny && (

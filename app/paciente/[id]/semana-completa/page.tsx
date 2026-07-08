@@ -24,6 +24,7 @@ export default async function PatientSemanaCompletaPage({
     where: { id: params.id },
     select: {
       id: true,
+      programType: true,
       programMode: true,
       rollingAccessoriesId: true,
       rollingTrainingId: true,
@@ -32,8 +33,13 @@ export default async function PatientSemanaCompletaPage({
   });
   if (!patient) notFound();
 
-  const accId = patient.rollingAccessoriesId;
-  const trnId = patient.rollingTrainingId || patient.rollingProgramId;
+  const isPrevention = patient.programType === "PREVENTION";
+  // Prevention es single-rolling y usa el campo legacy rollingProgramId.
+  // Advance usa acc + trn (con fallback al legacy si viene de rolling antiguo).
+  const accId = isPrevention ? null : patient.rollingAccessoriesId;
+  const trnId = isPrevention
+    ? patient.rollingProgramId
+    : (patient.rollingTrainingId || patient.rollingProgramId);
   const hasAnyRolling = Boolean(accId || trnId);
 
   // Si el paciente no está en rolling, no tiene sentido esta vista → home.
@@ -114,23 +120,36 @@ export default async function PatientSemanaCompletaPage({
     })) as ResolvedExercise[],
   });
   const blocks: Block[] = [];
-  if (accId && accWeek) {
-    blocks.push({
-      blockLabel: "Accesorios",
-      blockColor: "#3B82F6",
-      title: accWeek.title || null,
-      published: Boolean(accWeek.publishedAt),
-      days: accWeek.days.map((d) => ({ dayOfWeek: d.dayOfWeek, tasks: d.tasks.map(mapTask) })),
-    });
-  }
-  if (trnId && trnWeek) {
-    blocks.push({
-      blockLabel: "Entrenamiento",
-      blockColor: "#F59E0B",
-      title: trnWeek.title || null,
-      published: Boolean(trnWeek.publishedAt),
-      days: trnWeek.days.map((d) => ({ dayOfWeek: d.dayOfWeek, tasks: d.tasks.map(mapTask) })),
-    });
+  if (isPrevention) {
+    // Prevention: un solo tramo de contenido sin etiqueta de bloque.
+    if (trnWeek) {
+      blocks.push({
+        blockLabel: "", // sin chip visible en la tarea
+        blockColor: "#10B981",
+        title: trnWeek.title || null,
+        published: Boolean(trnWeek.publishedAt),
+        days: trnWeek.days.map((d) => ({ dayOfWeek: d.dayOfWeek, tasks: d.tasks.map(mapTask) })),
+      });
+    }
+  } else {
+    if (accId && accWeek) {
+      blocks.push({
+        blockLabel: "Accesorios",
+        blockColor: "#3B82F6",
+        title: accWeek.title || null,
+        published: Boolean(accWeek.publishedAt),
+        days: accWeek.days.map((d) => ({ dayOfWeek: d.dayOfWeek, tasks: d.tasks.map(mapTask) })),
+      });
+    }
+    if (trnId && trnWeek) {
+      blocks.push({
+        blockLabel: "Entrenamiento",
+        blockColor: "#F59E0B",
+        title: trnWeek.title || null,
+        published: Boolean(trnWeek.publishedAt),
+        days: trnWeek.days.map((d) => ({ dayOfWeek: d.dayOfWeek, tasks: d.tasks.map(mapTask) })),
+      });
+    }
   }
 
   const anyPublished = blocks.some((b) => b.published);

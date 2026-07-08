@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { PatientHomeDark } from "@/components/PatientHomeDark";
 import { PatientHomePaused } from "@/components/PatientHomePaused";
 import { PatientHomeRolling } from "@/components/PatientHomeRolling";
+import { PatientHomePrevention } from "@/components/PatientHomePrevention";
 import { calculateAdherence } from "@/lib/adherence";
 import { getPauseSnapshot, weekStartDate } from "@/lib/program-pauses";
 import { getWelcomeConfig } from "@/lib/welcome-config";
@@ -27,6 +28,125 @@ export default async function PatientHome({ params }: { params: { id: string } }
         endDate={pauseSnapshot.activePause.endDate.toISOString()}
         daysRemaining={pauseSnapshot.activePause.daysRemaining}
         reason={pauseSnapshot.activePause.reason}
+      />
+    );
+  }
+
+  // --- 2a. Si es PREVENTION → vista dedicada de suscriptor ---
+  // Prevention es una suscripción low-ticket recurrente con UN SOLO rolling
+  // (equivalente a los accesorios de ADVANCE). El paciente no tiene fisio
+  // asignado, no ve PRs y en el header aparece el CTA "Consultar con un fisio".
+  if (patient.programType === "PREVENTION" && patient.programMode === "rolling") {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const thisMonday = weekStartDate(today);
+    const preventionRollingId =
+      patient.rollingProgramId ?? patient.rollingAccessoriesId ?? patient.rollingTrainingId;
+
+    // Fecha de fin de suscripción para avisos discretos de renovación
+    const activeSub = await prisma.patientSubscription.findFirst({
+      where: {
+        patientId: patient.id,
+        productType: "prevention",
+        status: { in: ["scheduled", "trialing", "active", "past_due"] },
+      },
+      orderBy: { createdAt: "desc" },
+      select: { status: true, currentPeriodEnd: true, trialEndsAt: true, cancelAtPeriodEnd: true },
+    });
+    const relevantEnd = activeSub?.status === "trialing"
+      ? activeSub.trialEndsAt
+      : activeSub?.currentPeriodEnd;
+    const daysToRenewal = relevantEnd
+      ? Math.round((new Date(relevantEnd).getTime() - today.getTime()) / 86400000)
+      : null;
+
+    // Semana del rolling Prevention (si hay una asignada y publicada)
+    const week = preventionRollingId
+      ? await prisma.rollingWeek.findUnique({
+          where: { programId_weekStartDate: { programId: preventionRollingId, weekStartDate: thisMonday } },
+          include: {
+            days: {
+              include: {
+                tasks: {
+                  orderBy: { order: "asc" },
+                  include: {
+                    exercises: {
+                      orderBy: { order: "asc" },
+                      include: { exercise: { select: { id: true, name: true, category: true, youtubeUrl: true, description: true } } },
+                    },
+                  },
+                },
+              },
+              orderBy: { dayOfWeek: "asc" },
+            },
+          },
+        })
+      : null;
+
+    // Vídeos referenciados (para tareas VIDEO/WORKOUT con videoId)
+    const videoIds = new Set<string>();
+    for (const d of week?.days ?? []) {
+      for (const t of d.tasks) {
+        if ((t.type === "VIDEO" || t.type === "WORKOUT") && t.videoId) videoIds.add(t.videoId);
+      }
+    }
+    const videosById: Record<string, { youtubeUrl: string }> = {};
+    if (videoIds.size > 0) {
+      const vids = await prisma.videoLibrary.findMany({ where: { id: { in: Array.from(videoIds) } } });
+      for (const v of vids) videosById[v.id] = { youtubeUrl: v.youtubeUrl };
+    }
+
+    // Aplanar días (sin split de bloques — Prevention es un tramo único)
+    const flatDays = [1, 2, 3, 4, 5].map((dow) => {
+      const day = week?.days.find((d) => d.dayOfWeek === dow);
+      const tasks = (day?.tasks ?? []).map((t) => ({
+        id: t.id,
+        type: t.type,
+        title: t.title,
+        bodyText: t.bodyText,
+        youtubeUrl: t.videoId ? videosById[t.videoId]?.youtubeUrl ?? null : null,
+      }));
+      return { dayOfWeek: dow, tasks };
+    });
+
+    // Reto del mes + comunidad unread (misma que Advance)
+    const nowP = new Date();
+    const sinceP = patient.communityLastSeenAt ?? patient.startedAt ?? new Date(0);
+    const [preventionNewPosts, preventionNewComments, preventionNewReactions, currentChallengeP] = await Promise.all([
+      prisma.communityFeedPost.count({
+        where: { published: true, createdAt: { gt: sinceP }, NOT: { patientAuthorId: patient.id } },
+      }),
+      prisma.communityComment.count({
+        where: { createdAt: { gt: sinceP }, post: { patientAuthorId: patient.id }, NOT: { patientId: patient.id } },
+      }),
+      prisma.communityReaction.count({
+        where: { createdAt: { gt: sinceP }, post: { patientAuthorId: patient.id }, NOT: { patientId: patient.id } },
+      }),
+      prisma.monthlyChallenge.findUnique({
+        where: { year_month: { year: nowP.getFullYear(), month: nowP.getMonth() } },
+      }).catch(() => null),
+    ]);
+    const preventionUnread = preventionNewPosts + preventionNewComments + preventionNewReactions;
+
+    return (
+      <PatientHomePrevention
+        firstName={firstName}
+        patientId={patient.id}
+        patientPhotoUrl={patient.photoUrl}
+        communityUnread={preventionUnread}
+        challenge={currentChallengeP ? {
+          id: currentChallengeP.id,
+          title: currentChallengeP.title,
+          description: currentChallengeP.description,
+        } : null}
+        mode={week?.publishedAt ? "ready" : "pending"}
+        weekStartIso={thisMonday.toISOString()}
+        weekTitle={week?.title ?? null}
+        days={flatDays}
+        daysToRenewal={daysToRenewal}
+        subscriptionStatus={activeSub?.status ?? null}
+        cancelAtPeriodEnd={activeSub?.cancelAtPeriodEnd ?? false}
+        shippingComplete={!!(patient.shippingStreet && patient.shippingNumber && patient.shippingCity && patient.shippingPostalCode)}
       />
     );
   }
@@ -60,6 +180,7 @@ export default async function PatientHome({ params }: { params: { id: string } }
           patientId={patient.id}
           mode="expired"
           weekStartIso={thisMonday.toISOString()}
+          days={[]}
         />
       );
     }
