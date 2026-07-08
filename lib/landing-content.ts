@@ -384,10 +384,6 @@ export const PREVENTION_LANDING_DEFAULTS: PreventionLandingCopy = {
       a: "Prevention es un servicio recurrente low-ticket para gente ya sana que quiere mantenerse. No hay fisio asignado ni seguimiento personalizado — es contenido rolling con vídeos. Si tienes una lesión o quieres acompañamiento 1:1, cuéntanoslo y te derivamos al programa RECUPERA o CONSOLIDA.",
     },
     {
-      q: "¿Puedo consultar con un fisio si me surge algo?",
-      a: "Sí. Desde la app puedes reservar una consulta de 45 min por 17 € cuando lo necesites. Sin compromiso de continuidad.",
-    },
-    {
       q: "¿Se renueva automáticamente?",
       a: "Sí, para que no te quedes sin acceso por olvido. Te avisamos con 7 días de antelación por email y siempre puedes desactivar la renovación desde tu panel.",
     },

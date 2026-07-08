@@ -174,12 +174,6 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     return;
   }
 
-  // Prevention: consulta puntual 17 € (payment mode, one-shot).
-  if (session.mode === "payment" && session.metadata?.productType === "prevention-consultation") {
-    await handlePreventionConsultationCompleted(session);
-    return;
-  }
-
   // Renovaciones: flujo aparte (paciente existente, sin crear cuenta).
   if (session.metadata?.kind === "renewal") {
     await handleRenewalCompleted(session);
@@ -697,64 +691,3 @@ async function handlePreventionInvoiceFailed(invoice: Stripe.Invoice) {
   }
 }
 
-/**
- * Consulta puntual 17 € pagada. Registramos como Transaction income_other
- * y notificamos por email/notificación in-app a la CEO para que envíe el
- * link de agenda al paciente. Idempotente por session.id (guardamos en
- * description).
- */
-async function handlePreventionConsultationCompleted(session: Stripe.Checkout.Session) {
-  const patientId = session.metadata?.patientId;
-  if (!patientId) {
-    console.warn("[stripe-webhook] Consultation sin patientId en metadata", { sessionId: session.id });
-    return;
-  }
-  const patient = await prisma.patient.findUnique({ where: { id: patientId } });
-  if (!patient) {
-    console.warn("[stripe-webhook] Consultation con paciente no encontrado", { patientId });
-    return;
-  }
-
-  // Idempotencia: si ya hay una Transaction con esta session.id en la descripción, salimos.
-  const existing = await prisma.transaction.findFirst({
-    where: {
-      patientId,
-      category: "consultation-prevention",
-      description: { contains: session.id },
-    },
-  });
-  if (existing) {
-    console.log("[stripe-webhook] Consulta ya registrada, skip", { sessionId: session.id });
-    return;
-  }
-
-  const amountCents = session.amount_total ?? 0;
-  const note = session.metadata?.note ?? "";
-
-  await prisma.transaction.create({
-    data: {
-      type: "income_other",
-      category: "consultation-prevention",
-      amount: amountCents / 100,
-      description: `Consulta Prevention · ${patient.fullName}${note ? ` · Motivo: ${note.slice(0, 200)}` : ""} · ${session.id}`,
-      occurredAt: new Date(),
-      patientId,
-    },
-  });
-
-  // Notificar a la CEO / head_success para que envíe el link de agenda.
-  try {
-    await notifyHeadSuccess({
-      type: "prevention_consultation_booked",
-      title: `🧑‍⚕️ Consulta Prevention reservada · ${patient.fullName}`,
-      body: note
-        ? `Motivo: "${note.slice(0, 200)}"`
-        : "Sin motivo indicado. Ponte en contacto para agendar franja.",
-      actionUrl: `/fisio/paciente/${patientId}/ficha`,
-    });
-  } catch (err) {
-    console.error("[stripe-webhook] Error notificando consulta:", err);
-  }
-
-  console.log("[stripe-webhook] Consulta puntual registrada", { patientId, sessionId: session.id });
-}

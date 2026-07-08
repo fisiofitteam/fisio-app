@@ -123,11 +123,6 @@ export const PREVENTION_PLAN_CONFIG: Record<PreventionPlan, {
   },
 };
 
-/** Env key del price para la consulta puntual 45 min por 17 €. */
-export const PREVENTION_CONSULTATION_ENV_KEY = "STRIPE_PRICE_PREVENTION_CONSULTATION";
-export const PREVENTION_CONSULTATION_AMOUNT_CENTS = 1700;
-export const PREVENTION_CONSULTATION_DURATION_MIN = 45;
-
 /** Días de prueba gratuita al arrancar una suscripción Prevention nueva. */
 export const PREVENTION_TRIAL_DAYS = 4;
 
@@ -139,8 +134,4 @@ export function getPreventionPriceId(plan: PreventionPlan): string | null {
   const cfg = PREVENTION_PLAN_CONFIG[plan];
   if (!cfg) return null;
   return process.env[cfg.priceEnvKey] || null;
-}
-
-export function getPreventionConsultationPriceId(): string | null {
-  return process.env[PREVENTION_CONSULTATION_ENV_KEY] || null;
 }

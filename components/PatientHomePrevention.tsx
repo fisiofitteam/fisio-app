@@ -8,7 +8,6 @@ import {
   Users,
   Target,
   CalendarDays,
-  Stethoscope,
   Settings,
 } from "lucide-react";
 import { PatientSessionMenu, patientLogout } from "@/components/PatientSessionMenu";
@@ -35,8 +34,6 @@ const DAY_NAMES = ["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
  * Diferencias vs. PatientHomeRolling (Advance):
  *  - Sin PRs (no aplica al público Prevention).
  *  - Sin badge de fisio asignado (Prevention no lleva fisio).
- *  - Aparece la card "🧑‍⚕️ Consultar con un fisio (17 €)" como CTA para
- *    convertir la consulta puntual en un lead — win-win.
  *  - Header sutil "Modo Prevention" y avisos de renovación de la
  *    suscripción cuando queden ≤ 14 días.
  *
@@ -280,42 +277,6 @@ export function PatientHomePrevention({
             />
           )}
         </div>
-
-        {/* CTA especial · Consultar con un fisio (upsell puntual) */}
-        <Link
-          href={`/paciente/${patientId}/consulta`}
-          className="block rounded-2xl p-4 mb-6 relative overflow-hidden"
-          style={{
-            background: "var(--p-surface)",
-            border: "1px dashed #FCD34D",
-            color: "var(--p-text)",
-          }}
-        >
-          <div className="flex items-center gap-3">
-            <div
-              className="flex items-center justify-center rounded-xl flex-shrink-0"
-              style={{
-                width: 48,
-                height: 48,
-                background: "linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)",
-                color: "#FFFFFF",
-              }}
-            >
-              <Stethoscope size={22} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="font-semibold text-sm" style={{ letterSpacing: "-0.01em" }}>
-                🧑‍⚕️ Consultar con un fisio
-              </div>
-              <div className="text-[11px] mt-0.5" style={{ color: "var(--p-text-dim)" }}>
-                45 minutos por vídeollamada · 17 €
-              </div>
-            </div>
-            <div className="text-lg font-bold flex-shrink-0" style={{ color: "#FCD34D" }}>
-              →
-            </div>
-          </div>
-        </Link>
 
         {/* Aviso ligero cuando la semana aún no está publicada */}
         {mode === "pending" && (

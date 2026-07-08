@@ -20,8 +20,6 @@ export type PreventionMetrics = {
   newInPeriod: number;
   canceledInPeriod: number;
   trialConversionsInPeriod: { converted: number; startedTrial: number; rate: number | null };
-  consultationRevenueCents: number;
-  consultationCount: number;
   periodLabel: string;
 };
 
@@ -30,7 +28,7 @@ export async function calculatePreventionMetrics(
   periodEnd: Date,
   periodLabel: string,
 ): Promise<PreventionMetrics> {
-  const [allActive, newInPeriodSubs, canceledInPeriodSubs, consultTxs] = await Promise.all([
+  const [allActive, newInPeriodSubs, canceledInPeriodSubs] = await Promise.all([
     prisma.patientSubscription.findMany({
       where: {
         productType: "prevention",
@@ -51,13 +49,6 @@ export async function calculatePreventionMetrics(
         canceledAt: { gte: periodStart, lte: periodEnd },
       },
       select: { id: true },
-    }),
-    prisma.transaction.findMany({
-      where: {
-        category: "consultation-prevention",
-        occurredAt: { gte: periodStart, lte: periodEnd },
-      },
-      select: { amount: true },
     }),
   ]);
 
@@ -83,10 +74,9 @@ export async function calculatePreventionMetrics(
     label: PREVENTION_PLAN_CONFIG[plan].label,
   }));
 
-  // Conversiones trial → active en el periodo. Aproximación: subs creadas
-  // antes del final del periodo cuyo trialEndsAt cae dentro del periodo y su
-  // status actual es "active" (o "past_due" — pagó al menos una vez).
-  const startedTrialInPeriod = newInPeriodSubs.filter((s) => !!s.trialEndsAt);
+  // Conversiones trial → active en el periodo. Aproximación: subs cuyo
+  // trialEndsAt cae dentro del periodo y su status actual es "active"
+  // (o "past_due" — pagó al menos una vez).
   const trialingSubsWithEndInPeriod = await prisma.patientSubscription.findMany({
     where: {
       productType: "prevention",
@@ -100,8 +90,6 @@ export async function calculatePreventionMetrics(
   const startedTrial = trialingSubsWithEndInPeriod.length;
   const rate = startedTrial > 0 ? Math.round((converted / startedTrial) * 100) : null;
 
-  const consultationRevenueCents = consultTxs.reduce((acc, t) => acc + Math.round(t.amount * 100), 0);
-
   return {
     mrrCents,
     activeCount: revenueEarning.length,
@@ -112,8 +100,6 @@ export async function calculatePreventionMetrics(
     newInPeriod: newInPeriodSubs.length,
     canceledInPeriod: canceledInPeriodSubs.length,
     trialConversionsInPeriod: { converted, startedTrial, rate },
-    consultationRevenueCents,
-    consultationCount: consultTxs.length,
     periodLabel,
   };
 }

@@ -35,7 +35,7 @@ export default async function PatientHome({ params }: { params: { id: string } }
   // --- 2a. Si es PREVENTION → vista dedicada de suscriptor ---
   // Prevention es una suscripción low-ticket recurrente con UN SOLO rolling
   // (equivalente a los accesorios de ADVANCE). El paciente no tiene fisio
-  // asignado, no ve PRs y en el header aparece el CTA "Consultar con un fisio".
+  // asignado ni ve PRs.
   if (patient.programType === "PREVENTION" && patient.programMode === "rolling") {
     const today = new Date();
     today.setHours(0, 0, 0, 0);

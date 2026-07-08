@@ -9,7 +9,6 @@ function eur(n: number): string {
 export function PreventionMetricsBlock({ metrics }: { metrics: PreventionMetrics }) {
   const mrrEur = Math.round(metrics.mrrCents / 100);
   const arrEur = mrrEur * 12;
-  const consultRevenue = Math.round(metrics.consultationRevenueCents / 100);
   const conv = metrics.trialConversionsInPeriod;
 
   return (
@@ -79,7 +78,7 @@ export function PreventionMetricsBlock({ metrics }: { metrics: PreventionMetrics
       </div>
 
       {/* Distribución por plan */}
-      <div className="pl-2 mb-4">
+      <div className="pl-2">
         <div className="text-xs text-neutral-500 mb-2 font-medium uppercase tracking-wide">
           Distribución por plan
         </div>
@@ -92,25 +91,6 @@ export function PreventionMetricsBlock({ metrics }: { metrics: PreventionMetrics
               </div>
             </div>
           ))}
-        </div>
-      </div>
-
-      {/* Consultas puntuales */}
-      <div className="pl-2">
-        <div className="rounded-lg p-3 border border-purple-200" style={{ background: "#FAF5FF" }}>
-          <div className="flex justify-between items-baseline">
-            <div>
-              <div className="text-xs uppercase text-purple-700 font-medium">
-                🧑‍⚕️ Consultas puntuales
-              </div>
-              <div className="text-xs text-purple-700/80 mt-0.5">
-                {metrics.consultationCount} sesión{metrics.consultationCount === 1 ? "" : "es"} de 45 min en el periodo
-              </div>
-            </div>
-            <div className="text-2xl font-bold text-purple-800 tabular-nums">
-              {eur(consultRevenue)}
-            </div>
-          </div>
         </div>
       </div>
 
