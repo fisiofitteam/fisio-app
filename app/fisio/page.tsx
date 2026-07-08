@@ -16,6 +16,8 @@ import { WeeklyTeamTasksBoard } from "@/components/WeeklyTeamTasksBoard";
 import { buildWeeklyBoardForProfessional } from "@/lib/weekly-team-tasks";
 import { AdHocTasksCard } from "@/components/AdHocTasksCard";
 import { buildAdHocActiveForProfessional } from "@/lib/team-tasks-adhoc";
+import { calculatePreventionMetrics } from "@/lib/prevention-metrics";
+import { PreventionMetricsBlock } from "@/components/PreventionMetricsBlock";
 
 const TYPE_LABELS: Record<string, string> = {
   optimizacion: "Optimización",
@@ -274,6 +276,10 @@ export default async function FisioPanelPage({
     const salesByCloser = await calculateSalesByCloser(salesStart, salesEnd);
     const originMetrics = await calculateLeadOriginMetrics(salesStart, salesEnd);
 
+    // Métricas de FisioFit Prevention (MRR, activos, trials, churn) — usan el
+    // mismo período seleccionado que "Métricas equipo" para coherencia.
+    const preventionMetrics = await calculatePreventionMetrics(periodStart, periodEnd, periodLabel);
+
     const salesBlock = (
       <>
         <SalesMetricsBlock
@@ -296,6 +302,7 @@ export default async function FisioPanelPage({
         <CEOPanelTabs
           teamBlock={teamBlock}
           salesBlock={salesBlock}
+          preventionBlock={<PreventionMetricsBlock metrics={preventionMetrics} />}
           finance={{ ...financeSummary, periodLabel: label }}
           userFullName={user.fullName}
         />

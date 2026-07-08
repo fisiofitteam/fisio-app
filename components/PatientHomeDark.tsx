@@ -83,6 +83,7 @@ export function PatientHomeDark({
   welcomeLine1 = "Lo difícil era empezar.",
   welcomeLine2 = "Ya estás aquí.",
   assignmentIndexEntries = [],
+  programEndsInDays,
 }: {
   patient: Patient;
   todaySessions: TodaySession[];
@@ -95,6 +96,9 @@ export function PatientHomeDark({
   /** Pares [assignmentId, index] para pintar cada sesión con el color
    *  de su programa (paleta rotativa verde/amarillo/violeta/naranja). */
   assignmentIndexEntries?: Array<[string, number]>;
+  /** Días restantes de programa fijo. Usado para el banner upsell a
+   *  Prevention cuando quedan pocos. null si no aplica. */
+  programEndsInDays?: number | null;
 }) {
   const assignmentIndex = new Map<string, number>(assignmentIndexEntries);
   const dow = new Date().getDay() === 0 ? 7 : new Date().getDay();
@@ -162,6 +166,38 @@ export function PatientHomeDark({
               Tu programa se reanuda automáticamente.
             </div>
           </div>
+        )}
+
+        {typeof programEndsInDays === "number" && programEndsInDays <= 14 && programEndsInDays >= 0 && (
+          <a
+            href="https://prevention.fisiofitteam.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mb-5 rounded-2xl p-4 flex items-center gap-3 transition-transform active:scale-[0.99]"
+            style={{
+              background: "linear-gradient(135deg, #10B981 0%, #059669 100%)",
+              color: "#FFFFFF",
+              boxShadow: "0 8px 24px -8px rgba(16, 185, 129, 0.5)",
+            }}
+          >
+            <div className="text-2xl flex-shrink-0">🛡</div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] font-bold tracking-wider uppercase opacity-80 mb-0.5">
+                {programEndsInDays === 0
+                  ? "Tu programa termina hoy"
+                  : programEndsInDays === 1
+                  ? "Te queda 1 día de programa"
+                  : `Te quedan ${programEndsInDays} días de programa`}
+              </div>
+              <div className="text-sm font-semibold leading-tight mb-0.5">
+                Sigue cuidándote con Prevention
+              </div>
+              <div className="text-[11px] opacity-85">
+                Desde 17 €/mes · 4 días de prueba gratis
+              </div>
+            </div>
+            <div className="text-lg opacity-80 flex-shrink-0">→</div>
+          </a>
         )}
 
         {!patient.photoUrl && (

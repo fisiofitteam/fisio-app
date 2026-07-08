@@ -441,11 +441,24 @@ export default async function PatientHome({ params }: { params: { id: string } }
   ]);
   const communityUnread = newPostsCount + newCommentsCount + newReactionsCount;
 
+  // Días para el fin del programa fijo (RECUPERA/CONSOLIDA). Si quedan pocos,
+  // el home muestra un banner de upsell a Prevention como "siguiente paso".
+  const programEndsInDays = (() => {
+    if (!patient.subscriptionStartDate) return null;
+    const end = new Date(patient.subscriptionStartDate);
+    end.setMonth(end.getMonth() + (patient.subscriptionPeriodMonths ?? 0));
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    end.setHours(0, 0, 0, 0);
+    return Math.round((end.getTime() - today.getTime()) / 86400000);
+  })();
+
   return (
     <PatientHomeDark
       assignmentIndexEntries={assignmentIndexEntries}
       welcomeLine1={welcomeLine1}
       welcomeLine2={welcomeLine2}
+      programEndsInDays={programEndsInDays}
       patient={{
         id: patient.id,
         firstName,

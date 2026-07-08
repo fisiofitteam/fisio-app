@@ -25,15 +25,17 @@ function eur(n: number): string {
 export function CEOPanelTabs({
   teamBlock,
   salesBlock,
+  preventionBlock,
   finance,
   userFullName,
 }: {
   teamBlock: React.ReactNode;
   salesBlock: React.ReactNode;
+  preventionBlock: React.ReactNode;
   finance: FinanceResumen;
   userFullName: string;
 }) {
-  const [tab, setTab] = useState<"mi-ceo" | "team" | "sales" | "finance">("mi-ceo");
+  const [tab, setTab] = useState<"mi-ceo" | "team" | "sales" | "prevention" | "finance">("mi-ceo");
 
   return (
     <>
@@ -41,12 +43,14 @@ export function CEOPanelTabs({
         <TabButton active={tab === "mi-ceo"} onClick={() => setTab("mi-ceo")} label="🎯 Mi CEO" />
         <TabButton active={tab === "sales"} onClick={() => setTab("sales")} label="📈 Métricas de venta" />
         <TabButton active={tab === "team"} onClick={() => setTab("team")} label="📊 Métricas equipo" />
+        <TabButton active={tab === "prevention"} onClick={() => setTab("prevention")} label="🛡 Prevention" />
         <TabButton active={tab === "finance"} onClick={() => setTab("finance")} label="💰 Finanzas" />
       </div>
 
       {tab === "mi-ceo" && <CeoPersonalView userFullName={userFullName} />}
       {tab === "sales" && salesBlock}
       {tab === "team" && teamBlock}
+      {tab === "prevention" && preventionBlock}
 
       {tab === "finance" && (
         <>

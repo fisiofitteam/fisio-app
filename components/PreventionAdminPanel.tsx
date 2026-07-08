@@ -290,6 +290,7 @@ const STATUS_LABEL: Record<string, { label: string; color: string }> = {
 
 function SubscribersList({ subscribers }: { subscribers: SubscriberRow[] }) {
   const [filter, setFilter] = useState<"all" | "active" | "history">("active");
+  const [adding, setAdding] = useState(false);
 
   const filtered = subscribers.filter((s) => {
     if (filter === "all") return true;
@@ -304,18 +305,29 @@ function SubscribersList({ subscribers }: { subscribers: SubscriberRow[] }) {
         <p className="text-sm text-neutral-500">
           {filtered.length} suscriptor{filtered.length === 1 ? "" : "es"} · Estado, plan y próximo cobro.
         </p>
-        <div className="flex gap-1">
-          <FilterChip active={filter === "active"} onClick={() => setFilter("active")}>
-            Activos
-          </FilterChip>
-          <FilterChip active={filter === "history"} onClick={() => setFilter("history")}>
-            Histórico
-          </FilterChip>
-          <FilterChip active={filter === "all"} onClick={() => setFilter("all")}>
-            Todos
-          </FilterChip>
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1">
+            <FilterChip active={filter === "active"} onClick={() => setFilter("active")}>
+              Activos
+            </FilterChip>
+            <FilterChip active={filter === "history"} onClick={() => setFilter("history")}>
+              Histórico
+            </FilterChip>
+            <FilterChip active={filter === "all"} onClick={() => setFilter("all")}>
+              Todos
+            </FilterChip>
+          </div>
+          <button
+            onClick={() => setAdding(true)}
+            className="text-xs font-medium px-3 py-1.5 rounded-lg"
+            style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+          >
+            + Añadir manual
+          </button>
         </div>
       </div>
+
+      {adding && <AddManualSubscriberModal onClose={() => setAdding(false)} />}
 
       {filtered.length === 0 ? (
         <div
@@ -406,8 +418,12 @@ function SubscriberRow({ sub }: { sub: SubscriberRow }) {
       </div>
       <div className="text-right shrink-0">
         <div className="text-sm font-semibold tabular-nums">
-          {planCfg ? planCfg.label : sub.plan} ·{" "}
-          {(sub.amountCents / 100).toFixed(0)} {sub.currency.toUpperCase()}
+          {planCfg
+            ? planCfg.label
+            : sub.plan === "indefinite"
+              ? "Indefinida"
+              : sub.plan}{" "}
+          · {sub.amountCents === 0 ? "manual" : `${(sub.amountCents / 100).toFixed(0)} ${sub.currency.toUpperCase()}`}
         </div>
         {nextEvent && (
           <div className="text-[11px] text-neutral-500">{nextEvent}</div>
@@ -424,5 +440,294 @@ function SubscriberRow({ sub }: { sub: SubscriberRow }) {
 
 function fmtDate(iso: string): string {
   const d = new Date(iso);
+  return d.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
+}
+
+// ─── Modal: añadir suscriptor manual ────────────────────────────────────────
+
+type PatientHit = {
+  id: string;
+  fullName: string;
+  programType: string | null;
+  diagnosis: string | null;
+};
+
+function AddManualSubscriberModal({ onClose }: { onClose: () => void }) {
+  const [mode, setMode] = useState<"new" | "existing">("new");
+
+  // Modo nuevo
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+
+  // Modo existente
+  const [query, setQuery] = useState("");
+  const [hits, setHits] = useState<PatientHit[]>([]);
+  const [selected, setSelected] = useState<PatientHit | null>(null);
+  const [searching, setSearching] = useState(false);
+
+  // Comunes
+  const [plan, setPlan] = useState<"quarterly" | "semiannual" | "annual" | "indefinite">("semiannual");
+  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [originSource, setOriginSource] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function runSearch(q: string) {
+    setQuery(q);
+    if (q.trim().length < 2) {
+      setHits([]);
+      return;
+    }
+    setSearching(true);
+    try {
+      const res = await fetch(`/api/patients/search?q=${encodeURIComponent(q)}`);
+      if (res.ok) setHits(await res.json());
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  async function save() {
+    setError("");
+    if (mode === "new" && !fullName.trim()) {
+      setError("El nombre es obligatorio");
+      return;
+    }
+    if (mode === "existing" && !selected) {
+      setError("Selecciona un paciente");
+      return;
+    }
+    setSaving(true);
+    const payload: any = {
+      plan,
+      startDate,
+      originSource: originSource.trim() || undefined,
+    };
+    if (mode === "existing") {
+      payload.patientId = selected!.id;
+    } else {
+      payload.fullName = fullName.trim();
+      if (email.trim()) payload.email = email.trim();
+      if (phone.trim()) payload.phone = phone.trim();
+    }
+    const res = await fetch("/api/prevention/manual-subscription", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      window.location.reload();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "No se pudo crear");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl max-w-md w-full p-5 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-1">
+          <h3 className="font-semibold">Añadir suscriptor manual</h3>
+          <button onClick={onClose} className="text-neutral-400 text-xl leading-none">✕</button>
+        </div>
+        <p className="text-xs text-neutral-500 mb-4">
+          Alta sin cobro (cortesía, regalo, beta). Marca el paciente como
+          Prevention y le crea una suscripción activa sin pasar por Stripe.
+        </p>
+
+        {/* Toggle nuevo / existente */}
+        <div className="flex gap-1 mb-4 p-1 rounded-lg bg-neutral-100">
+          <button
+            onClick={() => setMode("new")}
+            className={`flex-1 text-xs font-medium py-1.5 rounded ${
+              mode === "new" ? "bg-white shadow-sm text-neutral-900" : "text-neutral-500"
+            }`}
+          >
+            Paciente nuevo
+          </button>
+          <button
+            onClick={() => setMode("existing")}
+            className={`flex-1 text-xs font-medium py-1.5 rounded ${
+              mode === "existing" ? "bg-white shadow-sm text-neutral-900" : "text-neutral-500"
+            }`}
+          >
+            Paciente existente
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          {mode === "new" ? (
+            <>
+              <div>
+                <label className="text-xs text-neutral-500 block mb-1">Nombre completo *</label>
+                <input
+                  type="text"
+                  autoFocus
+                  className="input text-sm w-full"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-neutral-500 block mb-1">Email</label>
+                  <input
+                    type="email"
+                    className="input text-sm w-full"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="opcional"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-neutral-500 block mb-1">Teléfono</label>
+                  <input
+                    type="tel"
+                    className="input text-sm w-full"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="opcional"
+                  />
+                </div>
+              </div>
+            </>
+          ) : (
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">Buscar paciente</label>
+              <input
+                type="text"
+                autoFocus
+                className="input text-sm w-full"
+                value={query}
+                onChange={(e) => {
+                  setSelected(null);
+                  runSearch(e.target.value);
+                }}
+                placeholder="Escribe al menos 2 letras…"
+              />
+              {selected ? (
+                <div className="mt-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 flex justify-between items-center">
+                  <div>
+                    <div className="text-sm font-medium text-emerald-900">{selected.fullName}</div>
+                    <div className="text-[11px] text-emerald-700">
+                      {selected.programType ?? "sin programa"}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSelected(null)}
+                    className="text-xs text-emerald-800 underline"
+                  >
+                    cambiar
+                  </button>
+                </div>
+              ) : (
+                query.trim().length >= 2 && (
+                  <div className="mt-2 border border-neutral-200 rounded-lg max-h-40 overflow-y-auto">
+                    {searching && <div className="p-2 text-xs text-neutral-400">Buscando…</div>}
+                    {!searching && hits.length === 0 && (
+                      <div className="p-2 text-xs text-neutral-400">Sin resultados</div>
+                    )}
+                    {hits.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => setSelected(p)}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 border-b border-neutral-100 last:border-b-0"
+                      >
+                        <div className="font-medium">{p.fullName}</div>
+                        <div className="text-[11px] text-neutral-500">
+                          {p.programType ?? "sin programa"}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )
+              )}
+            </div>
+          )}
+
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Plan *</label>
+            <div className="grid grid-cols-2 gap-1.5">
+              {(
+                [
+                  { key: "quarterly", label: "Trimestral (3m)" },
+                  { key: "semiannual", label: "Semestral (6m)" },
+                  { key: "annual", label: "Anual (12m)" },
+                  { key: "indefinite", label: "Indefinida" },
+                ] as const
+              ).map((p) => (
+                <button
+                  key={p.key}
+                  onClick={() => setPlan(p.key)}
+                  className={`text-xs font-medium py-2 rounded-lg border ${
+                    plan === p.key
+                      ? "bg-neutral-900 text-white border-neutral-900"
+                      : "bg-white text-neutral-700 border-neutral-200 hover:border-neutral-400"
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Fecha de inicio *</label>
+            <input
+              type="date"
+              className="input text-sm w-full"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+            {plan !== "indefinite" && (
+              <p className="text-[11px] text-neutral-400 mt-1">
+                Termina el {previewEnd(startDate, plan)}.
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Origen (opcional)</label>
+            <input
+              type="text"
+              className="input text-sm w-full"
+              value={originSource}
+              onChange={(e) => setOriginSource(e.target.value)}
+              placeholder="regalo, beta, embajador… (default: manual)"
+            />
+          </div>
+
+          {error && (
+            <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              {error}
+            </div>
+          )}
+
+          <button
+            onClick={save}
+            disabled={saving}
+            className="w-full text-sm font-medium py-2.5 rounded-lg"
+            style={{
+              background: "#10B981",
+              color: "#FFFFFF",
+              opacity: saving ? 0.5 : 1,
+              cursor: saving ? "wait" : "pointer",
+            }}
+          >
+            {saving ? "Creando…" : "Crear suscripción manual"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function previewEnd(startISO: string, plan: "quarterly" | "semiannual" | "annual"): string {
+  const months = plan === "quarterly" ? 3 : plan === "semiannual" ? 6 : 12;
+  const d = new Date(startISO);
+  if (isNaN(d.getTime())) return "—";
+  d.setMonth(d.getMonth() + months);
   return d.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
 }
