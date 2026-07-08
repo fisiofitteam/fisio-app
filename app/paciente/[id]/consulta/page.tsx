@@ -86,7 +86,7 @@ export default async function ConsultaPage({
         <section
           className="rounded-2xl p-5 mb-5 text-center"
           style={{
-            background: "linear-gradient(135deg, #10B981 0%, #059669 100%)",
+            background: "linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)",
             color: "#FFFFFF",
           }}
         >

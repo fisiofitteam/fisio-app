@@ -298,9 +298,9 @@ export type PreventionFaqItem = { q: string; a: string };
 
 export type PreventionLandingCopy = {
   // Colores del brand (permite cambiar el look completo sin tocar código)
-  brandPrimary: string;      // "#10B981"
-  brandPrimaryDark: string;  // "#059669"
-  brandAccentSoft: string;   // "#ECFDF5" — fondos suaves de badge
+  brandPrimary: string;      // "#FCD34D" — amarillo FisioFit (brand oficial)
+  brandPrimaryDark: string;  // "#F59E0B" — naranja del gradient
+  brandAccentSoft: string;   // "#FEF3C7" — fondos suaves de badge
 
   // Header
   brandName: string;
@@ -334,9 +334,9 @@ export type PreventionLandingCopy = {
 };
 
 export const PREVENTION_LANDING_DEFAULTS: PreventionLandingCopy = {
-  brandPrimary: "#10B981",
-  brandPrimaryDark: "#059669",
-  brandAccentSoft: "#ECFDF5",
+  brandPrimary: "#FCD34D",
+  brandPrimaryDark: "#F59E0B",
+  brandAccentSoft: "#FEF3C7",
 
   brandName: "FisioFit",
   brandSuffix: "Prevention",

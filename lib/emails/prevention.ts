@@ -9,7 +9,7 @@
  *   5. canceled       — al terminar el periodo si el usuario canceló.
  *
  * Todas devuelven { subject, html, text } listo para pasar a sendEmail().
- * El look es sobrio (Prevention hereda estilo FisioFit) con acento emerald.
+ * Look transaccional FisioFit: gradient oficial amarillo→naranja.
  */
 import { PREVENTION_PLAN_CONFIG, type PreventionPlan } from "@/lib/stripe";
 

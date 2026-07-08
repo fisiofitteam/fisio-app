@@ -52,7 +52,7 @@ export function ConsultationCheckoutButton() {
         onClick={() => (expanded ? go() : setExpanded(true))}
         disabled={busy}
         className="w-full text-sm font-semibold py-3 rounded-xl disabled:opacity-50"
-        style={{ background: "#FFFFFF", color: "#059669" }}
+        style={{ background: "#FFFFFF", color: "#F59E0B" }}
       >
         {busy ? "Redirigiendo…" : expanded ? "Ir a pago seguro (Stripe) →" : "Reservar mi consulta →"}
       </button>

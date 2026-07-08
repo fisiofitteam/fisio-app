@@ -175,9 +175,9 @@ export function PatientHomeDark({
             rel="noopener noreferrer"
             className="mb-5 rounded-2xl p-4 flex items-center gap-3 transition-transform active:scale-[0.99]"
             style={{
-              background: "linear-gradient(135deg, #10B981 0%, #059669 100%)",
+              background: "linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)",
               color: "#FFFFFF",
-              boxShadow: "0 8px 24px -8px rgba(16, 185, 129, 0.5)",
+              boxShadow: "0 8px 24px -8px rgba(245, 158, 11, 0.55)",
             }}
           >
             <div className="text-2xl flex-shrink-0">🛡</div>

@@ -120,7 +120,7 @@ export function PatientHomePrevention({
                 width: 52, height: 52, borderRadius: 14,
                 background: patientPhotoUrl
                   ? "transparent"
-                  : "linear-gradient(135deg, #10B981 0%, #059669 100%)",
+                  : "linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)",
                 color: "#FFFFFF",
                 fontSize: 22,
                 letterSpacing: "-0.03em",
@@ -223,7 +223,7 @@ export function PatientHomePrevention({
             href={`/paciente/${patientId}/sesion-hoy`}
             className="block rounded-2xl p-5 mb-5 transition-transform active:scale-[0.98]"
             style={{
-              background: "linear-gradient(135deg, #10B981 0%, #059669 100%)",
+              background: "linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)",
               color: "#FFFFFF",
             }}
           >
@@ -287,7 +287,7 @@ export function PatientHomePrevention({
           className="block rounded-2xl p-4 mb-6 relative overflow-hidden"
           style={{
             background: "var(--p-surface)",
-            border: "1px dashed #10B981",
+            border: "1px dashed #FCD34D",
             color: "var(--p-text)",
           }}
         >
@@ -297,7 +297,7 @@ export function PatientHomePrevention({
               style={{
                 width: 48,
                 height: 48,
-                background: "linear-gradient(135deg, #10B981 0%, #059669 100%)",
+                background: "linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)",
                 color: "#FFFFFF",
               }}
             >
@@ -311,7 +311,7 @@ export function PatientHomePrevention({
                 45 minutos por vídeollamada · 17 €
               </div>
             </div>
-            <div className="text-lg font-bold flex-shrink-0" style={{ color: "#10B981" }}>
+            <div className="text-lg font-bold flex-shrink-0" style={{ color: "#FCD34D" }}>
               →
             </div>
           </div>
@@ -377,7 +377,7 @@ function PreventionActionCard({
         </span>
       )}
       <div className="flex flex-col items-center text-center gap-2">
-        <Icon size={28} strokeWidth={2} style={{ color: "#10B981" }} />
+        <Icon size={28} strokeWidth={2} style={{ color: "#FCD34D" }} />
         <div className="min-w-0 w-full">
           <div className="font-semibold text-sm leading-tight" style={{ letterSpacing: "-0.02em" }}>
             {label}

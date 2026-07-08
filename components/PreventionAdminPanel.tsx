@@ -293,7 +293,7 @@ function CreatePreventionProgramModal({ onClose }: { onClose: () => void }) {
 const STATUS_LABEL: Record<string, { label: string; color: string }> = {
   scheduled: { label: "Programada", color: "bg-blue-50 text-blue-800 border-blue-200" },
   trialing: { label: "En prueba", color: "bg-violet-50 text-violet-800 border-violet-200" },
-  active: { label: "Activa", color: "bg-emerald-50 text-emerald-800 border-emerald-200" },
+  active: { label: "Activa", color: "bg-amber-50 text-amber-800 border-amber-200" },
   past_due: { label: "Pago fallido", color: "bg-amber-50 text-amber-800 border-amber-200" },
   unpaid: { label: "Impago", color: "bg-red-50 text-red-800 border-red-200" },
   canceled: { label: "Cancelada", color: "bg-neutral-100 text-neutral-600 border-neutral-300" },
@@ -487,7 +487,7 @@ function SubscriberRow({ sub }: { sub: SubscriberRow }) {
         </div>
         {resendMsg && (
           <div
-            className={`text-[11px] mt-1 ${resendMsg.ok ? "text-emerald-700" : "text-red-600"}`}
+            className={`text-[11px] mt-1 ${resendMsg.ok ? "text-amber-700" : "text-red-600"}`}
           >
             {resendMsg.ok ? "✓ " : "✗ "}
             {resendMsg.text}
@@ -524,7 +524,7 @@ function SubscriberRow({ sub }: { sub: SubscriberRow }) {
             onClick={openWhatsApp}
             disabled={waLoading || !sub.patient.phone}
             title={sub.patient.phone ? "Abrir WhatsApp con el magic link" : "Sin WhatsApp en la ficha"}
-            className="text-[10px] font-medium px-2 py-1 rounded border border-emerald-200 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 hover:border-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="text-[10px] font-medium px-2 py-1 rounded border border-amber-200 text-amber-800 bg-amber-50 hover:bg-amber-100 hover:border-amber-300 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {waLoading ? "…" : "💬 WhatsApp"}
           </button>
@@ -706,16 +706,16 @@ function AddManualSubscriberModal({ onClose }: { onClose: () => void }) {
                 placeholder="Escribe al menos 2 letras…"
               />
               {selected ? (
-                <div className="mt-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 flex justify-between items-center">
+                <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 flex justify-between items-center">
                   <div>
-                    <div className="text-sm font-medium text-emerald-900">{selected.fullName}</div>
-                    <div className="text-[11px] text-emerald-700">
+                    <div className="text-sm font-medium text-amber-900">{selected.fullName}</div>
+                    <div className="text-[11px] text-amber-700">
                       {selected.programType ?? "sin programa"}
                     </div>
                   </div>
                   <button
                     onClick={() => setSelected(null)}
-                    className="text-xs text-emerald-800 underline"
+                    className="text-xs text-amber-800 underline"
                   >
                     cambiar
                   </button>
@@ -797,7 +797,7 @@ function AddManualSubscriberModal({ onClose }: { onClose: () => void }) {
             />
           </div>
 
-          <label className="flex items-start gap-2 text-xs text-neutral-700 cursor-pointer select-none rounded-lg bg-emerald-50 border border-emerald-200 p-3">
+          <label className="flex items-start gap-2 text-xs text-neutral-700 cursor-pointer select-none rounded-lg bg-amber-50 border border-amber-200 p-3">
             <input
               type="checkbox"
               checked={sendWelcome}
@@ -805,8 +805,8 @@ function AddManualSubscriberModal({ onClose }: { onClose: () => void }) {
               className="mt-0.5"
             />
             <span>
-              <strong className="text-emerald-900">Enviar email de bienvenida con acceso 1-clic</strong>
-              <span className="block text-[11px] text-emerald-700/80 mt-0.5">
+              <strong className="text-amber-900">Enviar email de bienvenida con acceso 1-clic</strong>
+              <span className="block text-[11px] text-amber-700/80 mt-0.5">
                 Le llega un email con el link mágico — entra sin códigos ni contraseñas.
                 {mode === "new" ? " Solo se envía si has puesto email." : ""}
               </span>
@@ -824,7 +824,7 @@ function AddManualSubscriberModal({ onClose }: { onClose: () => void }) {
             disabled={saving}
             className="w-full text-sm font-medium py-2.5 rounded-lg"
             style={{
-              background: "#10B981",
+              background: "#FCD34D",
               color: "#FFFFFF",
               opacity: saving ? 0.5 : 1,
               cursor: saving ? "wait" : "pointer",

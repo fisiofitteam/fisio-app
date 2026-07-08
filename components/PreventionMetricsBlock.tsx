@@ -16,7 +16,7 @@ export function PreventionMetricsBlock({ metrics }: { metrics: PreventionMetrics
     <section className="card mb-3 relative overflow-hidden">
       <div
         className="absolute top-0 left-0 w-1 h-full"
-        style={{ background: "linear-gradient(180deg, #10B981 0%, #059669 100%)" }}
+        style={{ background: "linear-gradient(180deg, #FCD34D 0%, #F59E0B 100%)" }}
       />
       <div className="flex justify-between items-center mb-4 pl-2 flex-wrap gap-2">
         <div>
@@ -27,10 +27,10 @@ export function PreventionMetricsBlock({ metrics }: { metrics: PreventionMetrics
 
       {/* KPIs principales */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pl-2 mb-4">
-        <div className="rounded-xl p-4 border border-emerald-200" style={{ background: "#ECFDF5" }}>
-          <div className="text-xs uppercase text-emerald-700 font-medium">MRR</div>
-          <div className="text-3xl font-bold text-emerald-800 mt-1 tabular-nums">{eur(mrrEur)}</div>
-          <div className="text-xs text-emerald-700 mt-0.5">
+        <div className="rounded-xl p-4 border border-amber-200" style={{ background: "#FEF3C7" }}>
+          <div className="text-xs uppercase text-amber-700 font-medium">MRR</div>
+          <div className="text-3xl font-bold text-amber-800 mt-1 tabular-nums">{eur(mrrEur)}</div>
+          <div className="text-xs text-amber-700 mt-0.5">
             ARR: {eur(arrEur)}
           </div>
         </div>

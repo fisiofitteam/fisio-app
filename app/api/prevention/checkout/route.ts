@@ -101,7 +101,8 @@ export async function POST(req: Request) {
         phone,
       },
       allow_promotion_codes: true,
-      billing_address_collection: "required",
+      // No pedimos dirección postal en Prevention: es 100% digital, sin
+      // envíos físicos. Solo email + nombre + WhatsApp del propio form.
       success_url: successUrl,
       cancel_url: cancelUrl,
     });

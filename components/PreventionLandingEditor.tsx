@@ -66,11 +66,11 @@ export function PreventionLandingEditor({
 
   return (
     <div className="space-y-5">
-      <div className="rounded-2xl bg-gradient-to-br from-emerald-50 to-white border border-emerald-200 p-4">
+      <div className="rounded-2xl bg-gradient-to-br from-amber-50 to-white border border-amber-200 p-4">
         <div className="flex justify-between items-start gap-3 flex-wrap">
           <div>
-            <div className="text-sm font-semibold text-emerald-900">Editar landing pública</div>
-            <div className="text-xs text-emerald-700/80 mt-0.5">
+            <div className="text-sm font-semibold text-amber-900">Editar landing pública</div>
+            <div className="text-xs text-amber-700/80 mt-0.5">
               Los cambios se aplican inmediatamente en{" "}
               <a
                 href="/prevention"
@@ -177,7 +177,7 @@ export function PreventionLandingEditor({
         <div className="rounded-2xl bg-white shadow-lg border border-neutral-200 p-3 flex items-center gap-3 flex-wrap justify-between">
           <div className="text-xs text-neutral-500">
             {msg ? (
-              <span className={msg.kind === "ok" ? "text-emerald-700" : "text-red-600"}>
+              <span className={msg.kind === "ok" ? "text-amber-700" : "text-red-600"}>
                 {msg.kind === "ok" ? "✓ " : "✗ "}
                 {msg.text}
               </span>
@@ -205,7 +205,7 @@ export function PreventionLandingEditor({
               disabled={saving}
               className="text-sm font-semibold px-4 py-2 rounded-lg text-white"
               style={{
-                background: "linear-gradient(135deg, #10B981 0%, #059669 100%)",
+                background: "linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)",
                 opacity: saving ? 0.5 : 1,
                 cursor: saving ? "wait" : "pointer",
               }}

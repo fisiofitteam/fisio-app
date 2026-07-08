@@ -38,7 +38,7 @@ export default async function ConsultaGraciasPage({
           href={`/paciente/${patient.id}`}
           className="inline-flex items-center gap-1 text-sm font-semibold px-5 py-3 rounded-xl"
           style={{
-            background: "linear-gradient(135deg, #10B981 0%, #059669 100%)",
+            background: "linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)",
             color: "#FFFFFF",
           }}
         >

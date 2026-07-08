@@ -125,7 +125,7 @@ export default async function PatientSemanaCompletaPage({
     if (trnWeek) {
       blocks.push({
         blockLabel: "", // sin chip visible en la tarea
-        blockColor: "#10B981",
+        blockColor: "#FCD34D",
         title: trnWeek.title || null,
         published: Boolean(trnWeek.publishedAt),
         days: trnWeek.days.map((d) => ({ dayOfWeek: d.dayOfWeek, tasks: d.tasks.map(mapTask) })),

@@ -7,11 +7,11 @@ export const PROGRAM_LABELS: Record<string, { label: string; color: string }> = 
   RECUPERA: { label: "RECUPERA", color: "bg-neutral-100 text-neutral-700 border-neutral-300" },
   CONSOLIDA: { label: "CONSOLIDA", color: "bg-neutral-100 text-neutral-700 border-neutral-300" },
   ADVANCE: { label: "ADVANCE", color: "bg-neutral-100 text-neutral-700 border-neutral-300" },
-  PREVENTION: { label: "PREVENTION", color: "bg-emerald-50 text-emerald-800 border-emerald-200" },
+  PREVENTION: { label: "PREVENTION", color: "bg-amber-50 text-amber-800 border-amber-200" },
 };
 
 export const DIFFICULTY_LABELS: Record<string, { label: string; color: string }> = {
-  FACIL: { label: "FÁCIL", color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
+  FACIL: { label: "FÁCIL", color: "bg-amber-100 text-amber-800 border-amber-200" },
   MEDIO: { label: "MEDIO", color: "bg-amber-100 text-amber-800 border-amber-200" },
   DIFICIL: { label: "DIFÍCIL", color: "bg-red-100 text-red-800 border-red-200" },
 };
