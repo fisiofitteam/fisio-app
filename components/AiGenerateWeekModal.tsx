@@ -45,8 +45,21 @@ export function AiGenerateWeekModal({
     return initial;
   });
 
-  async function generateForDay(dow: number) {
+  /**
+   * Genera un día concreto pasando como contexto extra qué ejercicios ya
+   * han salido en días previos. Esto es lo que evita que Claude repita
+   * "back squat" el lunes y otra vez el martes.
+   */
+  async function generateForDay(dow: number, alreadyUsed: string[] = []) {
     setDays((prev) => ({ ...prev, [dow]: { status: "loading" } }));
+    const contextParts: string[] = [
+      `Sesión de ${DAY_LABELS[dow]} de la semana. Encaja con el plan semanal.`,
+    ];
+    if (alreadyUsed.length > 0) {
+      contextParts.push(
+        `Estos ejercicios YA se han programado en días anteriores de esta misma semana — NO los repitas hoy: ${alreadyUsed.join(", ")}.`
+      );
+    }
     try {
       const res = await fetch("/api/ai/generate-session", {
         method: "POST",
@@ -56,26 +69,51 @@ export function AiGenerateWeekModal({
           prompt: prompt.trim(),
           dayOfWeek: dow,
           durationMin: FIXED_DURATION_BY_KIND[kind],
-          extraContext: `Sesión de ${DAY_LABELS[dow]} de la semana. Encaja con el resto de días L-V manteniendo un plan coherente.`,
+          extraContext: contextParts.join(" "),
         }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d?.error ?? "Error");
       setDays((prev) => ({ ...prev, [dow]: { status: "ready", session: d.session, meta: d.meta } }));
+      return d.session as Session;
     } catch (e: any) {
       setDays((prev) => ({ ...prev, [dow]: { status: "error", message: e?.message ?? "Error de red" } }));
+      return null;
     }
+  }
+
+  function collectExercises(sessions: (Session | null)[]): string[] {
+    const seen = new Set<string>();
+    for (const s of sessions) {
+      if (!s) continue;
+      for (const b of s.blocks) {
+        for (const ex of b.exercises) {
+          const norm = ex.trim();
+          if (norm) seen.add(norm);
+        }
+      }
+    }
+    return [...seen];
   }
 
   async function generateAll() {
     if (!prompt.trim()) return;
     setBusy(true);
     setErr(null);
-    // Reset a "loading" para los 5 antes de disparar en paralelo.
+    // Reset a "loading" para los 5 antes de arrancar
     const resetLoading: Record<number, DayResult> = {};
     for (let d = 1; d <= 5; d++) resetLoading[d] = { status: "loading" };
     setDays(resetLoading);
-    await Promise.all([1, 2, 3, 4, 5].map((dow) => generateForDay(dow)));
+
+    // Generación SECUENCIAL con contexto acumulativo: cada día recibe la
+    // lista de ejercicios de los días previos con orden explícito de no
+    // repetirlos. Es ~1.5x más lento que paralelo pero da coherencia semanal.
+    const generated: (Session | null)[] = [];
+    for (const dow of [1, 2, 3, 4, 5]) {
+      const alreadyUsed = collectExercises(generated);
+      const s = await generateForDay(dow, alreadyUsed);
+      generated.push(s);
+    }
     setBusy(false);
   }
 
@@ -170,7 +208,7 @@ export function AiGenerateWeekModal({
 
         <div className="flex gap-2 items-center justify-between flex-wrap mb-3">
           <p className="text-[11px] text-neutral-500 italic">
-            ⏱ Duración fija · {FIXED_DURATION_BY_KIND[kind]} min por día. 💡 Se lanzan 5 tiros en paralelo (~15-25s).
+            ⏱ Duración fija · {FIXED_DURATION_BY_KIND[kind]} min por día. 💡 Se generan L→V en secuencia (~40-60s) para no repetir ejercicios.
           </p>
           <button
             onClick={generateAll}
