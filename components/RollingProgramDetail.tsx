@@ -20,6 +20,15 @@ type Program = {
   name: string;
   description: string | null;
   isActive: boolean;
+  role: string;
+};
+
+// Rol "hermano" con el que se puede copiar semana. Prevention y Advance
+// Accesorios se enriquecen mutuamente porque suelen ser sesiones cortas
+// de movilidad/técnica.
+const SIBLING_ROLE_LABEL: Record<string, string> = {
+  "prevention": "Advance Accesorios",
+  "advance-accesorios": "Prevention",
 };
 
 type Task = {
@@ -162,6 +171,37 @@ export function RollingProgramDetail({
       }),
     });
     if (res.ok) await loadWeek(currentMonday);
+  }
+
+  // Traer la misma semana del programa "hermano" (Prevention ↔ Accesorios)
+  const [copyingFromSibling, setCopyingFromSibling] = useState(false);
+  const siblingLabel = SIBLING_ROLE_LABEL[program.role];
+  async function copyFromSibling() {
+    if (!siblingLabel) return;
+    const confirmMsg = week
+      ? `Vas a sobrescribir el contenido de esta semana con el de ${siblingLabel}. ¿Continuar?`
+      : `Traer la semana desde ${siblingLabel}. ¿Continuar?`;
+    if (!confirm(confirmMsg)) return;
+    setCopyingFromSibling(true);
+    try {
+      const res = await fetch("/api/rolling-weeks/copy-from-sibling", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          programId: program.id,
+          weekStartDate: currentMonday.toISOString(),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        alert(data.error || "No se pudo copiar la semana");
+        return;
+      }
+      alert(`Copiado desde "${data.siblingProgramName}": ${data.days} días, ${data.tasks} tareas.`);
+      await loadWeek(currentMonday);
+    } finally {
+      setCopyingFromSibling(false);
+    }
   }
 
   // Publicar / despublicar
@@ -311,6 +351,16 @@ export function RollingProgramDetail({
               >
                 ✨ Generar semana con IA
               </button>
+              {siblingLabel && (
+                <button
+                  onClick={copyFromSibling}
+                  disabled={copyingFromSibling}
+                  className="text-xs font-medium px-2.5 py-1 rounded-md border border-neutral-300 bg-white hover:bg-neutral-50 disabled:opacity-50"
+                  title={`Copiar esta misma semana desde ${siblingLabel}`}
+                >
+                  {copyingFromSibling ? "Copiando…" : `📥 Traer de ${siblingLabel}`}
+                </button>
+              )}
               {week.publishedAt ? (
                 <span className="text-emerald-600 font-medium">● Publicada</span>
               ) : (
@@ -332,13 +382,25 @@ export function RollingProgramDetail({
           <p className="text-sm text-neutral-500 mb-4 italic">
             Esta semana aún no tiene contenido.
           </p>
-          <button
-            onClick={startThisWeek}
-            className="text-sm font-medium px-4 py-2 rounded-lg"
-            style={{ background: "#0A0A0A", color: "#FAFAFA" }}
-          >
-            + Empezar a programar esta semana
-          </button>
+          <div className="flex items-center justify-center gap-2 flex-wrap">
+            <button
+              onClick={startThisWeek}
+              className="text-sm font-medium px-4 py-2 rounded-lg"
+              style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+            >
+              + Empezar a programar esta semana
+            </button>
+            {siblingLabel && (
+              <button
+                onClick={copyFromSibling}
+                disabled={copyingFromSibling}
+                className="text-sm font-medium px-4 py-2 rounded-lg border border-neutral-300 bg-white hover:bg-neutral-50 disabled:opacity-50"
+                title={`Copiar esta misma semana desde ${siblingLabel}`}
+              >
+                {copyingFromSibling ? "Copiando…" : `📥 Traer de ${siblingLabel}`}
+              </button>
+            )}
+          </div>
         </div>
       ) : (
         <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
