@@ -26,7 +26,7 @@ import { prisma } from "@/lib/prisma";
 import { notifyHeadSuccess, notifyProfessional } from "@/lib/notifications";
 import { applyRenewal } from "@/lib/renewals";
 import { isPreventionPlan } from "@/lib/stripe";
-import { createPreventionSubscription } from "@/lib/prevention";
+import { createPreventionSubscription, ensurePreventionRollingProgram } from "@/lib/prevention";
 import { getOrCreatePatientAccessPath } from "@/lib/auth";
 import { sendEmail } from "@/lib/email";
 import {
@@ -515,6 +515,9 @@ async function handlePreventionCheckoutCompleted(session: Stripe.Checkout.Sessio
   const stripeCustomerId = typeof session.customer === "string"
     ? session.customer
     : session.customer?.id;
+
+  // Enlazar al primer Rolling Prevention activo (idempotente).
+  await ensurePreventionRollingProgram(patient.id);
 
   const sub = await createPreventionSubscription({
     patientId: patient.id,

@@ -23,6 +23,7 @@ import { PREVENTION_PLAN_CONFIG, type PreventionPlan } from "@/lib/stripe";
 import { getOrCreatePatientAccessPath } from "@/lib/auth";
 import { sendEmail } from "@/lib/email";
 import { welcomeEmail } from "@/lib/emails/prevention";
+import { ensurePreventionRollingProgram } from "@/lib/prevention";
 
 export const runtime = "nodejs";
 
@@ -118,21 +119,10 @@ export async function POST(req: Request) {
     });
   }
 
-  // ─── 2. Asignar programa Prevention si no lo tiene ────────────────────
-  // Para que vea contenido semanal desde el minuto uno. Toma el primer
-  // rolling con role="prevention" isActive=true.
-  if (!patient.rollingProgramId) {
-    const rp = await prisma.rollingProgram.findFirst({
-      where: { role: "prevention", isActive: true },
-      orderBy: { createdAt: "asc" },
-      select: { id: true },
-    });
-    if (rp) {
-      patient = await prisma.patient.update({
-        where: { id: patient.id },
-        data: { rollingProgramId: rp.id },
-      });
-    }
+  // ─── 2. Asignar programa Prevention si no lo tiene (idempotente) ─────
+  const linkedRollingProgramId = await ensurePreventionRollingProgram(patient.id);
+  if (linkedRollingProgramId && patient.rollingProgramId !== linkedRollingProgramId) {
+    patient = { ...patient, rollingProgramId: linkedRollingProgramId };
   }
 
   // ─── 3. Crear PatientSubscription ─────────────────────────────────────

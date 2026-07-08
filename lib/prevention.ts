@@ -162,3 +162,34 @@ export async function markCancelAtPeriodEnd(subId: string) {
     data: { cancelAtPeriodEnd: true },
   });
 }
+
+/**
+ * Asigna al paciente el primer programa Rolling Prevention activo si aún
+ * no tiene ninguno. Se usa al crear la cuenta (landing/webhook/manual) y
+ * también como auto-heal cuando el paciente entra a su home y no está
+ * enlazado (por ejemplo si el programa se creó DESPUÉS del alta).
+ *
+ * Devuelve el rollingProgramId asignado (o el que ya tenía). Null si no
+ * hay ningún programa Prevention activo.
+ */
+export async function ensurePreventionRollingProgram(patientId: string): Promise<string | null> {
+  const patient = await prisma.patient.findUnique({
+    where: { id: patientId },
+    select: { rollingProgramId: true },
+  });
+  if (!patient) return null;
+  if (patient.rollingProgramId) return patient.rollingProgramId;
+
+  const rp = await prisma.rollingProgram.findFirst({
+    where: { role: "prevention", isActive: true },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  if (!rp) return null;
+
+  await prisma.patient.update({
+    where: { id: patientId },
+    data: { rollingProgramId: rp.id },
+  });
+  return rp.id;
+}

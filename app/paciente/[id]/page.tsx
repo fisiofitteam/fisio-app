@@ -9,6 +9,7 @@ import { getPauseSnapshot, weekStartDate } from "@/lib/program-pauses";
 import { getWelcomeConfig } from "@/lib/welcome-config";
 import { pickWelcomeMessage } from "@/lib/welcome-content";
 import { applyVars } from "@/lib/landing-content";
+import { ensurePreventionRollingProgram } from "@/lib/prevention";
 
 export default async function PatientHome({ params }: { params: { id: string } }) {
   const patient = await prisma.patient.findUnique({
@@ -40,8 +41,16 @@ export default async function PatientHome({ params }: { params: { id: string } }
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const thisMonday = weekStartDate(today);
+    // Auto-heal: si el paciente Prevention no está enlazado a un rolling
+    // (ej. pacientes creados antes de este fix, o el programa Prevention
+    // se creó después del alta), le asignamos el primer activo aquí en
+    // lectura para que el home muestre contenido sin necesidad de que la
+    // CEO intervenga manualmente.
     const preventionRollingId =
-      patient.rollingProgramId ?? patient.rollingAccessoriesId ?? patient.rollingTrainingId;
+      patient.rollingProgramId
+      ?? patient.rollingAccessoriesId
+      ?? patient.rollingTrainingId
+      ?? (await ensurePreventionRollingProgram(patient.id));
 
     // Fecha de fin de suscripción para avisos discretos de renovación
     const activeSub = await prisma.patientSubscription.findFirst({

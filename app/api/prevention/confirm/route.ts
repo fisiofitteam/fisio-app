@@ -18,7 +18,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { stripe, isPreventionPlan } from "@/lib/stripe";
-import { createPreventionSubscription } from "@/lib/prevention";
+import { createPreventionSubscription, ensurePreventionRollingProgram } from "@/lib/prevention";
 import { createSessionForPatient } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -113,7 +113,12 @@ export async function POST(req: Request) {
     });
   }
 
-  // ─── 2. Crear PatientSubscription (idempotente) ───────────────────────
+  // ─── 2. Enlazar el paciente al Rolling Prevention activo ─────────────
+  // Si no lo hacemos, el home Prevention mostrará "estamos preparando tu
+  // semana" indefinidamente aunque haya contenido publicado.
+  await ensurePreventionRollingProgram(patient.id);
+
+  // ─── 3. Crear PatientSubscription (idempotente) ───────────────────────
   const subscription = await createPreventionSubscription({
     patientId: patient.id,
     plan,
@@ -123,7 +128,7 @@ export async function POST(req: Request) {
     originSource: "landing",
   });
 
-  // ─── 3. Crear sesión web para que el paciente entre directo ───────────
+  // ─── 4. Crear sesión web para que el paciente entre directo ───────────
   // Solo la primera vez (createdNew). En reintentos (webhook + confirm),
   // no queremos generar otra cookie de sesión.
   let sessionToken: string | null = null;
