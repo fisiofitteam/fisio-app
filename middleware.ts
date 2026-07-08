@@ -20,6 +20,8 @@ const PUBLIC_PATHS = [
   "/api/sale",      // endpoints públicos del flujo de venta (status, checkout, create-account)
   "/renovar",       // landing pública de renovación (paciente existente)
   "/api/renewal",   // endpoints públicos del flujo de renovación (status, checkout)
+  "/prevention",    // landing pública Prevention + páginas de gracias
+  "/api/prevention",// endpoints públicos del flujo Prevention (checkout, confirm)
   "/api/webhooks",  // webhooks externos (Stripe) — los llama Stripe sin cookie
   "/privacidad",    // política de privacidad pública (requerida por App Store)
   "/terminos",     // términos y condiciones públicos
