@@ -5,8 +5,10 @@ import { PatientCommunity } from "@/components/PatientCommunity";
 export const dynamic = "force-dynamic";
 
 export default async function PatientCommunityPage({ params }: { params: { id: string } }) {
-  const patient = await prisma.patient.findUnique({ where: { id: params.id }, select: { id: true, fullName: true, photoUrl: true } });
+  const patient = await prisma.patient.findUnique({ where: { id: params.id }, select: { id: true, fullName: true, photoUrl: true, programType: true } });
   if (!patient) notFound();
+
+  const navVariant = patient.programType === "PREVENTION" ? "prevention" : "default";
 
   // Marca la comunidad como vista (reset del badge de novedades en la home).
   prisma.patient.update({ where: { id: patient.id }, data: { communityLastSeenAt: new Date() } }).catch(() => {});
@@ -38,6 +40,7 @@ export default async function PatientCommunityPage({ params }: { params: { id: s
       patientId={patient.id}
       myName={patient.fullName}
       myPhotoUrl={patient.photoUrl}
+      navVariant={navVariant}
       initialPosts={posts.map((p) => ({
         id: p.id,
         title: p.title,

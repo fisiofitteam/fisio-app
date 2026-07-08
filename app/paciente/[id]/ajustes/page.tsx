@@ -14,7 +14,7 @@ export default async function PatientSettingsPage({ params }: { params: { id: st
   const patient = await prisma.patient.findUnique({
     where: { id: params.id },
     select: {
-      id: true, fullName: true, photoUrl: true,
+      id: true, fullName: true, photoUrl: true, programType: true,
       shippingStreet: true, shippingNumber: true, shippingFloor: true,
       shippingStaircase: true, shippingDoor: true, shippingCity: true,
       shippingProvince: true, shippingPostalCode: true, shippingPhone: true,
@@ -22,6 +22,8 @@ export default async function PatientSettingsPage({ params }: { params: { id: st
     },
   });
   if (!patient) notFound();
+
+  const isPrevention = patient.programType === "PREVENTION";
 
   return (
     <main className="min-h-screen" style={{ color: "var(--p-text)" }}>
@@ -42,29 +44,33 @@ export default async function PatientSettingsPage({ params }: { params: { id: st
           <PatientPhotoUploader initialUrl={patient.photoUrl} />
         </section>
 
-        <section id="direccion"
-          className="rounded-2xl p-4 mb-3"
-          style={{ background: "var(--p-surface)", border: "1px solid var(--p-border)" }}
-        >
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-lg">📮</span>
-            <h2 className="font-semibold text-sm">Dirección postal</h2>
-          </div>
-          <p className="text-xs mb-3" style={{ color: "var(--p-text-dim)" }}>
-            Datos de contacto postal para que tu ficha esté completa.
-          </p>
-          <PatientShippingForm initial={{
-            shippingStreet: patient.shippingStreet,
-            shippingNumber: patient.shippingNumber,
-            shippingFloor: patient.shippingFloor,
-            shippingStaircase: patient.shippingStaircase,
-            shippingDoor: patient.shippingDoor,
-            shippingCity: patient.shippingCity,
-            shippingProvince: patient.shippingProvince,
-            shippingPostalCode: patient.shippingPostalCode,
-            shippingPhone: patient.shippingPhone,
-          }} />
-        </section>
+        {/* Sección de dirección postal — se oculta en Prevention (100% digital,
+            sin envíos físicos de merch ni parches). */}
+        {!isPrevention && (
+          <section id="direccion"
+            className="rounded-2xl p-4 mb-3"
+            style={{ background: "var(--p-surface)", border: "1px solid var(--p-border)" }}
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-lg">📮</span>
+              <h2 className="font-semibold text-sm">Dirección postal</h2>
+            </div>
+            <p className="text-xs mb-3" style={{ color: "var(--p-text-dim)" }}>
+              Datos de contacto postal para que tu ficha esté completa.
+            </p>
+            <PatientShippingForm initial={{
+              shippingStreet: patient.shippingStreet,
+              shippingNumber: patient.shippingNumber,
+              shippingFloor: patient.shippingFloor,
+              shippingStaircase: patient.shippingStaircase,
+              shippingDoor: patient.shippingDoor,
+              shippingCity: patient.shippingCity,
+              shippingProvince: patient.shippingProvince,
+              shippingPostalCode: patient.shippingPostalCode,
+              shippingPhone: patient.shippingPhone,
+            }} />
+          </section>
+        )}
 
         <section
           className="rounded-2xl p-4 mb-3"
@@ -103,7 +109,7 @@ export default async function PatientSettingsPage({ params }: { params: { id: st
         </section>
       </div>
 
-      <PatientNav patientId={patient.id} active="ajustes" />
+      <PatientNav patientId={patient.id} active="ajustes" variant={isPrevention ? "prevention" : "default"} />
     </main>
   );
 }

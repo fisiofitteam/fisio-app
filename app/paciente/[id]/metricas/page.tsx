@@ -11,9 +11,11 @@ export const dynamic = "force-dynamic";
 export default async function PatientMetricsPage({ params }: { params: { id: string } }) {
   const patient = await prisma.patient.findUnique({
     where: { id: params.id },
-    select: { id: true },
+    select: { id: true, programType: true },
   });
   if (!patient) notFound();
+
+  const navVariant = patient.programType === "PREVENTION" ? "prevention" : "advance";
 
   const today = todayMadridUtc();
 
@@ -107,7 +109,7 @@ export default async function PatientMetricsPage({ params }: { params: { id: str
         )}
       </div>
 
-      <PatientNav patientId={patient.id} active="metricas" variant="advance" />
+      <PatientNav patientId={patient.id} active="metricas" variant={navVariant} />
     </main>
   );
 }

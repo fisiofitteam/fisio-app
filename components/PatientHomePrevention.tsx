@@ -4,7 +4,6 @@ import Link from "next/link";
 import {
   ArrowLeft,
   BarChart3,
-  BookOpen,
   Users,
   Target,
   CalendarDays,
@@ -55,7 +54,6 @@ export function PatientHomePrevention({
   daysToRenewal,
   subscriptionStatus,
   cancelAtPeriodEnd,
-  shippingComplete = true,
 }: {
   firstName: string;
   patientId: string;
@@ -69,7 +67,6 @@ export function PatientHomePrevention({
   daysToRenewal?: number | null;
   subscriptionStatus?: string | null;
   cancelAtPeriodEnd?: boolean;
-  shippingComplete?: boolean;
 }) {
   const initial = firstName[0]?.toUpperCase() ?? "?";
 
@@ -193,28 +190,7 @@ export function PatientHomePrevention({
             )}
         </header>
 
-        {/* Aviso datos incompletos (shipping) */}
-        {!shippingComplete && (
-          <Link
-            href={`/paciente/${patientId}/ajustes#direccion`}
-            className="mb-5 rounded-xl px-4 py-3 text-sm flex items-center justify-between gap-3"
-            style={{
-              background: "var(--p-amber-bg)",
-              border: "1px solid var(--p-amber-border)",
-              color: "var(--p-amber-text)",
-            }}
-          >
-            <div className="flex-1 min-w-0">
-              <div className="font-medium mb-0.5">📮 Completa tu dirección postal</div>
-              <div className="text-xs" style={{ color: "var(--p-text-dim)" }}>
-                Faltan datos de contacto básicos.
-              </div>
-            </div>
-            <span className="text-xs font-medium underline flex-shrink-0">Completar</span>
-          </Link>
-        )}
-
-        {/* 💪 Sesión de hoy CTA principal (verde Prevention) */}
+        {/* 💪 Sesión de hoy CTA principal */}
         {hasSessionToday && (
           <Link
             href={`/paciente/${patientId}/sesion-hoy`}
@@ -256,12 +232,6 @@ export function PatientHomePrevention({
             sublabel="Fatiga, RPE, sueño…"
           />
           <PreventionActionCard
-            href={`/paciente/${patientId}/biblioteca`}
-            Icon={BookOpen}
-            label="Biblioteca"
-            sublabel="Recursos y vídeos"
-          />
-          <PreventionActionCard
             href={`/paciente/${patientId}/comunidad`}
             Icon={Users}
             label="Comunidad"
@@ -291,7 +261,7 @@ export function PatientHomePrevention({
           </section>
         )}
       </div>
-      <PatientNav patientId={patientId} active="home" variant="advance" />
+      <PatientNav patientId={patientId} active="home" variant="prevention" />
     </main>
   );
 }

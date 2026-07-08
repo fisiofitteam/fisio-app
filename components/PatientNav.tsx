@@ -10,23 +10,36 @@ export function PatientNav({
 }: {
   patientId: string;
   active: string;
-  variant?: "default" | "advance";
+  variant?: "default" | "advance" | "prevention";
 }) {
-  const items = variant === "advance"
-    ? [
+  const items = (() => {
+    if (variant === "prevention") {
+      // Prevention: sin PRs, sin adaptaciones, sin WOD. Solo contenido
+      // semanal, métricas y comunidad.
+      return [
+        { id: "home", label: "Hoy", href: `/paciente/${patientId}`, Icon: Home },
+        { id: "semana", label: "Semana", href: `/paciente/${patientId}/semana-completa`, Icon: Calendar },
+        { id: "metricas", label: "Métricas", href: `/paciente/${patientId}/metricas`, Icon: BarChart3 },
+        { id: "comunidad", label: "Comunidad", href: `/paciente/${patientId}/comunidad`, Icon: Users },
+      ];
+    }
+    if (variant === "advance") {
+      return [
         { id: "home", label: "Hoy", href: `/paciente/${patientId}`, Icon: Home },
         { id: "semana", label: "Semana", href: `/paciente/${patientId}/semana`, Icon: Calendar },
         { id: "prs", label: "PRs", href: `/paciente/${patientId}/prs`, Icon: Trophy },
         { id: "comunidad", label: "Comunidad", href: `/paciente/${patientId}/comunidad`, Icon: Users },
         { id: "metricas", label: "Métricas", href: `/paciente/${patientId}/metricas`, Icon: BarChart3 },
-      ]
-    : [
-        { id: "home", label: "Hoy", href: `/paciente/${patientId}`, Icon: Home },
-        { id: "semana", label: "Semana", href: `/paciente/${patientId}/semana`, Icon: Calendar },
-        { id: "wod", label: "WOD", href: `/paciente/${patientId}/wod`, Icon: Zap },
-        { id: "comunidad", label: "Comunidad", href: `/paciente/${patientId}/comunidad`, Icon: Users },
-        { id: "adapt", label: "Adaptaciones", href: `/paciente/${patientId}/adaptaciones`, Icon: ClipboardList },
       ];
+    }
+    return [
+      { id: "home", label: "Hoy", href: `/paciente/${patientId}`, Icon: Home },
+      { id: "semana", label: "Semana", href: `/paciente/${patientId}/semana`, Icon: Calendar },
+      { id: "wod", label: "WOD", href: `/paciente/${patientId}/wod`, Icon: Zap },
+      { id: "comunidad", label: "Comunidad", href: `/paciente/${patientId}/comunidad`, Icon: Users },
+      { id: "adapt", label: "Adaptaciones", href: `/paciente/${patientId}/adaptaciones`, Icon: ClipboardList },
+    ];
+  })();
 
   return (
     <nav

@@ -189,7 +189,7 @@ export default async function PatientSemanaCompletaPage({
           days={flatDays}
         />
       </div>
-      <PatientNav patientId={patient.id} active="home" variant="advance" />
+      <PatientNav patientId={patient.id} active="semana" variant={isPrevention ? "prevention" : "advance"} />
     </main>
   );
 }

@@ -146,7 +146,6 @@ export default async function PatientHome({ params }: { params: { id: string } }
         daysToRenewal={daysToRenewal}
         subscriptionStatus={activeSub?.status ?? null}
         cancelAtPeriodEnd={activeSub?.cancelAtPeriodEnd ?? false}
-        shippingComplete={!!(patient.shippingStreet && patient.shippingNumber && patient.shippingCity && patient.shippingPostalCode)}
       />
     );
   }

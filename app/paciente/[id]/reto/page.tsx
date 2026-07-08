@@ -61,7 +61,7 @@ export default async function PatientChallengePage({ params }: { params: { id: s
         )}
       </div>
 
-      <PatientNav patientId={patient.id} active="" variant="advance" />
+      <PatientNav patientId={patient.id} active="" variant={patient.programType === "PREVENTION" ? "prevention" : "advance"} />
     </main>
   );
 }

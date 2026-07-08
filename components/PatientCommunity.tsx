@@ -50,13 +50,14 @@ async function api(url: string, method: string, body?: unknown) {
 }
 
 export function PatientCommunity({
-  patientId, myName, myPhotoUrl, initialPosts, courses,
+  patientId, myName, myPhotoUrl, initialPosts, courses, navVariant = "default",
 }: {
   patientId: string;
   myName: string;
   myPhotoUrl: string | null;
   initialPosts: Post[];
   courses: Course[];
+  navVariant?: "default" | "advance" | "prevention";
 }) {
   const [tab, setTab] = useState<"community" | "classroom">("community");
   const [posts, setPosts] = useState<Post[]>(initialPosts);
@@ -90,7 +91,7 @@ export function PatientCommunity({
         )}
       </div>
 
-      <PatientNav patientId={patientId} active="comunidad" />
+      <PatientNav patientId={patientId} active="comunidad" variant={navVariant} />
     </main>
   );
 }
