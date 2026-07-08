@@ -38,6 +38,15 @@ type LibraryVideo = {
   category: string;
 };
 
+type LibraryExercise = {
+  id: string;
+  name: string;
+  category: string;
+  tags: string;
+  youtubeUrl: string | null;
+  description: string | null;
+};
+
 type Day = {
   id: string;
   dayOfWeek: number;
@@ -523,6 +532,14 @@ function TaskEditorModal({ task, onClose }: { task: Task; onClose: () => void })
   const [loadingVideos, setLoadingVideos] = useState(false);
   const [creatingVideo, setCreatingVideo] = useState(false);
 
+  // Ejercicios de la biblioteca (para WORKOUT): permite vincular varios como
+  // "Vídeos de referencia" que el paciente verá dentro de la tarea, igual
+  // que en programas RECUPERA/CONSOLIDA.
+  const [libraryExercises, setLibraryExercises] = useState<LibraryExercise[]>([]);
+  const [linkedExercises, setLinkedExercises] = useState<LibraryExercise[]>([]);
+  const [exerciseSearch, setExerciseSearch] = useState("");
+  const [showExerciseSearch, setShowExerciseSearch] = useState(false);
+
   useEffect(() => {
     // Cargamos la lista de vídeos para VIDEO y WORKOUT (en WORKOUT es opcional como apoyo)
     if (task.type !== "VIDEO" && task.type !== "WORKOUT") return;
@@ -536,6 +553,29 @@ function TaskEditorModal({ task, onClose }: { task: Task; onClose: () => void })
       .catch(() => setLoadingVideos(false));
   }, [task.type]);
 
+  useEffect(() => {
+    // Solo para WORKOUT: cargamos catálogo de ejercicios + los ya vinculados.
+    if (task.type !== "WORKOUT") return;
+    fetch("/api/library").then((r) => r.json()).then(setLibraryExercises).catch(() => setLibraryExercises([]));
+    fetch(`/api/rolling-tasks?id=${task.id}`)
+      .then((r) => r.json())
+      .then((full: any) => {
+        if (Array.isArray(full?.exercises)) {
+          setLinkedExercises(
+            full.exercises.map((we: any) => ({
+              id: we.exercise.id,
+              name: we.exercise.name,
+              category: we.exercise.category,
+              tags: we.exercise.tags ?? "",
+              youtubeUrl: we.exercise.youtubeUrl ?? null,
+              description: we.exercise.description ?? null,
+            }))
+          );
+        }
+      })
+      .catch(() => { /* si falla, quedamos con lista vacía */ });
+  }, [task.id, task.type]);
+
   async function save() {
     setSaving(true);
     await fetch("/api/rolling-tasks", {
@@ -546,6 +586,7 @@ function TaskEditorModal({ task, onClose }: { task: Task; onClose: () => void })
         title,
         bodyText: task.type === "WORKOUT" || task.type === "VIDEO" ? bodyText : undefined,
         videoId: (task.type === "VIDEO" || task.type === "WORKOUT") ? (videoId || null) : undefined,
+        ...(task.type === "WORKOUT" && { exerciseIds: linkedExercises.map((e) => e.id) }),
       }),
     });
     setSaving(false);
@@ -627,6 +668,135 @@ function TaskEditorModal({ task, onClose }: { task: Task; onClose: () => void })
                       </option>
                     ))}
                   </select>
+                )}
+              </div>
+
+              {/* Ejercicios vinculados — el paciente los verá como "Vídeos de referencia" */}
+              <div>
+                <label className="text-xs text-neutral-500 block mb-2">
+                  🎥 Ejercicios vinculados <span className="text-neutral-400">(el paciente los verá al abrir la sesión)</span>
+                </label>
+
+                {linkedExercises.length > 0 && (
+                  <div className="space-y-1 mb-2">
+                    {linkedExercises.map((ex, idx) => (
+                      <div key={ex.id} className="flex items-center gap-2 p-2 bg-neutral-50 rounded-lg">
+                        <div className="text-neutral-300 text-xs w-4 text-center">{idx + 1}</div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium truncate">{ex.name}</div>
+                          <div className="text-xs text-neutral-500 truncate">{ex.category}</div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {idx > 0 && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setLinkedExercises((prev) => {
+                                  const c = [...prev];
+                                  [c[idx - 1], c[idx]] = [c[idx], c[idx - 1]];
+                                  return c;
+                                })
+                              }
+                              className="text-neutral-400 hover:text-neutral-700 text-xs px-1"
+                              title="Subir"
+                            >
+                              ↑
+                            </button>
+                          )}
+                          {idx < linkedExercises.length - 1 && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setLinkedExercises((prev) => {
+                                  const c = [...prev];
+                                  [c[idx], c[idx + 1]] = [c[idx + 1], c[idx]];
+                                  return c;
+                                })
+                              }
+                              className="text-neutral-400 hover:text-neutral-700 text-xs px-1"
+                              title="Bajar"
+                            >
+                              ↓
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setLinkedExercises((prev) => prev.filter((e) => e.id !== ex.id))}
+                            className="text-xs text-red-600 px-2"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {!showExerciseSearch ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowExerciseSearch(true)}
+                    className="text-xs w-full py-2 px-3 rounded-md border border-dashed border-neutral-300 text-neutral-500 hover:bg-neutral-50"
+                  >
+                    + Vincular ejercicio de mi biblioteca
+                  </button>
+                ) : (
+                  <div className="border border-neutral-200 rounded-lg p-2">
+                    <div className="flex gap-2 mb-2">
+                      <input
+                        className="input text-sm flex-1"
+                        placeholder="🔍 Buscar por nombre, categoría o etiqueta…"
+                        value={exerciseSearch}
+                        onChange={(e) => setExerciseSearch(e.target.value)}
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={() => { setShowExerciseSearch(false); setExerciseSearch(""); }}
+                        className="text-xs text-neutral-500 px-2"
+                      >
+                        Cerrar
+                      </button>
+                    </div>
+                    <div className="max-h-56 overflow-y-auto space-y-1">
+                      {libraryExercises
+                        .filter((ex) => !linkedExercises.some((le) => le.id === ex.id))
+                        .filter((ex) => {
+                          if (!exerciseSearch) return true;
+                          const s = exerciseSearch.toLowerCase();
+                          return (
+                            ex.name.toLowerCase().includes(s) ||
+                            ex.category.toLowerCase().includes(s) ||
+                            ex.tags.toLowerCase().includes(s)
+                          );
+                        })
+                        .slice(0, 20)
+                        .map((ex) => (
+                          <button
+                            key={ex.id}
+                            type="button"
+                            onClick={() => {
+                              setLinkedExercises((prev) => [...prev, ex]);
+                              setExerciseSearch("");
+                            }}
+                            className="w-full flex items-center gap-2 p-2 hover:bg-neutral-50 rounded text-left"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium truncate">{ex.name}</div>
+                              <div className="text-xs text-neutral-500 truncate">
+                                {ex.category}
+                                {ex.tags && ` · ${ex.tags}`}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      {libraryExercises.filter((ex) => !linkedExercises.some((le) => le.id === ex.id)).length === 0 && (
+                        <p className="text-xs text-neutral-500 text-center py-4">
+                          No hay ejercicios en la biblioteca. Añádelos desde el panel del fisio.
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
             </>

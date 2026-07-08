@@ -556,6 +556,7 @@ model ExerciseLibrary {
   createdAt   DateTime @default(now())
 
   workoutLinks WorkoutExercise[]
+  rollingLinks RollingTaskExercise[]
 }
 
 // ============================================================================
@@ -1561,16 +1562,29 @@ model RollingTask {
   id          String   @id @default(cuid())
   dayId       String
   day         RollingDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
-  type        String                          // "WORKOUT" | "VIDEO" | "FORM" | "EVOLUTION"
+  type        String
   title       String   @default("")
   order       Int      @default(0)
 
-  // Payload inline según `type`. Mantenemos simple: una tabla, sin sub-tablas.
-  bodyText    String?                         // WORKOUT: texto libre (markdown ligero); VIDEO/FORM: notas
-  videoId     String?                         // VIDEO: referencia a VideoLibrary (FK lógico, no relación)
-  formId      String?                         // FORM: referencia al Form de Biblioteca
+  bodyText    String?
+  videoId     String?
+  formId      String?
+
+  exercises   RollingTaskExercise[]
 
   @@index([dayId])
+}
+
+model RollingTaskExercise {
+  id          String          @id @default(cuid())
+  rollingTaskId String
+  rollingTask   RollingTask   @relation(fields: [rollingTaskId], references: [id], onDelete: Cascade)
+  exerciseId  String
+  exercise    ExerciseLibrary @relation(fields: [exerciseId], references: [id])
+  order       Int             @default(0)
+
+  @@unique([rollingTaskId, exerciseId])
+  @@index([rollingTaskId])
 }
 
 // ============================================================================

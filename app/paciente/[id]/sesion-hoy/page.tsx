@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { weekStartDate, todayMadridUtc } from "@/lib/program-pauses";
 import { PatientDailyLogForm } from "@/components/PatientDailyLogForm";
+import { RollingExerciseVideos, type RollingExercise } from "@/components/RollingExerciseVideos";
 
 const DAY_NAMES = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
@@ -26,6 +27,7 @@ type ResolvedTask = {
   title: string;
   bodyText: string | null;
   youtubeUrl: string | null;
+  exercises: RollingExercise[];
 };
 
 export default async function SesionHoyPage({ params }: { params: { id: string } }) {
@@ -55,7 +57,17 @@ export default async function SesionHoyPage({ params }: { params: { id: string }
       include: {
         days: {
           where: { dayOfWeek: todayDow },
-          include: { tasks: { orderBy: { order: "asc" } } },
+          include: {
+            tasks: {
+              orderBy: { order: "asc" },
+              include: {
+                exercises: {
+                  orderBy: { order: "asc" },
+                  include: { exercise: { select: { id: true, name: true, category: true, youtubeUrl: true, description: true } } },
+                },
+              },
+            },
+          },
         },
       },
     });
@@ -85,6 +97,13 @@ export default async function SesionHoyPage({ params }: { params: { id: string }
       title: t.title,
       bodyText: t.bodyText,
       youtubeUrl: t.videoId ? videosById[t.videoId]?.youtubeUrl ?? null : null,
+      exercises: ((t as any).exercises ?? []).map((we: any) => ({
+        id: we.exercise.id,
+        name: we.exercise.name,
+        category: we.exercise.category,
+        youtubeUrl: we.exercise.youtubeUrl,
+        description: we.exercise.description,
+      })) as RollingExercise[],
     }));
 
   const accTasks = resolve(accTasksRaw);
@@ -211,6 +230,9 @@ function TaskCard({ task }: { task: ResolvedTask }) {
         >
           Abrir vídeo →
         </a>
+      )}
+      {task.exercises && task.exercises.length > 0 && (
+        <RollingExerciseVideos exercises={task.exercises} />
       )}
     </div>
   );

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { RollingExerciseVideos, type RollingExercise } from "@/components/RollingExerciseVideos";
 
 type RollingTask = {
   id: string;
@@ -9,6 +10,7 @@ type RollingTask = {
   title: string;
   bodyText: string | null;
   youtubeUrl: string | null;
+  exercises?: RollingExercise[];
   blockLabel?: string;
   blockColor?: string;
 };
@@ -222,6 +224,9 @@ function RollingTaskCard({ task }: { task: RollingTask }) {
         >
           Abrir vídeo →
         </a>
+      )}
+      {task.exercises && task.exercises.length > 0 && (
+        <RollingExerciseVideos exercises={task.exercises} />
       )}
     </div>
   );

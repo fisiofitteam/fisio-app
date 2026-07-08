@@ -48,24 +48,34 @@ export async function POST(req: NextRequest) {
 
 /**
  * GET /api/rolling-tasks?id=xxx
- * Leer una tarea con todo su contenido.
+ * Leer una tarea con todo su contenido (incluye ejercicios vinculados).
  */
 export async function GET(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "missing id" }, { status: 400 });
-  const task = await prisma.rollingTask.findUnique({ where: { id } });
+  const task = await prisma.rollingTask.findUnique({
+    where: { id },
+    include: {
+      exercises: {
+        orderBy: { order: "asc" },
+        include: { exercise: true },
+      },
+    },
+  });
   return NextResponse.json(task);
 }
 
 /**
  * PATCH /api/rolling-tasks
- * Actualizar título / payload.
+ * Actualizar título / payload. Si viene `exerciseIds` (array de ids del
+ * catálogo ExerciseLibrary), sincroniza los ejercicios enlazados: borra los
+ * que ya no estén y añade los nuevos, respetando el orden del array.
  */
 export async function PATCH(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const { id, title, bodyText, videoId, formId } = await req.json();
+  const { id, title, bodyText, videoId, formId, exerciseIds } = await req.json();
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
   const task = await prisma.rollingTask.update({
@@ -77,6 +87,27 @@ export async function PATCH(req: NextRequest) {
       ...(formId !== undefined && { formId: formId || null }),
     },
   });
+
+  if (Array.isArray(exerciseIds)) {
+    // Reset y recrea con el orden del array recibido. Como el join tiene
+    // unique(rollingTaskId, exerciseId), duplicados llegarían a chocar; los
+    // dedupeamos con un Set preservando el orden.
+    const clean: string[] = [];
+    const seen = new Set<string>();
+    for (const eid of exerciseIds) {
+      if (typeof eid === "string" && eid && !seen.has(eid)) {
+        seen.add(eid);
+        clean.push(eid);
+      }
+    }
+    await prisma.rollingTaskExercise.deleteMany({ where: { rollingTaskId: id } });
+    if (clean.length > 0) {
+      await prisma.rollingTaskExercise.createMany({
+        data: clean.map((eid, idx) => ({ rollingTaskId: id, exerciseId: eid, order: idx })),
+      });
+    }
+  }
+
   return NextResponse.json(task);
 }
 

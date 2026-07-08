@@ -51,7 +51,17 @@ export default async function PatientSemanaCompletaPage({
       where: { programId_weekStartDate: { programId, weekStartDate: thisMonday } },
       include: {
         days: {
-          include: { tasks: { orderBy: { order: "asc" } } },
+          include: {
+            tasks: {
+              orderBy: { order: "asc" },
+              include: {
+                exercises: {
+                  orderBy: { order: "asc" },
+                  include: { exercise: { select: { id: true, name: true, category: true, youtubeUrl: true, description: true } } },
+                },
+              },
+            },
+          },
           orderBy: { dayOfWeek: "asc" },
         },
       },
@@ -78,6 +88,7 @@ export default async function PatientSemanaCompletaPage({
     }
   }
 
+  type ResolvedExercise = { id: string; name: string; category: string; youtubeUrl: string | null; description: string | null };
   type Block = {
     blockLabel: string;
     blockColor: string;
@@ -85,9 +96,23 @@ export default async function PatientSemanaCompletaPage({
     published: boolean;
     days: Array<{
       dayOfWeek: number;
-      tasks: Array<{ id: string; type: string; title: string; bodyText: string | null; youtubeUrl: string | null }>;
+      tasks: Array<{ id: string; type: string; title: string; bodyText: string | null; youtubeUrl: string | null; exercises: ResolvedExercise[] }>;
     }>;
   };
+  const mapTask = (t: any) => ({
+    id: t.id,
+    type: t.type,
+    title: t.title,
+    bodyText: t.bodyText,
+    youtubeUrl: t.videoId ? videosById[t.videoId]?.youtubeUrl ?? null : null,
+    exercises: (t.exercises ?? []).map((we: any) => ({
+      id: we.exercise.id,
+      name: we.exercise.name,
+      category: we.exercise.category,
+      youtubeUrl: we.exercise.youtubeUrl,
+      description: we.exercise.description,
+    })) as ResolvedExercise[],
+  });
   const blocks: Block[] = [];
   if (accId && accWeek) {
     blocks.push({
@@ -95,16 +120,7 @@ export default async function PatientSemanaCompletaPage({
       blockColor: "#3B82F6",
       title: accWeek.title || null,
       published: Boolean(accWeek.publishedAt),
-      days: accWeek.days.map((d) => ({
-        dayOfWeek: d.dayOfWeek,
-        tasks: d.tasks.map((t) => ({
-          id: t.id,
-          type: t.type,
-          title: t.title,
-          bodyText: t.bodyText,
-          youtubeUrl: t.videoId ? videosById[t.videoId]?.youtubeUrl ?? null : null,
-        })),
-      })),
+      days: accWeek.days.map((d) => ({ dayOfWeek: d.dayOfWeek, tasks: d.tasks.map(mapTask) })),
     });
   }
   if (trnId && trnWeek) {
@@ -113,21 +129,12 @@ export default async function PatientSemanaCompletaPage({
       blockColor: "#F59E0B",
       title: trnWeek.title || null,
       published: Boolean(trnWeek.publishedAt),
-      days: trnWeek.days.map((d) => ({
-        dayOfWeek: d.dayOfWeek,
-        tasks: d.tasks.map((t) => ({
-          id: t.id,
-          type: t.type,
-          title: t.title,
-          bodyText: t.bodyText,
-          youtubeUrl: t.videoId ? videosById[t.videoId]?.youtubeUrl ?? null : null,
-        })),
-      })),
+      days: trnWeek.days.map((d) => ({ dayOfWeek: d.dayOfWeek, tasks: d.tasks.map(mapTask) })),
     });
   }
 
   const anyPublished = blocks.some((b) => b.published);
-  const daysByDow: Record<number, Array<{ id: string; type: string; title: string; bodyText: string | null; youtubeUrl: string | null; blockLabel: string; blockColor: string }>> = {};
+  const daysByDow: Record<number, Array<{ id: string; type: string; title: string; bodyText: string | null; youtubeUrl: string | null; exercises: ResolvedExercise[]; blockLabel: string; blockColor: string }>> = {};
   for (let dow = 1; dow <= 5; dow++) daysByDow[dow] = [];
   for (const b of blocks) {
     if (!b.published) continue;
