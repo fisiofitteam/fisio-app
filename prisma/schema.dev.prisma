@@ -148,6 +148,7 @@ model Patient {
   scheduledCalls  ScheduledCall[]
   renewals        SubscriptionRenewal[]
   renewalCheckouts RenewalCheckout[]
+  subscriptions   PatientSubscription[]
   clinicalSessionCase ClinicalSessionCase?
   transactions    Transaction[]
   prs             PatientPR[]

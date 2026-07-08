@@ -4,17 +4,22 @@ import { getActiveProfessional } from "@/lib/session";
 
 // GET: lista de programas rolling --------------------------------------------
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
+  // Filtrado opcional por línea de servicio (Advance vs Prevention). Sin
+  // parámetro devuelve TODO el catálogo (comportamiento anterior).
+  const roleFilter = req.nextUrl.searchParams.get("role");
+  const where = roleFilter ? { role: roleFilter } : {};
+
   const programs = await prisma.rollingProgram.findMany({
+    where,
     orderBy: [{ isActive: "desc" }, { name: "asc" }],
     include: {
       _count: { select: { patientsLegacy: true, patientsAccessories: true, patientsTraining: true, weeks: true } },
     },
   });
-  // Devolvemos también un patientsCount agregado para compat con UI antiguas
   const enriched = programs.map((p) => ({
     ...p,
     patientsCount: p._count.patientsLegacy + p._count.patientsAccessories + p._count.patientsTraining,
@@ -31,15 +36,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { name, description } = await req.json();
+  const { name, description, role } = await req.json();
   if (!name || !name.trim()) {
     return NextResponse.json({ error: "El nombre es obligatorio" }, { status: 400 });
   }
+  const ALLOWED = new Set(["", "advance-accesorios", "advance-entrenamiento", "prevention"]);
+  const finalRole = typeof role === "string" && ALLOWED.has(role) ? role : "";
 
   const program = await prisma.rollingProgram.create({
     data: {
       name: name.trim(),
       description: description?.trim() || null,
+      role: finalRole,
     },
   });
   return NextResponse.json({ ok: true, programId: program.id });
