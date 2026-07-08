@@ -7,6 +7,7 @@ import { PatientLogoutButton } from "@/components/PatientLogoutButton";
 import { PatientPhotoUploader } from "@/components/PatientPhotoUploader";
 import { PatientShippingForm } from "@/components/PatientShippingForm";
 import { PatientDailyReminderToggle } from "@/components/PatientDailyReminderToggle";
+import { PreventionCancelForm } from "@/components/PreventionCancelForm";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,24 @@ export default async function PatientSettingsPage({ params }: { params: { id: st
   if (!patient) notFound();
 
   const isPrevention = patient.programType === "PREVENTION";
+
+  // Suscripción Prevention activa para la sección "Cancelar renovación".
+  const preventionSub = isPrevention
+    ? await prisma.patientSubscription.findFirst({
+        where: {
+          patientId: patient.id,
+          productType: "prevention",
+          status: { in: ["scheduled", "trialing", "active", "past_due"] },
+        },
+        orderBy: { createdAt: "desc" },
+        select: {
+          status: true,
+          cancelAtPeriodEnd: true,
+          currentPeriodEnd: true,
+          trialEndsAt: true,
+        },
+      })
+    : null;
 
   return (
     <main className="min-h-screen" style={{ color: "var(--p-text)" }}>
@@ -96,6 +115,24 @@ export default async function PatientSettingsPage({ params }: { params: { id: st
           </p>
           <PatientThemeToggle />
         </section>
+
+        {isPrevention && preventionSub && (
+          <section
+            className="rounded-2xl p-4 mb-3"
+            style={{ background: "var(--p-surface)", border: "1px solid var(--p-border)" }}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-lg">🛡</span>
+              <h2 className="font-semibold text-sm">Suscripción Prevention</h2>
+            </div>
+            <PreventionCancelForm
+              initialCancelAtPeriodEnd={preventionSub.cancelAtPeriodEnd}
+              currentPeriodEndIso={preventionSub.currentPeriodEnd?.toISOString() ?? null}
+              trialEndsAtIso={preventionSub.trialEndsAt?.toISOString() ?? null}
+              status={preventionSub.status}
+            />
+          </section>
+        )}
 
         <section
           className="rounded-2xl p-4 flex items-center justify-between gap-3"

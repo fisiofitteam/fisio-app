@@ -56,8 +56,16 @@ export default async function PatientHome({ params }: { params: { id: string } }
     const relevantEnd = activeSub?.status === "trialing"
       ? activeSub.trialEndsAt
       : activeSub?.currentPeriodEnd;
+    // Normalizamos ambas fechas a medianoche para contar días de
+    // calendario y evitar off-by-one por horas (ej. trialEndsAt suele
+    // ser now+4d con la hora del pago, y `today` está a las 00:00 →
+    // Math.round redondea a 5 cuando debería ser 4).
     const daysToRenewal = relevantEnd
-      ? Math.round((new Date(relevantEnd).getTime() - today.getTime()) / 86400000)
+      ? (() => {
+          const end = new Date(relevantEnd);
+          end.setHours(0, 0, 0, 0);
+          return Math.round((end.getTime() - today.getTime()) / 86400000);
+        })()
       : null;
 
     // Semana del rolling Prevention (si hay una asignada y publicada)
