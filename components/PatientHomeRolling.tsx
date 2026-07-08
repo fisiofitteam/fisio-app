@@ -349,7 +349,7 @@ function RollingActionCard({
   external?: boolean;
   badge?: number;
 }) {
-  const className = "block rounded-2xl px-3 py-3 transition-transform active:scale-95 relative";
+  const className = "block rounded-2xl px-3 py-5 transition-transform active:scale-95 relative";
   const style = {
     background: "var(--p-surface)",
     color: "var(--p-text)",
@@ -371,13 +371,13 @@ function RollingActionCard({
           {badge > 9 ? "9+" : badge}
         </span>
       )}
-      <div className="flex items-center gap-2.5">
-        <Icon size={22} strokeWidth={2} className="flex-shrink-0" style={{ color: "var(--p-accent)" }} />
-        <div className="min-w-0">
-          <div className="font-semibold text-sm leading-tight truncate" style={{ letterSpacing: "-0.02em" }}>
+      <div className="flex flex-col items-center text-center gap-2">
+        <Icon size={28} strokeWidth={2} style={{ color: "var(--p-accent)" }} />
+        <div className="min-w-0 w-full">
+          <div className="font-semibold text-sm leading-tight" style={{ letterSpacing: "-0.02em" }}>
             {label}
           </div>
-          <div className="text-[10px] leading-tight truncate" style={{ color: "var(--p-text-dim)", letterSpacing: "-0.005em" }}>
+          <div className="text-[11px] leading-tight mt-0.5 truncate" style={{ color: "var(--p-text-dim)", letterSpacing: "-0.005em" }}>
             {sublabel}
           </div>
         </div>
