@@ -14,16 +14,23 @@
 import { PREVENTION_PLAN_CONFIG, type PreventionPlan } from "@/lib/stripe";
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://app.fisiofitteam.com";
-const BRAND_COLOR = "#10B981";
+// Colores oficiales de FisioFit — coinciden con .brand-gradient del CSS
+// global (amarillo → naranja). Los emails son transaccionales de la marca
+// FisioFit, así que usan la paleta de la marca aunque la landing pública
+// pueda tener otro color primary editable.
+const BRAND_PRIMARY = "#FCD34D";       // amarillo
+const BRAND_PRIMARY_DARK = "#F59E0B";  // naranja
+const BRAND_TEXT_ON_DARK = "#1F2937";  // texto oscuro para contraste sobre gradient claro
+const GRADIENT = `linear-gradient(135deg,${BRAND_PRIMARY} 0%,${BRAND_PRIMARY_DARK} 100%)`;
 
 type Email = { subject: string; html: string; text: string };
 
 function shell(inner: string): string {
   return `<!doctype html><html lang="es"><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:#F5F5F5;margin:0;padding:24px;color:#111827">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;background:#FFFFFF;border-radius:16px;overflow:hidden">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;background:#FFFFFF;border-radius:16px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.06)">
     <tr>
-      <td style="padding:24px 28px;border-bottom:1px solid #F0F0F0">
-        <div style="font-weight:700;font-size:16px;letter-spacing:-0.02em">🛡 FisioFit <span style="color:${BRAND_COLOR}">Prevention</span></div>
+      <td style="padding:20px 28px;background:${GRADIENT}">
+        <div style="font-weight:700;font-size:16px;letter-spacing:-0.02em;color:${BRAND_TEXT_ON_DARK}">🛡 FisioFit Prevention</div>
       </td>
     </tr>
     <tr>
@@ -42,7 +49,7 @@ function shell(inner: string): string {
 }
 
 function cta(url: string, label: string): string {
-  return `<div style="text-align:center;margin:20px 0"><a href="${url}" style="display:inline-block;background:linear-gradient(135deg,#10B981 0%,#059669 100%);color:#FFFFFF;text-decoration:none;font-weight:600;font-size:14px;padding:12px 24px;border-radius:12px">${label} →</a></div>`;
+  return `<div style="text-align:center;margin:20px 0"><a href="${url}" style="display:inline-block;background:${GRADIENT};color:${BRAND_TEXT_ON_DARK};text-decoration:none;font-weight:700;font-size:14px;padding:12px 24px;border-radius:12px;box-shadow:0 4px 12px rgba(245,158,11,0.35)">${label} →</a></div>`;
 }
 
 function priceLabel(plan: PreventionPlan): string {

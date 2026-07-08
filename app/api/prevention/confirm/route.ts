@@ -96,7 +96,11 @@ export async function POST(req: Request) {
         programMode: "rolling",
         subscriptionPeriodMonths: 0, // Prevention no usa el modelo fixed
         subscriptionTotalMonths: 0,
-        onboardingTasks: { anamnesis: false, contract: false, firstSession: false },
+        // NULL a propósito: Prevention no pasa por onboarding (sin anamnesis
+        // ni contrato). El gate de /paciente/[id]/layout hace la excepción
+        // por programType, pero además dejamos el campo NULL para no
+        // ensuciar la BD con tareas que nunca se completarán.
+        onboardingTasks: undefined,
       },
     });
     createdNew = true;

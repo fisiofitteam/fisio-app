@@ -3,6 +3,10 @@
 // el paciente no ha completado anamnesis + contrato, se le redirige al onboarding
 // y no puede usar la app hasta terminarlo. (El onboarding vive en
 // /paciente/onboarding, fuera de este layout, para evitar bucles de redirección.)
+//
+// EXCEPCIÓN: los pacientes de FisioFit Prevention nunca pasan por
+// onboarding — no tienen fisio asignado ni programa 1:1, no hay
+// anamnesis ni contrato que firmar. El gate los deja pasar directamente.
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PatientShell } from "@/components/PatientShell";
@@ -18,10 +22,14 @@ export default async function PatientLayout({
 }) {
   const patient = await prisma.patient.findUnique({
     where: { id: params.id },
-    select: { onboardingTasks: true },
+    select: { onboardingTasks: true, programType: true },
   });
 
-  if (patient && needsOnboarding(patient.onboardingTasks)) {
+  if (
+    patient &&
+    patient.programType !== "PREVENTION" &&
+    needsOnboarding(patient.onboardingTasks)
+  ) {
     redirect("/paciente/onboarding");
   }
 

@@ -506,7 +506,8 @@ async function handlePreventionCheckoutCompleted(session: Stripe.Checkout.Sessio
         programMode: "rolling",
         subscriptionPeriodMonths: 0,
         subscriptionTotalMonths: 0,
-        onboardingTasks: { anamnesis: false, contract: false, firstSession: false },
+        // Prevention no pasa por onboarding: sin anamnesis ni contrato.
+        onboardingTasks: undefined,
       },
     });
   } else if (phoneFromMeta && !patient.phone) {

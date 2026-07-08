@@ -112,7 +112,8 @@ export async function POST(req: Request) {
         programMode: "rolling",
         subscriptionPeriodMonths: 0,
         subscriptionTotalMonths: 0,
-        onboardingTasks: { anamnesis: false, contract: false, firstSession: false },
+        // Prevention no pasa por onboarding: sin anamnesis ni contrato.
+        onboardingTasks: undefined,
       },
     });
   }
