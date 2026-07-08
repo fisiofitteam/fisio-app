@@ -301,6 +301,10 @@ export function RollingProgramDetail({
             <div className="text-xs text-neutral-500 mt-2">
               {patients.length} {patients.length === 1 ? "paciente activo" : "pacientes activos"}
             </div>
+            <ProgramRoleSelector
+              programId={program.id}
+              initialRole={program.role}
+            />
           </div>
         </div>
       </header>
@@ -1144,6 +1148,76 @@ function MoveOrDuplicateModal({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Selector de rol del programa (Prevention / Accesorios / …) ────────────
+// Los programas rolling se etiquetan con un rol para que el sistema sepa
+// quién es quién: quién es la fuente de contenido Prevention, cuál es el
+// hermano de accesorios de Advance, etc. Los programas antiguos suelen
+// tener role="" (legacy) y este selector es la forma rápida de asignarlo.
+
+const ROLE_OPTIONS: { value: string; label: string }[] = [
+  { value: "", label: "Sin categoría (legacy)" },
+  { value: "advance-accesorios", label: "Advance · Accesorios" },
+  { value: "advance-entrenamiento", label: "Advance · Entrenamiento" },
+  { value: "prevention", label: "Prevention" },
+];
+
+function ProgramRoleSelector({
+  programId,
+  initialRole,
+}: {
+  programId: string;
+  initialRole: string;
+}) {
+  const [role, setRole] = useState(initialRole);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  async function save(newRole: string) {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/rolling-programs", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: programId, role: newRole }),
+      });
+      if (res.ok) {
+        setRole(newRole);
+        setMsg("✓ Guardado");
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setMsg(d.error || "No se pudo guardar");
+      }
+    } catch (e: any) {
+      setMsg(e?.message || "Error de red");
+    } finally {
+      setSaving(false);
+      setTimeout(() => setMsg(null), 3000);
+    }
+  }
+
+  return (
+    <div className="mt-2 flex items-center gap-2 text-xs">
+      <span className="text-neutral-500">Categoría:</span>
+      <select
+        value={role}
+        disabled={saving}
+        onChange={(e) => save(e.target.value)}
+        className="border border-neutral-200 rounded px-2 py-1 text-xs bg-white disabled:opacity-50"
+      >
+        {ROLE_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+      {msg && (
+        <span className={msg.startsWith("✓") ? "text-emerald-600" : "text-red-600"}>
+          {msg}
+        </span>
+      )}
     </div>
   );
 }

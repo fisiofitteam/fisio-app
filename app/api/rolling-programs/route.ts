@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 
+const ALLOWED = new Set(["", "advance-accesorios", "advance-entrenamiento", "prevention"]);
+
 // GET: lista de programas rolling --------------------------------------------
 
 export async function GET(req: NextRequest) {
@@ -40,7 +42,6 @@ export async function POST(req: NextRequest) {
   if (!name || !name.trim()) {
     return NextResponse.json({ error: "El nombre es obligatorio" }, { status: 400 });
   }
-  const ALLOWED = new Set(["", "advance-accesorios", "advance-entrenamiento", "prevention"]);
   const finalRole = typeof role === "string" && ALLOWED.has(role) ? role : "";
 
   const program = await prisma.rollingProgram.create({
@@ -62,8 +63,14 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { id, name, description, isActive } = await req.json();
+  const { id, name, description, isActive, role } = await req.json();
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+
+  // Solo dejamos actualizar el rol si viene en la lista blanca. Los
+  // programas legacy suelen estar con role="" y esto es la vía para
+  // etiquetarlos (imprescindible para "Traer semana de X").
+  const roleUpdate =
+    typeof role === "string" && ALLOWED.has(role) ? { role } : {};
 
   const updated = await prisma.rollingProgram.update({
     where: { id },
@@ -71,6 +78,7 @@ export async function PATCH(req: NextRequest) {
       ...(name !== undefined && { name: name.trim() }),
       ...(description !== undefined && { description: description?.trim() || null }),
       ...(isActive !== undefined && { isActive: !!isActive }),
+      ...roleUpdate,
     },
   });
   return NextResponse.json(updated);

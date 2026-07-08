@@ -27,6 +27,7 @@ export default async function RollingProgramPage({ params }: { params: { program
         name: program.name,
         description: program.description,
         isActive: program.isActive,
+        role: program.role,
       }}
       weeks={program.weeks.map((w) => ({
         id: w.id,
