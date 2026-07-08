@@ -197,18 +197,18 @@ export function PatientHomePrevention({
             className="block rounded-2xl p-5 mb-5 transition-transform active:scale-[0.98]"
             style={{
               background: "linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)",
-              color: "#FFFFFF",
+              color: "#1F2937",
             }}
           >
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-[10px] font-bold tracking-wider uppercase opacity-80 mb-1">
+                <div className="text-[10px] font-bold tracking-wider uppercase opacity-70 mb-1">
                   Hoy · {DAY_NAMES[todayDow]}
                 </div>
                 <div className="text-2xl font-bold flex items-center gap-2" style={{ letterSpacing: "-0.025em" }}>
-                  🧘 Tu sesión
+                  🏋️ Tu sesión
                 </div>
-                <div className="text-xs mt-1.5 font-medium opacity-80">
+                <div className="text-xs mt-1.5 font-medium opacity-70">
                   Pulsa para empezar
                 </div>
               </div>
