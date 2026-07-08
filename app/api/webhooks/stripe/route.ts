@@ -25,6 +25,14 @@ import Stripe from "stripe";
 import { prisma } from "@/lib/prisma";
 import { notifyHeadSuccess, notifyProfessional } from "@/lib/notifications";
 import { applyRenewal } from "@/lib/renewals";
+import { isPreventionPlan } from "@/lib/stripe";
+import { createPreventionSubscription } from "@/lib/prevention";
+import { sendEmail } from "@/lib/email";
+import {
+  welcomeEmail,
+  paymentFailedEmail,
+  canceledEmail,
+} from "@/lib/emails/prevention";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -68,6 +76,19 @@ export async function POST(req: NextRequest) {
         break;
       case "charge.refunded":
         await handleChargeRefunded(event.data.object as Stripe.Charge);
+        break;
+      // ─── Prevention · ciclo de vida de la suscripción ────────────────
+      case "customer.subscription.updated":
+        await handlePreventionSubscriptionSync(event.data.object as Stripe.Subscription);
+        break;
+      case "customer.subscription.deleted":
+        await handlePreventionSubscriptionDeleted(event.data.object as Stripe.Subscription);
+        break;
+      case "invoice.paid":
+        await handlePreventionInvoicePaid(event.data.object as Stripe.Invoice);
+        break;
+      case "invoice.payment_failed":
+        await handlePreventionInvoiceFailed(event.data.object as Stripe.Invoice);
         break;
       default:
         console.log(`[stripe-webhook] Unhandled event type: ${event.type}`);
@@ -144,6 +165,14 @@ async function handleRenewalCompleted(session: Stripe.Checkout.Session) {
 // Pago confirmado → creamos Patient, marcamos Sale paid, notificamos a Miguel.
 // ────────────────────────────────────────────────────────────────────────────
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
+  // Prevention: subscription mode. La página /prevention/gracias hace el
+  // sync síncrono con /api/prevention/confirm, pero este webhook es la red
+  // de seguridad si el usuario no vuelve al gracias (cerró la pestaña).
+  if (session.mode === "subscription" && session.metadata?.productType === "prevention") {
+    await handlePreventionCheckoutCompleted(session);
+    return;
+  }
+
   // Renovaciones: flujo aparte (paciente existente, sin crear cuenta).
   if (session.metadata?.kind === "renewal") {
     await handleRenewalCompleted(session);
@@ -411,5 +440,240 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
     });
   } catch (err) {
     console.error("[stripe-webhook] Error notificando refund:", err);
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// PREVENTION HANDLERS
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Fallback del /api/prevention/confirm cuando el paciente cerró la pestaña
+ * de gracias sin dar tiempo al sync síncrono. Crea Patient + subscription
+ * de forma idempotente y manda el email de bienvenida.
+ */
+async function handlePreventionCheckoutCompleted(session: Stripe.Checkout.Session) {
+  const stripeSubId = typeof session.subscription === "string"
+    ? session.subscription
+    : session.subscription?.id;
+  if (!stripeSubId) {
+    console.warn("[stripe-webhook] Prevention checkout sin subscription id", { sessionId: session.id });
+    return;
+  }
+
+  // Si ya existe (confirm ya la creó), salimos.
+  const existing = await prisma.patientSubscription.findUnique({
+    where: { stripeSubscriptionId: stripeSubId },
+    include: { patient: true },
+  });
+  if (existing) {
+    console.log("[stripe-webhook] Prevention subscription ya existe, skip", { subId: existing.id });
+    return;
+  }
+
+  const plan = session.metadata?.plan;
+  if (!isPreventionPlan(plan)) {
+    console.warn("[stripe-webhook] Prevention checkout con plan inválido", { plan });
+    return;
+  }
+  const fullName = (session.metadata?.fullName ?? "").toString().trim();
+  const email = (session.customer_details?.email ?? session.customer_email ?? "").toString().trim().toLowerCase();
+  if (!email) {
+    console.warn("[stripe-webhook] Prevention checkout sin email", { sessionId: session.id });
+    return;
+  }
+
+  // Localizar o crear Patient
+  let patient = await prisma.patient.findFirst({
+    where: { email: { equals: email, mode: "insensitive" } },
+  });
+  const isNewPatient = !patient;
+  if (!patient) {
+    patient = await prisma.patient.create({
+      data: {
+        fullName: fullName || email.split("@")[0],
+        email,
+        programType: "PREVENTION",
+        programMode: "rolling",
+        subscriptionPeriodMonths: 0,
+        subscriptionTotalMonths: 0,
+        onboardingTasks: { anamnesis: false, contract: false, firstSession: false },
+      },
+    });
+  }
+
+  const stripeCustomerId = typeof session.customer === "string"
+    ? session.customer
+    : session.customer?.id;
+
+  const sub = await createPreventionSubscription({
+    patientId: patient.id,
+    plan,
+    stripeSubscriptionId: stripeSubId,
+    stripeCustomerId: stripeCustomerId ?? null,
+    stripePriceId: null,
+    originSource: "landing",
+  });
+
+  // Sync los datos frescos de Stripe una vez creada la fila local
+  await handlePreventionSubscriptionSync({ id: stripeSubId } as Stripe.Subscription);
+
+  // Email de bienvenida
+  try {
+    const first = patient.fullName.split(" ")[0];
+    const mail = welcomeEmail({
+      firstName: first,
+      plan,
+      patientId: patient.id,
+      trialEndsAt: sub.trialEndsAt?.toISOString() ?? null,
+      scheduledStartAt: sub.scheduledStartAt?.toISOString() ?? null,
+    });
+    await sendEmail({ to: email, subject: mail.subject, html: mail.html, text: mail.text });
+  } catch (err) {
+    console.error("[stripe-webhook] Error mandando welcome email:", err);
+  }
+
+  console.log("[stripe-webhook] Prevention subscription creada via webhook", {
+    patientId: patient.id,
+    subId: sub.id,
+    isNewPatient,
+  });
+}
+
+/**
+ * Sincroniza el estado local de PatientSubscription con Stripe.
+ * Llamado por customer.subscription.updated / invoice.paid y también
+ * al final de handlePreventionCheckoutCompleted para refrescar periods.
+ */
+async function handlePreventionSubscriptionSync(subInput: Stripe.Subscription) {
+  if (!stripe) return;
+  const subId = subInput.id;
+  const local = await prisma.patientSubscription.findUnique({
+    where: { stripeSubscriptionId: subId },
+  });
+  if (!local) {
+    console.log("[stripe-webhook] Sync sub sin fila local (aún no la hemos creado)", { subId });
+    return;
+  }
+
+  const remote = await stripe.subscriptions.retrieve(subId);
+  const statusMap: Record<string, string> = {
+    trialing: "trialing",
+    active: "active",
+    past_due: "past_due",
+    unpaid: "unpaid",
+    canceled: "canceled",
+    incomplete: "trialing",
+    incomplete_expired: "canceled",
+    paused: "canceled",
+  };
+  const localStatus = statusMap[remote.status] ?? remote.status;
+  // Respetamos "scheduled" hasta que la activación por cron o el primer periodo
+  // active ocurran. Stripe no sabe de scheduled — es nuestro flag interno.
+  const finalStatus = local.status === "scheduled" && !["active", "past_due"].includes(localStatus)
+    ? "scheduled"
+    : localStatus;
+
+  await prisma.patientSubscription.update({
+    where: { id: local.id },
+    data: {
+      status: finalStatus,
+      currentPeriodStart: remote.current_period_start
+        ? new Date(remote.current_period_start * 1000)
+        : local.currentPeriodStart,
+      currentPeriodEnd: remote.current_period_end
+        ? new Date(remote.current_period_end * 1000)
+        : local.currentPeriodEnd,
+      trialEndsAt: remote.trial_end ? new Date(remote.trial_end * 1000) : local.trialEndsAt,
+      cancelAtPeriodEnd: remote.cancel_at_period_end ?? local.cancelAtPeriodEnd,
+      canceledAt: remote.canceled_at ? new Date(remote.canceled_at * 1000) : local.canceledAt,
+      stripePriceId: remote.items?.data?.[0]?.price?.id ?? local.stripePriceId,
+      stripeCustomerId: (typeof remote.customer === "string" ? remote.customer : remote.customer?.id) ?? local.stripeCustomerId,
+    },
+  });
+}
+
+async function handlePreventionSubscriptionDeleted(sub: Stripe.Subscription) {
+  const local = await prisma.patientSubscription.findUnique({
+    where: { stripeSubscriptionId: sub.id },
+    include: { patient: true },
+  });
+  if (!local) return;
+
+  await prisma.patientSubscription.update({
+    where: { id: local.id },
+    data: {
+      status: "finished",
+      canceledAt: sub.canceled_at ? new Date(sub.canceled_at * 1000) : new Date(),
+      cancelAtPeriodEnd: false,
+    },
+  });
+
+  // Cuando Prevention termina, devolvemos el Patient a un estado "sin
+  // programa" para que otro producto pueda tomarlo. Si el paciente sigue
+  // teniendo otro programType (RECUPERA/CONSOLIDA/ADVANCE), no lo tocamos.
+  if (local.patient.programType === "PREVENTION") {
+    await prisma.patient.update({
+      where: { id: local.patient.id },
+      data: { programType: null },
+    });
+  }
+
+  // Email de cancelación
+  try {
+    if (local.patient.email && local.currentPeriodEnd) {
+      const first = local.patient.fullName.split(" ")[0];
+      const mail = canceledEmail({
+        firstName: first,
+        endDate: local.currentPeriodEnd.toISOString(),
+      });
+      await sendEmail({ to: local.patient.email, subject: mail.subject, html: mail.html, text: mail.text });
+    }
+  } catch (err) {
+    console.error("[stripe-webhook] Error mandando canceled email:", err);
+  }
+}
+
+/**
+ * Un ciclo de la suscripción se ha pagado con éxito. Refrescamos periods
+ * en local — el email de bienvenida ya se mandó en el checkout inicial y
+ * el email de renewalSoon lo manda el cron 7 días antes.
+ */
+async function handlePreventionInvoicePaid(invoice: Stripe.Invoice) {
+  const subId = typeof invoice.subscription === "string"
+    ? invoice.subscription
+    : invoice.subscription?.id;
+  if (!subId) return;
+  await handlePreventionSubscriptionSync({ id: subId } as Stripe.Subscription);
+}
+
+/**
+ * Un cobro ha fallado. Marca past_due y envía email para actualizar el
+ * método de pago.
+ */
+async function handlePreventionInvoiceFailed(invoice: Stripe.Invoice) {
+  const subId = typeof invoice.subscription === "string"
+    ? invoice.subscription
+    : invoice.subscription?.id;
+  if (!subId) return;
+  const local = await prisma.patientSubscription.findUnique({
+    where: { stripeSubscriptionId: subId },
+    include: { patient: true },
+  });
+  if (!local) return;
+
+  await prisma.patientSubscription.update({
+    where: { id: local.id },
+    data: { status: "past_due" },
+  });
+
+  try {
+    if (local.patient.email) {
+      const first = local.patient.fullName.split(" ")[0];
+      const mail = paymentFailedEmail({ firstName: first, patientId: local.patient.id });
+      await sendEmail({ to: local.patient.email, subject: mail.subject, html: mail.html, text: mail.text });
+    }
+  } catch (err) {
+    console.error("[stripe-webhook] Error mandando payment_failed email:", err);
   }
 }
