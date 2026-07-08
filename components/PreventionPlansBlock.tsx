@@ -107,15 +107,19 @@ function PlanCard({
 
   const ctaLabel = ctaTemplate.replace(/\{plan\}/g, plan.label.toLowerCase());
 
+  const inputStyle: React.CSSProperties = {
+    background: "rgba(10, 10, 10, 0.6)",
+    border: "1px solid #333",
+    color: "#FAFAFA",
+  };
   return (
     <div
-      className={`rounded-2xl p-5 flex flex-col ${isHighlight ? "shadow-lg" : "border border-neutral-200"}`}
+      className="rounded-2xl p-5 flex flex-col relative transition-transform hover:-translate-y-0.5"
       style={{
-        background: "#FFFFFF",
-        position: "relative",
-        ...(isHighlight
-          ? { boxShadow: `0 10px 25px -5px ${brandPrimary}30`, border: `2px solid ${brandPrimary}` }
-          : {}),
+        background: "rgba(20, 20, 20, 0.88)",
+        backdropFilter: "blur(8px)",
+        border: isHighlight ? `2px solid ${brandPrimary}` : "1px solid #262626",
+        boxShadow: isHighlight ? `0 12px 32px -8px ${brandPrimary}66` : undefined,
       }}
     >
       {isHighlight && (
@@ -127,25 +131,28 @@ function PlanCard({
         </div>
       )}
 
-      <div className="text-sm font-semibold uppercase tracking-wider text-neutral-500 mb-1">
+      <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#A3A3A3" }}>
         {plan.label}
       </div>
       <div className="flex items-baseline gap-1 mb-1">
         <span
-          className="text-4xl font-bold tabular-nums"
-          style={{ letterSpacing: "-0.02em", color: isHighlight ? brandPrimary : "#0A0A0A" }}
+          className="text-5xl font-bold tabular-nums"
+          style={{ letterSpacing: "-0.03em", color: isHighlight ? brandPrimary : "#FAFAFA" }}
         >
           {plan.amountEuros}
         </span>
-        <span className="text-sm text-neutral-500 font-medium">€</span>
+        <span className="text-base font-medium" style={{ color: "#737373" }}>€</span>
       </div>
-      <div className="text-xs text-neutral-500 mb-4">
+      <div className="text-[11px] mb-5" style={{ color: "#737373" }}>
         Cada {plan.months} meses · ≈ {plan.monthlyEffectiveEuros.toFixed(2)} €/mes
       </div>
 
-      <ul className="text-sm text-neutral-700 space-y-1.5 mb-5 flex-1">
+      <ul className="text-sm space-y-2 mb-6 flex-1" style={{ color: "#D4D4D4" }}>
         {bullets.map((b, i) => (
-          <li key={i}>✅ {b}</li>
+          <li key={i} className="flex items-start gap-2">
+            <span style={{ color: brandPrimary, marginTop: 2 }}>✓</span>
+            <span>{b}</span>
+          </li>
         ))}
       </ul>
 
@@ -153,10 +160,12 @@ function PlanCard({
         <button
           type="button"
           onClick={() => setShowForm(true)}
-          className={`w-full text-sm font-semibold py-3 rounded-xl transition-transform active:scale-[0.98] ${
-            isHighlight ? "text-white shadow-md" : "border border-neutral-200 bg-white hover:bg-neutral-50"
-          }`}
-          style={isHighlight ? { background: gradient } : undefined}
+          className="w-full text-sm font-semibold py-3 rounded-xl transition-transform active:scale-[0.98]"
+          style={
+            isHighlight
+              ? { background: gradient, color: "#FFFFFF", boxShadow: `0 8px 20px -6px ${brandPrimary}80` }
+              : { background: "rgba(250, 250, 250, 0.06)", color: "#FAFAFA", border: "1px solid #333" }
+          }
         >
           {ctaLabel}
         </button>
@@ -168,7 +177,8 @@ function PlanCard({
             placeholder="Tu nombre"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
-            className="w-full text-sm px-3 py-2 border border-neutral-200 rounded-lg focus:border-neutral-400 outline-none"
+            className="w-full text-sm px-3 py-2 rounded-lg outline-none focus:border-neutral-400 placeholder:text-neutral-500"
+            style={inputStyle}
           />
           <input
             type="email"
@@ -176,7 +186,8 @@ function PlanCard({
             placeholder="Tu email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full text-sm px-3 py-2 border border-neutral-200 rounded-lg focus:border-neutral-400 outline-none"
+            className="w-full text-sm px-3 py-2 rounded-lg outline-none focus:border-neutral-400 placeholder:text-neutral-500"
+            style={inputStyle}
           />
           <input
             type="tel"
@@ -184,29 +195,36 @@ function PlanCard({
             placeholder="WhatsApp (ej. +34 600 123 456)"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            className="w-full text-sm px-3 py-2 border border-neutral-200 rounded-lg focus:border-neutral-400 outline-none"
+            className="w-full text-sm px-3 py-2 rounded-lg outline-none focus:border-neutral-400 placeholder:text-neutral-500"
+            style={inputStyle}
             inputMode="tel"
             autoComplete="tel"
           />
           {err && (
-            <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-2 py-1.5">
+            <div
+              className="text-xs rounded-lg px-2 py-1.5"
+              style={{
+                background: "rgba(220, 38, 38, 0.15)",
+                border: "1px solid rgba(220, 38, 38, 0.4)",
+                color: "#FCA5A5",
+              }}
+            >
               ⚠ {err}
             </div>
           )}
           <button
             type="submit"
             disabled={busy || !email || !fullName || !phone}
-            className={`w-full text-sm font-semibold py-3 rounded-xl disabled:opacity-50 ${
-              isHighlight ? "text-white" : "bg-neutral-900 text-white"
-            }`}
-            style={isHighlight ? { background: gradient } : undefined}
+            className="w-full text-sm font-semibold py-3 rounded-xl disabled:opacity-50"
+            style={{ background: gradient, color: "#FFFFFF" }}
           >
             {busy ? "Redirigiendo…" : "Ir a pago seguro (Stripe) →"}
           </button>
           <button
             type="button"
             onClick={() => { setShowForm(false); setErr(null); }}
-            className="w-full text-[11px] text-neutral-400 hover:text-neutral-700"
+            className="w-full text-[11px] hover:underline"
+            style={{ color: "#737373" }}
           >
             Cambiar plan
           </button>
