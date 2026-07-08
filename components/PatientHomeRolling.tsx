@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Trophy, BarChart3, BookOpen, Users, Target, CalendarDays } from "lucide-react";
+import { ArrowLeft, Trophy, BarChart3, BookOpen, Users, Target, CalendarDays, Settings } from "lucide-react";
 import { PatientSessionMenu, patientLogout } from "@/components/PatientSessionMenu";
 import { PatientNav } from "@/components/PatientNav";
 import { PatientShirtSizePicker } from "@/components/PatientShirtSizePicker";
@@ -126,7 +126,17 @@ export function PatientHomeRolling({
             <Link href="/" className="inline-flex items-center gap-1 text-xs" style={{ color: "var(--p-text-faint)" }}>
               <ArrowLeft size={12} /> Cambiar usuario
             </Link>
-            <PatientSessionMenu />
+            <div className="flex items-center gap-2">
+              <Link
+                href={`/paciente/${patientId}/ajustes`}
+                title="Ajustes"
+                className="p-1.5 rounded-lg"
+                style={{ color: "var(--p-text-dim)" }}
+              >
+                <Settings size={18} />
+              </Link>
+              <PatientSessionMenu />
+            </div>
           </div>
 
           <div className="flex items-center gap-3 mb-5">
