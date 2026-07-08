@@ -15,7 +15,8 @@ export default async function PatientMetricsPage({ params }: { params: { id: str
   });
   if (!patient) notFound();
 
-  const navVariant = patient.programType === "PREVENTION" ? "prevention" : "advance";
+  const isPrevention = patient.programType === "PREVENTION";
+  const navVariant = isPrevention ? "prevention" : "advance";
 
   const today = todayMadridUtc();
 
@@ -45,6 +46,29 @@ export default async function PatientMetricsPage({ params }: { params: { id: str
             Cómo va tu carga y descanso día a día. Registra desde la sesión o desde aquí.
           </p>
         </header>
+
+        {/* Explicación específica para Prevention: no hay fisio 1:1, así que
+            el paciente debe entender para qué le sirven las métricas y cómo
+            usarlas de forma autónoma para prevenir lesiones. */}
+        {isPrevention && (
+          <div
+            className="rounded-2xl p-4 mb-5 text-xs leading-relaxed"
+            style={{
+              background: "var(--p-amber-bg)",
+              border: "1px solid var(--p-amber-border)",
+              color: "var(--p-amber-text)",
+            }}
+          >
+            <div className="font-semibold mb-1">🛡 Para qué sirve este panel</div>
+            <p style={{ color: "var(--p-text-dim)" }}>
+              Aunque nuestro equipo no te está ayudando con tu programación,
+              este apartado puede servirte para que veas qué tendencia sigue
+              tu fatiga, sensación de esfuerzo en el entrenamiento y sueño y
+              puedas ajustar tu entrenamiento para no pasarte y prevenir
+              lesiones.
+            </p>
+          </div>
+        )}
 
         {/* Registro rápido — colapsado por defecto porque normalmente se hace
             desde la propia sesión de entrenamiento */}
