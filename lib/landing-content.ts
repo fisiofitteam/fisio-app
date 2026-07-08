@@ -297,6 +297,15 @@ export type PreventionValueCard = { emoji: string; title: string; body: string }
 export type PreventionFaqItem = { q: string; a: string };
 
 export type PreventionLandingCopy = {
+  // MODO. Si "html" y htmlContent no está vacío, la landing se renderiza
+  // desde HTML libre (sanitizado). Si "structured", se usa el flujo con
+  // hero/valueCards/faq. Fallback a "structured" en normalizador.
+  mode: "structured" | "html";
+  // HTML libre (solo se aplica en mode="html"). Puede contener el
+  // placeholder [[PLANS]] para embeder el bloque interactivo de planes.
+  // Placeholders adicionales: {trialDays}, {year}.
+  htmlContent: string;
+
   // Colores del brand (permite cambiar el look completo sin tocar código)
   brandPrimary: string;      // "#10B981"
   brandPrimaryDark: string;  // "#059669"
@@ -334,6 +343,8 @@ export type PreventionLandingCopy = {
 };
 
 export const PREVENTION_LANDING_DEFAULTS: PreventionLandingCopy = {
+  mode: "structured",
+  htmlContent: "",
   brandPrimary: "#10B981",
   brandPrimaryDark: "#059669",
   brandAccentSoft: "#ECFDF5",
@@ -430,7 +441,12 @@ export function normalizePreventionCopy(raw: unknown): PreventionLandingCopy {
         .filter((f) => f.q.trim() !== "" && f.a.trim() !== "")
     : d.faqItems;
 
+  const mode = o.mode === "html" ? "html" : "structured";
+  const htmlContent = typeof o.htmlContent === "string" ? o.htmlContent : "";
+
   return {
+    mode,
+    htmlContent,
     brandPrimary: hex(o.brandPrimary, d.brandPrimary),
     brandPrimaryDark: hex(o.brandPrimaryDark, d.brandPrimaryDark),
     brandAccentSoft: hex(o.brandAccentSoft, d.brandAccentSoft),

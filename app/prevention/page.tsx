@@ -1,6 +1,7 @@
 import { PreventionLanding } from "@/components/PreventionLanding";
 import { PREVENTION_PLAN_CONFIG, PREVENTION_TRIAL_DAYS } from "@/lib/stripe";
 import { getPreventionLandingCopy } from "@/lib/landing-config";
+import { sanitizeLandingHtml } from "@/lib/sanitize-landing";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,16 @@ export default async function PreventionLandingPage({
   });
 
   const copy = await getPreventionLandingCopy();
+  // Sanitizamos aquí (server) para no ejecutar sanitize-html en el cliente.
+  // Sustituimos placeholders {trialDays} y {year} antes del sanitize.
+  const sanitizedHtml =
+    copy.mode === "html" && copy.htmlContent
+      ? sanitizeLandingHtml(
+          copy.htmlContent
+            .replace(/\{trialDays\}/g, String(PREVENTION_TRIAL_DAYS))
+            .replace(/\{year\}/g, String(new Date().getFullYear())),
+        )
+      : "";
 
   return (
     <PreventionLanding
@@ -40,6 +51,7 @@ export default async function PreventionLandingPage({
       trialDays={PREVENTION_TRIAL_DAYS}
       cancelled={cancelled}
       copy={copy}
+      sanitizedHtml={sanitizedHtml}
     />
   );
 }

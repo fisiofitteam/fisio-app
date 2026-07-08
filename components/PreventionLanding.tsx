@@ -1,16 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import type { PreventionLandingCopy } from "@/lib/landing-content";
-
-type Plan = {
-  key: "quarterly" | "semiannual" | "annual";
-  label: string;
-  months: number;
-  amountEuros: number;
-  monthlyEffectiveEuros: number;
-  isHighlighted: boolean;
-};
+import { PreventionPlansBlock, type PreventionPlanCardData } from "@/components/PreventionPlansBlock";
 
 // Sustituye {clave} en un texto. Local para evitar la dependencia de
 // applyVars() que exige objeto tipado — aquí las variables son fijas.
@@ -21,27 +12,77 @@ function tpl(text: string, trialDays: number): string {
 }
 
 /**
- * Landing pública de FisioFit Prevention. La CEO la pasará manualmente al
- * lead (no hay SEO/CAC público). Objetivo: convertir de un vistazo.
+ * Landing pública de FisioFit Prevention.
  *
- * Todos los textos y colores brand se leen del copy (editable en admin,
- * lib/landing-content.ts). Los precios y bullets por plan vienen de
- * PREVENTION_PLAN_CONFIG y no son editables aquí (para no divergir con
- * los Prices de Stripe).
+ * Dos modos según `copy.mode`:
+ *   - "structured": layout de siempre con hero + valueCards + planes + FAQ,
+ *     todo con campos editables desde el admin.
+ *   - "html": el CEO ha escrito HTML libre (sanitizado en server). Se
+ *     inserta el bloque interactivo de planes donde encuentre el
+ *     placeholder [[PLANS]], o al final si no lo encuentra.
+ *
+ * `sanitizedHtml` viene ya limpio del server — sanitize-html corre solo
+ * en Node. El cliente confía en él (dangerouslySetInnerHTML).
  */
 export function PreventionLanding({
   plans,
   trialDays,
   cancelled,
   copy,
+  sanitizedHtml,
 }: {
-  plans: Plan[];
+  plans: PreventionPlanCardData[];
   trialDays: number;
   cancelled?: boolean;
   copy: PreventionLandingCopy;
+  sanitizedHtml: string;
 }) {
   const gradient = `linear-gradient(135deg, ${copy.brandPrimary} 0%, ${copy.brandPrimaryDark} 100%)`;
 
+  const bullets = copy.planBullets.map((b) => tpl(b, trialDays));
+  const plansBlock = (
+    <PreventionPlansBlock
+      plans={plans}
+      trialDays={trialDays}
+      bullets={bullets}
+      highlightBadgeLabel={copy.highlightBadgeLabel}
+      ctaTemplate={copy.ctaPlanTemplate}
+      gradient={gradient}
+      brandPrimary={copy.brandPrimary}
+    />
+  );
+
+  // ─── Modo HTML libre ──────────────────────────────────────────────────
+  if (copy.mode === "html" && sanitizedHtml) {
+    const PLACEHOLDER = "[[PLANS]]";
+    const idx = sanitizedHtml.indexOf(PLACEHOLDER);
+    const before = idx === -1 ? sanitizedHtml : sanitizedHtml.slice(0, idx);
+    const after = idx === -1 ? "" : sanitizedHtml.slice(idx + PLACEHOLDER.length);
+
+    return (
+      <main className="min-h-screen bg-white text-neutral-900">
+        {cancelled && (
+          <div className="max-w-3xl mx-auto px-5 pt-3">
+            <div className="rounded-xl border border-amber-200 bg-amber-50 text-amber-900 text-sm px-4 py-3">
+              Has cancelado el proceso. Cuando quieras volver, elige un plan más abajo. Sin compromiso.
+            </div>
+          </div>
+        )}
+        <div dangerouslySetInnerHTML={{ __html: before }} />
+        <section id="planes" className="max-w-5xl mx-auto px-5 py-10">
+          {plansBlock}
+        </section>
+        {after && <div dangerouslySetInnerHTML={{ __html: after }} />}
+        {idx === -1 && (
+          // Si no había placeholder, no montamos también el after — el bloque
+          // de planes ya se pintó al final del `before`. Nada más que renderizar.
+          null
+        )}
+      </main>
+    );
+  }
+
+  // ─── Modo estructurado ────────────────────────────────────────────────
   return (
     <main className="min-h-screen bg-white text-neutral-900">
       {/* Cabecera fija minimal */}
@@ -128,20 +169,7 @@ export function PreventionLanding({
           {tpl(copy.planesSubtitle, trialDays)}
         </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {plans.map((p) => (
-            <PlanCard
-              key={p.key}
-              plan={p}
-              trialDays={trialDays}
-              bullets={copy.planBullets.map((b) => tpl(b, trialDays))}
-              highlightBadgeLabel={copy.highlightBadgeLabel}
-              ctaTemplate={copy.ctaPlanTemplate}
-              gradient={gradient}
-              brandPrimary={copy.brandPrimary}
-            />
-          ))}
-        </div>
+        {plansBlock}
       </section>
 
       {/* FAQ */}
@@ -190,167 +218,6 @@ function ValueCard({
         {title}
       </div>
       <p className="text-sm text-neutral-600 leading-relaxed whitespace-pre-line">{children}</p>
-    </div>
-  );
-}
-
-function PlanCard({
-  plan,
-  trialDays,
-  bullets,
-  highlightBadgeLabel,
-  ctaTemplate,
-  gradient,
-  brandPrimary,
-}: {
-  plan: Plan;
-  trialDays: number;
-  bullets: string[];
-  highlightBadgeLabel: string;
-  ctaTemplate: string;
-  gradient: string;
-  brandPrimary: string;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [showForm, setShowForm] = useState(false);
-  const [email, setEmail] = useState("");
-  const [fullName, setFullName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [err, setErr] = useState<string | null>(null);
-
-  const isHighlight = plan.isHighlighted;
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    const digits = phone.replace(/\D/g, "");
-    if (digits.length < 9) {
-      setErr("El WhatsApp no parece válido. Incluye el prefijo del país (ej. +34).");
-      return;
-    }
-    setBusy(true);
-    setErr(null);
-    try {
-      const res = await fetch("/api/prevention/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan: plan.key, email, fullName, phone }),
-      });
-      const d = await res.json();
-      if (!res.ok || !d.url) throw new Error(d?.error || "No pudimos iniciar el pago");
-      window.location.href = d.url;
-    } catch (e: any) {
-      setErr(e?.message ?? "Error de red");
-      setBusy(false);
-    }
-  }
-
-  const ctaLabel = ctaTemplate.replace(/\{plan\}/g, plan.label.toLowerCase());
-
-  return (
-    <div
-      className={`rounded-2xl p-5 flex flex-col ${isHighlight ? "shadow-lg" : "border border-neutral-200"}`}
-      style={{
-        background: "#FFFFFF",
-        position: "relative",
-        ...(isHighlight
-          ? { boxShadow: `0 10px 25px -5px ${brandPrimary}30`, border: `2px solid ${brandPrimary}` }
-          : {}),
-      }}
-    >
-      {isHighlight && (
-        <div
-          className="absolute -top-3 left-1/2 -translate-x-1/2 text-[10px] font-bold tracking-wider text-white px-2.5 py-1 rounded-full uppercase"
-          style={{ background: gradient }}
-        >
-          {highlightBadgeLabel}
-        </div>
-      )}
-
-      <div className="text-sm font-semibold uppercase tracking-wider text-neutral-500 mb-1">
-        {plan.label}
-      </div>
-      <div className="flex items-baseline gap-1 mb-1">
-        <span
-          className="text-4xl font-bold tabular-nums"
-          style={{ letterSpacing: "-0.02em", color: isHighlight ? brandPrimary : "#0A0A0A" }}
-        >
-          {plan.amountEuros}
-        </span>
-        <span className="text-sm text-neutral-500 font-medium">€</span>
-      </div>
-      <div className="text-xs text-neutral-500 mb-4">
-        Cada {plan.months} meses · ≈ {plan.monthlyEffectiveEuros.toFixed(2)} €/mes
-      </div>
-
-      <ul className="text-sm text-neutral-700 space-y-1.5 mb-5 flex-1">
-        {bullets.map((b, i) => (
-          <li key={i}>✅ {b}</li>
-        ))}
-      </ul>
-
-      {!showForm ? (
-        <button
-          type="button"
-          onClick={() => setShowForm(true)}
-          className={`w-full text-sm font-semibold py-3 rounded-xl transition-transform active:scale-[0.98] ${
-            isHighlight ? "text-white shadow-md" : "border border-neutral-200 bg-white hover:bg-neutral-50"
-          }`}
-          style={isHighlight ? { background: gradient } : undefined}
-        >
-          {ctaLabel}
-        </button>
-      ) : (
-        <form onSubmit={submit} className="space-y-2">
-          <input
-            type="text"
-            required
-            placeholder="Tu nombre"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            className="w-full text-sm px-3 py-2 border border-neutral-200 rounded-lg focus:border-neutral-400 outline-none"
-          />
-          <input
-            type="email"
-            required
-            placeholder="Tu email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full text-sm px-3 py-2 border border-neutral-200 rounded-lg focus:border-neutral-400 outline-none"
-          />
-          <input
-            type="tel"
-            required
-            placeholder="WhatsApp (ej. +34 600 123 456)"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            className="w-full text-sm px-3 py-2 border border-neutral-200 rounded-lg focus:border-neutral-400 outline-none"
-            inputMode="tel"
-            autoComplete="tel"
-          />
-          {err && (
-            <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-2 py-1.5">
-              ⚠ {err}
-            </div>
-          )}
-          <button
-            type="submit"
-            disabled={busy || !email || !fullName || !phone}
-            className={`w-full text-sm font-semibold py-3 rounded-xl disabled:opacity-50 ${
-              isHighlight ? "text-white" : "bg-neutral-900 text-white"
-            }`}
-            style={isHighlight ? { background: gradient } : undefined}
-          >
-            {busy ? "Redirigiendo…" : "Ir a pago seguro (Stripe) →"}
-          </button>
-          <button
-            type="button"
-            onClick={() => { setShowForm(false); setErr(null); }}
-            className="w-full text-[11px] text-neutral-400 hover:text-neutral-700"
-          >
-            Cambiar plan
-          </button>
-        </form>
-      )}
     </div>
   );
 }
