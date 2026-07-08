@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Trophy, BarChart3, BookOpen, Users, Target } from "lucide-react";
+import { ArrowLeft, Trophy, BarChart3, BookOpen, Users, Target, CalendarDays } from "lucide-react";
 import { PatientSessionMenu, patientLogout } from "@/components/PatientSessionMenu";
 import { PatientNav } from "@/components/PatientNav";
 import { PatientShirtSizePicker } from "@/components/PatientShirtSizePicker";
@@ -236,6 +236,12 @@ export function PatientHomeRolling({
             sublabel="Tus máximos"
           />
           <RollingActionCard
+            href={`/paciente/${patientId}/semana-completa`}
+            Icon={CalendarDays}
+            label="Semana completa"
+            sublabel="Los 5 días L-V"
+          />
+          <RollingActionCard
             href={`/paciente/${patientId}/metricas`}
             Icon={BarChart3}
             label="Mis métricas"
@@ -254,15 +260,6 @@ export function PatientHomeRolling({
             sublabel={communityUnread && communityUnread > 0 ? "Tienes novedades" : "Equipo y atletas"}
             badge={communityUnread}
           />
-          {whatsappGroupUrl && (
-            <RollingActionCard
-              href={whatsappGroupUrl}
-              Icon={WhatsAppIcon}
-              label="Mi seguimiento"
-              sublabel="Grupo de WhatsApp"
-              external
-            />
-          )}
           {challenge && (
             <RollingActionCard
               href={`/paciente/${patientId}/reto`}
@@ -273,62 +270,18 @@ export function PatientHomeRolling({
           )}
         </div>
 
-        <div className="text-[11px] font-medium mb-1 tracking-wider" style={{ color: "var(--p-text-faint)" }}>
-          SEMANA · {formatWeekLabel(weekStartIso).toUpperCase()}
-        </div>
-        {title && (
-          <h2 className="text-xl font-bold mb-5" style={{ letterSpacing: "-0.025em" }}>
-            {title}
-          </h2>
-        )}
-
+        {/* Aviso ligero cuando la semana aún no está publicada. La vista completa
+            de la semana vive ahora en /paciente/[id]/semana-completa. */}
         {mode === "pending" && (
           <section
-            className="rounded-2xl p-5 text-center py-10"
+            className="rounded-2xl p-4 text-center"
             style={{ background: "var(--p-surface-2)", border: "1px solid var(--p-border)" }}
           >
-            <div className="text-3xl mb-2">⚒️</div>
-            <p className="text-sm" style={{ color: "var(--p-text-dim)" }}>
+            <div className="text-2xl mb-1">⚒️</div>
+            <p className="text-xs" style={{ color: "var(--p-text-dim)" }}>
               Tu coach está preparando la semana.
             </p>
           </section>
-        )}
-
-        {mode === "ready" && (
-          <div className="space-y-3">
-            {[1, 2, 3, 4, 5].map((dow) => {
-              const tasks = daysByDow[dow];
-              const isToday = dow === todayDow;
-              const isPast = dow < todayDow;
-              return (
-                <section
-                  key={dow}
-                  className="rounded-2xl p-4"
-                  style={{
-                    background: isToday ? "rgba(252, 211, 77, 0.08)" : "var(--p-surface-2)",
-                    border: `1px solid ${isToday ? "rgba(252, 211, 77, 0.25)" : "var(--p-border)"}`,
-                    opacity: isPast ? 0.6 : 1,
-                  }}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-[11px] font-bold tracking-wider" style={{ color: isToday ? "var(--p-accent)" : "var(--p-text-faint)" }}>
-                      {DAY_NAMES[dow].toUpperCase()}{isToday ? " · HOY" : ""}
-                    </div>
-                  </div>
-
-                  {tasks.length === 0 ? (
-                    <p className="text-xs italic" style={{ color: "var(--p-text-faint)" }}>Día de descanso</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {tasks.map((t) => (
-                        <RollingTaskCard key={t.id} task={t} />
-                      ))}
-                    </div>
-                  )}
-                </section>
-              );
-            })}
-          </div>
         )}
       </div>
       <PatientNav patientId={patientId} active="home" variant="advance" />
