@@ -9,10 +9,9 @@ const TABS: Tab[] = [
   { key: "this-week", label: "📍 Esta semana", href: "/fisio/contenido" },
   { key: "to-record", label: "🎬 Para grabar", href: "/fisio/contenido/para-grabar" },
   { key: "template", label: "🧩 Plantillas", href: "/fisio/contenido/plantilla" },
-  // /storymaker es un route handler que sirve un HTML completo — no cabe
-  // como pestaña Next normal. Usamos <a> para forzar full-page navigation
-  // en vez del router SPA de Next (que intentaría hidratarlo).
-  { key: "story-maker", label: "🎨 Story Maker", href: "/storymaker", external: true },
+  // El editor Story Maker vive en /fisio/contenido/story-maker (page Next
+  // con iframe embebido a /storymaker). Así se queda dentro de la app.
+  { key: "story-maker", label: "🎨 Story Maker", href: "/fisio/contenido/story-maker" },
   { key: "metrics", label: "📈 Métricas", href: "/fisio/contenido/metricas" },
   { key: "bank", label: "🗂 Banco recursos", href: "/fisio/contenido/banco" },
   { key: "brief-ia", label: "✨ Brief IA", href: "/fisio/contenido/brief-ia", ceoOnly: true },

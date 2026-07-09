@@ -11520,26 +11520,112 @@ async function dlAll() {
 </script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════
-     FisioFit — override Story Maker
-     Ocultamos modos "Datos técnicos" y "Carrusel" porque el uso interno es
-     solo Historias. El código de esos modos queda dormido en el JS pero
-     nadie puede activarlo desde la UI.
+     FisioFit — overrides Story Maker
+     1. Ocultamos modos "Datos técnicos" y "Carrusel" (solo Historias).
+     2. Ocultamos botones "TrainingPeaks CSV" y "Corregir" (no aplican).
+     3. Aplicamos paleta dark FisioFit (amarillo #FCD34D + naranja #F59E0B).
      ═══════════════════════════════════════════════════════════════════════ -->
 <style>
-  /* Tabs de "Datos técnicos" y "Carrusel" al inicio */
+  /* 1. Tabs de modos que no usamos */
   .mode-tab[data-mode="technical"],
   .mode-tab[data-mode="carousel"] { display: none !important; }
-  /* Botón "descargar en 9:16 + 4:5 + 1:1" solo tiene sentido con carrusel */
   #btn-dl-multi { display: none !important; }
+
+  /* 2. Botones de guion que no usamos */
+  #btn-tp-csv,           /* CSV de TrainingPeaks */
+  #btn-corrector,        /* Corregir ortografía */
+  #tp-csv-input          /* input file oculto asociado a TP CSV */
+  { display: none !important; }
+
+  /* 3. Paleta FisioFit: sobrescribe TODAS las variables raíz del original.
+        Como el HTML usa var(--blue*) por todos lados, con esto se rebrandea
+        el 95% de la UI sin tocar cada regla. */
+  :root {
+    /* Marca (antes azul) */
+    --blue: #FCD34D !important;
+    --blue-dark: #F59E0B !important;
+    --blue-light: rgba(252, 211, 77, 0.18) !important;
+    --blue-pale: rgba(252, 211, 77, 0.08) !important;
+    --accent: #FCD34D !important;
+
+    /* Fondos y superficies (antes claros) */
+    --white: #141414 !important;         /* superficies principales */
+    --bg: #0A0A0A !important;            /* fondo general */
+    --dark: #050505 !important;
+
+    /* Textos (antes oscuros sobre claro → invierten) */
+    --black: #FAFAFA !important;
+    --gray-dark: #E5E5E5 !important;
+    --gray-mid: #A3A3A3 !important;
+    --gray-light: #525252 !important;
+    --border: #262626 !important;
+  }
+
+  /* Fondos con hex hardcoded que no usan variables — arreglos puntuales */
+  body { background: #0A0A0A !important; color: #FAFAFA !important; }
+  .header { background: #141414 !important; border-bottom-color: #262626 !important; }
+  .sidebar { background: #141414 !important; border-right-color: #262626 !important; }
+  .main { background: #0A0A0A !important; }
+  .hb-back { background: rgba(252,211,77,0.10) !important; color: #FCD34D !important; border-color: rgba(252,211,77,0.35) !important; }
+  .hs { background: rgba(252,211,77,0.10) !important; border-color: rgba(252,211,77,0.30) !important; color: #A3A3A3 !important; }
+
+  /* Textareas / inputs — mismo tratamiento */
+  textarea, .api-input, input[type="text"], input[type="number"], input[type="url"], select {
+    background: #1F1F1F !important;
+    border-color: #333 !important;
+    color: #FAFAFA !important;
+  }
+  textarea::placeholder, input::placeholder { color: #737373 !important; }
+  textarea:focus, input:focus { border-color: #FCD34D !important; background: #262626 !important; }
+
+  /* Botones — el original tiene box-shadow con rgba(azul) que ahora rompe */
+  .btn-primary { color: #1F2937 !important; box-shadow: 0 4px 16px rgba(252,211,77,0.35) !important; }
+  .btn-primary:hover:not(:disabled) { background: #F59E0B !important; }
+  .btn-dl { background: #1F1F1F !important; color: #E5E5E5 !important; border-color: #333 !important; }
+  .btn-dl:hover:not(:disabled) { background: #262626 !important; color: #FCD34D !important; border-color: #FCD34D !important; }
+  .btn-dl.main { background: rgba(252,211,77,0.12) !important; color: #FCD34D !important; border-color: rgba(252,211,77,0.35) !important; }
+
+  /* Cards / módulos de sidebar */
+  .drop-zone { background: #1F1F1F !important; border-color: #333 !important; }
+  .drop-zone:hover, .drop-zone.dragover { background: rgba(252,211,77,0.05) !important; border-color: #FCD34D !important; }
+  .dz-text { color: #E5E5E5 !important; }
+  .dz-sub { color: #A3A3A3 !important; }
+
+  .chip { background: rgba(252,211,77,0.15) !important; border-color: rgba(252,211,77,0.30) !important; color: #FCD34D !important; }
+
+  /* Divisores */
+  .divider { background: #262626 !important; }
+
+  /* Estados vacío / loading */
+  .empty-title, .empty-sub, .loading-sub { color: #525252 !important; }
+  .empty-icon { color: #262626 !important; }
+  .spinner { border-color: #262626 !important; border-top-color: #FCD34D !important; }
+  .loading-title { color: #FCD34D !important; }
+
+  /* Cabecera del panel de salida */
+  .out-header { border-bottom-color: #262626 !important; }
+  .out-label { color: #A3A3A3 !important; }
+  .out-count { color: #1F2937 !important; background: #FCD34D !important; }
+
+  /* Tarjetas de slide en el stage: fondo blanco → dark surface */
+  .slide-card { color: #FAFAFA !important; }
+
+  /* Caja API — la ocultamos porque en useProxy:true nunca se usa */
+  .api-box { display: none !important; }
+
+  /* Barra de estado inferior */
+  .status-bar { background: #141414 !important; border-top-color: #262626 !important; color: #A3A3A3 !important; }
+
+  /* Modales / paleta de comandos */
+  .modal, .cmdk, .cmdk-input, .toast { background: #141414 !important; color: #FAFAFA !important; border-color: #262626 !important; }
 </style>
 <script>
-  // Blindaje adicional: si algún atajo intenta cambiar de modo, lo revertimos.
+  // Blindaje: si algún atajo intenta cambiar de modo (technical/carousel),
+  // lo forzamos siempre a 'stories'.
   (function () {
     if (typeof S !== 'object' || !S) return;
     S.mode = 'stories';
-    // Sella el modo por si alguna función interna intenta escribirlo.
     try {
-      var prevSet = Object.getOwnPropertyDescriptor(S, 'mode');
       Object.defineProperty(S, 'mode', {
         configurable: true,
         enumerable: true,
