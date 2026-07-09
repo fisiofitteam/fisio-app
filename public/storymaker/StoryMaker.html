@@ -11842,15 +11842,15 @@ async function dlAll() {
           });
         }
 
-        // REEMPLAZAR el listener original del file-input por uno nuestro.
-        // El original hace loadFiles(this.files) con referencia local a la
-        // función, así que mi interceptor de window.loadFiles no lo atrapa.
-        // Solución: cloneNode remueve todos los listeners, luego pongo el
-        // mío con try/catch y logs verbosos.
+        // Listener con capture:true corre ANTES del original (que está
+        // en fase bubble). stopImmediatePropagation() impide que el
+        // original corra, dejándome el control total con try/catch.
+        // NO tocamos el nodo (cloneNode causa que el dropzone click
+        // apunte a un elemento fuera del DOM).
         if (fi) {
-          var newFi = fi.cloneNode(true);
-          fi.parentNode.replaceChild(newFi, fi);
-          newFi.addEventListener('change', function (e) {
+          fi.addEventListener('change', function (e) {
+            e.stopImmediatePropagation();
+
             var files = e.target.files;
             if (!files || files.length === 0) {
               showDbg('No hay archivos seleccionados', true);
@@ -11860,8 +11860,6 @@ async function dlAll() {
             var sizeMB = (f0.size / 1024 / 1024).toFixed(2);
             showDbg('Recibido: ' + f0.name + ' (' + sizeMB + ' MB, ' + f0.type + '). Procesando…');
 
-            // Aviso concreto si es demasiado grande: canvas de imagen
-            // no comprimida puede reventar en iframe. Sugerimos límite.
             if (f0.type && f0.type.indexOf('image/') === 0 && f0.size > 8 * 1024 * 1024) {
               showDbg('⚠ Imagen de ' + sizeMB + ' MB muy grande. Prueba con <8 MB.', true);
               return;
@@ -11873,7 +11871,6 @@ async function dlAll() {
                 return;
               }
               loadFiles(files);
-              // renderChips es async por el FileReader, esperamos un poco.
               setTimeout(function () {
                 var chips = document.getElementById('chips');
                 var chipCount = chips ? chips.children.length : 0;
@@ -11890,7 +11887,7 @@ async function dlAll() {
               showDbg('✗ Error en loadFiles: ' + m, true);
               console.error('[FisioFit] loadFiles error:', err);
             }
-          });
+          }, true); // capture:true — corre antes del listener original
         }
       } catch (e) {
         console.warn('[FisioFit override] upload instrumentation failed:', e);
