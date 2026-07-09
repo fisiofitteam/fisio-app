@@ -11777,27 +11777,32 @@ async function dlAll() {
   *:focus-visible { outline-color: #FCD34D !important; }
 </style>
 <script>
-  // Blindaje: si algún atajo intenta cambiar de modo (technical/carousel),
-  // lo forzamos siempre a 'stories'.
+  // Solo forzamos S.mode una vez al arranque. NO usamos Object.defineProperty
+  // porque interfiere con otras partes del código que hacen S.mode = X y
+  // rompe la cascada de renderizado (renderStyleSelector no llega a
+  // ejecutarse porque algún handler anterior lanza excepción por el setter
+  // no-op). Los usuarios ya no pueden cambiar de modo porque las tabs
+  // están ocultas con .mode-tabs { display: none }.
   (function () {
-    if (typeof S !== 'object' || !S) return;
-    S.mode = 'stories';
-    try {
-      Object.defineProperty(S, 'mode', {
-        configurable: true,
-        enumerable: true,
-        get: function () { return 'stories'; },
-        set: function () { /* ignore */ },
-      });
-    } catch (e) { /* ignore */ }
+    if (typeof S === 'object' && S) S.mode = 'stories';
   })();
 
-  // NO tocamos el DOM de Atleta/Marca. Los divs se ocultan solo con CSS
-  // (:has()) porque el JS del propio Story Maker asume que #brand-kit y
-  // #athlete-box existen y llama renderBrandKit() en el arranque — si
-  // los quitamos del DOM, ese render lanza un error y detiene toda la
-  // inicialización posterior (incluido renderStyleSelector, que es lo
-  // que puebla la sección "Estilo visual" con las 21 opciones).
+  // Fallback explícito: si por lo que sea la inicialización original no
+  // llegó a poblar #style-selector, lo hacemos nosotros después del
+  // DOMContentLoaded. Idempotente: renderStyleSelector() limpia el
+  // contenedor y lo re-puebla, no hay problema por llamarlo dos veces.
+  window.addEventListener('DOMContentLoaded', function () {
+    setTimeout(function () {
+      try {
+        var sel = document.getElementById('style-selector');
+        if (sel && sel.childElementCount === 0 && typeof renderStyleSelector === 'function') {
+          renderStyleSelector();
+        }
+      } catch (e) {
+        console.warn('[FisioFit override] renderStyleSelector fallback:', e);
+      }
+    }, 100);
+  });
 </script>
 </body>
 </html>
