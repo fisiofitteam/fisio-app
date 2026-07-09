@@ -102,24 +102,30 @@ export default async function PatientsListPage({
       })
     : [];
 
-  // Filtro según tab
-  let where: any = {};
+  // Filtro según tab. Los pacientes PREVENTION NO aparecen en esta lista:
+  // son suscriptores de un producto low-ticket sin fisio asignado y sin
+  // SubscriptionRenewal, tienen su propia vista en /fisio/advance/prevention.
+  // Sin este filtro salían fantasmas en "Por asignar" (cuenta > 0 pero la
+  // lista mostraba "No hay pacientes por asignar" porque el filtro isFinished
+  // los descartaba después).
+  const excludePrevention = { programType: { not: "PREVENTION" } };
+  let where: any = { ...excludePrevention };
   if (tab === "mine") {
-    where = { assignedProfessionalId: user.id };
+    where = { ...excludePrevention, assignedProfessionalId: user.id };
   } else if (tab === "unassigned") {
-    where = { assignedProfessionalId: null };
+    where = { ...excludePrevention, assignedProfessionalId: null };
   } else if (tab.startsWith("pro:")) {
     const proId = tab.slice(4);
-    where = { assignedProfessionalId: proId };
+    where = { ...excludePrevention, assignedProfessionalId: proId };
   } else if (tab === "finished") {
     // Pacientes terminados: sin ningún SubscriptionRenewal activo con
     // endDate en el futuro. Filtramos por el patient.id abajo después
     // de resolver quiénes cumplen la condición.
     if (user.isManager) {
-      // Manager ve todos. Aplicamos el filtro real más abajo.
+      // Manager ve todos (menos Prevention).
     } else {
-      // Fisios normales solo ven los suyos.
-      where = { assignedProfessionalId: user.id };
+      // Fisios normales solo ven los suyos (menos Prevention).
+      where = { ...excludePrevention, assignedProfessionalId: user.id };
     }
   }
   // tab === "all" → sin filtro
@@ -143,7 +149,11 @@ export default async function PatientsListPage({
     byPro: {},
   };
   if (user.isManager) {
-    const all = await prisma.patient.findMany({ select: { id: true, assignedProfessionalId: true } });
+    // Contamos SIN los Prevention — coherente con `where` que también los excluye.
+    const all = await prisma.patient.findMany({
+      where: { programType: { not: "PREVENTION" } },
+      select: { id: true, assignedProfessionalId: true },
+    });
     counts.all = all.length;
     counts.unassigned = all.filter((p) => p.assignedProfessionalId === null).length;
     counts.mine = all.filter((p) => p.assignedProfessionalId === user.id).length;
@@ -160,9 +170,9 @@ export default async function PatientsListPage({
     );
     counts.finished = all.filter((p) => !vigentes.has(p.id)).length;
   } else {
-    // Fisios normales: contar solo sus terminados para el badge.
+    // Fisios normales: contar solo sus terminados para el badge (sin Prevention).
     const mine = await prisma.patient.findMany({
-      where: { assignedProfessionalId: user.id },
+      where: { assignedProfessionalId: user.id, programType: { not: "PREVENTION" } },
       select: { id: true },
     });
     const active = await prisma.subscriptionRenewal.findMany({
