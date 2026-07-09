@@ -23,7 +23,9 @@ export default async function PatientWeekPage({
   const patient = await prisma.patient.findUnique({ where: { id: params.id } });
   if (!patient) notFound();
 
-  const view = searchParams.view === "prev" ? "prev" : "current";
+  const rawView = searchParams.view ?? "current";
+  const view: "prev" | "current" | "next" =
+    rawView === "prev" ? "prev" : rawView === "next" ? "next" : "current";
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -34,10 +36,16 @@ export default async function PatientWeekPage({
   const mondayThisWeek = new Date(today);
   mondayThisWeek.setDate(today.getDate() - (dow - 1));
 
+  // La navegación a "semana siguiente" solo se ofrece desde el viernes en
+  // adelante (dow >= 5). Antes no tiene mucho sentido: no ha empezado
+  // todavía la que estás viendo.
+  const canGoNext = dow >= 5;
+
   // A partir del VIERNES (dow >= 5), si estamos en la vista actual, también
-  // adelantamos la semana siguiente para que puedan preparar el fin de semana
-  // y la semana que viene.
-  const showNextWeek = view === "current" && dow >= 5;
+  // adelantamos la semana siguiente pegada al final para que la vayan
+  // viendo venir sin cambiar de vista. El botón "Siguiente" es la forma
+  // explícita; este auto-append es la pasiva.
+  const showNextWeek = view === "current" && canGoNext;
 
   // Rango según vista: SIEMPRE lunes 00:00 → domingo 23:59
   let rangeStart: Date, rangeEnd: Date;
@@ -47,6 +55,12 @@ export default async function PatientWeekPage({
     rangeStart.setDate(mondayThisWeek.getDate() - 7);
     rangeEnd = new Date(mondayThisWeek);
     rangeEnd.setDate(mondayThisWeek.getDate() - 1);
+  } else if (view === "next") {
+    // Lunes-domingo de la próxima semana
+    rangeStart = new Date(mondayThisWeek);
+    rangeStart.setDate(mondayThisWeek.getDate() + 7);
+    rangeEnd = new Date(mondayThisWeek);
+    rangeEnd.setDate(mondayThisWeek.getDate() + 13);
   } else {
     // Lunes-domingo de la semana actual (+ siguiente si dow >= viernes)
     rangeStart = new Date(mondayThisWeek);
@@ -111,13 +125,16 @@ export default async function PatientWeekPage({
         <p className="text-xs text-neutral-500">
           {view === "prev"
             ? "Semana anterior · lunes a domingo"
+            : view === "next"
+            ? "Semana siguiente · lunes a domingo"
             : showNextWeek
             ? "Esta semana + próxima"
             : "Esta semana · lunes a domingo"}
         </p>
       </header>
 
-      {/* Selector de semana */}
+      {/* Selector de semana. "Siguiente" solo aparece desde el viernes,
+          antes no tiene mucho sentido programación. */}
       <div className="flex bg-neutral-100 rounded-lg p-0.5 mb-4">
         <Link
           href={`/paciente/${patient.id}/semana?view=prev`}
@@ -125,7 +142,7 @@ export default async function PatientWeekPage({
             view === "prev" ? "bg-white shadow-sm font-medium" : "text-neutral-600"
           }`}
         >
-          ← Semana anterior
+          ← Anterior
         </Link>
         <Link
           href={`/paciente/${patient.id}/semana`}
@@ -135,11 +152,26 @@ export default async function PatientWeekPage({
         >
           Esta semana
         </Link>
+        {canGoNext && (
+          <Link
+            href={`/paciente/${patient.id}/semana?view=next`}
+            className={`flex-1 px-3 py-1.5 text-xs rounded-md text-center transition-colors ${
+              view === "next" ? "bg-white shadow-sm font-medium" : "text-neutral-600"
+            }`}
+          >
+            Siguiente →
+          </Link>
+        )}
       </div>
 
       {view === "prev" && (
         <p className="text-[11px] text-neutral-500 italic mb-3 text-center">
           Si te perdiste alguna sesión, aquí puedes revisarla.
+        </p>
+      )}
+      {view === "next" && (
+        <p className="text-[11px] text-neutral-500 italic mb-3 text-center">
+          Adelantamos tu próxima semana para que la vayas viendo venir.
         </p>
       )}
 
