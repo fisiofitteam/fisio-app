@@ -23,6 +23,7 @@ export function RightPanel({
   onSelectElement,
   onUpdateElement,
   onDeleteElement,
+  onDuplicateElement,
   onAddElement,
   onSaveAsTemplate,
   newId,
@@ -32,6 +33,7 @@ export function RightPanel({
   onSelectElement: (id: string | null) => void;
   onUpdateElement: (id: string, patch: Partial<SlideElement>) => void;
   onDeleteElement: (id: string) => void;
+  onDuplicateElement: (id: string) => void;
   onAddElement: (el: SlideElement) => void;
   onSaveAsTemplate: (name: string, description: string) => void;
   newId: () => string;
@@ -152,9 +154,20 @@ export function RightPanel({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
+                      onDuplicateElement(el.id);
+                    }}
+                    className="text-neutral-400 hover:text-neutral-900"
+                    title="Duplicar"
+                  >
+                    ⎘
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
                       onDeleteElement(el.id);
                     }}
                     className="text-neutral-400 hover:text-red-600"
+                    title="Borrar"
                   >
                     🗑
                   </button>
@@ -168,8 +181,17 @@ export function RightPanel({
       {/* Editor del elemento seleccionado */}
       {selectedElement && (
         <div className="p-3 border-b border-neutral-100 space-y-2 overflow-auto">
-          <div className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-1">
-            ✏ Editar {selectedElement.type === "text" ? "texto" : selectedElement.type === "logo" ? "logo" : "línea"}
+          <div className="flex items-center justify-between mb-1">
+            <div className="text-xs font-bold uppercase tracking-wider text-neutral-500">
+              ✏ Editar {selectedElement.type === "text" ? "texto" : selectedElement.type === "logo" ? "logo" : "línea"}
+            </div>
+            <button
+              onClick={() => onDuplicateElement(selectedElement.id)}
+              className="text-[10px] font-medium px-2 py-1 rounded border border-neutral-200 hover:bg-neutral-50"
+              title="Duplicar elemento (con misma configuración)"
+            >
+              ⎘ Duplicar
+            </button>
           </div>
           {selectedElement.type === "text" && (
             <TextEditor el={selectedElement} onChange={(p) => onUpdateElement(selectedElement.id, p)} />

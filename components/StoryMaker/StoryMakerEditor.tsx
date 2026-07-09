@@ -47,6 +47,7 @@ export function StoryMakerEditor({
   const [slides, setSlides] = useState<Slide[]>([emptySlide()]);
   const [selectedSlideIdx, setSelectedSlideIdx] = useState(0);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
+  const [editingElementId, setEditingElementId] = useState<string | null>(null);
   const [savedList, setSavedList] = useState(savedTemplates);
 
   const allTemplates = useMemo(
@@ -117,6 +118,30 @@ export function StoryMakerEditor({
       ),
     );
     if (selectedElementId === id) setSelectedElementId(null);
+    if (editingElementId === id) setEditingElementId(null);
+  }
+
+  function duplicateElement(id: string) {
+    const src = currentSlide.elements.find((e) => e.id === id);
+    if (!src) return;
+    const copy = {
+      ...src,
+      id: newId(),
+      // Ligero offset para que se vea que es una copia
+      x: Math.min(100, src.x + 4),
+      y: Math.min(100, src.y + 4),
+    };
+    setSlides((prev) =>
+      prev.map((s, i) =>
+        i === selectedSlideIdx ? { ...s, elements: [...s.elements, copy as SlideElement] } : s,
+      ),
+    );
+    setSelectedElementId(copy.id);
+  }
+
+  function finishEditingText(id: string, newContent: string) {
+    updateElement(id, { content: newContent } as any);
+    setEditingElementId(null);
   }
 
   // ─── Aplicar plantilla ──────────────────────────────────────────────
@@ -359,6 +384,9 @@ export function StoryMakerEditor({
             onSelectElement={setSelectedElementId}
             onUpdateElement={updateElement}
             interactive
+            editingElementId={editingElementId}
+            onStartEditing={setEditingElementId}
+            onFinishEditing={finishEditingText}
           />
         </div>
 
@@ -391,6 +419,7 @@ export function StoryMakerEditor({
         onSelectElement={setSelectedElementId}
         onUpdateElement={updateElement}
         onDeleteElement={deleteElement}
+        onDuplicateElement={duplicateElement}
         onAddElement={addElement}
         onSaveAsTemplate={saveAsTemplate}
         newId={newId}

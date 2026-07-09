@@ -26,6 +26,9 @@ export function SlideCanvas({
   onSelectElement,
   onUpdateElement,
   interactive = false,
+  editingElementId,
+  onStartEditing,
+  onFinishEditing,
 }: {
   slide: Slide;
   scale?: number;
@@ -33,6 +36,9 @@ export function SlideCanvas({
   onSelectElement?: (id: string | null) => void;
   onUpdateElement?: (id: string, patch: Partial<SlideElement>) => void;
   interactive?: boolean;
+  editingElementId?: string | null;
+  onStartEditing?: (id: string) => void;
+  onFinishEditing?: (id: string, newContent: string) => void;
 }) {
   const canvasRef = useRef<HTMLDivElement | null>(null);
 
@@ -48,6 +54,8 @@ export function SlideCanvas({
   const handleMouseDown = useCallback(
     (e: React.MouseEvent, el: SlideElement) => {
       if (!interactive) return;
+      // No arrastrar cuando el elemento está en modo edición inline.
+      if (editingElementId === el.id) return;
       e.stopPropagation();
       onSelectElement?.(el.id);
       dragRef.current = {
@@ -75,7 +83,7 @@ export function SlideCanvas({
       window.addEventListener("mousemove", move);
       window.addEventListener("mouseup", up);
     },
-    [interactive, onSelectElement, onUpdateElement],
+    [interactive, editingElementId, onSelectElement, onUpdateElement],
   );
 
   return (
@@ -146,7 +154,12 @@ export function SlideCanvas({
             element={el}
             selected={selectedElementId === el.id}
             interactive={interactive}
+            editing={editingElementId === el.id}
             onMouseDown={(e) => handleMouseDown(e, el)}
+            onDoubleClick={() => {
+              if (interactive && el.type === "text") onStartEditing?.(el.id);
+            }}
+            onFinishEditing={(newContent) => onFinishEditing?.(el.id, newContent)}
           />
         ))}
       </div>
@@ -163,11 +176,11 @@ function gradientCss(kind: NonNullable<Slide["bgGradient"]>): string {
     case "both-dark":
       return "linear-gradient(to bottom, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.15) 30%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.15) 70%, rgba(0,0,0,0.75) 100%)";
     case "top-bright":
-      return "linear-gradient(to bottom, rgba(252,211,77,0.55) 0%, rgba(252,211,77,0.15) 30%, rgba(0,0,0,0) 55%)";
+      return "linear-gradient(to bottom, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.15) 30%, rgba(255,255,255,0) 55%)";
     case "bottom-bright":
-      return "linear-gradient(to top, rgba(245,158,11,0.55) 0%, rgba(245,158,11,0.15) 30%, rgba(0,0,0,0) 55%)";
+      return "linear-gradient(to top, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.15) 30%, rgba(255,255,255,0) 55%)";
     case "center-bright":
-      return "radial-gradient(ellipse at center, rgba(252,211,77,0.35) 0%, rgba(252,211,77,0.10) 40%, rgba(0,0,0,0) 70%)";
+      return "radial-gradient(ellipse at center, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0.10) 40%, rgba(255,255,255,0) 70%)";
     default:
       return "transparent";
   }
@@ -177,12 +190,18 @@ function ElementRenderer({
   element,
   selected,
   interactive,
+  editing,
   onMouseDown,
+  onDoubleClick,
+  onFinishEditing,
 }: {
   element: SlideElement;
   selected: boolean;
   interactive: boolean;
+  editing: boolean;
   onMouseDown: (e: React.MouseEvent) => void;
+  onDoubleClick: () => void;
+  onFinishEditing: (newContent: string) => void;
 }) {
   const outlineStyle: React.CSSProperties = selected
     ? {
@@ -197,28 +216,67 @@ function ElementRenderer({
     left: `${element.x}%`,
     top: `${element.y}%`,
     transform: "translate(-50%, -50%)",
-    cursor: interactive ? "move" : "default",
-    userSelect: "none",
+    cursor: interactive ? (editing ? "text" : "move") : "default",
+    userSelect: editing ? "text" : "none",
     ...outlineStyle,
   };
 
-  if (element.type === "text") return <TextRender el={element} wrap={baseWrapper} onMouseDown={onMouseDown} />;
+  if (element.type === "text") {
+    return (
+      <TextRender
+        el={element}
+        wrap={baseWrapper}
+        editing={editing}
+        onMouseDown={onMouseDown}
+        onDoubleClick={onDoubleClick}
+        onFinishEditing={onFinishEditing}
+      />
+    );
+  }
   if (element.type === "logo") return <LogoRender el={element} wrap={baseWrapper} onMouseDown={onMouseDown} />;
   if (element.type === "line") return <LineRender el={element} wrap={baseWrapper} onMouseDown={onMouseDown} />;
   return null;
 }
 
-function TextRender({ el, wrap, onMouseDown }: { el: TextElement; wrap: React.CSSProperties; onMouseDown: (e: React.MouseEvent) => void }) {
-  const content = el.uppercase ? el.content.toUpperCase() : el.content;
+function TextRender({
+  el,
+  wrap,
+  editing,
+  onMouseDown,
+  onDoubleClick,
+  onFinishEditing,
+}: {
+  el: TextElement;
+  wrap: React.CSSProperties;
+  editing: boolean;
+  onMouseDown: (e: React.MouseEvent) => void;
+  onDoubleClick: () => void;
+  onFinishEditing: (newContent: string) => void;
+}) {
+  const displayed = el.uppercase && !editing ? el.content.toUpperCase() : el.content;
   return (
     <div
       onMouseDown={onMouseDown}
+      onDoubleClick={onDoubleClick}
       style={{
         ...wrap,
         width: `${el.width}%`,
       }}
     >
       <div
+        contentEditable={editing}
+        suppressContentEditableWarning
+        onBlur={(e) => {
+          if (!editing) return;
+          const nueva = e.currentTarget.textContent ?? "";
+          onFinishEditing(nueva);
+        }}
+        onKeyDown={(e) => {
+          // Escape confirma también (equivalente a onBlur).
+          if (e.key === "Escape") {
+            (e.currentTarget as HTMLElement).blur();
+          }
+        }}
         style={{
           fontFamily: FONT_STACK[el.font],
           fontSize: el.size,
@@ -234,9 +292,12 @@ function TextRender({ el, wrap, onMouseDown }: { el: TextElement; wrap: React.CS
           textShadow: el.shadow ? "0 6px 24px rgba(0,0,0,0.6)" : undefined,
           whiteSpace: "pre-wrap",
           wordBreak: "break-word",
+          outline: editing ? "2px dashed #FCD34D" : undefined,
+          outlineOffset: editing ? 6 : undefined,
+          cursor: editing ? "text" : "inherit",
         }}
       >
-        {content}
+        {displayed}
       </div>
     </div>
   );
