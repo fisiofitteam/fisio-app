@@ -11802,26 +11802,87 @@ async function dlAll() {
         console.warn('[FisioFit override] renderStyleSelector fallback:', e);
       }
 
-      // Fallback subida de imágenes: aseguramos que al pinchar en la
-      // drop-zone (incluyendo el icono/texto interior) se abra el
-      // diálogo de archivo. El CSS original hace que el input cubra
-      // toda la zona con opacity:0, pero según el navegador y el
-      // stacking context del iframe eso puede no propagarse. Un
-      // listener explícito de click en #dropzone -> click programático
-      // en #file-input lo garantiza.
+      // Fallback subida de imágenes con LOGS visibles + interceptor de
+      // errores en loadFiles. Muestra un banner amarillo en la parte
+      // superior del editor con lo que va pasando, para poder diagnosticar
+      // sin necesidad de abrir devtools del iframe.
       try {
         var dz = document.getElementById('dropzone');
         var fi = document.getElementById('file-input');
+        var statusEl = document.getElementById('status');
+
+        // Banner de debug fijo bajo el header
+        var dbg = document.createElement('div');
+        dbg.id = 'fisiofit-debug';
+        dbg.style.cssText = 'position:fixed;bottom:16px;left:16px;max-width:400px;padding:10px 14px;background:#FEF3C7;border:1px solid #FCD34D;border-radius:8px;font-size:11px;font-family:monospace;color:#78350F;z-index:99999;display:none;box-shadow:0 4px 16px rgba(0,0,0,0.15)';
+        document.body.appendChild(dbg);
+        var showDbg = function (msg, isError) {
+          dbg.textContent = msg;
+          dbg.style.display = 'block';
+          if (isError) {
+            dbg.style.background = '#FEE2E2';
+            dbg.style.borderColor = '#F87171';
+            dbg.style.color = '#7F1D1D';
+          } else {
+            dbg.style.background = '#FEF3C7';
+            dbg.style.borderColor = '#FCD34D';
+            dbg.style.color = '#78350F';
+          }
+          console.log('[FisioFit]', msg);
+          clearTimeout(dbg._t);
+          dbg._t = setTimeout(function () { dbg.style.display = 'none'; }, 8000);
+        };
+
+        // Click en zona → dispara input file explícitamente
         if (dz && fi) {
           dz.addEventListener('click', function (e) {
-            // Si ya el click fue directamente sobre el input, no
-            // volvemos a dispararlo (crearía diálogo doble).
             if (e.target === fi) return;
+            showDbg('Abriendo diálogo de archivo…');
             fi.click();
           });
         }
+
+        // Log del change del input file (antes de que corra loadFiles)
+        if (fi) {
+          fi.addEventListener('change', function (e) {
+            var files = e.target.files;
+            if (!files || files.length === 0) {
+              showDbg('No hay archivos seleccionados', true);
+              return;
+            }
+            var names = [];
+            for (var i = 0; i < files.length; i++) {
+              names.push(files[i].name + ' (' + Math.round(files[i].size / 1024) + 'KB, ' + (files[i].type || 'sin tipo') + ')');
+            }
+            showDbg('✓ ' + files.length + ' seleccionado(s): ' + names.join(', '));
+          }, true); // capture: true → mi listener corre ANTES del original
+        }
+
+        // Interceptor de loadFiles para atrapar errores
+        if (typeof window.loadFiles === 'function') {
+          var originalLoadFiles = window.loadFiles;
+          window.loadFiles = function (files) {
+            showDbg('Procesando ' + (files ? files.length : 0) + ' archivo(s)…');
+            try {
+              var result = originalLoadFiles(files);
+              setTimeout(function () {
+                var chips = document.getElementById('chips');
+                var chipCount = chips ? chips.children.length : 0;
+                if (chipCount > 0) {
+                  showDbg('✓ Cargados. Chips visibles: ' + chipCount);
+                } else {
+                  showDbg('⚠ loadFiles OK pero no aparecen chips', true);
+                }
+              }, 1500);
+              return result;
+            } catch (err) {
+              showDbg('✗ Error: ' + (err && err.message ? err.message : String(err)), true);
+              throw err;
+            }
+          };
+        }
       } catch (e) {
-        console.warn('[FisioFit override] dropzone click fallback:', e);
+        console.warn('[FisioFit override] upload instrumentation failed:', e);
       }
     }, 100);
   });
