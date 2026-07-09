@@ -157,55 +157,53 @@ export function StoryMakerEditor({
     setEditingElementId(null);
   }
 
-  // ─── Aplicar plantilla ──────────────────────────────────────────────
+  // ─── Aplicar plantilla al slide ACTUAL ──────────────────────────────
+  // Solo afecta al slide seleccionado. Así puedes tener slide 1 con
+  // "Portada", slide 2 con "Cita", slide 3 con "Lista"…
   function applyTemplate(t: StoryTemplate & { __preserveTexts?: boolean }) {
     const preserveTexts = !!t.__preserveTexts;
     const templateBase = t.slides[0];
+    if (!templateBase) return;
 
-    // Si "mantener textos" está marcado pero no hay contenido real que
-    // preservar (todos los slides vacíos / sin text elements con content),
-    // caemos a sustitución completa para no dejar un canvas en blanco.
-    const hasRealContent = slides.some((s) =>
-      s.elements.some((e) => e.type === "text" && (e as TextElement).content?.trim()),
+    const current = slides[selectedSlideIdx] ?? emptySlide();
+
+    // ¿Tiene el slide actual textos que valga la pena preservar?
+    const hasRealContent = current.elements.some(
+      (e) => e.type === "text" && (e as TextElement).content?.trim(),
     );
 
-    if (preserveTexts && hasRealContent && templateBase) {
-      // Extraemos los textos actuales de cada slide, en orden de aparición,
-      // y los inyectamos como content de los text elements de la plantilla.
-      // Genera tantos slides como haya en el estado actual.
-      const fresh: Slide[] = slides.map((s) => {
-        const currentTexts = s.elements
-          .filter((e): e is TextElement => e.type === "text")
-          .map((e) => e.content);
-        let ti = 0;
-        return {
-          ...templateBase,
-          elements: templateBase.elements.map((el) => {
-            const cloned = { ...el, id: newId() } as SlideElement;
-            if (cloned.type === "text" && ti < currentTexts.length) {
-              const withText = { ...(cloned as TextElement), content: currentTexts[ti] };
-              ti++;
-              return withText as SlideElement;
-            }
-            return cloned;
-          }),
-        };
-      });
-      setSlides(fresh);
-      setSelectedSlideIdx(Math.min(selectedSlideIdx, fresh.length - 1));
-      setSelectedElementId(null);
-      flash("ok", `Plantilla "${t.name}" aplicada preservando textos`);
-      return;
+    let nextSlide: Slide;
+
+    if (preserveTexts && hasRealContent) {
+      const currentTexts = current.elements
+        .filter((e): e is TextElement => e.type === "text")
+        .map((e) => e.content);
+      let ti = 0;
+      nextSlide = {
+        ...templateBase,
+        elements: templateBase.elements.map((el) => {
+          const cloned = { ...el, id: newId() } as SlideElement;
+          if (cloned.type === "text" && ti < currentTexts.length) {
+            const withText = { ...(cloned as TextElement), content: currentTexts[ti] };
+            ti++;
+            return withText as SlideElement;
+          }
+          return cloned;
+        }),
+      };
+    } else {
+      nextSlide = {
+        ...templateBase,
+        elements: templateBase.elements.map((el) => ({ ...el, id: newId() }) as SlideElement),
+      };
     }
 
-    // Sustitución completa (comportamiento clásico)
-    const fresh: Slide[] = t.slides.map((s) => ({
-      ...s,
-      elements: s.elements.map((el) => ({ ...el, id: newId() } as SlideElement)),
-    }));
-    setSlides(fresh.length ? fresh : [emptySlide()]);
-    setSelectedSlideIdx(0);
+    setSlides((prev) => prev.map((s, i) => (i === selectedSlideIdx ? nextSlide : s)));
     setSelectedElementId(null);
+    flash(
+      "ok",
+      `Plantilla "${t.name}" aplicada al slide ${selectedSlideIdx + 1}${preserveTexts && hasRealContent ? " (textos preservados)" : ""}`,
+    );
   }
 
   // ─── Seed de las 4 builtin en BD ────────────────────────────────────

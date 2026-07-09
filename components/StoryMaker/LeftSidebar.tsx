@@ -122,8 +122,12 @@ export function LeftSidebar({
               }}
               className="w-full text-xs font-semibold px-3 py-1.5 rounded bg-neutral-900 text-white hover:bg-neutral-800"
             >
-              Aplicar plantilla
+              Aplicar al slide actual
             </button>
+            <p className="mt-1 text-[10px] text-neutral-400 leading-tight">
+              Solo cambia el slide seleccionado — puedes darle una plantilla
+              distinta a cada slide del carrusel.
+            </p>
 
             {selectedTemplate?.description && (
               <p className="mt-1.5 text-[10px] text-neutral-400 leading-tight">
