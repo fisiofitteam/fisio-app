@@ -11801,6 +11801,28 @@ async function dlAll() {
       } catch (e) {
         console.warn('[FisioFit override] renderStyleSelector fallback:', e);
       }
+
+      // Fallback subida de imágenes: aseguramos que al pinchar en la
+      // drop-zone (incluyendo el icono/texto interior) se abra el
+      // diálogo de archivo. El CSS original hace que el input cubra
+      // toda la zona con opacity:0, pero según el navegador y el
+      // stacking context del iframe eso puede no propagarse. Un
+      // listener explícito de click en #dropzone -> click programático
+      // en #file-input lo garantiza.
+      try {
+        var dz = document.getElementById('dropzone');
+        var fi = document.getElementById('file-input');
+        if (dz && fi) {
+          dz.addEventListener('click', function (e) {
+            // Si ya el click fue directamente sobre el input, no
+            // volvemos a dispararlo (crearía diálogo doble).
+            if (e.target === fi) return;
+            fi.click();
+          });
+        }
+      } catch (e) {
+        console.warn('[FisioFit override] dropzone click fallback:', e);
+      }
     }, 100);
   });
 </script>

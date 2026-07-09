@@ -29,6 +29,7 @@ export default async function StoryMakerPage() {
         <iframe
           src="/storymaker"
           title="Story Maker"
+          allow="clipboard-read; clipboard-write; downloads-without-user-activation"
           style={{
             width: "100%",
             height: "100%",
@@ -41,6 +42,8 @@ export default async function StoryMakerPage() {
           // y descargar blobs. Corre en el mismo origen que la app, la CSP
           // por defecto de Next lo permite. Autorización ya la ha hecho el
           // route handler /storymaker antes de servir el HTML.
+          // allow= habilita capacidades necesarias del editor: portapapeles
+          // (para copiar caption e imágenes) y descargas automáticas del ZIP.
         />
       </div>
     </main>
