@@ -2898,10 +2898,7 @@ model TeamMeeting {
 // ============================================================================
 // STORY MAKER — plantillas de composición para Instagram Stories
 // ============================================================================
-// DEPRECATED (2026-07-09): el editor React V1/V2 se sustituyó por el HTML
-// autocontenido en public/storymaker/StoryMaker.html, que guarda las series
-// en localStorage del navegador (no en BD). El modelo se conserva por si
-// se resucita más adelante — la tabla está vacía en Neon.
+// jsonSlides = array de {bgColor, bgImageUrl?, elements: [...]}. Coord en %.
 
 model ContentStoryTemplate {
   id          String   @id @default(cuid())

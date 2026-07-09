@@ -2681,8 +2681,10 @@ model TeamMeeting {
 // ============================================================================
 // STORY MAKER — plantillas de composición para Instagram Stories
 // ============================================================================
-// DEPRECATED (2026-07-09): reemplazado por public/storymaker/StoryMaker.html
-// (autocontenido, guarda en localStorage). Modelo conservado por si vuelve.
+// Cada plantilla es una serie de slides (1080×1920). jsonSlides es un array
+// de {bgColor, bgImageUrl?, elements: [{type, x, y, width, ...props}]} con
+// x/y en porcentaje del canvas. El editor vive en /fisio/contenido/story-maker
+// y se edita también desde /fisio/contenido/plantilla (tab Historias).
 
 model ContentStoryTemplate {
   id          String   @id @default(cuid())
