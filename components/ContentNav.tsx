@@ -9,6 +9,7 @@ const TABS: Tab[] = [
   { key: "this-week", label: "📍 Esta semana", href: "/fisio/contenido" },
   { key: "to-record", label: "🎬 Para grabar", href: "/fisio/contenido/para-grabar" },
   { key: "template", label: "🧩 Plantillas", href: "/fisio/contenido/plantilla" },
+  { key: "story-maker", label: "🎨 Story Maker", href: "/fisio/contenido/story-maker" },
   { key: "metrics", label: "📈 Métricas", href: "/fisio/contenido/metricas" },
   { key: "bank", label: "🗂 Banco recursos", href: "/fisio/contenido/banco" },
   { key: "brief-ia", label: "✨ Brief IA", href: "/fisio/contenido/brief-ia", ceoOnly: true },

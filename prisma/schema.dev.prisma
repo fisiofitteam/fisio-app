@@ -2678,3 +2678,23 @@ model TeamMeeting {
   @@index([category, scheduledAt])
 }
 
+// ============================================================================
+// STORY MAKER — plantillas de composición para Instagram Stories
+// ============================================================================
+// Cada plantilla guarda una serie de slides ya maquetados (estilo + textos +
+// imágenes) para reutilizarlos entre semanas / personas. jsonSlides es un
+// array JSON con la forma [{ styleKey, title, subtitle, body, cta, bgUrl }, …].
+// Sin migración compleja: se crea con db:push y se puebla desde el editor.
+
+model ContentStoryTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  jsonSlides  String                          // JSON array de slides
+  createdById String?                         // Professional que la guardó
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([createdById, updatedAt])
+}
+
