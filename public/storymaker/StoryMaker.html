@@ -1431,7 +1431,9 @@ body{background:#EEF2F7}
 
 <script>
 // [PERSONALIZAR] Marca y modo API — inyectados por app/storymaker/route.ts
-// El comentario /* __SM_CONFIG__ */ es el marker que el route handler sustituye.
+// El marker SM CONFIG (con guion bajo) en la siguiente línea se reemplaza
+// al vuelo por SM_CONFIG real. NO poner el marker en este comentario para
+// evitar que el regex del route handler lo empareje aquí por error.
 var SM_CONFIG = /* __SM_CONFIG__ */ {
   marca: 'FisioFit Team',
   handle: '@fisiofitteam',
@@ -1441,7 +1443,7 @@ var SM_CONFIG = /* __SM_CONFIG__ */ {
 };
 
 // [PERSONALIZAR] Logo — SVG con iniciales "FF" amarillo (paleta FisioFit).
-// Sustituible por el logo real desde app/storymaker/route.ts (marker /* __LOGO__ */).
+// Sustituible por el logo real desde app/storymaker/route.ts.
 var LOGO_ER_DATA_URL = /* __LOGO__ */ 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMDAgMjAwIj48Y2lyY2xlIGN4PSIxMDAiIGN5PSIxMDAiIHI9Ijk2IiBmaWxsPSIjMEEwQTBBIi8+PHRleHQgeD0iMTAwIiB5PSIxMzUiIGZvbnQtZmFtaWx5PSJBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSI5NiIgZm9udC13ZWlnaHQ9IjkwMCIgZmlsbD0iI0ZDRDM0RCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+RkY8L3RleHQ+PC9zdmc+';
 
 // Catálogo de estilos visuales. La key se usa como sufijo de clase CSS (.style-X).
