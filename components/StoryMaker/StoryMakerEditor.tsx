@@ -250,10 +250,13 @@ export function StoryMakerEditor({
         flash("err", data.error || "No se pudo generar");
         return;
       }
-      // El backend nos devuelve `templateKey` con la plantilla que usó como base
-      const template = allTemplates.find((t) => t.key === data.templateKey) ?? allTemplates[0];
-      if (!template) {
-        flash("err", "Sin plantillas disponibles — carga primero las de ejemplo");
+      // El backend nos devuelve la plantilla base completa (una builtin
+      // hardcoded con aiSlots). La materializamos y el CEO puede aplicar
+      // otra plantilla del dropdown con "mantener textos" para cambiar
+      // el estilo visual manteniendo el contenido.
+      const template: StoryTemplate | undefined = data.template;
+      if (!template || !template.slides?.[0]) {
+        flash("err", "Respuesta del backend sin plantilla base");
         return;
       }
       const base = template.slides[0];
