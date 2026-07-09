@@ -11521,76 +11521,111 @@ async function dlAll() {
 
 <!-- ═══════════════════════════════════════════════════════════════════════
      FisioFit — overrides Story Maker
-     1. Ocultamos modos "Datos técnicos" y "Carrusel" (solo Historias).
-     2. Ocultamos botones "TrainingPeaks CSV" y "Corregir" (no aplican).
-     3. Look CLARO como el panel admin de fisio-app: fondo blanco/gris claro,
-        botones NEGROS y AMARILLO como acento (nada de dark ni de azul).
+     El HTML original aplica un bloque "chrome oscuro studio" en la línea
+     993 que da el look dark azul marino con hex hardcodeados. Aquí lo
+     revertimos al look CLARO del panel admin de fisio-app: fondos blancos,
+     botones NEGROS, amarillo como acento.
      ═══════════════════════════════════════════════════════════════════════ -->
 <style>
-  /* 1. Tabs de modos que no usamos */
+  /* Ocultar UI que no usamos */
   .mode-tab[data-mode="technical"],
-  .mode-tab[data-mode="carousel"] { display: none !important; }
-  #btn-dl-multi { display: none !important; }
-
-  /* 2. Botones de guion que no usamos */
+  .mode-tab[data-mode="carousel"],
+  #btn-dl-multi,
   #btn-tp-csv,
   #btn-corrector,
-  #tp-csv-input
-  { display: none !important; }
+  #tp-csv-input,
+  .api-box { display: none !important; }
 
-  /* 3. Paleta FisioFit sobre look CLARO original.
-        Reasignamos las variables --blue* a los tokens de la app admin:
-        - marca principal (antes azul) → NEGRO (#0A0A0A) como los botones
-          "Guardar", "Cerrar sesión", etc.
-        - accent (antes azul oscuro) → AMARILLO/NARANJA para chips y
-          highlights.
-        Mantenemos los fondos claros del original (--white, --bg). */
-  :root {
-    --blue: #0A0A0A !important;              /* botón primario, tabs activas */
-    --blue-dark: #000000 !important;         /* hover del primario */
-    --blue-light: #FEF3C7 !important;        /* hover suave amarillo pastel */
-    --blue-pale: #FFFBEB !important;         /* fondos casi-blancos amarillentos */
-    --accent: #F59E0B !important;            /* naranja de acento */
-    --orange: #F59E0B !important;
-    /* Fondos y textos se quedan como el original (look claro) */
+  /* ═══ SHELL: header + sidebar + main → CLARO ═══ */
+  body { background: #F4F7FB !important; color: #0A0A0A !important; }
+
+  .header {
+    background: #FFFFFF !important;
+    border-bottom: 1px solid #E5E5E5 !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
+  }
+  .hb-title {
+    background: none !important;
+    -webkit-background-clip: unset !important;
+    background-clip: unset !important;
+    -webkit-text-fill-color: #0A0A0A !important;
+    color: #0A0A0A !important;
+  }
+  .hb-sub { color: #737373 !important; }
+  .hb-back {
+    background: #FFFBEB !important;
+    color: #0A0A0A !important;
+    border-color: #FCD34D !important;
+  }
+  .hb-back:hover { background: #FEF3C7 !important; }
+  .hs {
+    background: #F0FDF4 !important;
+    border-color: #A7F3D0 !important;
+    color: #065F46 !important;
   }
 
-  /* Ajustes puntuales — sitios con hex hardcoded en vez de var() */
+  /* Tabs de modo arriba: contenedor claro, activa negra */
+  .mode-tabs {
+    background: #FFFFFF !important;
+    border-bottom: 1px solid #E5E5E5 !important;
+  }
+  .mode-tab { color: #737373 !important; background: transparent !important; }
+  .mode-tab:hover { color: #0A0A0A !important; background: #F5F5F5 !important; }
+  .mode-tab.active {
+    background: #0A0A0A !important;
+    color: #FFFFFF !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+  }
 
-  /* Cabecera con línea azul debajo → negra */
-  .header { border-bottom-color: #0A0A0A !important; box-shadow: 0 2px 12px rgba(0,0,0,0.05) !important; }
-  .hb-title, .hb-sub { color: #0A0A0A !important; }
-  .hs-dot { background: #10B981 !important; } /* verde OK se queda */
+  .sidebar {
+    background: #FFFFFF !important;
+    border-right: 1px solid #E5E5E5 !important;
+  }
+  .sb::-webkit-scrollbar-thumb { background: #E5E5E5 !important; }
+  .slabel { color: #0A0A0A !important; }
+  .slabel::after { background: #E5E5E5 !important; }
 
-  /* Botón vuelta atrás */
-  .hb-back { background: #FFFBEB !important; color: #0A0A0A !important; border-color: #FEF3C7 !important; }
-  .hb-back:hover { background: #FEF3C7 !important; }
+  .main {
+    background: #F4F7FB !important;
+    background-image: radial-gradient(rgba(0,0,0,0.04) 1px, transparent 1px) !important;
+  }
 
-  /* Estado / status */
-  .hs { background: #FFFBEB !important; border-color: #FEF3C7 !important; color: #0A0A0A !important; }
-
-  /* Textareas / inputs — focus en amarillo */
+  /* ═══ INPUTS / TEXTAREAS del sidebar ═══ */
+  .sidebar textarea,
+  textarea, input[type="text"], input[type="number"], input[type="url"], select,
+  .athlete-search, .api-input {
+    background: #FFFFFF !important;
+    border: 1.5px solid #E5E5E5 !important;
+    color: #0A0A0A !important;
+  }
+  .sidebar textarea::placeholder,
+  textarea::placeholder, input::placeholder { color: #A3A3A3 !important; }
+  .sidebar textarea:focus,
   textarea:focus, input:focus, select:focus {
     border-color: #FCD34D !important;
-    box-shadow: 0 0 0 3px rgba(252, 211, 77, 0.15) !important;
+    background: #FFFBEB !important;
+    box-shadow: 0 0 0 3px rgba(252, 211, 77, 0.20) !important;
   }
 
-  /* Botón primario NEGRO estilo app admin */
+  /* ═══ BOTONES ═══ */
+  /* Primario NEGRO */
   .btn-primary {
     background: #0A0A0A !important;
     color: #FFFFFF !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.18) !important;
+    border-radius: 12px !important;
   }
   .btn-primary:hover:not(:disabled) {
     background: #262626 !important;
     transform: translateY(-1px);
   }
+  .btn-primary:disabled { opacity: 0.4 !important; }
 
-  /* Botones secundarios / descargas — negros outline */
+  /* Descargas / secundarios */
   .btn-dl {
     background: #FFFFFF !important;
     color: #333333 !important;
-    border-color: #E0E8F0 !important;
+    border: 1.5px solid #E5E5E5 !important;
   }
   .btn-dl:hover:not(:disabled) {
     background: #FFFBEB !important;
@@ -11598,61 +11633,139 @@ async function dlAll() {
     border-color: #FCD34D !important;
   }
   .btn-dl.main {
-    background: #0A0A0A !important;
-    color: #FFFFFF !important;
-    border-color: #0A0A0A !important;
-    font-weight: 900 !important;
+    background: rgba(252, 211, 77, 0.15) !important;
+    color: #78350F !important;
+    border-color: #FCD34D !important;
+    font-weight: 800 !important;
   }
   .btn-dl.main:hover:not(:disabled) {
-    background: #262626 !important;
-    color: #FCD34D !important;
-    border-color: #262626 !important;
+    background: #FCD34D !important;
+    color: #0A0A0A !important;
   }
 
-  /* Botones secundarios del sidebar (afinar, hooks, url, reciclar, etc.)
-     — el CSS original les da color azul cyan, los pasamos a negro. */
-  .btn-secondary {
+  /* Botones de sidebar (URL / Reciclar / Semana / Lote / Hooks / afinar…) */
+  .btn-secondary,
+  .guion-tools button {
     background: #FFFFFF !important;
     color: #333333 !important;
-    border-color: #E0E8F0 !important;
+    border: 1.5px solid #E5E5E5 !important;
   }
-  .btn-secondary:hover:not(:disabled) {
+  .btn-secondary:hover:not(:disabled),
+  .guion-tools button:hover:not(:disabled) {
     background: #FFFBEB !important;
     color: #0A0A0A !important;
     border-color: #FCD34D !important;
   }
 
-  /* Chips (etiquetas del guion, hashtags…) — amarillo pastel */
+  /* Export options toggle group */
+  .export-opts .eo-group { border-color: #E5E5E5 !important; }
+  .export-opts button {
+    background: #FFFFFF !important;
+    color: #737373 !important;
+  }
+  .export-opts button.active {
+    background: #0A0A0A !important;
+    color: #FFFFFF !important;
+  }
+
+  /* ═══ DROP ZONE (subir imagen) ═══ */
+  .drop-zone {
+    background: #F4F7FB !important;
+    border: 2px dashed #E5E5E5 !important;
+  }
+  .drop-zone:hover, .drop-zone.dragover {
+    background: #FFFBEB !important;
+    border-color: #FCD34D !important;
+  }
+  .dz-icon, .dz-text { color: #0A0A0A !important; }
+  .dz-sub { color: #737373 !important; }
+
+  /* ═══ CHIPS / BADGES ═══ */
   .chip {
     background: #FEF3C7 !important;
     border-color: #FCD34D !important;
     color: #78350F !important;
   }
 
-  /* Labels de sección del sidebar (SLABEL) — en negro discreto */
-  .slabel { color: #0A0A0A !important; }
+  /* ═══ SELECTOR DE ESTILOS (thumbnails de estilos visuales) ═══ */
+  .style-card {
+    background: #FFFFFF !important;
+    border: 1.5px solid #E5E5E5 !important;
+  }
+  .style-card:hover {
+    background: #FFFBEB !important;
+    border-color: #FCD34D !important;
+  }
+  .style-card.active {
+    background: #FEF3C7 !important;
+    border-color: #F59E0B !important;
+    box-shadow: 0 2px 12px rgba(245, 158, 11, 0.25) !important;
+  }
+  .style-card .sc-name { color: #0A0A0A !important; }
+  .style-card.active .sc-name { color: #78350F !important; }
+  .style-card .sc-desc { color: #737373 !important; }
+  .style-group { color: #737373 !important; }
 
-  /* Título de la cabecera del panel de salida: "OUTPUT" pequeño */
+  /* ═══ DIVISORES ═══ */
+  .divider { background: #E5E5E5 !important; }
+
+  /* ═══ HEADER DEL PANEL DE SALIDA ═══ */
+  .out-header { border-bottom: 1px solid #E5E5E5 !important; }
+  .out-label { color: #737373 !important; }
   .out-count {
     background: #0A0A0A !important;
     color: #FCD34D !important;
   }
 
-  /* Focus rings de accesibilidad si vienen en azul → amarillo */
-  *:focus-visible { outline-color: #FCD34D !important; }
+  /* ═══ CARD DE ATLETA / RESULTADOS DE BÚSQUEDA ═══ */
+  .athlete-card {
+    background: #FFFFFF !important;
+    border: 1px solid #E5E5E5 !important;
+    color: #333333 !important;
+  }
+  .athlete-card .ed-apply-all {
+    background: #FFFBEB !important;
+    border-color: #FCD34D !important;
+    color: #78350F !important;
+  }
+  .athlete-results .ar-item:hover {
+    background: #FFFBEB !important;
+    color: #0A0A0A !important;
+  }
 
-  /* Caja API — la ocultamos porque en useProxy:true nunca se usa */
-  .api-box { display: none !important; }
+  /* ═══ CMDK (paleta de comandos ⌘K) ═══ */
+  .cmdk-box {
+    background: #FFFFFF !important;
+    border: 1px solid #E5E5E5 !important;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.20) !important;
+  }
+  .cmdk-input {
+    background: #FFFFFF !important;
+    color: #0A0A0A !important;
+    border-color: #E5E5E5 !important;
+  }
+  .cmdk-input:focus { border-color: #FCD34D !important; }
+  .cmdk-row { color: #333333 !important; }
+  .cmdk-row.sel {
+    background: #FFFBEB !important;
+    color: #0A0A0A !important;
+  }
 
-  /* Modales — barra superior y CTAs → negra */
-  .modal-title-bar, .cmdk-input:focus { border-color: #FCD34D !important; }
-
-  /* Spinner del loading — anillo negro con acento amarillo */
+  /* ═══ ESTADO VACÍO + LOADING ═══ */
+  .empty-title, .empty-sub { color: #737373 !important; }
+  .empty-icon { opacity: 0.15 !important; }
   .spinner {
-    border-color: #E0E8F0 !important;
+    border-color: #E5E5E5 !important;
     border-top-color: #0A0A0A !important;
   }
   .loading-title { color: #0A0A0A !important; }
+  .loading-sub { color: #737373 !important; }
+
+  /* ═══ SLIDE FRAME (el canvas dark del preview no lo tocamos — así se ve
+         mejor el contenido del propio slide) ═══ */
+
+  /* ═══ FOCUS RINGS GLOBAL ═══ */
+  *:focus-visible { outline-color: #FCD34D !important; }
 </style>
 <script>
   // Blindaje: si algún atajo intenta cambiar de modo (technical/carousel),
