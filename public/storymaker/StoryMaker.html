@@ -11792,15 +11792,12 @@ async function dlAll() {
     } catch (e) { /* ignore */ }
   })();
 
-  // Cleanup DOM: tumba los bloques "Atleta" y "Marca" del sidebar por si
-  // el navegador no soporta :has() y el CSS anterior no los ha ocultado.
-  // Busca los elementos por id y elimina su div padre completo.
-  (function () {
-    ['athlete-box', 'brand-kit'].forEach(function (id) {
-      var el = document.getElementById(id);
-      if (el && el.parentElement) el.parentElement.remove();
-    });
-  })();
+  // NO tocamos el DOM de Atleta/Marca. Los divs se ocultan solo con CSS
+  // (:has()) porque el JS del propio Story Maker asume que #brand-kit y
+  // #athlete-box existen y llama renderBrandKit() en el arranque — si
+  // los quitamos del DOM, ese render lanza un error y detiene toda la
+  // inicialización posterior (incluido renderStyleSelector, que es lo
+  // que puebla la sección "Estilo visual" con las 21 opciones).
 </script>
 </body>
 </html>
