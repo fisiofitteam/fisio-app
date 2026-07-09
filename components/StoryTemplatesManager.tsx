@@ -17,14 +17,8 @@ type StoryTemplateRow = {
 
 /**
  * Manager de plantillas de Story Maker dentro de /fisio/contenido/plantilla.
- * Muestra las plantillas guardadas por el equipo, con acciones:
- *   - Editar (abre el Story Maker precargado con esa plantilla)
- *   - Duplicar (crea copia con nombre "X (copia)")
- *   - Eliminar (con confirmación)
- *
- * Las 4 plantillas builtin (Portada, Cita, Lista, Pregunta) NO aparecen
- * aquí — viven en el código y no se pueden borrar/editar; se muestran
- * solo dentro del propio editor.
+ * TODAS las plantillas viven en BD (las 4 "builtin" se instancian con
+ * "cargar de ejemplo"). Cualquiera puede editarse, duplicarse o borrarse.
  */
 export function StoryTemplatesManager({
   initialTemplates,
@@ -71,6 +65,20 @@ export function StoryTemplatesManager({
     }
   }
 
+  async function seedBuiltins() {
+    setBusy("__seed");
+    const res = await fetch("/api/story-maker/templates/seed-builtins", { method: "POST" });
+    setBusy(null);
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.ok) {
+      flash("ok", `${(data.created ?? []).length} plantillas de ejemplo cargadas`);
+      await refresh();
+      router.refresh();
+    } else {
+      flash("err", data.error || "No se pudo cargar los ejemplos");
+    }
+  }
+
   async function remove(t: StoryTemplateRow) {
     if (!confirm(`¿Borrar la plantilla "${t.name}"? No se puede deshacer.`)) return;
     setBusy(t.id);
@@ -91,15 +99,27 @@ export function StoryTemplatesManager({
         <div>
           <h2 className="font-medium text-sm">🎨 Plantillas de historias (Story Maker)</h2>
           <p className="text-xs text-neutral-500">
-            Composiciones guardadas para reutilizar en Instagram Stories. Las 4 plantillas base (Portada, Cita, Lista, Pregunta) viven en código y no aparecen aquí.
+            Composiciones para reutilizar en Instagram Stories. Puedes editar, duplicar o borrar cualquiera.
           </p>
         </div>
-        <Link
-          href="/fisio/contenido/story-maker"
-          className="text-xs font-semibold px-3 py-1.5 rounded-md bg-neutral-900 text-white hover:bg-neutral-800"
-        >
-          + Nueva plantilla
-        </Link>
+        <div className="flex items-center gap-2">
+          {canEdit && (
+            <button
+              onClick={seedBuiltins}
+              disabled={busy === "__seed"}
+              className="text-xs font-medium px-3 py-1.5 rounded-md border border-neutral-300 hover:bg-neutral-50 disabled:opacity-50"
+              title="Añade 4 plantillas base (Portada, Cita, Lista, Pregunta). Ignora las que ya existan por nombre."
+            >
+              {busy === "__seed" ? "Cargando…" : "+ Cargar ejemplos"}
+            </button>
+          )}
+          <Link
+            href="/fisio/contenido/story-maker"
+            className="text-xs font-semibold px-3 py-1.5 rounded-md bg-neutral-900 text-white hover:bg-neutral-800"
+          >
+            + Nueva plantilla
+          </Link>
+        </div>
       </div>
 
       {msg && (
@@ -116,16 +136,27 @@ export function StoryTemplatesManager({
       )}
 
       {items.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-neutral-300 bg-neutral-50 py-10 text-center">
+        <div className="rounded-2xl border border-dashed border-neutral-300 bg-neutral-50 py-10 text-center space-y-3">
           <p className="text-sm text-neutral-500 italic">
-            Aún no has guardado ninguna plantilla de historia.
+            Aún no hay plantillas de historia.
           </p>
-          <Link
-            href="/fisio/contenido/story-maker"
-            className="inline-block mt-3 text-xs font-medium underline text-neutral-700"
-          >
-            Ir al Story Maker para crear una →
-          </Link>
+          {canEdit && (
+            <button
+              onClick={seedBuiltins}
+              disabled={busy === "__seed"}
+              className="inline-block text-xs font-semibold px-4 py-2 rounded-md bg-neutral-900 text-white hover:bg-neutral-800 disabled:opacity-50"
+            >
+              {busy === "__seed" ? "Cargando…" : "🎨 Cargar 4 plantillas de ejemplo"}
+            </button>
+          )}
+          <div>
+            <Link
+              href="/fisio/contenido/story-maker"
+              className="inline-block text-xs font-medium underline text-neutral-700"
+            >
+              o ir al Story Maker para crear una desde cero →
+            </Link>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">

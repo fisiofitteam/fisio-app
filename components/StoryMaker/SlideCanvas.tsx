@@ -221,20 +221,39 @@ function ElementRenderer({
     ...outlineStyle,
   };
 
+  // ⚠ Añadir onClick con stopPropagation ES CRÍTICO. Sin esto, el click
+  //   burbujea al div raíz del canvas que llama onSelectElement(null) →
+  //   deselecciona inmediatamente el elemento que acabas de pulsar.
+  const stopClick = (e: React.MouseEvent) => e.stopPropagation();
+
   if (element.type === "text") {
     return (
-      <TextRender
-        el={element}
-        wrap={baseWrapper}
-        editing={editing}
-        onMouseDown={onMouseDown}
-        onDoubleClick={onDoubleClick}
-        onFinishEditing={onFinishEditing}
-      />
+      <div onClick={stopClick}>
+        <TextRender
+          el={element}
+          wrap={baseWrapper}
+          editing={editing}
+          onMouseDown={onMouseDown}
+          onDoubleClick={onDoubleClick}
+          onFinishEditing={onFinishEditing}
+        />
+      </div>
     );
   }
-  if (element.type === "logo") return <LogoRender el={element} wrap={baseWrapper} onMouseDown={onMouseDown} />;
-  if (element.type === "line") return <LineRender el={element} wrap={baseWrapper} onMouseDown={onMouseDown} />;
+  if (element.type === "logo") {
+    return (
+      <div onClick={stopClick}>
+        <LogoRender el={element} wrap={baseWrapper} onMouseDown={onMouseDown} />
+      </div>
+    );
+  }
+  if (element.type === "line") {
+    return (
+      <div onClick={stopClick}>
+        <LineRender el={element} wrap={baseWrapper} onMouseDown={onMouseDown} />
+      </div>
+    );
+  }
   return null;
 }
 

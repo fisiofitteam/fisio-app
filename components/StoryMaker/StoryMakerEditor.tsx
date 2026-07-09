@@ -1,11 +1,10 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { SlideCanvas } from "./SlideCanvas";
 import { RightPanel } from "./RightPanel";
 import { LeftSidebar } from "./LeftSidebar";
 import { downloadSlide, downloadZip } from "./exportSlides";
-import { BUILTIN_TEMPLATES } from "@/lib/story-maker/templates";
 import { BLACK } from "@/lib/story-maker/types";
 import type {
   Slide,
@@ -64,10 +63,10 @@ export function StoryMakerEditor({
   const editingId = editingTemplate?.id ?? null;
   const editingName = editingTemplate?.name ?? "";
 
-  const allTemplates = useMemo(
-    () => [...BUILTIN_TEMPLATES, ...savedList],
-    [savedList],
-  );
+  // Solo plantillas guardadas. Las 4 builtin ahora se instancian en BD
+  // con el botón "Cargar 4 plantillas de ejemplo" del sidebar, así el CEO
+  // puede editar/borrar cualquiera de ellas.
+  const allTemplates = savedList;
   const currentSlide = slides[selectedSlideIdx] ?? emptySlide();
   const selectedElement =
     currentSlide.elements.find((e) => e.id === selectedElementId) ?? null;
@@ -159,8 +158,40 @@ export function StoryMakerEditor({
   }
 
   // ─── Aplicar plantilla ──────────────────────────────────────────────
-  function applyTemplate(t: StoryTemplate) {
-    // Reasignamos IDs para no colisionar
+  function applyTemplate(t: StoryTemplate & { __preserveTexts?: boolean }) {
+    const preserveTexts = !!t.__preserveTexts;
+    const templateBase = t.slides[0];
+
+    if (preserveTexts && slides.length > 0 && templateBase) {
+      // Extraemos los textos actuales de cada slide, en orden de aparición,
+      // y los inyectamos como content de los text elements de la plantilla.
+      // Genera tantos slides como haya en el estado actual.
+      const fresh: Slide[] = slides.map((s) => {
+        const currentTexts = s.elements
+          .filter((e): e is TextElement => e.type === "text")
+          .map((e) => e.content);
+        let ti = 0;
+        return {
+          ...templateBase,
+          elements: templateBase.elements.map((el) => {
+            const cloned = { ...el, id: newId() } as SlideElement;
+            if (cloned.type === "text" && ti < currentTexts.length) {
+              const withText = { ...(cloned as TextElement), content: currentTexts[ti] };
+              ti++;
+              return withText as SlideElement;
+            }
+            return cloned;
+          }),
+        };
+      });
+      setSlides(fresh);
+      setSelectedSlideIdx(Math.min(selectedSlideIdx, fresh.length - 1));
+      setSelectedElementId(null);
+      flash("ok", `Plantilla "${t.name}" aplicada preservando textos`);
+      return;
+    }
+
+    // Sustitución completa (comportamiento clásico)
     const fresh: Slide[] = t.slides.map((s) => ({
       ...s,
       elements: s.elements.map((el) => ({ ...el, id: newId() } as SlideElement)),
@@ -168,6 +199,34 @@ export function StoryMakerEditor({
     setSlides(fresh.length ? fresh : [emptySlide()]);
     setSelectedSlideIdx(0);
     setSelectedElementId(null);
+  }
+
+  // ─── Seed de las 4 builtin en BD ────────────────────────────────────
+  async function seedBuiltins() {
+    try {
+      const res = await fetch("/api/story-maker/templates/seed-builtins", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        flash("err", data.error || "No se pudo cargar las plantillas");
+        return;
+      }
+      const list = await fetch("/api/story-maker/templates").then((r) => r.json()).catch(() => ({}));
+      if (list?.ok) {
+        setSavedList(
+          list.templates.map((t: any) => ({
+            id: t.id,
+            key: t.id,
+            name: t.name,
+            description: t.description ?? "",
+            slides: t.slides,
+            aiSlots: t.aiSlots ?? [],
+          })),
+        );
+      }
+      flash("ok", `${(data.created ?? []).length} plantillas cargadas`);
+    } catch (e: any) {
+      flash("err", e?.message || "Error de red");
+    }
   }
 
   // ─── Generar con IA ─────────────────────────────────────────────────
@@ -178,23 +237,23 @@ export function StoryMakerEditor({
     setTimeout(() => setMsg(null), 5000);
   }
 
-  async function generate(templateKey: string, prompt: string, count: number) {
+  async function generate(prompt: string) {
     setGenerating(true);
     try {
       const res = await fetch("/api/story-maker/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ templateKey, prompt, count }),
+        body: JSON.stringify({ prompt }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
         flash("err", data.error || "No se pudo generar");
         return;
       }
-      // Aplica los fills a copias del primer slide de la plantilla
-      const template = allTemplates.find((t) => t.key === templateKey);
+      // El backend nos devuelve `templateKey` con la plantilla que usó como base
+      const template = allTemplates.find((t) => t.key === data.templateKey) ?? allTemplates[0];
       if (!template) {
-        flash("err", "Plantilla no encontrada");
+        flash("err", "Sin plantillas disponibles — carga primero las de ejemplo");
         return;
       }
       const base = template.slides[0];
@@ -343,6 +402,7 @@ export function StoryMakerEditor({
       <LeftSidebar
         templates={allTemplates}
         onApplyTemplate={applyTemplate}
+        onSeedBuiltins={seedBuiltins}
         onGenerate={generate}
         generating={generating}
         slides={slides}

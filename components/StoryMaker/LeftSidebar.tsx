@@ -7,6 +7,7 @@ import type { Slide, StoryTemplate } from "@/lib/story-maker/types";
 export function LeftSidebar({
   templates,
   onApplyTemplate,
+  onSeedBuiltins,
   onGenerate,
   generating,
   slides,
@@ -18,7 +19,8 @@ export function LeftSidebar({
 }: {
   templates: StoryTemplate[];
   onApplyTemplate: (t: StoryTemplate) => void;
-  onGenerate: (templateKey: string, prompt: string, count: number) => void;
+  onSeedBuiltins: () => void;
+  onGenerate: (prompt: string) => void;
   generating: boolean;
   slides: Slide[];
   selectedSlideIdx: number;
@@ -28,77 +30,110 @@ export function LeftSidebar({
   onDelSlide: () => void;
 }) {
   const [prompt, setPrompt] = useState("");
-  const [aiTemplateKey, setAiTemplateKey] = useState(templates[0]?.key ?? "");
-  const [aiCount, setAiCount] = useState(3);
+  const [selectedTemplateKey, setSelectedTemplateKey] = useState(templates[0]?.key ?? "");
+  const [preserveTexts, setPreserveTexts] = useState(true);
+
+  const selectedTemplate = templates.find((t) => t.key === selectedTemplateKey) ?? templates[0];
 
   return (
     <aside className="rounded-2xl bg-white border border-neutral-200 flex flex-col overflow-y-auto">
+      {/* ── Generar con IA ───────────────────────────────────────── */}
       <div className="p-3 border-b border-neutral-100">
         <div className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-2">
           ✨ Generar con IA
         </div>
         <textarea
           className="w-full text-sm border border-neutral-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:border-neutral-400"
-          rows={3}
-          placeholder="Ej: 4 stories sobre dolor de hombro en atletas de CrossFit"
+          rows={4}
+          placeholder="Ej: 4 stories sobre dolor de hombro en atletas de CrossFit. La primera con impacto, luego una cita, una lista de ejercicios y una pregunta al final."
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
         />
-        <div className="grid grid-cols-2 gap-2 mt-2">
-          <select
-            value={aiTemplateKey}
-            onChange={(e) => setAiTemplateKey(e.target.value)}
-            className="text-xs border border-neutral-200 rounded px-2 py-1.5"
-          >
-            {templates.map((t) => (
-              <option key={t.key} value={t.key}>
-                {t.emoji ? `${t.emoji} ` : ""}
-                {t.name}
-              </option>
-            ))}
-          </select>
-          <input
-            type="number"
-            min={1}
-            max={10}
-            value={aiCount}
-            onChange={(e) => setAiCount(Math.max(1, Math.min(10, Number(e.target.value) || 3)))}
-            className="text-xs border border-neutral-200 rounded px-2 py-1.5"
-            placeholder="Nº"
-          />
-        </div>
         <button
-          onClick={() => onGenerate(aiTemplateKey, prompt.trim(), aiCount)}
+          onClick={() => onGenerate(prompt.trim())}
           disabled={generating || prompt.trim().length < 5}
           className="mt-2 w-full text-sm font-semibold px-3 py-2 rounded-lg bg-neutral-900 text-white disabled:opacity-50"
         >
           {generating ? "Generando…" : "✨ Generar carrusel"}
         </button>
+        <p className="mt-1.5 text-[10px] text-neutral-400 leading-tight">
+          Indica nº de stories y el estilo directamente en el prompt.
+          Después puedes aplicar una plantilla para darles diseño.
+        </p>
       </div>
 
+      {/* ── Plantillas (dropdown) ─────────────────────────────────── */}
       <div className="p-3 border-b border-neutral-100">
         <div className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-2">
           🎨 Plantillas
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          {templates.map((t) => (
+
+        {templates.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-neutral-300 bg-neutral-50 p-3 text-center space-y-2">
+            <p className="text-[11px] text-neutral-500 italic leading-tight">
+              Aún no tienes plantillas.
+            </p>
             <button
-              key={t.id}
-              onClick={() => onApplyTemplate(t)}
-              className="rounded-lg overflow-hidden border border-neutral-200 hover:border-neutral-400 hover:shadow-sm bg-neutral-50"
-              title={t.description}
+              onClick={onSeedBuiltins}
+              className="text-xs font-semibold px-3 py-1.5 rounded bg-neutral-900 text-white hover:bg-neutral-800"
             >
-              <div className="aspect-[9/16] flex items-center justify-center bg-neutral-950 overflow-hidden">
-                <SlideCanvas slide={t.slides[0]} scale={0.09} />
-              </div>
-              <div className="text-[10px] text-center py-1 truncate">
-                {t.emoji} {t.name}
-              </div>
+              🎨 Cargar 4 plantillas de ejemplo
             </button>
-          ))}
-        </div>
+          </div>
+        ) : (
+          <>
+            <select
+              value={selectedTemplateKey}
+              onChange={(e) => setSelectedTemplateKey(e.target.value)}
+              className="w-full text-sm border border-neutral-200 rounded-lg px-2 py-2 mb-2"
+            >
+              {templates.map((t) => (
+                <option key={t.key} value={t.key}>
+                  {t.emoji ? `${t.emoji} ` : ""}
+                  {t.name}
+                </option>
+              ))}
+            </select>
+
+            {selectedTemplate && (
+              <div className="rounded-lg overflow-hidden border border-neutral-200 bg-neutral-950 mb-2 flex items-center justify-center">
+                <div className="aspect-[9/16] flex items-center justify-center">
+                  <SlideCanvas slide={selectedTemplate.slides[0]} scale={0.14} />
+                </div>
+              </div>
+            )}
+
+            <label className="flex items-center gap-2 text-[11px] text-neutral-600 mb-2 select-none">
+              <input
+                type="checkbox"
+                checked={preserveTexts}
+                onChange={(e) => setPreserveTexts(e.target.checked)}
+                className="w-3 h-3"
+              />
+              Mantener los textos actuales
+            </label>
+
+            <button
+              onClick={() => {
+                if (!selectedTemplate) return;
+                // Marca en el template para que el editor sepa si preservar
+                onApplyTemplate({ ...selectedTemplate, __preserveTexts: preserveTexts } as any);
+              }}
+              className="w-full text-xs font-semibold px-3 py-1.5 rounded bg-neutral-900 text-white hover:bg-neutral-800"
+            >
+              Aplicar plantilla
+            </button>
+
+            {selectedTemplate?.description && (
+              <p className="mt-1.5 text-[10px] text-neutral-400 leading-tight">
+                {selectedTemplate.description}
+              </p>
+            )}
+          </>
+        )}
       </div>
 
+      {/* ── Slides ────────────────────────────────────────────────── */}
       <div className="p-3">
         <div className="flex items-center justify-between mb-2">
           <div className="text-xs font-bold uppercase tracking-wider text-neutral-500">
