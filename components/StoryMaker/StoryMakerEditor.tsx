@@ -41,14 +41,28 @@ function defaultText(): TextElement {
 
 export function StoryMakerEditor({
   savedTemplates,
+  editingTemplate,
 }: {
   savedTemplates: StoryTemplate[];
+  editingTemplate?: StoryTemplate | null;
 }) {
-  const [slides, setSlides] = useState<Slide[]>([emptySlide()]);
+  // Si venimos en modo edición precargamos la plantilla. Reasignamos IDs
+  // de elementos para no colisionar cuando el CEO añada más.
+  const initialSlides: Slide[] = editingTemplate?.slides?.length
+    ? editingTemplate.slides.map((s) => ({
+        ...s,
+        elements: s.elements.map((el) => ({ ...el, id: newId() })),
+      }))
+    : [emptySlide()];
+
+  const [slides, setSlides] = useState<Slide[]>(initialSlides);
   const [selectedSlideIdx, setSelectedSlideIdx] = useState(0);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   const [editingElementId, setEditingElementId] = useState<string | null>(null);
   const [savedList, setSavedList] = useState(savedTemplates);
+
+  const editingId = editingTemplate?.id ?? null;
+  const editingName = editingTemplate?.name ?? "";
 
   const allTemplates = useMemo(
     () => [...BUILTIN_TEMPLATES, ...savedList],
@@ -241,6 +255,22 @@ export function StoryMakerEditor({
           })),
         );
       }
+      return;
+    }
+    flash("err", data.error || "No se pudo guardar");
+  }
+
+  // ─── Actualizar plantilla existente (modo edición) ──────────────────
+  async function saveEdits() {
+    if (!editingId) return;
+    const res = await fetch("/api/story-maker/templates", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: editingId, slides, aiSlots: editingTemplate?.aiSlots ?? [] }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.ok) {
+      flash("ok", `Cambios guardados en "${editingName}"`);
     } else {
       flash("err", data.error || "No se pudo guardar");
     }
@@ -286,6 +316,29 @@ export function StoryMakerEditor({
   }
 
   return (
+    <>
+      {editingId && (
+        <div className="mb-3 flex items-center justify-between gap-3 flex-wrap rounded-xl bg-blue-50 border border-blue-200 px-4 py-2 text-sm">
+          <div>
+            <span className="font-semibold text-blue-900">✏ Editando plantilla:</span>{" "}
+            <span className="text-blue-900">{editingName}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <a
+              href="/fisio/contenido/plantilla"
+              className="text-xs font-medium px-3 py-1.5 rounded border border-neutral-300 bg-white hover:bg-neutral-50"
+            >
+              Cancelar
+            </a>
+            <button
+              onClick={saveEdits}
+              className="text-xs font-semibold px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700"
+            >
+              💾 Guardar cambios
+            </button>
+          </div>
+        </div>
+      )}
     <div className="grid grid-cols-[300px_1fr_320px] gap-3 h-[calc(100vh-160px)] min-h-[600px]">
       <LeftSidebar
         templates={allTemplates}
@@ -425,5 +478,6 @@ export function StoryMakerEditor({
         newId={newId}
       />
     </div>
+    </>
   );
 }

@@ -4,6 +4,7 @@ import { getActiveProfessional } from "@/lib/session";
 import { ContentNav } from "@/components/ContentNav";
 import { ScriptTemplatesManager } from "@/components/ScriptTemplatesManager";
 import { WeeklyTemplatesManager } from "@/components/WeeklyTemplatesManager";
+import { StoryTemplatesManager } from "@/components/StoryTemplatesManager";
 
 export const dynamic = "force-dynamic";
 
@@ -12,9 +13,10 @@ export default async function ContentTemplatePage() {
   if (!user) redirect("/login");
   if (user.role !== "ceo" && user.role !== "setter") redirect("/fisio");
 
-  const [scriptTemplates, weeklyTemplates] = await Promise.all([
+  const [scriptTemplates, weeklyTemplates, storyTemplates] = await Promise.all([
     prisma.scriptTemplate.findMany({ orderBy: [{ format: "asc" }, { name: "asc" }] }),
     prisma.weeklyTemplate.findMany({ orderBy: { name: "asc" } }),
+    prisma.contentStoryTemplate.findMany({ orderBy: { updatedAt: "desc" } }).catch(() => []),
   ]);
 
   const serializedScripts = scriptTemplates.map((t) => ({
@@ -34,6 +36,19 @@ export default async function ContentTemplatePage() {
     updatedAt: t.updatedAt.toISOString(),
   }));
 
+  const serializedStories = storyTemplates.map((t) => {
+    let parsed: any = {};
+    try { parsed = JSON.parse(t.jsonSlides); } catch {}
+    return {
+      id: t.id,
+      name: t.name,
+      description: t.description,
+      slides: parsed.slides ?? [],
+      aiSlots: parsed.aiSlots ?? [],
+      updatedAt: t.updatedAt.toISOString(),
+    };
+  });
+
   const canEdit = user.role === "ceo";
 
   return (
@@ -50,6 +65,8 @@ export default async function ContentTemplatePage() {
       <WeeklyTemplatesManager initialTemplates={serializedWeekly} canEdit={canEdit} />
 
       <ScriptTemplatesManager initialTemplates={serializedScripts} canEdit={canEdit} />
+
+      <StoryTemplatesManager initialTemplates={serializedStories} canEdit={canEdit} />
     </main>
   );
 }

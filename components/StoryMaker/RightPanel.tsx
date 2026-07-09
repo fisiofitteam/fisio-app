@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   LineElement,
   LogoElement,
@@ -41,6 +41,16 @@ export function RightPanel({
   const [saveOpen, setSaveOpen] = useState(false);
   const [saveName, setSaveName] = useState("");
   const [saveDesc, setSaveDesc] = useState("");
+
+  // Auto-scroll al editor cuando cambia el elemento seleccionado, para que
+  // el CEO no tenga que buscar el panel de propiedades cuando pulsa sobre
+  // un texto en el canvas.
+  const editorRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (selectedElement && editorRef.current) {
+      editorRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [selectedElement?.id]);
 
   function addText() {
     onAddElement({
@@ -90,7 +100,43 @@ export function RightPanel({
   }
 
   return (
-    <aside className="rounded-2xl bg-white border border-neutral-200 flex flex-col overflow-hidden">
+    <aside className="rounded-2xl bg-white border border-neutral-200 flex flex-col overflow-y-auto">
+      {/* Editor del elemento seleccionado — SIEMPRE ARRIBA cuando hay uno */}
+      {selectedElement && (
+        <div ref={editorRef} className="p-3 border-b border-neutral-100 space-y-2 bg-blue-50/50">
+          <div className="flex items-center justify-between mb-1">
+            <div className="text-xs font-bold uppercase tracking-wider text-blue-900">
+              ✏ Editar {selectedElement.type === "text" ? "texto" : selectedElement.type === "logo" ? "logo" : "línea"}
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => onDuplicateElement(selectedElement.id)}
+                className="text-[10px] font-medium px-2 py-1 rounded border border-neutral-200 bg-white hover:bg-neutral-50"
+                title="Duplicar elemento con misma configuración"
+              >
+                ⎘ Duplicar
+              </button>
+              <button
+                onClick={() => onDeleteElement(selectedElement.id)}
+                className="text-[10px] font-medium px-2 py-1 rounded border border-red-200 bg-white text-red-700 hover:bg-red-50"
+                title="Borrar elemento"
+              >
+                🗑
+              </button>
+            </div>
+          </div>
+          {selectedElement.type === "text" && (
+            <TextEditor el={selectedElement} onChange={(p) => onUpdateElement(selectedElement.id, p)} />
+          )}
+          {selectedElement.type === "logo" && (
+            <LogoEditor el={selectedElement} onChange={(p) => onUpdateElement(selectedElement.id, p)} />
+          )}
+          {selectedElement.type === "line" && (
+            <LineEditor el={selectedElement} onChange={(p) => onUpdateElement(selectedElement.id, p)} />
+          )}
+        </div>
+      )}
+
       {/* Añadir elementos */}
       <div className="p-3 border-b border-neutral-100">
         <div className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-2">
@@ -177,33 +223,6 @@ export function RightPanel({
           </div>
         )}
       </div>
-
-      {/* Editor del elemento seleccionado */}
-      {selectedElement && (
-        <div className="p-3 border-b border-neutral-100 space-y-2 overflow-auto">
-          <div className="flex items-center justify-between mb-1">
-            <div className="text-xs font-bold uppercase tracking-wider text-neutral-500">
-              ✏ Editar {selectedElement.type === "text" ? "texto" : selectedElement.type === "logo" ? "logo" : "línea"}
-            </div>
-            <button
-              onClick={() => onDuplicateElement(selectedElement.id)}
-              className="text-[10px] font-medium px-2 py-1 rounded border border-neutral-200 hover:bg-neutral-50"
-              title="Duplicar elemento (con misma configuración)"
-            >
-              ⎘ Duplicar
-            </button>
-          </div>
-          {selectedElement.type === "text" && (
-            <TextEditor el={selectedElement} onChange={(p) => onUpdateElement(selectedElement.id, p)} />
-          )}
-          {selectedElement.type === "logo" && (
-            <LogoEditor el={selectedElement} onChange={(p) => onUpdateElement(selectedElement.id, p)} />
-          )}
-          {selectedElement.type === "line" && (
-            <LineEditor el={selectedElement} onChange={(p) => onUpdateElement(selectedElement.id, p)} />
-          )}
-        </div>
-      )}
 
       {/* Guardar como plantilla */}
       <div className="mt-auto p-3 border-t border-neutral-100">
