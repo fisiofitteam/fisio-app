@@ -69,10 +69,20 @@ export type LineElement = {
 
 export type SlideElement = TextElement | LogoElement | LineElement;
 
+export type BgGradient =
+  | "none"
+  | "top-dark"       // oscurecido en la parte superior (baja hacia transparente)
+  | "bottom-dark"    // oscurecido en la parte inferior
+  | "both-dark"      // top + bottom oscuros (viñeta vertical)
+  | "top-bright"     // brillo cálido en la parte superior
+  | "bottom-bright"  // brillo cálido en la parte inferior
+  | "center-bright"; // halo brillante centrado
+
 export type Slide = {
   bgColor: string;
-  bgImageUrl?: string;      // opcional. Se pinta bajo un overlay controlable.
-  bgOverlayOpacity?: number;// 0..1. Default 0.4 (para que el texto se lea).
+  bgImageUrl?: string;       // opcional. Se pinta bajo un overlay controlable.
+  bgOverlayOpacity?: number; // 0..1. Default 0.4 (para que el texto se lea).
+  bgGradient?: BgGradient;   // gradient extra encima de la foto/color base.
   elements: SlideElement[];
 };
 

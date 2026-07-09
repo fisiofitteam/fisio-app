@@ -32,7 +32,7 @@ export function LeftSidebar({
   const [aiCount, setAiCount] = useState(3);
 
   return (
-    <aside className="rounded-2xl bg-white border border-neutral-200 flex flex-col overflow-hidden">
+    <aside className="rounded-2xl bg-white border border-neutral-200 flex flex-col overflow-y-auto">
       <div className="p-3 border-b border-neutral-100">
         <div className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-2">
           ✨ Generar con IA
@@ -99,7 +99,7 @@ export function LeftSidebar({
         </div>
       </div>
 
-      <div className="p-3 flex-1 overflow-auto">
+      <div className="p-3">
         <div className="flex items-center justify-between mb-2">
           <div className="text-xs font-bold uppercase tracking-wider text-neutral-500">
             📱 Slides ({slides.length})

@@ -117,6 +117,18 @@ export function SlideCanvas({
         </>
       )}
 
+      {/* Gradient overlay adicional (encima de la foto y overlay) */}
+      {slide.bgGradient && slide.bgGradient !== "none" && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "none",
+            background: gradientCss(slide.bgGradient),
+          }}
+        />
+      )}
+
       {/* Elementos */}
       <div
         style={{
@@ -140,6 +152,25 @@ export function SlideCanvas({
       </div>
     </div>
   );
+}
+
+function gradientCss(kind: NonNullable<Slide["bgGradient"]>): string {
+  switch (kind) {
+    case "top-dark":
+      return "linear-gradient(to bottom, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 30%, rgba(0,0,0,0) 55%)";
+    case "bottom-dark":
+      return "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 30%, rgba(0,0,0,0) 55%)";
+    case "both-dark":
+      return "linear-gradient(to bottom, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.15) 30%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.15) 70%, rgba(0,0,0,0.75) 100%)";
+    case "top-bright":
+      return "linear-gradient(to bottom, rgba(252,211,77,0.55) 0%, rgba(252,211,77,0.15) 30%, rgba(0,0,0,0) 55%)";
+    case "bottom-bright":
+      return "linear-gradient(to top, rgba(245,158,11,0.55) 0%, rgba(245,158,11,0.15) 30%, rgba(0,0,0,0) 55%)";
+    case "center-bright":
+      return "radial-gradient(ellipse at center, rgba(252,211,77,0.35) 0%, rgba(252,211,77,0.10) 40%, rgba(0,0,0,0) 70%)";
+    default:
+      return "transparent";
+  }
 }
 
 function ElementRenderer({

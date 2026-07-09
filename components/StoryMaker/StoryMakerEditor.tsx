@@ -277,11 +277,29 @@ export function StoryMakerEditor({
 
       {/* CANVAS CENTRO */}
       <div className="rounded-2xl bg-neutral-100 border border-neutral-200 flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-200 bg-white">
-          <div className="text-xs text-neutral-500">
-            Slide {selectedSlideIdx + 1} de {slides.length}
-          </div>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-200 bg-white flex-wrap gap-2">
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setSelectedSlideIdx(Math.max(0, selectedSlideIdx - 1)); setSelectedElementId(null); }}
+              disabled={selectedSlideIdx === 0}
+              className="text-xs font-medium px-2 py-1.5 rounded border border-neutral-300 hover:bg-neutral-50 disabled:opacity-40"
+              title="Slide anterior"
+            >
+              ←
+            </button>
+            <div className="text-xs text-neutral-500 min-w-[70px] text-center">
+              Slide {selectedSlideIdx + 1} de {slides.length}
+            </div>
+            <button
+              onClick={() => { setSelectedSlideIdx(Math.min(slides.length - 1, selectedSlideIdx + 1)); setSelectedElementId(null); }}
+              disabled={selectedSlideIdx === slides.length - 1}
+              className="text-xs font-medium px-2 py-1.5 rounded border border-neutral-300 hover:bg-neutral-50 disabled:opacity-40"
+              title="Slide siguiente"
+            >
+              →
+            </button>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => {
                 const inp = document.createElement("input");
@@ -302,6 +320,20 @@ export function StoryMakerEditor({
                 Quitar foto
               </button>
             )}
+            <select
+              value={currentSlide.bgGradient ?? "none"}
+              onChange={(e) => updateCurrentSlide({ bgGradient: e.target.value as any })}
+              className="text-xs border border-neutral-300 rounded px-2 py-1.5 bg-white"
+              title="Degradado por encima de la foto"
+            >
+              <option value="none">Sin degradado</option>
+              <option value="top-dark">🌑 Oscuro arriba</option>
+              <option value="bottom-dark">🌑 Oscuro abajo</option>
+              <option value="both-dark">🌑 Oscuro arriba + abajo</option>
+              <option value="top-bright">✨ Brillo arriba</option>
+              <option value="bottom-bright">✨ Brillo abajo</option>
+              <option value="center-bright">✨ Brillo al centro</option>
+            </select>
             <span className="w-px h-6 bg-neutral-200" />
             <button
               onClick={exportSingle}
