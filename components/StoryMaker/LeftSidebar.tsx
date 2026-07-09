@@ -57,9 +57,9 @@ export function LeftSidebar({
           {generating ? "Generando…" : "✨ Generar carrusel"}
         </button>
         <p className="mt-1.5 text-[10px] text-neutral-400 leading-tight">
-          Indica nº de stories en el prompt. La IA elige el estilo de cada
-          slide entre todas tus plantillas — mezcla portadas, citas, listas,
-          preguntas según lo que le pidas.
+          Claude Opus 4.7 diseña Y escribe cada slide desde 0:
+          composición, tipografías, colores y texto. Indica en el prompt
+          nº de stories, tema y tono.
         </p>
       </div>
 

@@ -257,27 +257,13 @@ export function StoryMakerEditor({
         flash("err", data.error || "No se pudo generar");
         return;
       }
-      // La IA nos devuelve un slide por posición con templateKey + fills.
-      // Materializamos cada slide con SU plantilla → mezcla de estilos.
-      const templatesByKey: Record<string, StoryTemplate> = data.templatesByKey ?? {};
-      const generated: Slide[] = (data.slides ?? []).flatMap(
-        (genSlide: { templateKey: string; fills: Record<string, string> }) => {
-          const tpl = templatesByKey[genSlide.templateKey];
-          if (!tpl?.slides?.[0]) return [];
-          const base = tpl.slides[0];
-          return [{
-            ...base,
-            elements: base.elements.map((el) => {
-              const newEl = { ...el, id: newId() } as SlideElement;
-              const fill = genSlide.fills[el.id];
-              if (fill && newEl.type === "text") {
-                return { ...newEl, content: fill } as TextElement;
-              }
-              return newEl;
-            }),
-          }];
-        },
-      );
+      // Claude Opus 4.7 devuelve slides ya completos (posiciones,
+      // tipografías, colores, textos). Solo les asignamos IDs frescos
+      // para no colisionar con los de otras plantillas.
+      const generated: Slide[] = (data.slides ?? []).map((s: Slide) => ({
+        ...s,
+        elements: (s.elements ?? []).map((el) => ({ ...el, id: newId() }) as SlideElement),
+      }));
       if (!generated.length) {
         flash("err", "La IA no devolvió slides válidos");
         return;
@@ -285,7 +271,7 @@ export function StoryMakerEditor({
       setSlides(generated);
       setSelectedSlideIdx(0);
       setSelectedElementId(null);
-      flash("ok", `${generated.length} slides generados`);
+      flash("ok", `${generated.length} slides generados por Opus`);
     } catch (e: any) {
       flash("err", e?.message || "Error de red");
     } finally {
