@@ -11528,13 +11528,22 @@ async function dlAll() {
      ═══════════════════════════════════════════════════════════════════════ -->
 <style>
   /* Ocultar UI que no usamos */
-  .mode-tab[data-mode="technical"],
-  .mode-tab[data-mode="carousel"],
-  #btn-dl-multi,
+  /* 1. Barra de modos entera — solo hay un modo (Historias), sobra */
+  .mode-tabs { display: none !important; }
+
+  /* 2. Botones extras del guion (URL / Reciclar / Semana / Corregir / Lote / Hooks + CSV TP) */
+  .guion-tools,
   #btn-tp-csv,
-  #btn-corrector,
   #tp-csv-input,
+  #btn-dl-multi,
   .api-box { display: none !important; }
+
+  /* 3. Bloques "Atleta" y "Marca" del sidebar — sus divs padre completos.
+        :has() cubre navegadores modernos (Chrome 105+/Safari 15.4+). El JS
+        del final tumba también los elementos por si el navegador no lo
+        soporta o hay algún wrapper huérfano. */
+  .sb > div:has(#athlete-box),
+  .sb > div:has(#brand-kit) { display: none !important; }
 
   /* ═══ SHELL: header + sidebar + main → CLARO ═══ */
   body { background: #F4F7FB !important; color: #0A0A0A !important; }
@@ -11781,6 +11790,16 @@ async function dlAll() {
         set: function () { /* ignore */ },
       });
     } catch (e) { /* ignore */ }
+  })();
+
+  // Cleanup DOM: tumba los bloques "Atleta" y "Marca" del sidebar por si
+  // el navegador no soporta :has() y el CSS anterior no los ha ocultado.
+  // Busca los elementos por id y elimina su div padre completo.
+  (function () {
+    ['athlete-box', 'brand-kit'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el && el.parentElement) el.parentElement.remove();
+    });
   })();
 </script>
 </body>
