@@ -162,7 +162,14 @@ export function StoryMakerEditor({
     const preserveTexts = !!t.__preserveTexts;
     const templateBase = t.slides[0];
 
-    if (preserveTexts && slides.length > 0 && templateBase) {
+    // Si "mantener textos" está marcado pero no hay contenido real que
+    // preservar (todos los slides vacíos / sin text elements con content),
+    // caemos a sustitución completa para no dejar un canvas en blanco.
+    const hasRealContent = slides.some((s) =>
+      s.elements.some((e) => e.type === "text" && (e as TextElement).content?.trim()),
+    );
+
+    if (preserveTexts && hasRealContent && templateBase) {
       // Extraemos los textos actuales de cada slide, en orden de aparición,
       // y los inyectamos como content de los text elements de la plantilla.
       // Genera tantos slides como haya en el estado actual.
@@ -237,45 +244,44 @@ export function StoryMakerEditor({
     setTimeout(() => setMsg(null), 5000);
   }
 
-  async function generate(prompt: string, templateKey?: string) {
+  async function generate(prompt: string, _templateKey?: string) {
     setGenerating(true);
     try {
       const res = await fetch("/api/story-maker/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, templateKey }),
+        body: JSON.stringify({ prompt }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
         flash("err", data.error || "No se pudo generar");
         return;
       }
-      // El backend nos devuelve la plantilla base completa (una builtin
-      // hardcoded con aiSlots). La materializamos y el CEO puede aplicar
-      // otra plantilla del dropdown con "mantener textos" para cambiar
-      // el estilo visual manteniendo el contenido.
-      const template: StoryTemplate | undefined = data.template;
-      if (!template || !template.slides?.[0]) {
-        flash("err", "Respuesta del backend sin plantilla base");
+      // La IA nos devuelve un slide por posición con templateKey + fills.
+      // Materializamos cada slide con SU plantilla → mezcla de estilos.
+      const templatesByKey: Record<string, StoryTemplate> = data.templatesByKey ?? {};
+      const generated: Slide[] = (data.slides ?? []).flatMap(
+        (genSlide: { templateKey: string; fills: Record<string, string> }) => {
+          const tpl = templatesByKey[genSlide.templateKey];
+          if (!tpl?.slides?.[0]) return [];
+          const base = tpl.slides[0];
+          return [{
+            ...base,
+            elements: base.elements.map((el) => {
+              const newEl = { ...el, id: newId() } as SlideElement;
+              const fill = genSlide.fills[el.id];
+              if (fill && newEl.type === "text") {
+                return { ...newEl, content: fill } as TextElement;
+              }
+              return newEl;
+            }),
+          }];
+        },
+      );
+      if (!generated.length) {
+        flash("err", "La IA no devolvió slides válidos");
         return;
       }
-      const base = template.slides[0];
-      const generated: Slide[] = data.slides.map((genSlide: { fills: Record<string, string> }) => {
-        // Copia base con IDs nuevos
-        return {
-          ...base,
-          elements: base.elements.map((el) => {
-            const newEl = { ...el, id: newId() } as SlideElement;
-            // Buscar por elementId original en aiSlots + fills
-            const originalId = el.id; // ojo: aún es el id de la plantilla
-            const fill = genSlide.fills[originalId];
-            if (fill && newEl.type === "text") {
-              return { ...newEl, content: fill } as TextElement;
-            }
-            return newEl;
-          }),
-        };
-      });
       setSlides(generated);
       setSelectedSlideIdx(0);
       setSelectedElementId(null);

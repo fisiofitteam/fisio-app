@@ -57,8 +57,9 @@ export function LeftSidebar({
           {generating ? "Generando…" : "✨ Generar carrusel"}
         </button>
         <p className="mt-1.5 text-[10px] text-neutral-400 leading-tight">
-          Indica nº de stories en el prompt. La IA rellena los huecos de la
-          plantilla que tengas seleccionada abajo{selectedTemplate ? ` (${selectedTemplate.name})` : ""}.
+          Indica nº de stories en el prompt. La IA elige el estilo de cada
+          slide entre todas tus plantillas — mezcla portadas, citas, listas,
+          preguntas según lo que le pidas.
         </p>
       </div>
 

@@ -1,25 +1,20 @@
 /**
  * POST /api/story-maker/generate
  *
- * Body: { prompt: string, templateKey?: string, count?: number }
- * Devuelve: { ok, slides: [{fills}], templateKey, template }
+ * Body: { prompt: string, count?: number }
+ * Devuelve: { ok, slides: [{templateKey, fills}], templatesByKey }
  *
- * Resolución de la plantilla base:
- *   1. Si templateKey resuelve a una builtin de código → usarla (aiSlots
- *      curados).
- *   2. Si resuelve a una plantilla guardada en BD (por id) → usarla.
- *      Si esa plantilla no tiene aiSlots → los AUTO-GENERAMOS a partir
- *      de sus text elements (cada text = un slot con hint basado en su
- *      contenido actual).
- *   3. Fallback: primera builtin con aiSlots.
+ * La IA recibe TODAS las plantillas disponibles (builtins hardcoded +
+ * las guardadas en BD del CEO) y para cada slide elige QUÉ PLANTILLA
+ * USAR + rellena sus huecos. El frontend materializa cada slide con la
+ * plantilla que la IA eligió.
  *
- * Con esto la IA respeta la plantilla que el CEO tiene seleccionada en
- * el dropdown, incluso si es una custom sin aiSlots definidos.
+ * Solo CEO/setter.
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
-import { BUILTIN_TEMPLATES, getBuiltinTemplate } from "@/lib/story-maker/templates";
+import { BUILTIN_TEMPLATES } from "@/lib/story-maker/templates";
 import { generateStoryContent } from "@/lib/story-maker/ai";
 import type { AiSlot, StoryTemplate, TextElement } from "@/lib/story-maker/types";
 
@@ -34,12 +29,6 @@ function extractCountFromPrompt(prompt: string, fallback = 3): number {
   return Math.min(10, n);
 }
 
-/**
- * Deriva aiSlots automáticos desde los text elements del primer slide.
- * Se usa cuando la plantilla que el CEO tiene seleccionada es custom
- * y no trae aiSlots definidos. Cada text element se convierte en un
- * slot con un hint basado en su contenido de plantilla.
- */
 function deriveAiSlots(template: StoryTemplate): AiSlot[] {
   const base = template.slides[0];
   if (!base) return [];
@@ -47,8 +36,7 @@ function deriveAiSlots(template: StoryTemplate): AiSlot[] {
     .filter((el): el is TextElement => el.type === "text")
     .map((el) => {
       const content = el.content?.trim() || "texto";
-      // Cortamos a algo razonable para el hint
-      const sample = content.length > 80 ? content.slice(0, 80) + "…" : content;
+      const sample = content.length > 60 ? content.slice(0, 60) + "…" : content;
       const words = content.split(/\s+/).filter(Boolean).length;
       const maxWords = Math.max(4, Math.min(30, Math.round(words * 1.4) || 15));
       return {
@@ -60,37 +48,37 @@ function deriveAiSlots(template: StoryTemplate): AiSlot[] {
     });
 }
 
-async function resolveTemplate(templateKeyRaw: string): Promise<StoryTemplate | null> {
-  if (templateKeyRaw) {
-    // 1) Builtin exacta
-    const builtin = getBuiltinTemplate(templateKeyRaw);
-    if (builtin?.aiSlots?.length) return builtin;
+async function loadAllTemplates(): Promise<StoryTemplate[]> {
+  const rows = await prisma.contentStoryTemplate.findMany({
+    orderBy: { updatedAt: "desc" },
+    select: { id: true, name: true, description: true, jsonSlides: true },
+  }).catch(() => []);
 
-    // 2) BD por id (las guardadas usan id como key)
-    const row = await prisma.contentStoryTemplate.findUnique({
-      where: { id: templateKeyRaw },
-      select: { id: true, name: true, description: true, jsonSlides: true },
-    }).catch(() => null);
-    if (row) {
-      try {
-        const parsed = JSON.parse(row.jsonSlides);
-        const t: StoryTemplate = {
-          id: row.id,
-          key: row.id,
-          name: row.name,
-          description: row.description ?? "",
-          slides: parsed.slides ?? [],
-          aiSlots: parsed.aiSlots ?? [],
-        };
-        // Si la BD guardada no trae aiSlots, los inferimos
-        if (!t.aiSlots?.length) t.aiSlots = deriveAiSlots(t);
-        if (t.aiSlots.length && t.slides[0]) return t;
-      } catch { /* ignore */ }
+  const saved: StoryTemplate[] = rows.flatMap((r) => {
+    try {
+      const parsed = JSON.parse(r.jsonSlides);
+      const t: StoryTemplate = {
+        id: r.id,
+        key: r.id,
+        name: r.name,
+        description: r.description ?? "",
+        slides: parsed.slides ?? [],
+        aiSlots: parsed.aiSlots ?? [],
+      };
+      if (!t.slides?.[0]) return [];
+      if (!t.aiSlots.length) t.aiSlots = deriveAiSlots(t);
+      return [t];
+    } catch {
+      return [];
     }
-  }
+  });
 
-  // 3) Fallback: primera builtin con aiSlots
-  return BUILTIN_TEMPLATES.find((t) => t.aiSlots?.length) ?? BUILTIN_TEMPLATES[0] ?? null;
+  // Combinamos builtins + guardadas. Deduplicamos por nombre (si el CEO
+  // hizo seed, las builtin ya están en BD — nos quedamos con las de BD
+  // porque son las editables).
+  const savedNames = new Set(saved.map((t) => t.name.toLowerCase()));
+  const builtins = BUILTIN_TEMPLATES.filter((t) => !savedNames.has(t.name.toLowerCase()));
+  return [...saved, ...builtins].filter((t) => t.aiSlots?.length && t.slides?.[0]);
 }
 
 export async function POST(req: Request) {
@@ -101,7 +89,6 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const templateKeyRaw = typeof body?.templateKey === "string" ? body.templateKey : "";
   const prompt = typeof body?.prompt === "string" ? body.prompt.trim() : "";
   const rawCount = Number(body?.count);
   const count = isFinite(rawCount) && rawCount > 0
@@ -112,26 +99,31 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Prompt demasiado corto (mín 5 caracteres)" }, { status: 400 });
   }
 
-  const template = await resolveTemplate(templateKeyRaw);
-  if (!template) {
-    return NextResponse.json({ error: "No hay plantillas base disponibles" }, { status: 500 });
+  const templates = await loadAllTemplates();
+  if (!templates.length) {
+    return NextResponse.json({
+      error: "No hay plantillas con huecos IA disponibles",
+    }, { status: 500 });
   }
 
   try {
-    const slides = await generateStoryContent({ template, prompt, count });
-    return NextResponse.json({
-      ok: true,
-      slides,
-      templateKey: template.key,
-      template: {
-        id: template.id,
-        key: template.key,
-        name: template.name,
-        description: template.description,
-        slides: template.slides,
-        aiSlots: template.aiSlots,
-      },
-    });
+    const slides = await generateStoryContent({ templates, prompt, count });
+
+    // Devolvemos también las plantillas por key para que el frontend
+    // pueda materializar sin conocer las builtin hardcoded.
+    const templatesByKey: Record<string, StoryTemplate> = {};
+    for (const t of templates) {
+      templatesByKey[t.key] = {
+        id: t.id,
+        key: t.key,
+        name: t.name,
+        description: t.description,
+        slides: t.slides,
+        aiSlots: t.aiSlots,
+      };
+    }
+
+    return NextResponse.json({ ok: true, slides, templatesByKey });
   } catch (e: any) {
     console.error("[story-maker/generate] Error:", e);
     return NextResponse.json({ error: e?.message ?? "Error generando" }, { status: 500 });
