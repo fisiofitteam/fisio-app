@@ -11938,6 +11938,86 @@ async function dlAll() {
       } catch (e) {
         console.warn('[FisioFit override] generate instrumentation failed:', e);
       }
+
+      // ═══ Generador de guion desde un prompt breve ═══
+      // Inyecta un mini-editor ANTES del textarea del guion con un prompt
+      // corto ("3 stories sobre lumbalgia") y un botón que llama a Claude
+      // (reusando la función callClaude del editor) para generar un guion
+      // estructurado tipo "STORY 1 · HOOK / STORY 2 · EDUCACIÓN / STORY 3 ·
+      // CTA". El resultado se vuelca en el textarea #guion y dispara el
+      // evento input para que checkReady() habilite "Generar historias".
+      try {
+        var guionEl = document.getElementById('guion');
+        if (guionEl && !document.getElementById('ff-prompt-box')) {
+          var box = document.createElement('div');
+          box.id = 'ff-prompt-box';
+          box.style.cssText = 'margin-bottom:10px;padding:10px 12px;background:#FFFBEB;border:1px solid #FCD34D;border-radius:10px';
+          box.innerHTML =
+            '<div style="font-size:10px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#78350F;margin-bottom:6px">✨ Generar guion con IA</div>' +
+            '<textarea id="ff-prompt" rows="2" placeholder="Ej: 4 stories sobre lumbalgia en atletas de CrossFit, terminando con CTA de reserva…" style="width:100%;padding:8px 10px;border:1.5px solid #E5E5E5;border-radius:8px;font-family:inherit;font-size:12px;line-height:1.4;resize:vertical;outline:none;background:#FFFFFF;color:#0A0A0A;box-sizing:border-box"></textarea>' +
+            '<button id="ff-prompt-gen" style="margin-top:8px;width:100%;padding:9px 12px;border:none;border-radius:8px;background:#0A0A0A;color:#FFFFFF;font-family:inherit;font-size:12px;font-weight:800;letter-spacing:.04em;cursor:pointer">✨ Crear guion</button>' +
+            '<div id="ff-prompt-msg" style="font-size:10px;color:#78350F;margin-top:6px;min-height:12px"></div>';
+          guionEl.parentNode.insertBefore(box, guionEl);
+
+          var pTA = document.getElementById('ff-prompt');
+          var pBtn = document.getElementById('ff-prompt-gen');
+          var pMsg = document.getElementById('ff-prompt-msg');
+
+          pBtn.addEventListener('click', async function () {
+            var idea = pTA.value.trim();
+            if (idea.length < 5) {
+              pMsg.textContent = '⚠ Escribe al menos 5 caracteres de idea.';
+              return;
+            }
+            if (typeof callClaude !== 'function') {
+              pMsg.textContent = '✗ callClaude no está disponible.';
+              return;
+            }
+            pBtn.disabled = true;
+            var originalText = pBtn.textContent;
+            pBtn.textContent = 'Generando…';
+            pMsg.textContent = '';
+
+            var system =
+              'Eres el editor de contenido de FisioFit Team. Nicho: atletas de CrossFit y Hyrox con dolor. ' +
+              'Tono directo, sin humo, empático. Regla: nunca uses "cliente" o "paciente" — siempre "atleta". ' +
+              '\n\n' +
+              'Tarea: convertir una idea corta en un GUION DE INSTAGRAM STORIES en formato ESTRUCTURADO. ' +
+              'Devuelve EXACTAMENTE con este formato (sin markdown, sin explicaciones extra, sin ```):\n\n' +
+              'STORY 1 · HOOK\n' +
+              '<texto de 1-2 líneas que enganche en <2 segundos>\n\n' +
+              'STORY 2 · EDUCACIÓN\n' +
+              '<texto explicando el problema o dando contexto>\n\n' +
+              'STORY 3 · CTA\n' +
+              '<texto con llamada a la acción clara>\n\n' +
+              'Ajusta el número de stories (mínimo 3, máximo 7) a lo que pida la idea. ' +
+              'Usa el número exacto de stories que el usuario mencione si lo hace explícito.';
+
+            try {
+              var out = await callClaude('IDEA:\n' + idea, {
+                system: system,
+                costLabel: 'Guion desde prompt (FisioFit)',
+              });
+              if (!out || typeof out !== 'string') {
+                pMsg.textContent = '✗ Respuesta vacía de Claude.';
+                return;
+              }
+              // Sustituir contenido del textarea del guion
+              guionEl.value = out.trim();
+              // Disparar input para que checkReady() habilite el botón Generar
+              guionEl.dispatchEvent(new Event('input', { bubbles: true }));
+              pMsg.textContent = '✓ Guion cargado. Puedes editarlo antes de generar las stories.';
+            } catch (err) {
+              pMsg.textContent = '✗ Error: ' + (err && err.message ? err.message : String(err));
+            } finally {
+              pBtn.disabled = false;
+              pBtn.textContent = originalText;
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('[FisioFit override] prompt→guion generator failed:', e);
+      }
     }, 100);
   });
 </script>
