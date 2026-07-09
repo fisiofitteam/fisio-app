@@ -237,13 +237,13 @@ export function StoryMakerEditor({
     setTimeout(() => setMsg(null), 5000);
   }
 
-  async function generate(prompt: string) {
+  async function generate(prompt: string, templateKey?: string) {
     setGenerating(true);
     try {
       const res = await fetch("/api/story-maker/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ prompt, templateKey }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {

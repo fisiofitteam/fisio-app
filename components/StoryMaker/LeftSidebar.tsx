@@ -20,7 +20,7 @@ export function LeftSidebar({
   templates: StoryTemplate[];
   onApplyTemplate: (t: StoryTemplate) => void;
   onSeedBuiltins: () => void;
-  onGenerate: (prompt: string) => void;
+  onGenerate: (prompt: string, templateKey?: string) => void;
   generating: boolean;
   slides: Slide[];
   selectedSlideIdx: number;
@@ -50,15 +50,15 @@ export function LeftSidebar({
           onChange={(e) => setPrompt(e.target.value)}
         />
         <button
-          onClick={() => onGenerate(prompt.trim())}
+          onClick={() => onGenerate(prompt.trim(), selectedTemplateKey || undefined)}
           disabled={generating || prompt.trim().length < 5}
           className="mt-2 w-full text-sm font-semibold px-3 py-2 rounded-lg bg-neutral-900 text-white disabled:opacity-50"
         >
           {generating ? "Generando…" : "✨ Generar carrusel"}
         </button>
         <p className="mt-1.5 text-[10px] text-neutral-400 leading-tight">
-          Indica nº de stories y el estilo directamente en el prompt.
-          Después puedes aplicar una plantilla para darles diseño.
+          Indica nº de stories en el prompt. La IA rellena los huecos de la
+          plantilla que tengas seleccionada abajo{selectedTemplate ? ` (${selectedTemplate.name})` : ""}.
         </p>
       </div>
 
