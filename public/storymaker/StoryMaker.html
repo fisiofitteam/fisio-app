@@ -11860,11 +11860,6 @@ async function dlAll() {
             var sizeMB = (f0.size / 1024 / 1024).toFixed(2);
             showDbg('Recibido: ' + f0.name + ' (' + sizeMB + ' MB, ' + f0.type + '). Procesando…');
 
-            if (f0.type && f0.type.indexOf('image/') === 0 && f0.size > 8 * 1024 * 1024) {
-              showDbg('⚠ Imagen de ' + sizeMB + ' MB muy grande. Prueba con <8 MB.', true);
-              return;
-            }
-
             try {
               if (typeof loadFiles !== 'function') {
                 showDbg('✗ loadFiles no está definido', true);
