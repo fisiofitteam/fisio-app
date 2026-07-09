@@ -11842,44 +11842,55 @@ async function dlAll() {
           });
         }
 
-        // Log del change del input file (antes de que corra loadFiles)
+        // REEMPLAZAR el listener original del file-input por uno nuestro.
+        // El original hace loadFiles(this.files) con referencia local a la
+        // función, así que mi interceptor de window.loadFiles no lo atrapa.
+        // Solución: cloneNode remueve todos los listeners, luego pongo el
+        // mío con try/catch y logs verbosos.
         if (fi) {
-          fi.addEventListener('change', function (e) {
+          var newFi = fi.cloneNode(true);
+          fi.parentNode.replaceChild(newFi, fi);
+          newFi.addEventListener('change', function (e) {
             var files = e.target.files;
             if (!files || files.length === 0) {
               showDbg('No hay archivos seleccionados', true);
               return;
             }
-            var names = [];
-            for (var i = 0; i < files.length; i++) {
-              names.push(files[i].name + ' (' + Math.round(files[i].size / 1024) + 'KB, ' + (files[i].type || 'sin tipo') + ')');
-            }
-            showDbg('✓ ' + files.length + ' seleccionado(s): ' + names.join(', '));
-          }, true); // capture: true → mi listener corre ANTES del original
-        }
+            var f0 = files[0];
+            var sizeMB = (f0.size / 1024 / 1024).toFixed(2);
+            showDbg('Recibido: ' + f0.name + ' (' + sizeMB + ' MB, ' + f0.type + '). Procesando…');
 
-        // Interceptor de loadFiles para atrapar errores
-        if (typeof window.loadFiles === 'function') {
-          var originalLoadFiles = window.loadFiles;
-          window.loadFiles = function (files) {
-            showDbg('Procesando ' + (files ? files.length : 0) + ' archivo(s)…');
+            // Aviso concreto si es demasiado grande: canvas de imagen
+            // no comprimida puede reventar en iframe. Sugerimos límite.
+            if (f0.type && f0.type.indexOf('image/') === 0 && f0.size > 8 * 1024 * 1024) {
+              showDbg('⚠ Imagen de ' + sizeMB + ' MB muy grande. Prueba con <8 MB.', true);
+              return;
+            }
+
             try {
-              var result = originalLoadFiles(files);
+              if (typeof loadFiles !== 'function') {
+                showDbg('✗ loadFiles no está definido', true);
+                return;
+              }
+              loadFiles(files);
+              // renderChips es async por el FileReader, esperamos un poco.
               setTimeout(function () {
                 var chips = document.getElementById('chips');
                 var chipCount = chips ? chips.children.length : 0;
-                if (chipCount > 0) {
-                  showDbg('✓ Cargados. Chips visibles: ' + chipCount);
+                var imgCount = 0;
+                try { imgCount = Object.keys(S.images || {}).length; } catch (e) {}
+                if (chipCount > 0 || imgCount > 0) {
+                  showDbg('✓ ¡Subido! S.images=' + imgCount + ', chips=' + chipCount);
                 } else {
-                  showDbg('⚠ loadFiles OK pero no aparecen chips', true);
+                  showDbg('⚠ loadFiles ejecutado pero S.images vacío y sin chips', true);
                 }
-              }, 1500);
-              return result;
+              }, 2000);
             } catch (err) {
-              showDbg('✗ Error: ' + (err && err.message ? err.message : String(err)), true);
-              throw err;
+              var m = err && err.message ? err.message : String(err);
+              showDbg('✗ Error en loadFiles: ' + m, true);
+              console.error('[FisioFit] loadFiles error:', err);
             }
-          };
+          });
         }
       } catch (e) {
         console.warn('[FisioFit override] upload instrumentation failed:', e);
