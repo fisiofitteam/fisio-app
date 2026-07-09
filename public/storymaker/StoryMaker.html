@@ -11887,6 +11887,57 @@ async function dlAll() {
       } catch (e) {
         console.warn('[FisioFit override] upload instrumentation failed:', e);
       }
+
+      // ═══ Instrumentación del botón "Generar historias" ═══
+      // Diagnóstico común: el botón queda deshabilitado porque el guion
+      // no llega a 20 chars, o algún listener del input no se enganchó.
+      try {
+        var guion = document.getElementById('guion');
+        var btnGen = document.getElementById('btn-gen');
+
+        // Listener redundante en el guion → llama a checkReady por si
+        // el listener original no se enganchó bien.
+        if (guion) {
+          guion.addEventListener('input', function () {
+            try { if (typeof checkReady === 'function') checkReady(); } catch (e) {}
+          });
+        }
+
+        // Log del click en generar — si está disabled, avisa por qué.
+        if (btnGen) {
+          btnGen.addEventListener('click', function (e) {
+            if (btnGen.disabled) {
+              var g = guion ? guion.value.trim() : '';
+              showDbg('Botón desactivado. Guion tiene ' + g.length + ' chars (mínimo 20).', true);
+              return;
+            }
+            showDbg('Generando historias con Claude…');
+          }, true);
+        }
+
+        // Interceptor de fetch para ver si la llamada a /api/claude falla.
+        var originalFetch = window.fetch;
+        window.fetch = function () {
+          var url = arguments[0];
+          var isClaude = typeof url === 'string' && url.indexOf('/api/claude') !== -1;
+          if (isClaude) showDbg('POST /api/claude …');
+          return originalFetch.apply(this, arguments).then(function (res) {
+            if (isClaude) {
+              if (!res.ok) {
+                showDbg('✗ /api/claude respondió ' + res.status + ' ' + res.statusText, true);
+              } else {
+                showDbg('✓ /api/claude 200 — recibiendo stream…');
+              }
+            }
+            return res;
+          }, function (err) {
+            if (isClaude) showDbg('✗ Error de red al llamar /api/claude: ' + err.message, true);
+            throw err;
+          });
+        };
+      } catch (e) {
+        console.warn('[FisioFit override] generate instrumentation failed:', e);
+      }
     }, 100);
   });
 </script>
