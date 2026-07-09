@@ -11523,7 +11523,8 @@ async function dlAll() {
      FisioFit — overrides Story Maker
      1. Ocultamos modos "Datos técnicos" y "Carrusel" (solo Historias).
      2. Ocultamos botones "TrainingPeaks CSV" y "Corregir" (no aplican).
-     3. Aplicamos paleta dark FisioFit (amarillo #FCD34D + naranja #F59E0B).
+     3. Look CLARO como el panel admin de fisio-app: fondo blanco/gris claro,
+        botones NEGROS y AMARILLO como acento (nada de dark ni de azul).
      ═══════════════════════════════════════════════════════════════════════ -->
 <style>
   /* 1. Tabs de modos que no usamos */
@@ -11532,92 +11533,126 @@ async function dlAll() {
   #btn-dl-multi { display: none !important; }
 
   /* 2. Botones de guion que no usamos */
-  #btn-tp-csv,           /* CSV de TrainingPeaks */
-  #btn-corrector,        /* Corregir ortografía */
-  #tp-csv-input          /* input file oculto asociado a TP CSV */
+  #btn-tp-csv,
+  #btn-corrector,
+  #tp-csv-input
   { display: none !important; }
 
-  /* 3. Paleta FisioFit: sobrescribe TODAS las variables raíz del original.
-        Como el HTML usa var(--blue*) por todos lados, con esto se rebrandea
-        el 95% de la UI sin tocar cada regla. */
+  /* 3. Paleta FisioFit sobre look CLARO original.
+        Reasignamos las variables --blue* a los tokens de la app admin:
+        - marca principal (antes azul) → NEGRO (#0A0A0A) como los botones
+          "Guardar", "Cerrar sesión", etc.
+        - accent (antes azul oscuro) → AMARILLO/NARANJA para chips y
+          highlights.
+        Mantenemos los fondos claros del original (--white, --bg). */
   :root {
-    /* Marca (antes azul) */
-    --blue: #FCD34D !important;
-    --blue-dark: #F59E0B !important;
-    --blue-light: rgba(252, 211, 77, 0.18) !important;
-    --blue-pale: rgba(252, 211, 77, 0.08) !important;
-    --accent: #FCD34D !important;
-
-    /* Fondos y superficies (antes claros) */
-    --white: #141414 !important;         /* superficies principales */
-    --bg: #0A0A0A !important;            /* fondo general */
-    --dark: #050505 !important;
-
-    /* Textos (antes oscuros sobre claro → invierten) */
-    --black: #FAFAFA !important;
-    --gray-dark: #E5E5E5 !important;
-    --gray-mid: #A3A3A3 !important;
-    --gray-light: #525252 !important;
-    --border: #262626 !important;
+    --blue: #0A0A0A !important;              /* botón primario, tabs activas */
+    --blue-dark: #000000 !important;         /* hover del primario */
+    --blue-light: #FEF3C7 !important;        /* hover suave amarillo pastel */
+    --blue-pale: #FFFBEB !important;         /* fondos casi-blancos amarillentos */
+    --accent: #F59E0B !important;            /* naranja de acento */
+    --orange: #F59E0B !important;
+    /* Fondos y textos se quedan como el original (look claro) */
   }
 
-  /* Fondos con hex hardcoded que no usan variables — arreglos puntuales */
-  body { background: #0A0A0A !important; color: #FAFAFA !important; }
-  .header { background: #141414 !important; border-bottom-color: #262626 !important; }
-  .sidebar { background: #141414 !important; border-right-color: #262626 !important; }
-  .main { background: #0A0A0A !important; }
-  .hb-back { background: rgba(252,211,77,0.10) !important; color: #FCD34D !important; border-color: rgba(252,211,77,0.35) !important; }
-  .hs { background: rgba(252,211,77,0.10) !important; border-color: rgba(252,211,77,0.30) !important; color: #A3A3A3 !important; }
+  /* Ajustes puntuales — sitios con hex hardcoded en vez de var() */
 
-  /* Textareas / inputs — mismo tratamiento */
-  textarea, .api-input, input[type="text"], input[type="number"], input[type="url"], select {
-    background: #1F1F1F !important;
-    border-color: #333 !important;
-    color: #FAFAFA !important;
+  /* Cabecera con línea azul debajo → negra */
+  .header { border-bottom-color: #0A0A0A !important; box-shadow: 0 2px 12px rgba(0,0,0,0.05) !important; }
+  .hb-title, .hb-sub { color: #0A0A0A !important; }
+  .hs-dot { background: #10B981 !important; } /* verde OK se queda */
+
+  /* Botón vuelta atrás */
+  .hb-back { background: #FFFBEB !important; color: #0A0A0A !important; border-color: #FEF3C7 !important; }
+  .hb-back:hover { background: #FEF3C7 !important; }
+
+  /* Estado / status */
+  .hs { background: #FFFBEB !important; border-color: #FEF3C7 !important; color: #0A0A0A !important; }
+
+  /* Textareas / inputs — focus en amarillo */
+  textarea:focus, input:focus, select:focus {
+    border-color: #FCD34D !important;
+    box-shadow: 0 0 0 3px rgba(252, 211, 77, 0.15) !important;
   }
-  textarea::placeholder, input::placeholder { color: #737373 !important; }
-  textarea:focus, input:focus { border-color: #FCD34D !important; background: #262626 !important; }
 
-  /* Botones — el original tiene box-shadow con rgba(azul) que ahora rompe */
-  .btn-primary { color: #1F2937 !important; box-shadow: 0 4px 16px rgba(252,211,77,0.35) !important; }
-  .btn-primary:hover:not(:disabled) { background: #F59E0B !important; }
-  .btn-dl { background: #1F1F1F !important; color: #E5E5E5 !important; border-color: #333 !important; }
-  .btn-dl:hover:not(:disabled) { background: #262626 !important; color: #FCD34D !important; border-color: #FCD34D !important; }
-  .btn-dl.main { background: rgba(252,211,77,0.12) !important; color: #FCD34D !important; border-color: rgba(252,211,77,0.35) !important; }
+  /* Botón primario NEGRO estilo app admin */
+  .btn-primary {
+    background: #0A0A0A !important;
+    color: #FFFFFF !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: #262626 !important;
+    transform: translateY(-1px);
+  }
 
-  /* Cards / módulos de sidebar */
-  .drop-zone { background: #1F1F1F !important; border-color: #333 !important; }
-  .drop-zone:hover, .drop-zone.dragover { background: rgba(252,211,77,0.05) !important; border-color: #FCD34D !important; }
-  .dz-text { color: #E5E5E5 !important; }
-  .dz-sub { color: #A3A3A3 !important; }
+  /* Botones secundarios / descargas — negros outline */
+  .btn-dl {
+    background: #FFFFFF !important;
+    color: #333333 !important;
+    border-color: #E0E8F0 !important;
+  }
+  .btn-dl:hover:not(:disabled) {
+    background: #FFFBEB !important;
+    color: #0A0A0A !important;
+    border-color: #FCD34D !important;
+  }
+  .btn-dl.main {
+    background: #0A0A0A !important;
+    color: #FFFFFF !important;
+    border-color: #0A0A0A !important;
+    font-weight: 900 !important;
+  }
+  .btn-dl.main:hover:not(:disabled) {
+    background: #262626 !important;
+    color: #FCD34D !important;
+    border-color: #262626 !important;
+  }
 
-  .chip { background: rgba(252,211,77,0.15) !important; border-color: rgba(252,211,77,0.30) !important; color: #FCD34D !important; }
+  /* Botones secundarios del sidebar (afinar, hooks, url, reciclar, etc.)
+     — el CSS original les da color azul cyan, los pasamos a negro. */
+  .btn-secondary {
+    background: #FFFFFF !important;
+    color: #333333 !important;
+    border-color: #E0E8F0 !important;
+  }
+  .btn-secondary:hover:not(:disabled) {
+    background: #FFFBEB !important;
+    color: #0A0A0A !important;
+    border-color: #FCD34D !important;
+  }
 
-  /* Divisores */
-  .divider { background: #262626 !important; }
+  /* Chips (etiquetas del guion, hashtags…) — amarillo pastel */
+  .chip {
+    background: #FEF3C7 !important;
+    border-color: #FCD34D !important;
+    color: #78350F !important;
+  }
 
-  /* Estados vacío / loading */
-  .empty-title, .empty-sub, .loading-sub { color: #525252 !important; }
-  .empty-icon { color: #262626 !important; }
-  .spinner { border-color: #262626 !important; border-top-color: #FCD34D !important; }
-  .loading-title { color: #FCD34D !important; }
+  /* Labels de sección del sidebar (SLABEL) — en negro discreto */
+  .slabel { color: #0A0A0A !important; }
 
-  /* Cabecera del panel de salida */
-  .out-header { border-bottom-color: #262626 !important; }
-  .out-label { color: #A3A3A3 !important; }
-  .out-count { color: #1F2937 !important; background: #FCD34D !important; }
+  /* Título de la cabecera del panel de salida: "OUTPUT" pequeño */
+  .out-count {
+    background: #0A0A0A !important;
+    color: #FCD34D !important;
+  }
 
-  /* Tarjetas de slide en el stage: fondo blanco → dark surface */
-  .slide-card { color: #FAFAFA !important; }
+  /* Focus rings de accesibilidad si vienen en azul → amarillo */
+  *:focus-visible { outline-color: #FCD34D !important; }
 
   /* Caja API — la ocultamos porque en useProxy:true nunca se usa */
   .api-box { display: none !important; }
 
-  /* Barra de estado inferior */
-  .status-bar { background: #141414 !important; border-top-color: #262626 !important; color: #A3A3A3 !important; }
+  /* Modales — barra superior y CTAs → negra */
+  .modal-title-bar, .cmdk-input:focus { border-color: #FCD34D !important; }
 
-  /* Modales / paleta de comandos */
-  .modal, .cmdk, .cmdk-input, .toast { background: #141414 !important; color: #FAFAFA !important; border-color: #262626 !important; }
+  /* Spinner del loading — anillo negro con acento amarillo */
+  .spinner {
+    border-color: #E0E8F0 !important;
+    border-top-color: #0A0A0A !important;
+  }
+  .loading-title { color: #0A0A0A !important; }
 </style>
 <script>
   // Blindaje: si algún atajo intenta cambiar de modo (technical/carousel),

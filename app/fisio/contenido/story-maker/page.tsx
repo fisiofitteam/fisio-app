@@ -17,9 +17,9 @@ export default async function StoryMakerPage() {
     <main>
       <ContentNav active="story-maker" role={user.role} />
       <div
-        className="rounded-2xl overflow-hidden border border-neutral-800"
+        className="rounded-2xl overflow-hidden border border-neutral-200"
         style={{
-          background: "#0A0A0A",
+          background: "#F4F7FB",
           // Ocupa el viewport útil por debajo del ContentNav.
           // 100vh menos aprox el header + nav + padding.
           height: "calc(100vh - 160px)",
@@ -34,7 +34,7 @@ export default async function StoryMakerPage() {
             height: "100%",
             border: 0,
             display: "block",
-            background: "#0A0A0A",
+            background: "#F4F7FB",
           }}
           // sandbox omitido a propósito: el iframe necesita ejecutar scripts,
           // acceder a localStorage (proyectos), llamar fetch() a /api/claude,
