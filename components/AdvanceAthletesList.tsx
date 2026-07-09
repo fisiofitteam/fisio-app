@@ -8,6 +8,7 @@ type Athlete = {
   fullName: string;
   photoUrl: string | null;
   sport: string;
+  phone: string | null;
   fisio: { id: string; fullName: string } | null;
   rpeAvg: number | null;
   fatigueAvg: number | null;
@@ -95,6 +96,40 @@ function AthleteRow({ athlete }: { athlete: Athlete }) {
     .toUpperCase();
 
   const noLogs = athlete.entries7d === 0;
+  const [waBusy, setWaBusy] = useState(false);
+  const [waError, setWaError] = useState<string | null>(null);
+
+  async function openWhatsApp(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!athlete.phone) {
+      setWaError("Sin WhatsApp en la ficha");
+      setTimeout(() => setWaError(null), 3000);
+      return;
+    }
+    setWaBusy(true);
+    setWaError(null);
+    try {
+      const res = await fetch(`/api/patients/${athlete.id}/whatsapp-link`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        setWaError(data.error || "No se pudo generar el link");
+        setTimeout(() => setWaError(null), 3000);
+        return;
+      }
+      const cleanPhone = data.phone.replace(/\D/g, "");
+      window.open(
+        `https://wa.me/${cleanPhone}?text=${encodeURIComponent(data.waText)}`,
+        "_blank",
+        "noopener,noreferrer",
+      );
+    } catch (e: any) {
+      setWaError(e?.message || "Error de red");
+      setTimeout(() => setWaError(null), 3000);
+    } finally {
+      setWaBusy(false);
+    }
+  }
 
   return (
     <Link
@@ -117,6 +152,9 @@ function AthleteRow({ athlete }: { athlete: Athlete }) {
         <div className="text-[11px] text-neutral-500 truncate">
           {athlete.fisio ? `🩺 ${athlete.fisio.fullName}` : "Sin fisio asignado"}
         </div>
+        {waError && (
+          <div className="text-[10px] text-red-600 mt-0.5">✗ {waError}</div>
+        )}
       </div>
 
       {/* Métricas */}
@@ -129,6 +167,15 @@ function AthleteRow({ athlete }: { athlete: Athlete }) {
           </div>
           <div className="text-[9px] text-neutral-400 uppercase tracking-wider">logs</div>
         </div>
+        {/* Botón WhatsApp con magic link */}
+        <button
+          onClick={openWhatsApp}
+          disabled={waBusy || !athlete.phone}
+          title={athlete.phone ? "Abrir WhatsApp con el magic link" : "Sin WhatsApp en la ficha"}
+          className="text-[11px] font-medium px-2.5 py-1.5 rounded-md border border-emerald-200 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 hover:border-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {waBusy ? "…" : "💬 WA"}
+        </button>
       </div>
     </Link>
   );

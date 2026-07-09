@@ -25,6 +25,7 @@ export default async function AdvanceAthletesPage() {
       fullName: true,
       photoUrl: true,
       sport: true,
+      phone: true,
       assignedProfessional: { select: { id: true, fullName: true } },
     },
     orderBy: { fullName: "asc" },
@@ -59,6 +60,7 @@ export default async function AdvanceAthletesPage() {
       fullName: a.fullName,
       photoUrl: a.photoUrl,
       sport: a.sport,
+      phone: a.phone,
       fisio: a.assignedProfessional
         ? { id: a.assignedProfessional.id, fullName: a.assignedProfessional.fullName }
         : null,
