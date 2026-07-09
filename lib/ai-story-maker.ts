@@ -76,6 +76,8 @@ export type Slide = {
   attribution: string; // solo para testimonios (autor + programa)
 };
 
+export type StoryMakerFormat = "story-9x16" | "carousel-4x5";
+
 export type StoryMakerInput = {
   script: string;               // guion libre del usuario
   count: number;                // nº de slides a generar (1-10)
@@ -83,6 +85,7 @@ export type StoryMakerInput = {
   niche: string;                // "atletas de CrossFit y Hyrox con dolor"
   tone: string;                 // "directo, sin humo, empático"
   terminologyRule: string;      // "nunca 'cliente', siempre 'atleta'"
+  format: StoryMakerFormat;     // afecta a las reglas de tono y CTA
 };
 
 export type StoryMakerOutput = {
@@ -96,11 +99,17 @@ function buildSystemPrompt(input: StoryMakerInput): string {
     (s) => `- \`${s.key}\` (${s.label}): ${s.promptHint}`,
   ).join("\n");
 
+  const formatBlock = input.format === "carousel-4x5"
+    ? `FORMATO: Carrusel de feed (4:5, permanente). La serie tiene numeración N/M pública, así que cada slide debe funcionar de forma autónoma como pieza de post pero con hilo narrativo entre ellas. La 1ª es el hook (portada), las intermedias desarrollan, la última cierra con CTA claro.`
+    : `FORMATO: Instagram Stories (9:16, efímera 24h). Cada slide se ve por separado en pantalla completa. La 1ª tiene que enganchar en <2 segundos, la última tiene CTA claro (deslizar arriba, guardar, DM).`;
+
   return `Eres el editor de contenido de ${input.brand}. Nicho: ${input.niche}.
 Tono: ${input.tone}.
 ${input.terminologyRule ? `Regla de terminología obligatoria: ${input.terminologyRule}.` : ""}
 
-Tu tarea: convertir un guion en una serie de Instagram Stories (formato 9:16) ya maquetadas y distribuidas por estilo visual.
+${formatBlock}
+
+Tu tarea: convertir un guion en una serie de slides ya maquetados y distribuidos por estilo visual.
 
 ESTILOS DISPONIBLES:
 ${styleList}

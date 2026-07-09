@@ -1,12 +1,15 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { SlideRenderer } from "./SlideRenderer";
-import { downloadSlide, downloadZip } from "./exportSlides";
+import { downloadPdf, downloadSlide, downloadZip } from "./exportSlides";
+import { LibraryBackgroundPicker } from "./LibraryBackgroundPicker";
 import {
   EMPTY_SLIDE,
+  FORMAT_DIMS,
   STORY_STYLE_KEYS,
   type Slide,
+  type StoryFormat,
   type StoryStyleKey,
   type StoryTemplate,
 } from "./types";
@@ -20,17 +23,79 @@ const STYLE_LABEL: Record<StoryStyleKey, string> = {
 };
 
 const DEFAULT_HANDLE = "@fisiofitteam";
+const HISTORY_LIMIT = 30;
 
 export function StoryMakerEditor({
   initialTemplates,
 }: {
   initialTemplates: StoryTemplate[];
 }) {
-  // Estado principal: array de slides + índice del que se está editando.
+  // ─── Estado principal ────────────────────────────────────────────────
+  const [format, setFormat] = useState<StoryFormat>("story-9x16");
   const [slides, setSlides] = useState<Slide[]>([EMPTY_SLIDE]);
   const [selectedIdx, setSelectedIdx] = useState(0);
 
-  // Sidebar
+  // Historial para undo/redo. Guardamos snapshots del array `slides`.
+  const historyRef = useRef<Slide[][]>([[EMPTY_SLIDE]]);
+  const historyIdxRef = useRef(0);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+
+  function pushHistory(next: Slide[]) {
+    // Corta cualquier futuro (redos posteriores al índice actual)
+    historyRef.current = historyRef.current.slice(0, historyIdxRef.current + 1);
+    historyRef.current.push(next);
+    if (historyRef.current.length > HISTORY_LIMIT) {
+      historyRef.current.shift();
+    } else {
+      historyIdxRef.current += 1;
+    }
+    setCanUndo(historyIdxRef.current > 0);
+    setCanRedo(false);
+  }
+
+  function applySlides(next: Slide[], record = true) {
+    setSlides(next);
+    if (record) pushHistory(next);
+  }
+
+  function undo() {
+    if (historyIdxRef.current <= 0) return;
+    historyIdxRef.current -= 1;
+    const snap = historyRef.current[historyIdxRef.current];
+    setSlides(snap);
+    setSelectedIdx((cur) => Math.min(cur, snap.length - 1));
+    setCanUndo(historyIdxRef.current > 0);
+    setCanRedo(true);
+  }
+
+  function redo() {
+    if (historyIdxRef.current >= historyRef.current.length - 1) return;
+    historyIdxRef.current += 1;
+    const snap = historyRef.current[historyIdxRef.current];
+    setSlides(snap);
+    setSelectedIdx((cur) => Math.min(cur, snap.length - 1));
+    setCanUndo(true);
+    setCanRedo(historyIdxRef.current < historyRef.current.length - 1);
+  }
+
+  // Atajos Cmd/Ctrl+Z / Shift+Z
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod || e.key.toLowerCase() !== "z") return;
+      // Evitar interceptar cuando el foco está en un input/textarea
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      e.preventDefault();
+      if (e.shiftKey) redo();
+      else undo();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // ─── Sidebar ─────────────────────────────────────────────────────────
   const [script, setScript] = useState("");
   const [count, setCount] = useState(5);
   const [handle, setHandle] = useState(DEFAULT_HANDLE);
@@ -38,62 +103,38 @@ export function StoryMakerEditor({
   const [saveOpen, setSaveOpen] = useState(false);
   const [saveName, setSaveName] = useState("");
   const [templates, setTemplates] = useState(initialTemplates);
+  const [libraryOpen, setLibraryOpen] = useState(false);
 
-  // Feedback
+  // ─── Feedback ────────────────────────────────────────────────────────
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   function flash(kind: "ok" | "err", text: string) {
     setMsg({ kind, text });
     setTimeout(() => setMsg(null), 4000);
   }
 
-  // Refs a los slides renderizados a resolución real (1080×1920) en un
-  // contenedor oculto — html-to-image captura desde ahí para no depender
-  // del scale del preview.
-  const fullSizeRefs = useRef<Array<HTMLDivElement | null>>([]);
-  const [exporting, setExporting] = useState<"single" | "zip" | null>(null);
-
-  async function handleExportSingle() {
-    const el = fullSizeRefs.current[selectedIdx];
-    if (!el) return;
-    setExporting("single");
-    try {
-      await downloadSlide(el, selectedIdx);
-      flash("ok", "PNG descargado");
-    } catch (e: any) {
-      flash("err", e?.message || "No se pudo exportar");
-    } finally {
-      setExporting(null);
-    }
-  }
-
-  async function handleExportZip() {
-    const els = fullSizeRefs.current.filter((el): el is HTMLDivElement => !!el);
-    if (els.length === 0) return;
-    setExporting("zip");
-    try {
-      await downloadZip(els);
-      flash("ok", `ZIP con ${els.length} PNG descargado`);
-    } catch (e: any) {
-      flash("err", e?.message || "No se pudo exportar");
-    } finally {
-      setExporting(null);
-    }
-  }
-
   const selected = slides[selectedIdx] ?? EMPTY_SLIDE;
 
   function updateSelected(patch: Partial<Slide>) {
-    setSlides((prev) => prev.map((s, i) => (i === selectedIdx ? { ...s, ...patch } : s)));
+    applySlides(slides.map((s, i) => (i === selectedIdx ? { ...s, ...patch } : s)));
   }
 
   function addSlide() {
-    setSlides((prev) => [...prev, EMPTY_SLIDE]);
+    applySlides([...slides, EMPTY_SLIDE]);
     setSelectedIdx(slides.length);
+  }
+
+  function duplicateSelected() {
+    const dup = { ...slides[selectedIdx] };
+    const next = [...slides];
+    next.splice(selectedIdx + 1, 0, dup);
+    applySlides(next);
+    setSelectedIdx(selectedIdx + 1);
   }
 
   function removeSlide(idx: number) {
     if (slides.length === 1) return;
-    setSlides((prev) => prev.filter((_, i) => i !== idx));
+    const next = slides.filter((_, i) => i !== idx);
+    applySlides(next);
     setSelectedIdx((cur) => (cur >= idx ? Math.max(0, cur - 1) : cur));
   }
 
@@ -102,10 +143,11 @@ export function StoryMakerEditor({
     const copy = [...slides];
     const [it] = copy.splice(from, 1);
     copy.splice(to, 0, it);
-    setSlides(copy);
+    applySlides(copy);
     setSelectedIdx(to);
   }
 
+  // ─── IA ──────────────────────────────────────────────────────────────
   async function generateWithAI() {
     if (script.trim().length < 20) {
       flash("err", "Escribe al menos 20 caracteres de guion.");
@@ -116,14 +158,14 @@ export function StoryMakerEditor({
       const res = await fetch("/api/story-maker/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ script, count }),
+        body: JSON.stringify({ script, count, format }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
         flash("err", data.error || "No se pudo generar");
         return;
       }
-      setSlides(data.slides);
+      applySlides(data.slides);
       setSelectedIdx(0);
       flash("ok", `${data.slides.length} slides generados con Claude`);
     } catch (e: any) {
@@ -133,6 +175,7 @@ export function StoryMakerEditor({
     }
   }
 
+  // ─── Plantillas ──────────────────────────────────────────────────────
   async function saveAsTemplate() {
     if (!saveName.trim()) {
       flash("err", "Ponle nombre a la plantilla");
@@ -148,7 +191,6 @@ export function StoryMakerEditor({
       flash("ok", "Plantilla guardada");
       setSaveOpen(false);
       setSaveName("");
-      // Recarga lista
       const listRes = await fetch("/api/story-maker/templates");
       const listData = await listRes.json().catch(() => ({}));
       if (listData?.ok) setTemplates(listData.templates);
@@ -160,7 +202,7 @@ export function StoryMakerEditor({
   function loadTemplate(id: string) {
     const t = templates.find((x) => x.id === id);
     if (!t) return;
-    setSlides(t.slides);
+    applySlides(t.slides);
     setSelectedIdx(0);
     flash("ok", `Plantilla "${t.name}" cargada`);
   }
@@ -174,16 +216,92 @@ export function StoryMakerEditor({
     }
   }
 
+  // ─── Export ──────────────────────────────────────────────────────────
+  const fullSizeRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const [exporting, setExporting] = useState<"single" | "zip" | "pdf" | null>(null);
+
+  async function handleExportSingle() {
+    const el = fullSizeRefs.current[selectedIdx];
+    if (!el) return;
+    setExporting("single");
+    try {
+      await downloadSlide(el, selectedIdx, format);
+      flash("ok", "PNG descargado");
+    } catch (e: any) {
+      flash("err", e?.message || "No se pudo exportar");
+    } finally {
+      setExporting(null);
+    }
+  }
+
+  async function handleExportZip() {
+    const els = fullSizeRefs.current.filter((el): el is HTMLDivElement => !!el);
+    if (els.length === 0) return;
+    setExporting("zip");
+    try {
+      await downloadZip(els, format);
+      flash("ok", `ZIP con ${els.length} PNG descargado`);
+    } catch (e: any) {
+      flash("err", e?.message || "No se pudo exportar");
+    } finally {
+      setExporting(null);
+    }
+  }
+
+  async function handleExportPdf() {
+    const els = fullSizeRefs.current.filter((el): el is HTMLDivElement => !!el);
+    if (els.length === 0) return;
+    setExporting("pdf");
+    try {
+      await downloadPdf(els, format);
+      flash("ok", "PDF descargado");
+    } catch (e: any) {
+      flash("err", e?.message || "No se pudo exportar");
+    } finally {
+      setExporting(null);
+    }
+  }
+
+  // ─── Preview scales según formato ────────────────────────────────────
+  const previewScale = format === "carousel-4x5" ? 0.38 : 0.32;
+  const thumbScale = format === "carousel-4x5" ? 0.14 : 0.11;
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-4">
       {/* ═════════ SIDEBAR ═════════ */}
       <aside className="space-y-4">
+        <SectionCard title="🎯 Formato">
+          <div className="flex gap-1 p-1 rounded-lg bg-neutral-100">
+            <button
+              onClick={() => setFormat("story-9x16")}
+              className={`flex-1 text-xs font-medium py-2 rounded ${
+                format === "story-9x16" ? "bg-white shadow-sm text-neutral-900" : "text-neutral-500"
+              }`}
+            >
+              📱 Story 9:16
+            </button>
+            <button
+              onClick={() => setFormat("carousel-4x5")}
+              className={`flex-1 text-xs font-medium py-2 rounded ${
+                format === "carousel-4x5" ? "bg-white shadow-sm text-neutral-900" : "text-neutral-500"
+              }`}
+            >
+              🎠 Carrusel 4:5
+            </button>
+          </div>
+          <p className="text-[11px] text-neutral-500 mt-2">
+            {format === "carousel-4x5"
+              ? "Post permanente en feed. Hasta 10 slides con numeración N/M."
+              : "Historia efímera 24h. 1-10 slides."}
+          </p>
+        </SectionCard>
+
         <SectionCard title="✨ Generar con IA">
           <label className="text-xs text-neutral-500 block mb-1">Guion</label>
           <textarea
             className="input text-sm w-full font-mono"
-            rows={8}
-            placeholder="Pega o escribe aquí el guion base. Ej.: Hoy hablamos del error #1 al recuperarte de una lumbalgia: volver al box antes de tiempo. Testimonio de Marta que se saltó las semanas de progresión. Solución: 4 semanas de progresión guiada. CTA: reserva sesión gratis."
+            rows={7}
+            placeholder="Pega o escribe aquí el guion base…"
             value={script}
             onChange={(e) => setScript(e.target.value)}
           />
@@ -212,7 +330,7 @@ export function StoryMakerEditor({
           <button
             onClick={generateWithAI}
             disabled={generating}
-            className="mt-3 w-full text-sm font-semibold px-4 py-3 rounded-lg text-white"
+            className="mt-3 w-full text-sm font-semibold px-4 py-3 rounded-lg"
             style={{
               background: "linear-gradient(135deg,#FCD34D 0%,#F59E0B 100%)",
               color: "#1F2937",
@@ -230,7 +348,7 @@ export function StoryMakerEditor({
               Aún no hay plantillas. Guarda esta serie para reutilizarla.
             </p>
           ) : (
-            <div className="space-y-1">
+            <div className="space-y-1 max-h-52 overflow-y-auto">
               {templates.map((t) => (
                 <div
                   key={t.id}
@@ -296,49 +414,80 @@ export function StoryMakerEditor({
         )}
       </aside>
 
-      {/* ═════════ MAIN — grid de slides + editor ═════════ */}
+      {/* ═════════ MAIN ═════════ */}
       <section>
         <div className="mb-3 flex items-center justify-between flex-wrap gap-2">
           <div>
             <h2 className="text-lg font-semibold">🎨 Story Maker</h2>
             <p className="text-xs text-neutral-500">
-              Instagram Stories 9:16 · {slides.length} slide{slides.length === 1 ? "" : "s"}
+              {FORMAT_DIMS[format].label} · {slides.length} slide{slides.length === 1 ? "" : "s"}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <button
+              onClick={undo}
+              disabled={!canUndo}
+              title="Deshacer (⌘Z)"
+              className="text-xs font-medium px-2.5 py-1.5 rounded border border-neutral-300 hover:bg-neutral-50 disabled:opacity-40"
+            >
+              ↶ Deshacer
+            </button>
+            <button
+              onClick={redo}
+              disabled={!canRedo}
+              title="Rehacer (⌘⇧Z)"
+              className="text-xs font-medium px-2.5 py-1.5 rounded border border-neutral-300 hover:bg-neutral-50 disabled:opacity-40"
+            >
+              ↷ Rehacer
+            </button>
+            <span className="w-px h-6 bg-neutral-200" />
+            <button
               onClick={addSlide}
               className="text-xs font-medium px-3 py-1.5 rounded border border-neutral-300 hover:bg-neutral-50"
             >
-              + Añadir slide
+              + Añadir
             </button>
+            <button
+              onClick={duplicateSelected}
+              className="text-xs font-medium px-3 py-1.5 rounded border border-neutral-300 hover:bg-neutral-50"
+              title="Duplicar el slide seleccionado"
+            >
+              ⎘ Duplicar
+            </button>
+            <span className="w-px h-6 bg-neutral-200" />
             <button
               onClick={handleExportSingle}
               disabled={exporting !== null}
               className="text-xs font-medium px-3 py-1.5 rounded border border-neutral-300 hover:bg-neutral-50 disabled:opacity-50"
-              title="Descargar el slide seleccionado como PNG 1080×1920"
+              title="Descargar el slide seleccionado"
             >
-              {exporting === "single" ? "Exportando…" : "📥 PNG"}
+              {exporting === "single" ? "…" : "📥 PNG"}
+            </button>
+            <button
+              onClick={handleExportPdf}
+              disabled={exporting !== null}
+              className="text-xs font-medium px-3 py-1.5 rounded border border-neutral-300 hover:bg-neutral-50 disabled:opacity-50"
+              title="Descargar todos como PDF"
+            >
+              {exporting === "pdf" ? "…" : "📄 PDF"}
             </button>
             <button
               onClick={handleExportZip}
               disabled={exporting !== null}
-              className="text-xs font-semibold px-3 py-1.5 rounded text-white"
+              className="text-xs font-semibold px-3 py-1.5 rounded"
               style={{
                 background: "linear-gradient(135deg,#FCD34D 0%,#F59E0B 100%)",
                 color: "#1F2937",
                 opacity: exporting !== null ? 0.5 : 1,
               }}
-              title="Descargar todos los slides como ZIP"
+              title="Descargar todos como ZIP de PNGs"
             >
-              {exporting === "zip" ? "Empaquetando…" : "📦 Descargar ZIP"}
+              {exporting === "zip" ? "…" : "📦 ZIP"}
             </button>
           </div>
         </div>
 
-        {/* Contenedor OCULTO con los slides a 1080×1920 reales. Es lo que
-            html-to-image captura. Está fuera del viewport pero sí en el
-            DOM para tener el layout correcto medido. */}
+        {/* Contenedor oculto con slides a tamaño real */}
         <div
           aria-hidden
           style={{
@@ -350,24 +499,33 @@ export function StoryMakerEditor({
           }}
         >
           {slides.map((s, i) => (
-            <div
-              key={i}
-              ref={(el) => {
-                fullSizeRefs.current[i] = el;
-              }}
-            >
-              <SlideRenderer slide={s} scale={1} handle={handle} />
+            <div key={i} ref={(el) => { fullSizeRefs.current[i] = el; }}>
+              <SlideRenderer
+                slide={s}
+                scale={1}
+                handle={handle}
+                format={format}
+                index={i}
+                total={slides.length}
+              />
             </div>
           ))}
         </div>
 
-        {/* Preview grande del slide seleccionado */}
+        {/* Preview grande */}
         <div className="rounded-2xl bg-neutral-950 p-4 mb-4 flex justify-center">
-          <SlideRenderer slide={selected} scale={0.32} handle={handle} />
+          <SlideRenderer
+            slide={selected}
+            scale={previewScale}
+            handle={handle}
+            format={format}
+            index={selectedIdx}
+            total={slides.length}
+          />
         </div>
 
         {/* Editor del slide seleccionado */}
-        <SectionCard title={`Editando slide ${selectedIdx + 1}`}>
+        <SectionCard title={`Editando slide ${selectedIdx + 1} / ${slides.length}`}>
           <div className="space-y-3">
             <div>
               <label className="text-xs text-neutral-500 block mb-1">Estilo visual</label>
@@ -389,9 +547,13 @@ export function StoryMakerEditor({
               </div>
             </div>
 
-            <SlideFields slide={selected} onChange={updateSelected} />
+            <SlideFields
+              slide={selected}
+              onChange={updateSelected}
+              onOpenLibrary={() => setLibraryOpen(true)}
+            />
 
-            <div className="flex items-center gap-2 pt-2 border-t border-neutral-100 mt-3">
+            <div className="flex items-center gap-2 pt-2 border-t border-neutral-100 mt-3 flex-wrap">
               <button
                 onClick={() => moveSlide(selectedIdx, selectedIdx - 1)}
                 disabled={selectedIdx === 0}
@@ -418,7 +580,7 @@ export function StoryMakerEditor({
           </div>
         </SectionCard>
 
-        {/* Tira de miniaturas — click cambia el slide seleccionado */}
+        {/* Tira de miniaturas */}
         <div className="mt-4">
           <div className="text-xs uppercase font-bold text-neutral-500 tracking-wider mb-2">
             Serie ({slides.length})
@@ -434,7 +596,13 @@ export function StoryMakerEditor({
                     : "opacity-70 hover:opacity-100"
                 }`}
               >
-                <SlideRenderer slide={s} scale={0.11} />
+                <SlideRenderer
+                  slide={s}
+                  scale={thumbScale}
+                  format={format}
+                  index={i}
+                  total={slides.length}
+                />
                 <div className="text-[10px] text-center py-1 text-neutral-500 bg-neutral-100">
                   #{i + 1} · {STYLE_LABEL[s.styleKey]}
                 </div>
@@ -443,6 +611,16 @@ export function StoryMakerEditor({
           </div>
         </div>
       </section>
+
+      {libraryOpen && (
+        <LibraryBackgroundPicker
+          onPick={(url) => {
+            updateSelected({ bgUrl: url });
+            setLibraryOpen(false);
+          }}
+          onClose={() => setLibraryOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -459,9 +637,11 @@ function SectionCard({ title, children }: { title: string; children: React.React
 function SlideFields({
   slide,
   onChange,
+  onOpenLibrary,
 }: {
   slide: Slide;
   onChange: (patch: Partial<Slide>) => void;
+  onOpenLibrary: () => void;
 }) {
   return (
     <>
@@ -496,7 +676,7 @@ function SlideFields({
           <textarea
             className="input text-sm w-full font-mono"
             rows={4}
-            placeholder="87% | menos dolor a las 4 semanas&#10;3× | menos recaídas&#10;12kg | media perdida&#10;+40 | atletas activos"
+            placeholder="87% | menos dolor a las 4 semanas&#10;3× | menos recaídas"
             value={slide.body}
             onChange={(e) => onChange({ body: e.target.value })}
           />
@@ -525,13 +705,33 @@ function SlideFields({
         </Field>
       )}
       <Field label="Fondo (URL de imagen — opcional)">
-        <input
-          type="text"
-          className="input text-sm w-full"
-          placeholder="https://…"
-          value={slide.bgUrl}
-          onChange={(e) => onChange({ bgUrl: e.target.value })}
-        />
+        <div className="flex gap-2">
+          <input
+            type="text"
+            className="input text-sm flex-1"
+            placeholder="https://…"
+            value={slide.bgUrl}
+            onChange={(e) => onChange({ bgUrl: e.target.value })}
+          />
+          <button
+            type="button"
+            onClick={onOpenLibrary}
+            className="text-xs font-medium px-3 py-1.5 rounded border border-neutral-300 bg-white hover:bg-neutral-50 whitespace-nowrap"
+            title="Elegir de la biblioteca del equipo"
+          >
+            📷 Biblioteca
+          </button>
+          {slide.bgUrl && (
+            <button
+              type="button"
+              onClick={() => onChange({ bgUrl: "" })}
+              className="text-xs font-medium px-2 py-1.5 rounded border border-neutral-300 text-neutral-500 hover:text-red-600"
+              title="Quitar fondo"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </Field>
     </>
   );

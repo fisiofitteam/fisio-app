@@ -1,9 +1,9 @@
 "use client";
 
-import { BRAND, type Slide } from "./types";
+import { BRAND, FORMAT_DIMS, type Slide, type StoryFormat } from "./types";
 
 /**
- * Renderiza UN slide 1080×1920 aplicando el estilo indicado.
+ * Renderiza UN slide en el formato indicado aplicando su estilo.
  *
  * Filosofía: cada estilo tiene su propio "layout mental" (marca-base = hero
  * grande centrado, luxury = cita en italic serif, bento = grid, magazine =
@@ -12,18 +12,29 @@ import { BRAND, type Slide } from "./types";
  *
  * Todos los estilos comparten la paleta FisioFit (dark + amarillo) para
  * mantener coherencia de marca aunque el layout cambie.
+ *
+ * V2: soporta también aspecto 4:5 (carrusel feed). Los layouts internos
+ * se apoyan en el flex/grid del canvas — como no dependen de posiciones
+ * absolutas al pixel, la mayoría se adapta automáticamente al cambio de
+ * aspecto. Solo ajusto padding un pelín para 4:5 (más apretado).
  */
 export function SlideRenderer({
   slide,
   scale = 1,
   handle,
+  format = "story-9x16",
+  index,
+  total,
 }: {
   slide: Slide;
-  scale?: number;    // 1 = tamaño real 1080×1920. Usa 0.35 para preview.
-  handle?: string;   // marca de agua opcional en esquina
+  scale?: number;
+  handle?: string;
+  format?: StoryFormat;
+  index?: number;   // 0-based, para la numeración N/M en carruseles
+  total?: number;
 }) {
-  const W = 1080;
-  const H = 1920;
+  const { w: W, h: H } = FORMAT_DIMS[format];
+  const showCounter = format === "carousel-4x5" && typeof index === "number" && typeof total === "number" && total > 1;
   return (
     <div
       style={{
@@ -49,7 +60,7 @@ export function SlideRenderer({
           fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif",
         }}
       >
-        <StyleLayer slide={slide} />
+        <StyleLayer slide={slide} format={format} />
         {handle && (
           <div
             style={{
@@ -65,25 +76,52 @@ export function SlideRenderer({
             {handle}
           </div>
         )}
+        {showCounter && (
+          <div
+            style={{
+              position: "absolute",
+              top: 40,
+              right: 44,
+              padding: "10px 20px",
+              borderRadius: 999,
+              background: "rgba(0,0,0,0.5)",
+              backdropFilter: "blur(8px)",
+              fontSize: 24,
+              fontWeight: 700,
+              color: BRAND.ink,
+              letterSpacing: "0.05em",
+            }}
+          >
+            {(index as number) + 1}/{total}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function StyleLayer({ slide }: { slide: Slide }) {
+function StyleLayer({ slide, format }: { slide: Slide; format: StoryFormat }) {
   switch (slide.styleKey) {
     case "luxury":
-      return <StyleLuxury slide={slide} />;
+      return <StyleLuxury slide={slide} format={format} />;
     case "bento":
-      return <StyleBento slide={slide} />;
+      return <StyleBento slide={slide} format={format} />;
     case "magazine":
-      return <StyleMagazine slide={slide} />;
+      return <StyleMagazine slide={slide} format={format} />;
     case "flashcard":
-      return <StyleFlashcard slide={slide} />;
+      return <StyleFlashcard slide={slide} format={format} />;
     case "marca-base":
     default:
-      return <StyleMarcaBase slide={slide} />;
+      return <StyleMarcaBase slide={slide} format={format} />;
   }
+}
+
+// Padding lateral y vertical según formato. 4:5 es más cuadrado → menos
+// altura, así que apretamos verticalmente para que quepa lo mismo sin
+// romper la composición.
+function paddingFor(format: StoryFormat, base: { x: number; y: number }): string {
+  const scaleY = format === "carousel-4x5" ? 0.65 : 1;
+  return `${Math.round(base.y * scaleY)}px ${base.x}px`;
 }
 
 // ═════════════════════════════════════════════════════════════════════════
@@ -119,7 +157,7 @@ function BgLayer({ url, tint = 0.65 }: { url: string; tint?: number }) {
 
 // ─── marca-base ───────────────────────────────────────────────────────────
 // Hero grande centrado con badge amarillo, título masivo y CTA gradient.
-function StyleMarcaBase({ slide }: { slide: Slide }) {
+function StyleMarcaBase({ slide, format }: { slide: Slide; format: StoryFormat }) {
   return (
     <>
       <BgLayer url={slide.bgUrl} tint={0.72} />
@@ -131,7 +169,7 @@ function StyleMarcaBase({ slide }: { slide: Slide }) {
           flexDirection: "column",
           justifyContent: "center",
           alignItems: "center",
-          padding: "80px 100px",
+          padding: paddingFor(format, { x: 100, y: 80 }),
           textAlign: "center",
         }}
       >
@@ -203,7 +241,7 @@ function StyleMarcaBase({ slide }: { slide: Slide }) {
 
 // ─── luxury ───────────────────────────────────────────────────────────────
 // Cita editorial en italic serif + atribución minúscula abajo.
-function StyleLuxury({ slide }: { slide: Slide }) {
+function StyleLuxury({ slide, format }: { slide: Slide; format: StoryFormat }) {
   return (
     <>
       <BgLayer url={slide.bgUrl} tint={0.78} />
@@ -214,7 +252,7 @@ function StyleLuxury({ slide }: { slide: Slide }) {
           display: "flex",
           flexDirection: "column",
           justifyContent: "center",
-          padding: "120px 100px",
+          padding: paddingFor(format, { x: 100, y: 120 }),
         }}
       >
         <div
@@ -265,7 +303,7 @@ function StyleLuxury({ slide }: { slide: Slide }) {
 
 // ─── bento ────────────────────────────────────────────────────────────────
 // Grid 2×2 de "celdas KPI". Divide el body en líneas para 2-4 celdas.
-function StyleBento({ slide }: { slide: Slide }) {
+function StyleBento({ slide, format }: { slide: Slide; format: StoryFormat }) {
   // Cada línea de `body` = una celda. Formato esperado: "NÚMERO | descripción".
   const cells = slide.body
     .split("\n")
@@ -284,7 +322,7 @@ function StyleBento({ slide }: { slide: Slide }) {
         style={{
           position: "absolute",
           inset: 0,
-          padding: "100px 90px",
+          padding: paddingFor(format, { x: 90, y: 100 }),
           display: "flex",
           flexDirection: "column",
         }}
@@ -360,7 +398,7 @@ function StyleBento({ slide }: { slide: Slide }) {
 
 // ─── magazine ─────────────────────────────────────────────────────────────
 // Título gigante ocupando arriba + cuerpo justificado abajo.
-function StyleMagazine({ slide }: { slide: Slide }) {
+function StyleMagazine({ slide, format }: { slide: Slide; format: StoryFormat }) {
   return (
     <>
       <BgLayer url={slide.bgUrl} tint={0.8} />
@@ -368,7 +406,7 @@ function StyleMagazine({ slide }: { slide: Slide }) {
         style={{
           position: "absolute",
           inset: 0,
-          padding: "100px 90px",
+          padding: paddingFor(format, { x: 90, y: 100 }),
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
@@ -419,7 +457,7 @@ function StyleMagazine({ slide }: { slide: Slide }) {
 
 // ─── flashcard ────────────────────────────────────────────────────────────
 // Un solo mensaje centrado, mucho aire, marca abajo.
-function StyleFlashcard({ slide }: { slide: Slide }) {
+function StyleFlashcard({ slide, format }: { slide: Slide; format: StoryFormat }) {
   return (
     <>
       <BgLayer url={slide.bgUrl} tint={0.75} />
@@ -431,7 +469,7 @@ function StyleFlashcard({ slide }: { slide: Slide }) {
           flexDirection: "column",
           justifyContent: "center",
           alignItems: "center",
-          padding: "80px 120px",
+          padding: paddingFor(format, { x: 120, y: 80 }),
           textAlign: "center",
         }}
       >

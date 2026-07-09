@@ -6,12 +6,12 @@
  */
 import { NextResponse } from "next/server";
 import { getActiveProfessional } from "@/lib/session";
-import { generateStorySlides, type StoryMakerInput } from "@/lib/ai-story-maker";
+import { generateStorySlides, type StoryMakerFormat, type StoryMakerInput } from "@/lib/ai-story-maker";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const DEFAULTS: Omit<StoryMakerInput, "script" | "count"> = {
+const DEFAULTS: Omit<StoryMakerInput, "script" | "count" | "format"> = {
   brand: "FisioFit Team",
   niche: "atletas de CrossFit y Hyrox con dolor que quieren volver a entrenar sin miedo",
   tone: "directo, sin humo, empático. Habla de tú. Sin promesas mágicas.",
@@ -28,6 +28,8 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const script = typeof body?.script === "string" ? body.script.trim() : "";
   const count = Math.max(1, Math.min(10, Number(body?.count) || 5));
+  const format: StoryMakerFormat =
+    body?.format === "carousel-4x5" ? "carousel-4x5" : "story-9x16";
   if (!script || script.length < 20) {
     return NextResponse.json(
       { error: "Necesito al menos 20 caracteres de guion para generar." },
@@ -39,6 +41,7 @@ export async function POST(req: Request) {
     const result = await generateStorySlides({
       script,
       count,
+      format,
       brand: body?.brand?.trim() || DEFAULTS.brand,
       niche: body?.niche?.trim() || DEFAULTS.niche,
       tone: body?.tone?.trim() || DEFAULTS.tone,
