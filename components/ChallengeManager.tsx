@@ -103,6 +103,17 @@ export function ChallengeManager({
     router.refresh();
   }
 
+  async function removeResult(challengeId: string, resultId: string, patientName: string) {
+    if (!confirm(`¿Borrar el resultado de ${patientName}?`)) return;
+    const res = await fetch(`/api/monthly-challenges/results/${resultId}`, { method: "DELETE" });
+    if (!res.ok) {
+      alert("No se pudo borrar el resultado");
+      return;
+    }
+    setList((a) => a.map((c) => c.id === challengeId ? { ...c, results: c.results.filter((r) => r.id !== resultId) } : c));
+    router.refresh();
+  }
+
   return (
     <main>
       <header className="mb-4 flex justify-between items-start flex-wrap gap-3">
@@ -142,6 +153,7 @@ export function ChallengeManager({
           challenge={visible}
           onEdit={() => setEditing(visible)}
           onDelete={() => remove(visible.id)}
+          onDeleteResult={(rid, name) => removeResult(visible.id, rid, name)}
         />
       ) : (
         <p className="text-sm text-neutral-400 italic py-12 text-center card">
@@ -191,11 +203,12 @@ function ChallengeForm({
 }
 
 function ChallengeView({
-  challenge, onEdit, onDelete,
+  challenge, onEdit, onDelete, onDeleteResult,
 }: {
   challenge: Challenge;
   onEdit: () => void;
   onDelete: () => void;
+  onDeleteResult: (resultId: string, patientName: string) => void;
 }) {
   const sorted = sortResults(challenge.results, challenge.metric);
   return (
@@ -245,6 +258,13 @@ function ChallengeView({
                   <div className="text-lg font-bold tabular-nums">{r.value}{r.unit && <span className="text-xs font-normal text-neutral-500 ml-1">{r.unit}</span>}</div>
                   <div className="text-[10px] text-neutral-400">{new Date(r.recordedAt).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}</div>
                 </div>
+                <button
+                  onClick={() => onDeleteResult(r.id, r.patient.fullName)}
+                  title={`Borrar resultado de ${r.patient.fullName}`}
+                  className="text-neutral-300 hover:text-red-600 p-1 flex-shrink-0"
+                >
+                  🗑
+                </button>
               </li>
             ))}
           </ol>

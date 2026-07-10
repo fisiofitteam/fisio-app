@@ -296,11 +296,16 @@ function CommunitySection({
       {viewingPost && (
         <PostDetailModal
           post={viewingPost}
+          canModerate={canModerate}
           onClose={() => setViewingPost(null)}
           onCommentAdded={() => {
             // Actualiza el contador del post en la lista
             setPosts((a) => a.map((x) => x.id === viewingPost.id ? { ...x, comments: x.comments + 1 } : x));
             setViewingPost((v) => v ? { ...v, comments: v.comments + 1 } : v);
+          }}
+          onCommentDeleted={() => {
+            setPosts((a) => a.map((x) => x.id === viewingPost.id ? { ...x, comments: Math.max(0, x.comments - 1) } : x));
+            setViewingPost((v) => v ? { ...v, comments: Math.max(0, v.comments - 1) } : v);
           }}
         />
       )}
@@ -472,17 +477,34 @@ function PostCard({
 type Comment = { id: string; body: string; createdAt: string; authorName: string; authorPhotoUrl: string | null; isPatient: boolean };
 
 function PostDetailModal({
-  post, onClose, onCommentAdded,
+  post, canModerate, onClose, onCommentAdded, onCommentDeleted,
 }: {
   post: Post;
+  canModerate: boolean;
   onClose: () => void;
   onCommentAdded: () => void;
+  onCommentDeleted: () => void;
 }) {
   const [comments, setComments] = useState<Comment[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState("");
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  async function deleteComment(id: string) {
+    if (!confirm("¿Borrar este comentario?")) return;
+    setDeleting(id);
+    setErr(null);
+    try {
+      await api(`/api/community/comments/${id}`, "DELETE");
+      setComments((arr) => (arr ?? []).filter((c) => c.id !== id));
+      onCommentDeleted();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "No se pudo borrar");
+    }
+    setDeleting(null);
+  }
 
   // Carga inicial de comentarios
   useEffect(() => {
@@ -561,7 +583,7 @@ function PostDetailModal({
           ) : comments && comments.length > 0 ? (
             <div className="space-y-3">
               {comments.map((c) => (
-                <div key={c.id} className="flex gap-2.5">
+                <div key={c.id} className="flex gap-2.5 group">
                   <span className="mt-0.5"><Avatar url={c.authorPhotoUrl} name={c.authorName} size={28} /></span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1 text-xs">
@@ -571,6 +593,16 @@ function PostDetailModal({
                     </div>
                     <p className="text-sm text-neutral-700 mt-0.5 break-words">{c.body}</p>
                   </div>
+                  {canModerate && (
+                    <button
+                      onClick={() => deleteComment(c.id)}
+                      disabled={deleting === c.id}
+                      title="Borrar comentario"
+                      className="text-neutral-300 hover:text-red-600 p-1 -mt-0.5 h-fit opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
