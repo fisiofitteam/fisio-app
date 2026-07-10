@@ -206,6 +206,9 @@ model Professional {
   // Preferencias de notificación: JSON { [tipo]: boolean }. Tipo ausente = activado.
   notificationPrefs Json?
 
+  // Última vez que abrió la pestaña Comunidad (para el badge de novedades en el sidebar).
+  communityLastSeenAt DateTime?
+
   patients          Patient[]            @relation("PatientAssignedTo")
   patientsAssignedBy Patient[]           @relation("PatientAssignedBy")
   assignedTasks     FisioTask[]  @relation("AssignedToFisio")

@@ -97,6 +97,7 @@ export function FisioSidebar({
 }) {
   const pathname = usePathname() ?? "";
   const [notifCount, setNotifCount] = useState(0);
+  const [communityUnread, setCommunityUnread] = useState(0);
 
   // Polling notificaciones para mostrar badge en sidebar
   useEffect(() => {
@@ -114,6 +115,23 @@ export function FisioSidebar({
     return () => clearInterval(id);
   }, [user]);
 
+  // Polling badge de novedades de la comunidad. Al entrar en /fisio/comunidad
+  // el server actualiza communityLastSeenAt → siguiente poll devuelve 0.
+  useEffect(() => {
+    if (!user) return;
+    async function fetchCommunity() {
+      try {
+        const res = await fetch("/api/community/unread", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        setCommunityUnread(data.count || 0);
+      } catch {}
+    }
+    fetchCommunity();
+    const id = setInterval(fetchCommunity, 30_000);
+    return () => clearInterval(id);
+  }, [user, pathname]);
+
   if (pathname.startsWith("/fisio/paciente/")) return null;
 
   const items = user ? itemsForRole(user.role) : [PANEL, PACIENTES, BIBLIOTECA, TAREAS, LLAMADAS, RECURSOS];
@@ -123,7 +141,9 @@ export function FisioSidebar({
   // - Setters: ven el badge en el item LEADS (es donde está su workflow)
   // - Closers / CEO con franjas: ven el badge en LLAMADAS_VENTA
   function badgeFor(itemId: string): number | null {
-    if (!user || notifCount === 0) return null;
+    if (!user) return null;
+    if (itemId === "comunidad" && communityUnread > 0) return communityUnread;
+    if (notifCount === 0) return null;
     if (user.role === "setter" && itemId === "leads") return notifCount;
     if ((user.role === "closer" || user.role === "ceo") && itemId === "llamadas-venta") return notifCount;
     return null;

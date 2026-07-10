@@ -15,6 +15,13 @@ export default async function ComunidadPage() {
   const canModerate = true;
   const canManageClassroom = user.role === "ceo" || user.role === "head_success" || user.role === "fisio";
 
+  // Marcar la comunidad como vista → resetea el badge del sidebar. Fire-and-forget
+  // (no bloquea la carga del feed). El campo comienza como null en el schema y se
+  // crea en el primer entra.
+  prisma.professional
+    .update({ where: { id: user.id }, data: { communityLastSeenAt: new Date() } as any })
+    .catch(() => {});
+
   const [courses, posts] = await Promise.all([
     prisma.communityModule.findMany({
       orderBy: { order: "asc" },
