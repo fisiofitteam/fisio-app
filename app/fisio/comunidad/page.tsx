@@ -22,7 +22,7 @@ export default async function ComunidadPage() {
     .update({ where: { id: user.id }, data: { communityLastSeenAt: new Date() } as any })
     .catch(() => {});
 
-  const [courses, posts] = await Promise.all([
+  const [courses, posts, myReactions] = await Promise.all([
     prisma.communityModule.findMany({
       orderBy: { order: "asc" },
       include: { sections: { orderBy: { order: "asc" }, include: { _count: { select: { lessons: true } } } } },
@@ -35,7 +35,9 @@ export default async function ComunidadPage() {
         _count: { select: { comments: true, reactions: true } },
       },
     }),
+    prisma.communityReaction.findMany({ where: { professionalId: user.id }, select: { postId: true } }),
   ]);
+  const likedByMeSet = new Set(myReactions.map((r) => r.postId));
 
   return (
     <main>
@@ -67,6 +69,7 @@ export default async function ComunidadPage() {
           createdAt: p.createdAt.toISOString(),
           comments: p._count.comments,
           reactions: p._count.reactions,
+          likedByMe: likedByMeSet.has(p.id),
         }))}
       />
     </main>

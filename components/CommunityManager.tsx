@@ -8,6 +8,7 @@ import { parseVideo } from "@/lib/video";
 import {
   GraduationCap, MessageSquare, Plus, Trash2, Pencil, Pin,
   Eye, EyeOff, Heart, MessageCircle, BadgeCheck, X, Send, Video,
+  ImagePlus, CornerDownRight,
 } from "lucide-react";
 
 type Course = {
@@ -19,6 +20,7 @@ type Post = {
   pinned: boolean; published: boolean; category: string;
   authorName: string | null; authorPhotoUrl: string | null; isPatient: boolean; createdAt: string;
   comments: number; reactions: number;
+  likedByMe?: boolean;
 };
 
 // Avatar del autor en el panel del pro: foto si la tiene, inicial con gradiente si no.
@@ -307,6 +309,10 @@ function CommunitySection({
             setPosts((a) => a.map((x) => x.id === viewingPost.id ? { ...x, comments: Math.max(0, x.comments - 1) } : x));
             setViewingPost((v) => v ? { ...v, comments: Math.max(0, v.comments - 1) } : v);
           }}
+          onLikeChange={(liked, count) => {
+            setPosts((a) => a.map((x) => x.id === viewingPost.id ? { ...x, likedByMe: liked, reactions: count } : x));
+            setViewingPost((v) => v ? { ...v, likedByMe: liked, reactions: count } : v);
+          }}
         />
       )}
     </div>
@@ -391,6 +397,19 @@ function PostCard({
     try { await api(`/api/community/feed/${post.id}`, "DELETE"); onDelete(); }
     catch (e) { fail(e); }
   }
+  async function toggleLike() {
+    // Optimista: cambio local antes de la respuesta.
+    const willLike = !post.likedByMe;
+    onChange({ ...post, likedByMe: willLike, reactions: Math.max(0, post.reactions + (willLike ? 1 : -1)) });
+    try {
+      const r = await api(`/api/community/feed/${post.id}/react`, "POST");
+      onChange({ ...post, likedByMe: r.liked, reactions: r.count });
+    } catch (e) {
+      // Rollback en caso de fallo
+      onChange({ ...post, likedByMe: !willLike, reactions: post.reactions });
+      fail(e);
+    }
+  }
 
   if (editing) {
     return <PostForm initial={post} onCancel={() => setEditing(false)} onSave={async (d) => { await patch(d); setEditing(false); }} />;
@@ -463,7 +482,14 @@ function PostCard({
 
       {/* Contadores + abrir comentarios */}
       <div className="flex items-center gap-4 text-xs text-neutral-500 pt-2 mt-2 border-t border-neutral-100">
-        <span className="flex items-center gap-1"><Heart size={13} /> {post.reactions}</span>
+        <button
+          onClick={toggleLike}
+          title={post.likedByMe ? "Quitar me gusta" : "Me gusta"}
+          className={`flex items-center gap-1 transition-colors ${post.likedByMe ? "text-red-500" : "hover:text-neutral-900"}`}
+        >
+          <Heart size={13} fill={post.likedByMe ? "currentColor" : "none"} />
+          {post.reactions}
+        </button>
         <button onClick={onOpen} className="flex items-center gap-1 hover:text-neutral-900">
           <MessageCircle size={13} /> {post.comments} {post.comments === 1 ? "comentario" : "comentarios"}
         </button>
@@ -474,23 +500,68 @@ function PostCard({
 
 /* ─────────────────────────── DETALLE DEL POST (modal con comentarios) ─────────────────────────── */
 
-type Comment = { id: string; body: string; createdAt: string; authorName: string; authorPhotoUrl: string | null; isPatient: boolean };
+type Comment = {
+  id: string;
+  body: string;
+  imageUrl: string | null;
+  parentId: string | null;
+  createdAt: string;
+  authorName: string;
+  authorPhotoUrl: string | null;
+  isPatient: boolean;
+};
 
 function PostDetailModal({
-  post, canModerate, onClose, onCommentAdded, onCommentDeleted,
+  post, canModerate, onClose, onCommentAdded, onCommentDeleted, onLikeChange,
 }: {
   post: Post;
   canModerate: boolean;
   onClose: () => void;
   onCommentAdded: () => void;
   onCommentDeleted: () => void;
+  onLikeChange: (liked: boolean, count: number) => void;
 }) {
   const [comments, setComments] = useState<Comment[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState("");
+  const [newImageUrl, setNewImageUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [replyTo, setReplyTo] = useState<Comment | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [likeBusy, setLikeBusy] = useState(false);
+
+  async function toggleLike() {
+    if (likeBusy) return;
+    setLikeBusy(true);
+    try {
+      const r = await api(`/api/community/feed/${post.id}/react`, "POST");
+      onLikeChange(r.liked, r.count);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "No se pudo dar me gusta");
+    }
+    setLikeBusy(false);
+  }
+
+  async function uploadImage(file: File) {
+    setUploading(true);
+    setErr(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d?.error || "No se pudo subir la imagen");
+      }
+      const data = await res.json();
+      setNewImageUrl(data.url);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "No se pudo subir");
+    }
+    setUploading(false);
+  }
 
   async function deleteComment(id: string) {
     if (!confirm("¿Borrar este comentario?")) return;
@@ -498,7 +569,8 @@ function PostDetailModal({
     setErr(null);
     try {
       await api(`/api/community/comments/${id}`, "DELETE");
-      setComments((arr) => (arr ?? []).filter((c) => c.id !== id));
+      // Borra el comentario y sus replies (cascade en BD, pero limpio local).
+      setComments((arr) => (arr ?? []).filter((c) => c.id !== id && c.parentId !== id));
       onCommentDeleted();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "No se pudo borrar");
@@ -506,7 +578,6 @@ function PostDetailModal({
     setDeleting(null);
   }
 
-  // Carga inicial de comentarios
   useEffect(() => {
     (async () => {
       try {
@@ -521,13 +592,19 @@ function PostDetailModal({
 
   async function send() {
     const body = newComment.trim();
-    if (!body) return;
+    if (!body && !newImageUrl) return;
     setSending(true);
     setErr(null);
     try {
-      const c = await api(`/api/community/feed/${post.id}/comments`, "POST", { body });
+      const c = await api(`/api/community/feed/${post.id}/comments`, "POST", {
+        body,
+        imageUrl: newImageUrl,
+        parentId: replyTo?.id ?? null,
+      });
       setComments((arr) => [...(arr ?? []), c]);
       setNewComment("");
+      setNewImageUrl(null);
+      setReplyTo(null);
       onCommentAdded();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "No se pudo enviar");
@@ -536,6 +613,16 @@ function PostDetailModal({
   }
 
   const date = new Date(post.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
+
+  // Anida los comentarios por parentId
+  const topLevel = (comments ?? []).filter((c) => !c.parentId);
+  const repliesByParent = new Map<string, Comment[]>();
+  for (const c of comments ?? []) {
+    if (!c.parentId) continue;
+    const arr = repliesByParent.get(c.parentId) ?? [];
+    arr.push(c);
+    repliesByParent.set(c.parentId, arr);
+  }
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 p-4 overflow-y-auto" onClick={onClose}>
@@ -571,8 +658,17 @@ function PostDetailModal({
         })()}
 
         <div className="flex items-center gap-4 text-xs text-neutral-500 pt-3 mt-3 border-t border-neutral-100">
-          <span className="flex items-center gap-1"><Heart size={13} /> {post.reactions}</span>
-          <span className="flex items-center gap-1"><MessageCircle size={13} /> {post.comments + (comments?.length && comments.length > post.comments ? (comments.length - post.comments) : 0)} comentarios</span>
+          <button
+            onClick={toggleLike}
+            disabled={likeBusy}
+            title={post.likedByMe ? "Quitar me gusta" : "Me gusta"}
+            className={`flex items-center gap-1 transition-colors disabled:opacity-50 ${post.likedByMe ? "text-red-500" : "hover:text-neutral-900"}`}
+          >
+            <Heart size={13} fill={post.likedByMe ? "currentColor" : "none"} /> {post.reactions}
+          </button>
+          <span className="flex items-center gap-1">
+            <MessageCircle size={13} /> {comments?.length ?? post.comments} comentarios
+          </span>
         </div>
 
         {/* Comentarios */}
@@ -580,53 +676,164 @@ function PostDetailModal({
           <h3 className="text-xs uppercase tracking-wide text-neutral-500 font-medium mb-2">Comentarios</h3>
           {loading ? (
             <p className="text-xs text-neutral-400 italic">Cargando…</p>
-          ) : comments && comments.length > 0 ? (
+          ) : topLevel.length > 0 ? (
             <div className="space-y-3">
-              {comments.map((c) => (
-                <div key={c.id} className="flex gap-2.5 group">
-                  <span className="mt-0.5"><Avatar url={c.authorPhotoUrl} name={c.authorName} size={28} /></span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1 text-xs">
-                      <span className="font-medium">{c.authorName}</span>
-                      {!c.isPatient && <BadgeCheck size={12} className="text-blue-600" fill="#2563EB" stroke="#FFFFFF" />}
-                      <span className="text-neutral-400 ml-1">· {new Date(c.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}</span>
-                    </div>
-                    <p className="text-sm text-neutral-700 mt-0.5 break-words">{c.body}</p>
-                  </div>
-                  {canModerate && (
-                    <button
-                      onClick={() => deleteComment(c.id)}
-                      disabled={deleting === c.id}
-                      title="Borrar comentario"
-                      className="text-neutral-300 hover:text-red-600 p-1 -mt-0.5 h-fit opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  )}
-                </div>
+              {topLevel.map((c) => (
+                <CommentItem
+                  key={c.id}
+                  c={c}
+                  replies={repliesByParent.get(c.id) ?? []}
+                  canModerate={canModerate}
+                  onReply={() => setReplyTo(c)}
+                  onDelete={() => deleteComment(c.id)}
+                  onDeleteReply={(rid) => { if (confirm("¿Borrar esta respuesta?")) deleteComment(rid); }}
+                  deleting={deleting}
+                />
               ))}
             </div>
           ) : (
             <p className="text-xs text-neutral-400 italic">Sin comentarios todavía.</p>
           )}
 
-          {/* Añadir comentario como pro */}
-          <div className="mt-4 flex items-center gap-2">
-            <input
-              className="input text-sm flex-1"
-              placeholder="Escribe un comentario..."
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") send(); }}
-              disabled={sending}
-            />
-            <button onClick={send} disabled={!newComment.trim() || sending} className="btn btn-primary text-sm flex items-center gap-1.5 disabled:opacity-50">
-              <Send size={14} /> Enviar
-            </button>
+          {/* Añadir comentario / responder */}
+          <div className="mt-4">
+            {replyTo && (
+              <div className="mb-2 flex items-center justify-between text-[11px] bg-neutral-50 rounded px-2 py-1.5 border border-neutral-200">
+                <span className="text-neutral-500">
+                  Respondiendo a <span className="font-medium text-neutral-800">{replyTo.authorName}</span>
+                </span>
+                <button onClick={() => setReplyTo(null)} className="text-neutral-400 hover:text-neutral-900">
+                  <X size={13} />
+                </button>
+              </div>
+            )}
+            {newImageUrl && (
+              <div className="mb-2 relative inline-block">
+                <img src={newImageUrl} alt="" className="rounded max-h-32 border border-neutral-200" />
+                <button
+                  onClick={() => setNewImageUrl(null)}
+                  className="absolute -top-2 -right-2 bg-white rounded-full border border-neutral-300 p-0.5 shadow-sm"
+                  title="Quitar imagen"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <label className="cursor-pointer text-neutral-500 hover:text-neutral-900 p-2 rounded border border-neutral-200 hover:bg-neutral-50" title="Adjuntar imagen">
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  disabled={uploading}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) uploadImage(f);
+                    e.currentTarget.value = "";
+                  }}
+                />
+                {uploading ? <span className="text-[10px]">…</span> : <ImagePlus size={16} />}
+              </label>
+              <input
+                className="input text-sm flex-1"
+                placeholder={replyTo ? `Responder a ${replyTo.authorName}...` : "Escribe un comentario..."}
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") send(); }}
+                disabled={sending}
+              />
+              <button
+                onClick={send}
+                disabled={(!newComment.trim() && !newImageUrl) || sending}
+                className="btn btn-primary text-sm flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <Send size={14} /> Enviar
+              </button>
+            </div>
           </div>
           {err && <p className="text-xs mt-1" style={{ color: "#DC2626" }}>{err}</p>}
         </section>
       </div>
+    </div>
+  );
+}
+
+function CommentItem({
+  c, replies, canModerate, onReply, onDelete, onDeleteReply, deleting,
+}: {
+  c: Comment;
+  replies: Comment[];
+  canModerate: boolean;
+  onReply: () => void;
+  onDelete: () => void;
+  onDeleteReply: (replyId: string) => void;
+  deleting: string | null;
+}) {
+  return (
+    <div className="flex gap-2.5 group">
+      <span className="mt-0.5"><Avatar url={c.authorPhotoUrl} name={c.authorName} size={28} /></span>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1 text-xs">
+          <span className="font-medium">{c.authorName}</span>
+          {!c.isPatient && <BadgeCheck size={12} className="text-blue-600" fill="#2563EB" stroke="#FFFFFF" />}
+          <span className="text-neutral-400 ml-1">· {new Date(c.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}</span>
+        </div>
+        {c.body && <p className="text-sm text-neutral-700 mt-0.5 break-words">{c.body}</p>}
+        {c.imageUrl && (
+          <a href={c.imageUrl} target="_blank" rel="noreferrer">
+            <img src={c.imageUrl} alt="" className="rounded-lg mt-1.5 max-h-64 border border-neutral-200" />
+          </a>
+        )}
+        <button
+          onClick={onReply}
+          className="text-[10px] text-neutral-500 hover:text-neutral-900 mt-1 flex items-center gap-0.5"
+        >
+          <CornerDownRight size={10} /> Responder
+        </button>
+
+        {replies.length > 0 && (
+          <div className="mt-2 space-y-2 pl-3 border-l-2 border-neutral-100">
+            {replies.map((r) => (
+              <div key={r.id} className="flex gap-2 group">
+                <span className="mt-0.5"><Avatar url={r.authorPhotoUrl} name={r.authorName} size={22} /></span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1 text-[11px]">
+                    <span className="font-medium">{r.authorName}</span>
+                    {!r.isPatient && <BadgeCheck size={10} className="text-blue-600" fill="#2563EB" stroke="#FFFFFF" />}
+                    <span className="text-neutral-400 ml-1">· {new Date(r.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}</span>
+                  </div>
+                  {r.body && <p className="text-[13px] text-neutral-700 mt-0.5 break-words">{r.body}</p>}
+                  {r.imageUrl && (
+                    <a href={r.imageUrl} target="_blank" rel="noreferrer">
+                      <img src={r.imageUrl} alt="" className="rounded-lg mt-1 max-h-56 border border-neutral-200" />
+                    </a>
+                  )}
+                </div>
+                {canModerate && (
+                  <button
+                    onClick={() => onDeleteReply(r.id)}
+                    className="text-neutral-300 hover:text-red-600 p-1 -mt-0.5 h-fit opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Borrar respuesta"
+                    disabled={deleting === r.id}
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      {canModerate && (
+        <button
+          onClick={onDelete}
+          disabled={deleting === c.id}
+          title="Borrar comentario"
+          className="text-neutral-300 hover:text-red-600 p-1 -mt-0.5 h-fit opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+        >
+          <Trash2 size={13} />
+        </button>
+      )}
     </div>
   );
 }

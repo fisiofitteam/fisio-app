@@ -2346,6 +2346,7 @@ model CommunityFeedPost {
 }
 
 // Comentario en un post. Autor = paciente o profesional (uno de los dos).
+// Puede ser respuesta a otro comentario (parentId) y adjuntar imagen.
 model CommunityComment {
   id             String   @id @default(cuid())
   postId         String
@@ -2355,9 +2356,14 @@ model CommunityComment {
   professionalId String?
   professional   Professional? @relation("FeedCommentAuthor", fields: [professionalId], references: [id])
   body           String
+  imageUrl       String?
+  parentId       String?
+  parent         CommunityComment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies        CommunityComment[] @relation("CommentReplies")
   createdAt      DateTime @default(now())
 
   @@index([postId, createdAt])
+  @@index([parentId])
 }
 
 // Reacción ("me gusta") a un post. Única por usuario y post.
