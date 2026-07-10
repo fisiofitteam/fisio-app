@@ -5,8 +5,8 @@ import { monthStartMadridUtc } from "@/lib/team-tasks-adhoc";
 
 // POST /api/team-tasks-adhoc/complete
 // body: { taskId } → marca como completada por el usuario actual para la
-// instancia vigente. Monthly: occurrenceDate = primer día del mes Madrid.
-// Range: occurrenceDate = startDate de la tarea.
+// instancia vigente. Monthly y monthly_weekday: occurrenceDate = primer día
+// del mes Madrid. Range: occurrenceDate = startDate de la tarea.
 export async function POST(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -26,7 +26,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Esta tarea no es para tu rol" }, { status: 403 });
   }
 
-  const occurrenceDate = task.kind === "monthly" ? monthStartMadridUtc() : task.startDate!;
+  // occurrenceDate DEBE coincidir con el que calcula buildAdHocActiveForProfessional
+  // en lib/team-tasks-adhoc.ts para que el frontend detecte la completion.
+  let occurrenceDate: Date;
+  if (task.kind === "monthly" || task.kind === "monthly_weekday") {
+    occurrenceDate = monthStartMadridUtc();
+  } else if (task.kind === "range") {
+    if (!task.startDate) {
+      return NextResponse.json({ error: "Tarea de rango sin startDate" }, { status: 500 });
+    }
+    occurrenceDate = task.startDate;
+  } else {
+    return NextResponse.json({ error: `Tipo de tarea desconocido: ${task.kind}` }, { status: 500 });
+  }
 
   const completion = await prisma.teamTaskAdHocCompletion.upsert({
     where: {

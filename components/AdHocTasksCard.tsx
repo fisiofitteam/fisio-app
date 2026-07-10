@@ -17,13 +17,25 @@ export function AdHocTasksCard({ tasks }: { tasks: AdHocTaskItem[] }) {
 
   async function complete(taskId: string) {
     setBusy(taskId);
-    await fetch("/api/team-tasks-adhoc/complete", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ taskId }),
-    }).catch(() => {});
-    setBusy(null);
-    router.refresh();
+    try {
+      const res = await fetch("/api/team-tasks-adhoc/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ taskId }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        console.error("[AdHocTasksCard] complete failed:", res.status, data);
+        alert(data?.error || "No se pudo marcar como hecha. Recarga y prueba de nuevo.");
+        return;
+      }
+      router.refresh();
+    } catch (e) {
+      console.error("[AdHocTasksCard] complete error:", e);
+      alert("Error de red. Comprueba tu conexión.");
+    } finally {
+      setBusy(null);
+    }
   }
 
   function toggleExpand(taskId: string) {
