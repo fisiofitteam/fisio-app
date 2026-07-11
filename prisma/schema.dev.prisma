@@ -73,11 +73,6 @@ model Patient {
   rollingTrainingId    String?
   rollingTraining      RollingProgram? @relation("PatientTrainingRolling", fields: [rollingTrainingId], references: [id])
 
-  // Slot extra para asignar un RollingProgram de tipo personalizado
-  // (ej. "FisioFit Hybrid"). Independiente de accesorios/entrenamiento.
-  rollingCustomId      String?
-  rollingCustom        RollingProgram? @relation("PatientCustomRolling", fields: [rollingCustomId], references: [id])
-
   // Perfil clínico aplicado (opcional)
   appliedLevelId  String?
   appliedLevel    ClinicalLevel? @relation(fields: [appliedLevelId], references: [id])
@@ -1567,35 +1562,17 @@ model RollingProgram {
   description String?
   isActive    Boolean  @default(true)
   role        String   @default("")
-  // Tipo personalizado (ej. "FisioFit Hybrid"). Si null, usa el slot legacy
-  // por `role` (accesorios/entrenamiento/prevention).
-  typeId      String?
-  type        RollingProgramType? @relation(fields: [typeId], references: [id])
+  // System prompt propio de este programa para "generar semana con IA".
+  // Si null, el editor no ofrece el botón de generación.
+  aiBriefPrompt String?
   createdAt   DateTime @default(now())
 
   weeks       RollingWeek[]
   patientsLegacy     Patient[] @relation("PatientLegacyRolling")
   patientsAccessories Patient[] @relation("PatientAccessoriesRolling")
   patientsTraining    Patient[] @relation("PatientTrainingRolling")
-  patientsCustom      Patient[] @relation("PatientCustomRolling")
 
   @@index([role])
-  @@index([typeId])
-}
-
-// Tipos personalizados de programa rolling que el CEO define desde
-// /fisio/advance/rolling/tipos. Cada tipo puede tener su propio brief IA
-// opcional (si null, el editor no muestra el botón "generar con IA").
-model RollingProgramType {
-  id             String   @id @default(cuid())
-  name           String   @unique                // "FisioFit Hybrid"
-  description    String?
-  aiBriefPrompt  String?                          // system prompt IA opcional
-  active         Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  programs       RollingProgram[]
 }
 
 model RollingWeek {

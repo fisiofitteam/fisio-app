@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 type Program = {
   id: string;
@@ -27,21 +27,13 @@ export function RollingPrograms({ programs, isManager }: { programs: Program[]; 
           </p>
         </div>
         {isManager && (
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <Link
-              href="/fisio/advance/rolling/tipos"
-              className="text-xs font-medium px-3 py-2 rounded-lg whitespace-nowrap border border-neutral-200 bg-white hover:bg-neutral-50"
-            >
-              🎯 Tipos
-            </Link>
-            <button
-              onClick={() => setCreating(true)}
-              className="text-sm font-medium px-3 py-2 rounded-lg whitespace-nowrap"
-              style={{ background: "#0A0A0A", color: "#FAFAFA" }}
-            >
-              + Nuevo programa
-            </button>
-          </div>
+          <button
+            onClick={() => setCreating(true)}
+            className="text-sm font-medium px-3 py-2 rounded-lg whitespace-nowrap"
+            style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+          >
+            + Nuevo programa
+          </button>
         )}
       </header>
 
@@ -115,19 +107,9 @@ export function RollingPrograms({ programs, isManager }: { programs: Program[]; 
 function CreateProgramModal({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [typeId, setTypeId] = useState("");
-  const [types, setTypes] = useState<Array<{ id: string; name: string }>>([]);
+  const [aiBriefPrompt, setAiBriefPrompt] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    fetch("/api/rolling-program-types")
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data)) setTypes(data.filter((t: any) => t.active).map((t: any) => ({ id: t.id, name: t.name })));
-      })
-      .catch(() => {});
-  }, []);
 
   async function save() {
     if (!name.trim()) {
@@ -141,7 +123,7 @@ function CreateProgramModal({ onClose }: { onClose: () => void }) {
       body: JSON.stringify({
         name: name.trim(),
         description: description.trim() || null,
-        typeId: typeId || null,
+        aiBriefPrompt: aiBriefPrompt.trim() || null,
       }),
     });
     if (res.ok) {
@@ -189,21 +171,17 @@ function CreateProgramModal({ onClose }: { onClose: () => void }) {
 
           <div>
             <label className="text-xs text-neutral-500 block mb-1">
-              Tipo personalizado (opcional){" "}
-              <Link href="/fisio/advance/rolling/tipos" className="underline">gestionar tipos</Link>
+              Brief de IA (opcional)
             </label>
-            <select
-              className="input text-sm w-full"
-              value={typeId}
-              onChange={(e) => setTypeId(e.target.value)}
-            >
-              <option value="">— Ninguno (estándar) —</option>
-              {types.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
+            <textarea
+              className="input text-sm w-full font-mono"
+              rows={6}
+              value={aiBriefPrompt}
+              onChange={(e) => setAiBriefPrompt(e.target.value)}
+              placeholder="System prompt propio para 'generar semana con IA' en este programa. Ej: 'Programación híbrida: fuerza compuesta 2x/sem + Zone 2 y VO2max 2x/sem + WOD 1x/sem...'. Déjalo vacío si prefieres programación 100% manual."
+            />
             <p className="text-[10px] text-neutral-400 mt-1">
-              Si eliges un tipo (ej. "FisioFit Hybrid"), este programa aparecerá en el slot personalizado al asignarlo a un paciente.
+              Si defines un brief, aparecerá el botón "generar con IA" dentro del programa. Si lo dejas vacío, solo programación manual.
             </p>
           </div>
 
