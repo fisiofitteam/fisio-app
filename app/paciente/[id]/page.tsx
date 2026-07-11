@@ -168,10 +168,11 @@ export default async function PatientHome({ params }: { params: { id: string } }
   }
 
   // --- 2. Si es ADVANCE rolling → vista de programa rolling ---
-  // Determinar IDs de los Rollings asignados (accesorios + entrenamiento + fallback legacy)
+  // Determinar IDs de los Rollings asignados (accesorios + entrenamiento + custom + fallback legacy)
   const accId = patient.rollingAccessoriesId;
   const trnId = patient.rollingTrainingId || patient.rollingProgramId; // fallback al legacy
-  const hasAnyRolling = Boolean(accId || trnId);
+  const cusId = (patient as any).rollingCustomId ?? null;
+  const hasAnyRolling = Boolean(accId || trnId || cusId);
 
   if (patient.programMode === "rolling" && hasAnyRolling) {
     const today = new Date();

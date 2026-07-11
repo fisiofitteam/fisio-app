@@ -22,25 +22,21 @@ export default async function PatientSemanaCompletaPage({
 }) {
   const patient = await prisma.patient.findUnique({
     where: { id: params.id },
-    select: {
-      id: true,
-      programType: true,
-      programMode: true,
-      rollingAccessoriesId: true,
-      rollingTrainingId: true,
-      rollingProgramId: true,
-    },
+    include: { rollingCustom: { select: { name: true } } } as any,
   });
   if (!patient) notFound();
+  const patientAny = patient as any;
 
   const isPrevention = patient.programType === "PREVENTION";
   // Prevention es single-rolling y usa el campo legacy rollingProgramId.
-  // Advance usa acc + trn (con fallback al legacy si viene de rolling antiguo).
+  // Advance usa acc + trn + custom (con fallback al legacy).
   const accId = isPrevention ? null : patient.rollingAccessoriesId;
   const trnId = isPrevention
     ? patient.rollingProgramId
     : (patient.rollingTrainingId || patient.rollingProgramId);
-  const hasAnyRolling = Boolean(accId || trnId);
+  const cusId = isPrevention ? null : (patientAny.rollingCustomId ?? null);
+  const cusLabel = patientAny.rollingCustom?.name ?? "Personalizado";
+  const hasAnyRolling = Boolean(accId || trnId || cusId);
 
   // Si el paciente no está en rolling, no tiene sentido esta vista → home.
   if (patient.programMode !== "rolling" || !hasAnyRolling) {
@@ -73,12 +69,13 @@ export default async function PatientSemanaCompletaPage({
       },
     });
   };
-  const [accWeek, trnWeek] = await Promise.all([fetchWeek(accId), fetchWeek(trnId)]);
+  const [accWeek, trnWeek, cusWeek] = await Promise.all([fetchWeek(accId), fetchWeek(trnId), fetchWeek(cusId)]);
 
   // Vídeos referenciados en las tareas
   const allTasksFlat = [
     ...(accWeek?.days.flatMap((d) => d.tasks) || []),
     ...(trnWeek?.days.flatMap((d) => d.tasks) || []),
+    ...(cusWeek?.days.flatMap((d) => d.tasks) || []),
   ];
   const videoIds = new Set<string>();
   for (const t of allTasksFlat) {
@@ -148,6 +145,15 @@ export default async function PatientSemanaCompletaPage({
         title: trnWeek.title || null,
         published: Boolean(trnWeek.publishedAt),
         days: trnWeek.days.map((d) => ({ dayOfWeek: d.dayOfWeek, tasks: d.tasks.map(mapTask) })),
+      });
+    }
+    if (cusId && cusWeek) {
+      blocks.push({
+        blockLabel: cusLabel,
+        blockColor: "#8B5CF6",
+        title: cusWeek.title || null,
+        published: Boolean(cusWeek.publishedAt),
+        days: cusWeek.days.map((d) => ({ dayOfWeek: d.dayOfWeek, tasks: d.tasks.map(mapTask) })),
       });
     }
   }

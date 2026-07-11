@@ -38,18 +38,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { name, description, role } = await req.json();
+  const { name, description, role, typeId } = await req.json();
   if (!name || !name.trim()) {
     return NextResponse.json({ error: "El nombre es obligatorio" }, { status: 400 });
   }
   const finalRole = typeof role === "string" && ALLOWED.has(role) ? role : "";
+  const finalTypeId = typeof typeId === "string" && typeId ? typeId : null;
 
   const program = await prisma.rollingProgram.create({
     data: {
       name: name.trim(),
       description: description?.trim() || null,
       role: finalRole,
-    },
+      typeId: finalTypeId,
+    } as any,
   });
   return NextResponse.json({ ok: true, programId: program.id });
 }
@@ -63,14 +65,14 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { id, name, description, isActive, role } = await req.json();
+  const { id, name, description, isActive, role, typeId } = await req.json();
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
-  // Solo dejamos actualizar el rol si viene en la lista blanca. Los
-  // programas legacy suelen estar con role="" y esto es la vía para
-  // etiquetarlos (imprescindible para "Traer semana de X").
   const roleUpdate =
     typeof role === "string" && ALLOWED.has(role) ? { role } : {};
+  // typeId: null explícito -> desasigna. undefined -> no toca.
+  const typeUpdate =
+    typeId === null || typeof typeId === "string" ? { typeId: typeId || null } : {};
 
   const updated = await prisma.rollingProgram.update({
     where: { id },
@@ -79,7 +81,8 @@ export async function PATCH(req: NextRequest) {
       ...(description !== undefined && { description: description?.trim() || null }),
       ...(isActive !== undefined && { isActive: !!isActive }),
       ...roleUpdate,
-    },
+      ...typeUpdate,
+    } as any,
   });
   return NextResponse.json(updated);
 }

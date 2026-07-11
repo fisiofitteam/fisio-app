@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Program = {
   id: string;
@@ -27,13 +27,21 @@ export function RollingPrograms({ programs, isManager }: { programs: Program[]; 
           </p>
         </div>
         {isManager && (
-          <button
-            onClick={() => setCreating(true)}
-            className="text-sm font-medium px-3 py-2 rounded-lg whitespace-nowrap"
-            style={{ background: "#0A0A0A", color: "#FAFAFA" }}
-          >
-            + Nuevo programa
-          </button>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Link
+              href="/fisio/advance/rolling/tipos"
+              className="text-xs font-medium px-3 py-2 rounded-lg whitespace-nowrap border border-neutral-200 bg-white hover:bg-neutral-50"
+            >
+              🎯 Tipos
+            </Link>
+            <button
+              onClick={() => setCreating(true)}
+              className="text-sm font-medium px-3 py-2 rounded-lg whitespace-nowrap"
+              style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+            >
+              + Nuevo programa
+            </button>
+          </div>
         )}
       </header>
 
@@ -107,8 +115,19 @@ export function RollingPrograms({ programs, isManager }: { programs: Program[]; 
 function CreateProgramModal({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [typeId, setTypeId] = useState("");
+  const [types, setTypes] = useState<Array<{ id: string; name: string }>>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetch("/api/rolling-program-types")
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) setTypes(data.filter((t: any) => t.active).map((t: any) => ({ id: t.id, name: t.name })));
+      })
+      .catch(() => {});
+  }, []);
 
   async function save() {
     if (!name.trim()) {
@@ -119,7 +138,11 @@ function CreateProgramModal({ onClose }: { onClose: () => void }) {
     const res = await fetch("/api/rolling-programs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: name.trim(), description: description.trim() || null }),
+      body: JSON.stringify({
+        name: name.trim(),
+        description: description.trim() || null,
+        typeId: typeId || null,
+      }),
     });
     if (res.ok) {
       window.location.reload();
@@ -162,6 +185,26 @@ function CreateProgramModal({ onClose }: { onClose: () => void }) {
               placeholder="Para quién es, qué enfoque tiene..."
               rows={3}
             />
+          </div>
+
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">
+              Tipo personalizado (opcional){" "}
+              <Link href="/fisio/advance/rolling/tipos" className="underline">gestionar tipos</Link>
+            </label>
+            <select
+              className="input text-sm w-full"
+              value={typeId}
+              onChange={(e) => setTypeId(e.target.value)}
+            >
+              <option value="">— Ninguno (estándar) —</option>
+              {types.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+            <p className="text-[10px] text-neutral-400 mt-1">
+              Si eliges un tipo (ej. "FisioFit Hybrid"), este programa aparecerá en el slot personalizado al asignarlo a un paciente.
+            </p>
           </div>
 
           {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}

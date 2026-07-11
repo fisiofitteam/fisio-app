@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-type RollingProgram = { id: string; name: string };
+type RollingProgram = { id: string; name: string; typeId: string | null };
 
 export function RollingAssignmentBlock({
   patientId,
@@ -11,6 +11,7 @@ export function RollingAssignmentBlock({
   currentRollingProgramId,
   currentAccessoriesId,
   currentTrainingId,
+  currentCustomId,
   isManager,
 }: {
   patientId: string;
@@ -22,15 +23,17 @@ export function RollingAssignmentBlock({
   currentAccessoriesId: string | null;
   /** Slot Entrenamiento */
   currentTrainingId: string | null;
+  /** Slot personalizado (tipo custom, ej. FisioFit Hybrid) */
+  currentCustomId?: string | null;
   isManager: boolean;
 }) {
   const [programs, setPrograms] = useState<RollingProgram[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [selectedMode, setSelectedMode] = useState<"fixed" | "rolling">(programMode as any);
-  // Valor inicial: si hay slots nuevos, usarlos. Si no, "training" hereda el legacy.
   const [accessoriesId, setAccessoriesId] = useState(currentAccessoriesId || "");
   const [trainingId, setTrainingId] = useState(currentTrainingId || currentRollingProgramId || "");
+  const [customId, setCustomId] = useState(currentCustomId || "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -38,21 +41,30 @@ export function RollingAssignmentBlock({
     fetch("/api/rolling-programs")
       .then((r) => r.json())
       .then((data) => {
-        setPrograms(data.filter((p: any) => p.isActive).map((p: any) => ({ id: p.id, name: p.name })));
+        setPrograms(
+          data
+            .filter((p: any) => p.isActive)
+            .map((p: any) => ({ id: p.id, name: p.name, typeId: p.typeId ?? null })),
+        );
         setLoading(false);
       })
       .catch(() => setLoading(false));
   }, []);
+
+  // Los programas "personalizados" son los que tienen un typeId asignado.
+  const customPrograms = programs.filter((p) => !!p.typeId);
+  const standardPrograms = programs.filter((p) => !p.typeId);
 
   // Solo mostrar el bloque si es ADVANCE (los demás programas no admiten rolling)
   if (programType !== "ADVANCE") return null;
 
   const accProgram = programs.find((p) => p.id === (currentAccessoriesId || ""));
   const trnProgram = programs.find((p) => p.id === (currentTrainingId || currentRollingProgramId || ""));
+  const cusProgram = programs.find((p) => p.id === (currentCustomId || ""));
 
   async function save() {
-    if (selectedMode === "rolling" && !accessoriesId && !trainingId) {
-      setError("Selecciona al menos un programa rolling (Accesorios o Entrenamiento)");
+    if (selectedMode === "rolling" && !accessoriesId && !trainingId && !customId) {
+      setError("Selecciona al menos un programa rolling (Accesorios, Entrenamiento o Personalizado)");
       return;
     }
     setSaving(true);
@@ -65,6 +77,7 @@ export function RollingAssignmentBlock({
         programMode: selectedMode,
         rollingAccessoriesId: selectedMode === "rolling" ? (accessoriesId || null) : null,
         rollingTrainingId: selectedMode === "rolling" ? (trainingId || null) : null,
+        rollingCustomId: selectedMode === "rolling" ? (customId || null) : null,
         // Limpiar el legacy: ya no lo usamos
         rollingProgramId: null,
       }),
@@ -113,8 +126,18 @@ export function RollingAssignmentBlock({
                   <span className="font-medium">{trnProgram?.name || ((currentTrainingId || currentRollingProgramId) ? "(archivado)" : "—")}</span>
                 </div>
               </div>
+              {(currentCustomId || cusProgram) && (
+                <div>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded" style={{ background: "#EDE9FE", color: "#5B21B6" }}>
+                      PERSONALIZADO
+                    </span>
+                    <span className="font-medium">{cusProgram?.name || (currentCustomId ? "(archivado)" : "—")}</span>
+                  </div>
+                </div>
+              )}
               <p className="text-[11px] text-neutral-500 mt-1.5">
-                Ve cada día las sesiones de ambos programas. Sin métricas, sin pausas.
+                Ve cada día las sesiones de los programas asignados. Sin métricas, sin pausas.
               </p>
             </div>
           ) : (
@@ -194,14 +217,33 @@ export function RollingAssignmentBlock({
                       onChange={(e) => setTrainingId(e.target.value)}
                     >
                       <option value="">— Sin programa de entrenamiento —</option>
-                      {programs.map((p) => (
+                      {(standardPrograms.length ? standardPrograms : programs).map((p) => (
                         <option key={p.id} value={p.id}>{p.name}</option>
                       ))}
                     </select>
                   </div>
 
+                  {customPrograms.length > 0 && (
+                    <div>
+                      <label className="text-xs text-neutral-500 block mb-1">
+                        <span className="font-medium text-neutral-800">Personalizado</span>
+                        <span className="text-[10px] ml-1.5">(programas de tipo custom, ej. FisioFit Hybrid)</span>
+                      </label>
+                      <select
+                        className="input text-sm w-full"
+                        value={customId}
+                        onChange={(e) => setCustomId(e.target.value)}
+                      >
+                        <option value="">— Sin programa personalizado —</option>
+                        {customPrograms.map((p) => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
                   <p className="text-[10px] italic text-neutral-500">
-                    Tienes que asignar al menos uno de los dos.
+                    Tienes que asignar al menos uno.
                   </p>
                 </div>
               )}
@@ -217,6 +259,7 @@ export function RollingAssignmentBlock({
                 setSelectedMode(programMode as any);
                 setAccessoriesId(currentAccessoriesId || "");
                 setTrainingId(currentTrainingId || currentRollingProgramId || "");
+                setCustomId(currentCustomId || "");
                 setError("");
               }}
               className="flex-1 text-xs px-3 py-2 rounded-md"

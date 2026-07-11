@@ -358,6 +358,7 @@ export function ClinicalFile({
           currentRollingProgramId={patient.rollingProgramId}
           currentAccessoriesId={patient.rollingAccessoriesId}
           currentTrainingId={patient.rollingTrainingId}
+          currentCustomId={(patient as any).rollingCustomId ?? null}
           isManager={isManager}
         />
       </section>

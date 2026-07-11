@@ -245,6 +245,7 @@ export async function PATCH(req: NextRequest) {
     rollingProgramId,
     rollingAccessoriesId,
     rollingTrainingId,
+    rollingCustomId,
     week0Completed,
   } = body;
 
@@ -273,19 +274,20 @@ export async function PATCH(req: NextRequest) {
         { status: 400 }
       );
     }
-    // En modo rolling, ADVANCE necesita al menos UNO de los dos slots asignado.
-    // Aceptamos cualquier combinación: solo accesorios, solo entrenamiento, o ambos.
+    // En modo rolling, ADVANCE necesita al menos UNO de los slots asignado.
+    // Aceptamos cualquier combinación entre accesorios / entrenamiento / custom.
     const accId = rollingAccessoriesId !== undefined ? rollingAccessoriesId : null;
     const trnId = rollingTrainingId !== undefined ? rollingTrainingId : null;
     const legacyId = rollingProgramId !== undefined ? rollingProgramId : null;
-    if (!accId && !trnId && !legacyId) {
+    const custId  = rollingCustomId !== undefined ? rollingCustomId : null;
+    if (!accId && !trnId && !legacyId && !custId) {
       return NextResponse.json(
-        { error: "Asigna al menos un programa rolling (Accesorios o Entrenamiento)" },
+        { error: "Asigna al menos un programa rolling (Accesorios, Entrenamiento o Personalizado)" },
         { status: 400 }
       );
     }
     // Validar que los rollings seleccionados existen y están activos
-    for (const rid of [accId, trnId, legacyId].filter(Boolean) as string[]) {
+    for (const rid of [accId, trnId, legacyId, custId].filter(Boolean) as string[]) {
       const rp = await prisma.rollingProgram.findUnique({ where: { id: rid } });
       if (!rp || !rp.isActive) {
         return NextResponse.json(
@@ -361,25 +363,28 @@ export async function PATCH(req: NextRequest) {
       ...(rollingProgramId !== undefined && { rollingProgramId: rollingProgramId || null }),
       ...(rollingAccessoriesId !== undefined && { rollingAccessoriesId: rollingAccessoriesId || null }),
       ...(rollingTrainingId !== undefined && { rollingTrainingId: rollingTrainingId || null }),
+      ...(rollingCustomId !== undefined && ({ rollingCustomId: rollingCustomId || null } as any)),
       // Toggle "Semana 0 completada" desde la lista de pacientes. true →
       // fecha actual, false → null (por si el fisio quiere revertir).
       ...(week0Completed !== undefined && {
         week0CompletedAt: week0Completed ? new Date() : null,
       }),
-      // Si se cambia a fixed, limpiamos los tres rollings
-      ...(programMode === "fixed" && {
+      // Si se cambia a fixed, limpiamos los rollings (incl. custom)
+      ...(programMode === "fixed" && ({
         rollingProgramId: null,
         rollingAccessoriesId: null,
         rollingTrainingId: null,
-      }),
+        rollingCustomId: null,
+      } as any)),
       // Si se cambia programType a uno no-ADVANCE, forzar fixed y limpiar rollings
       // (gana sobre el bloque anterior si está activo)
-      ...(forceFixedCleanup && {
+      ...(forceFixedCleanup && ({
         programMode: "fixed",
         rollingProgramId: null,
         rollingAccessoriesId: null,
         rollingTrainingId: null,
-      }),
+        rollingCustomId: null,
+      } as any)),
     },
   });
   return NextResponse.json(updated);

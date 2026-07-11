@@ -33,16 +33,10 @@ type ResolvedTask = {
 export default async function SesionHoyPage({ params }: { params: { id: string } }) {
   const patient = await prisma.patient.findUnique({
     where: { id: params.id },
-    select: {
-      id: true,
-      fullName: true,
-      programType: true,
-      rollingAccessoriesId: true,
-      rollingTrainingId: true,
-      rollingProgramId: true,
-    },
+    include: { rollingCustom: { select: { name: true } } } as any,
   });
   if (!patient) notFound();
+  const patientAny = patient as any;
 
   const today = new Date();
   const todayDow = today.getDay(); // 0..6 (0=domingo). Las tareas usan 1..5.
@@ -54,6 +48,8 @@ export default async function SesionHoyPage({ params }: { params: { id: string }
   const trnId = isPrevention
     ? patient.rollingProgramId
     : (patient.rollingTrainingId || patient.rollingProgramId);
+  const cusId = isPrevention ? null : (patientAny.rollingCustomId ?? null);
+  const cusLabel = patientAny.rollingCustom?.name ?? "Personalizado";
 
   async function fetchDayTasks(programId: string | null) {
     if (!programId) return [];
@@ -80,11 +76,15 @@ export default async function SesionHoyPage({ params }: { params: { id: string }
     return week.days.flatMap((d) => d.tasks);
   }
 
-  const [accTasksRaw, trnTasksRaw] = await Promise.all([fetchDayTasks(accId), fetchDayTasks(trnId)]);
+  const [accTasksRaw, trnTasksRaw, cusTasksRaw] = await Promise.all([
+    fetchDayTasks(accId),
+    fetchDayTasks(trnId),
+    fetchDayTasks(cusId),
+  ]);
 
   // Resolver vídeos referenciados
   const videoIds = new Set<string>();
-  for (const t of [...accTasksRaw, ...trnTasksRaw]) {
+  for (const t of [...accTasksRaw, ...trnTasksRaw, ...cusTasksRaw]) {
     if ((t.type === "VIDEO" || t.type === "WORKOUT") && t.videoId) videoIds.add(t.videoId);
   }
   const videosById: Record<string, { youtubeUrl: string }> = {};
@@ -113,7 +113,8 @@ export default async function SesionHoyPage({ params }: { params: { id: string }
 
   const accTasks = resolve(accTasksRaw);
   const trnTasks = resolve(trnTasksRaw);
-  const hasAny = accTasks.length > 0 || trnTasks.length > 0;
+  const cusTasks = resolve(cusTasksRaw);
+  const hasAny = accTasks.length > 0 || trnTasks.length > 0 || cusTasks.length > 0;
 
   // Log diario de hoy (para precargar el formulario si ya registró)
   const todayUtc = todayMadridUtc();
@@ -156,6 +157,10 @@ export default async function SesionHoyPage({ params }: { params: { id: string }
 
             {trnTasks.length > 0 && (
               <SectionBlock label="Entrenamiento" color="#F59E0B" tasks={trnTasks} />
+            )}
+
+            {cusTasks.length > 0 && (
+              <SectionBlock label={cusLabel} color="#8B5CF6" tasks={cusTasks} />
             )}
           </>
         )}
