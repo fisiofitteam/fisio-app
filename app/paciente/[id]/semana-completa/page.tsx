@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { weekStartDate } from "@/lib/program-pauses";
+import { resolveVisibleRollingWeek } from "@/lib/rolling-visible-week";
 import { PatientNav } from "@/components/PatientNav";
 import { RollingWeekView } from "@/components/RollingWeekView";
 
@@ -51,34 +52,29 @@ export default async function PatientSemanaCompletaPage({
   today.setHours(0, 0, 0, 0);
   const thisMonday = weekStartDate(today);
 
-  const fetchWeek = async (programId: string | null) => {
-    if (!programId) return null;
-    return prisma.rollingWeek.findUnique({
-      where: { programId_weekStartDate: { programId, weekStartDate: thisMonday } },
-      include: {
-        days: {
-          include: {
-            tasks: {
-              orderBy: { order: "asc" },
-              include: {
-                exercises: {
-                  orderBy: { order: "asc" },
-                  include: { exercise: { select: { id: true, name: true, category: true, youtubeUrl: true, description: true } } },
-                },
+  const fetchWeek = (programId: string | null) =>
+    resolveVisibleRollingWeek<any>(programId, thisMonday, {
+      days: {
+        include: {
+          tasks: {
+            orderBy: { order: "asc" },
+            include: {
+              exercises: {
+                orderBy: { order: "asc" },
+                include: { exercise: { select: { id: true, name: true, category: true, youtubeUrl: true, description: true } } },
               },
             },
           },
-          orderBy: { dayOfWeek: "asc" },
         },
+        orderBy: { dayOfWeek: "asc" },
       },
     });
-  };
   const [accWeek, trnWeek] = await Promise.all([fetchWeek(accId), fetchWeek(trnId)]);
 
   // Vídeos referenciados en las tareas
   const allTasksFlat = [
-    ...(accWeek?.days.flatMap((d) => d.tasks) || []),
-    ...(trnWeek?.days.flatMap((d) => d.tasks) || []),
+    ...(accWeek?.days.flatMap((d: any) => d.tasks) || []),
+    ...(trnWeek?.days.flatMap((d: any) => d.tasks) || []),
   ];
   const videoIds = new Set<string>();
   for (const t of allTasksFlat) {
@@ -128,7 +124,7 @@ export default async function PatientSemanaCompletaPage({
         blockColor: "#FCD34D",
         title: trnWeek.title || null,
         published: Boolean(trnWeek.publishedAt),
-        days: trnWeek.days.map((d) => ({ dayOfWeek: d.dayOfWeek, tasks: d.tasks.map(mapTask) })),
+        days: trnWeek.days.map((d: any) => ({ dayOfWeek: d.dayOfWeek, tasks: d.tasks.map(mapTask) })),
       });
     }
   } else {
@@ -138,7 +134,7 @@ export default async function PatientSemanaCompletaPage({
         blockColor: "#3B82F6",
         title: accWeek.title || null,
         published: Boolean(accWeek.publishedAt),
-        days: accWeek.days.map((d) => ({ dayOfWeek: d.dayOfWeek, tasks: d.tasks.map(mapTask) })),
+        days: accWeek.days.map((d: any) => ({ dayOfWeek: d.dayOfWeek, tasks: d.tasks.map(mapTask) })),
       });
     }
     if (trnId && trnWeek) {
@@ -147,7 +143,7 @@ export default async function PatientSemanaCompletaPage({
         blockColor: "#F59E0B",
         title: trnWeek.title || null,
         published: Boolean(trnWeek.publishedAt),
-        days: trnWeek.days.map((d) => ({ dayOfWeek: d.dayOfWeek, tasks: d.tasks.map(mapTask) })),
+        days: trnWeek.days.map((d: any) => ({ dayOfWeek: d.dayOfWeek, tasks: d.tasks.map(mapTask) })),
       });
     }
   }
@@ -165,6 +161,14 @@ export default async function PatientSemanaCompletaPage({
   }
   const flatDays = [1, 2, 3, 4, 5].map((dow) => ({ dayOfWeek: dow, tasks: daysByDow[dow] }));
   const headerTitle = (trnWeek?.title || accWeek?.title) || null;
+
+  // Fecha real de la semana visible: si la actual está publicada usamos
+  // thisMonday; si no y estamos viendo una futura, usamos su weekStartDate
+  // para que el header refleje la semana real que ve el atleta.
+  const visibleWeekStart: Date =
+    (trnWeek?.weekStartDate as Date | undefined) ??
+    (accWeek?.weekStartDate as Date | undefined) ??
+    thisMonday;
 
   return (
     <main className="min-h-screen" style={{ color: "var(--p-text)" }}>
@@ -184,7 +188,7 @@ export default async function PatientSemanaCompletaPage({
 
         <RollingWeekView
           mode={anyPublished ? "ready" : "pending"}
-          weekStartIso={thisMonday.toISOString()}
+          weekStartIso={visibleWeekStart.toISOString()}
           title={headerTitle}
           days={flatDays}
         />

@@ -10,6 +10,7 @@ import { getWelcomeConfig } from "@/lib/welcome-config";
 import { pickWelcomeMessage } from "@/lib/welcome-content";
 import { applyVars } from "@/lib/landing-content";
 import { ensurePreventionRollingProgram } from "@/lib/prevention";
+import { resolveVisibleRollingWeek } from "@/lib/rolling-visible-week";
 
 export default async function PatientHome({ params }: { params: { id: string } }) {
   const patient = await prisma.patient.findUnique({
@@ -77,32 +78,28 @@ export default async function PatientHome({ params }: { params: { id: string } }
         })()
       : null;
 
-    // Semana del rolling Prevention (si hay una asignada y publicada)
-    const week = preventionRollingId
-      ? await prisma.rollingWeek.findUnique({
-          where: { programId_weekStartDate: { programId: preventionRollingId, weekStartDate: thisMonday } },
-          include: {
-            days: {
-              include: {
-                tasks: {
-                  orderBy: { order: "asc" },
-                  include: {
-                    exercises: {
-                      orderBy: { order: "asc" },
-                      include: { exercise: { select: { id: true, name: true, category: true, youtubeUrl: true, description: true } } },
-                    },
-                  },
-                },
+    // Semana visible del rolling Prevention: la actual si está publicada,
+    // si no la próxima publicada (fallback anti "no hay contenido").
+    const week: any = await resolveVisibleRollingWeek(preventionRollingId, thisMonday, {
+      days: {
+        include: {
+          tasks: {
+            orderBy: { order: "asc" },
+            include: {
+              exercises: {
+                orderBy: { order: "asc" },
+                include: { exercise: { select: { id: true, name: true, category: true, youtubeUrl: true, description: true } } },
               },
-              orderBy: { dayOfWeek: "asc" },
             },
           },
-        })
-      : null;
+        },
+        orderBy: { dayOfWeek: "asc" },
+      },
+    });
 
     // Vídeos referenciados (para tareas VIDEO/WORKOUT con videoId)
     const videoIds = new Set<string>();
-    for (const d of week?.days ?? []) {
+    for (const d of (week?.days ?? []) as any[]) {
       for (const t of d.tasks) {
         if ((t.type === "VIDEO" || t.type === "WORKOUT") && t.videoId) videoIds.add(t.videoId);
       }
@@ -115,8 +112,8 @@ export default async function PatientHome({ params }: { params: { id: string } }
 
     // Aplanar días (sin split de bloques — Prevention es un tramo único)
     const flatDays = [1, 2, 3, 4, 5].map((dow) => {
-      const day = week?.days.find((d) => d.dayOfWeek === dow);
-      const tasks = (day?.tasks ?? []).map((t) => ({
+      const day = week?.days.find((d: any) => d.dayOfWeek === dow);
+      const tasks = (day?.tasks ?? []).map((t: any) => ({
         id: t.id,
         type: t.type,
         title: t.title,
@@ -157,7 +154,7 @@ export default async function PatientHome({ params }: { params: { id: string } }
           description: currentChallengeP.description,
         } : null}
         mode={week?.publishedAt ? "ready" : "pending"}
-        weekStartIso={thisMonday.toISOString()}
+        weekStartIso={(week?.weekStartDate ?? thisMonday).toISOString()}
         weekTitle={week?.title ?? null}
         days={flatDays}
         daysToRenewal={daysToRenewal}
@@ -201,27 +198,24 @@ export default async function PatientHome({ params }: { params: { id: string } }
       );
     }
 
-    // Cargar la semana de cada rolling asignado (accesorios y/o entrenamiento)
-    const fetchWeek = async (programId: string | null) => {
-      if (!programId) return null;
-      return prisma.rollingWeek.findUnique({
-        where: { programId_weekStartDate: { programId, weekStartDate: thisMonday } },
-        include: {
-          days: {
-            include: { tasks: { orderBy: { order: "asc" } } },
-            orderBy: { dayOfWeek: "asc" },
-          },
+    // Semana visible por rolling: la actual si está publicada; si no, la
+    // próxima publicada. Así el atleta ve el "avance" cuando el CEO ha
+    // programado con antelación pero aún no toca esta semana.
+    const fetchWeek = (programId: string | null) =>
+      resolveVisibleRollingWeek<any>(programId, thisMonday, {
+        days: {
+          include: { tasks: { orderBy: { order: "asc" } } },
+          orderBy: { dayOfWeek: "asc" },
         },
       });
-    };
 
     const [accWeek, trnWeek] = await Promise.all([fetchWeek(accId), fetchWeek(trnId)]);
 
     // Resolver vídeos referenciados de ambos rollings
     let videosById: Record<string, { youtubeUrl: string; title: string }> = {};
     const allTasksFlat = [
-      ...(accWeek?.days.flatMap((d) => d.tasks) || []),
-      ...(trnWeek?.days.flatMap((d) => d.tasks) || []),
+      ...(accWeek?.days.flatMap((d: any) => d.tasks) || []),
+      ...(trnWeek?.days.flatMap((d: any) => d.tasks) || []),
     ];
     const videoIds = new Set<string>();
     for (const t of allTasksFlat) {
@@ -262,9 +256,9 @@ export default async function PatientHome({ params }: { params: { id: string } }
         blockColor: "#3B82F6", // azul
         title: accWeek.title || null,
         published: Boolean(accWeek.publishedAt),
-        days: accWeek.days.map((d) => ({
+        days: accWeek.days.map((d: any) => ({
           dayOfWeek: d.dayOfWeek,
-          tasks: d.tasks.map((t) => ({
+          tasks: d.tasks.map((t: any) => ({
             id: t.id,
             type: t.type,
             title: t.title,
@@ -280,9 +274,9 @@ export default async function PatientHome({ params }: { params: { id: string } }
         blockColor: "#F59E0B", // ámbar
         title: trnWeek.title || null,
         published: Boolean(trnWeek.publishedAt),
-        days: trnWeek.days.map((d) => ({
+        days: trnWeek.days.map((d: any) => ({
           dayOfWeek: d.dayOfWeek,
-          tasks: d.tasks.map((t) => ({
+          tasks: d.tasks.map((t: any) => ({
             id: t.id,
             type: t.type,
             title: t.title,
@@ -350,7 +344,7 @@ export default async function PatientHome({ params }: { params: { id: string } }
           description: currentChallenge.description,
         } : null}
         mode={anyPublished ? "ready" : "pending"}
-        weekStartIso={thisMonday.toISOString()}
+        weekStartIso={((trnWeek?.weekStartDate ?? accWeek?.weekStartDate ?? thisMonday) as Date).toISOString()}
         title={headerTitle}
         days={flatDays}
         daysToExpire={daysToExpire}

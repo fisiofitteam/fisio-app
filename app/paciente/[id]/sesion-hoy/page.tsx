@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { weekStartDate, todayMadridUtc } from "@/lib/program-pauses";
+import { resolveVisibleRollingWeek } from "@/lib/rolling-visible-week";
 import { PatientDailyLogForm } from "@/components/PatientDailyLogForm";
 import { RollingExerciseVideos, type RollingExercise } from "@/components/RollingExerciseVideos";
 
@@ -56,28 +57,29 @@ export default async function SesionHoyPage({ params }: { params: { id: string }
     : (patient.rollingTrainingId || patient.rollingProgramId);
 
   async function fetchDayTasks(programId: string | null) {
-    if (!programId) return [];
-    const week = await prisma.rollingWeek.findUnique({
-      where: { programId_weekStartDate: { programId, weekStartDate: thisMonday } },
-      include: {
-        days: {
-          where: { dayOfWeek: todayDow },
-          include: {
-            tasks: {
-              orderBy: { order: "asc" },
-              include: {
-                exercises: {
-                  orderBy: { order: "asc" },
-                  include: { exercise: { select: { id: true, name: true, category: true, youtubeUrl: true, description: true } } },
-                },
+    // Semana visible: la actual si está publicada, si no la próxima
+    // publicada. `days` se filtra al día de hoy en ambos casos — si el
+    // atleta ve la semana futura, sigue viendo el mismo dow (ej. si es
+    // sábado y solo hay la semana que viene, ve el sábado de la semana
+    // que viene, que no existirá en tareas L→V y quedará vacío).
+    const week: any = await resolveVisibleRollingWeek(programId, thisMonday, {
+      days: {
+        where: { dayOfWeek: todayDow },
+        include: {
+          tasks: {
+            orderBy: { order: "asc" },
+            include: {
+              exercises: {
+                orderBy: { order: "asc" },
+                include: { exercise: { select: { id: true, name: true, category: true, youtubeUrl: true, description: true } } },
               },
             },
           },
         },
       },
     });
-    if (!week || !week.publishedAt) return [];
-    return week.days.flatMap((d) => d.tasks);
+    if (!week) return [];
+    return week.days.flatMap((d: any) => d.tasks);
   }
 
   const [accTasksRaw, trnTasksRaw] = await Promise.all([fetchDayTasks(accId), fetchDayTasks(trnId)]);
@@ -96,7 +98,7 @@ export default async function SesionHoyPage({ params }: { params: { id: string }
   }
 
   const resolve = (tasks: typeof accTasksRaw): ResolvedTask[] =>
-    tasks.map((t) => ({
+    tasks.map((t: any) => ({
       id: t.id,
       type: t.type,
       title: t.title,
