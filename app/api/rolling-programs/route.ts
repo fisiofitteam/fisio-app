@@ -38,22 +38,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { name, description, role, aiBriefPrompt } = await req.json();
+  const { name, description, role } = await req.json();
   if (!name || !name.trim()) {
     return NextResponse.json({ error: "El nombre es obligatorio" }, { status: 400 });
   }
   const finalRole = typeof role === "string" && ALLOWED.has(role) ? role : "";
-  const finalPrompt = typeof aiBriefPrompt === "string" && aiBriefPrompt.trim()
-    ? aiBriefPrompt.trim()
-    : null;
 
   const program = await prisma.rollingProgram.create({
     data: {
       name: name.trim(),
       description: description?.trim() || null,
       role: finalRole,
-      aiBriefPrompt: finalPrompt,
-    } as any,
+    },
   });
   return NextResponse.json({ ok: true, programId: program.id });
 }
@@ -67,16 +63,11 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { id, name, description, isActive, role, aiBriefPrompt } = await req.json();
+  const { id, name, description, isActive, role } = await req.json();
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
   const roleUpdate =
     typeof role === "string" && ALLOWED.has(role) ? { role } : {};
-  // aiBriefPrompt: null explícito -> quita el brief. undefined -> no toca. string vacío -> null.
-  const promptUpdate =
-    aiBriefPrompt === null || typeof aiBriefPrompt === "string"
-      ? { aiBriefPrompt: (typeof aiBriefPrompt === "string" && aiBriefPrompt.trim()) ? aiBriefPrompt.trim() : null }
-      : {};
 
   const updated = await prisma.rollingProgram.update({
     where: { id },
@@ -85,8 +76,7 @@ export async function PATCH(req: NextRequest) {
       ...(description !== undefined && { description: description?.trim() || null }),
       ...(isActive !== undefined && { isActive: !!isActive }),
       ...roleUpdate,
-      ...promptUpdate,
-    } as any,
+    },
   });
   return NextResponse.json(updated);
 }

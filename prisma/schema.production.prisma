@@ -1661,9 +1661,6 @@ model RollingProgram {
   description String?
   isActive    Boolean  @default(true)
   role        String   @default("")
-  // System prompt propio de este programa para "generar semana con IA".
-  // Si null, el editor no ofrece el botón de generación.
-  aiBriefPrompt String?
   createdAt   DateTime @default(now())
 
   weeks       RollingWeek[]

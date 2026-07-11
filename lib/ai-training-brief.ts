@@ -5,14 +5,25 @@
 import { prisma } from "@/lib/prisma";
 import { TRAINING_BRIEF_SEED_BY_KIND } from "@/lib/ai-training-brief-seed";
 
-export type BriefKind = "accesorios" | "entrenamiento";
-export const BRIEF_KINDS: BriefKind[] = ["accesorios", "entrenamiento"];
+// Los kinds "builtin" son los originales que vienen destilados desde el HTML
+// histórico del CEO. A partir de aquí, cada RollingProgram creado desde
+// /fisio/advance/rolling tambien crea implícitamente un kind con id = programId
+// (el brief-ia lo lista como pestaña más).
+export type BriefKind = string;
+export const BUILTIN_BRIEF_KINDS: string[] = ["accesorios", "entrenamiento"];
+export const BRIEF_KINDS: string[] = BUILTIN_BRIEF_KINDS;
 
-export function isBriefKind(x: unknown): x is BriefKind {
+export function isBuiltinBriefKind(x: unknown): x is "accesorios" | "entrenamiento" {
   return x === "accesorios" || x === "entrenamiento";
 }
 
-export const BRIEF_KIND_LABEL: Record<BriefKind, string> = {
+// Acepta cualquier string no vacío. La validación real (existe el programa
+// rolling correspondiente) se hace en las páginas / API cuando aplica.
+export function isBriefKind(x: unknown): x is BriefKind {
+  return typeof x === "string" && x.trim().length > 0;
+}
+
+export const BRIEF_KIND_LABEL: Record<string, string> = {
   accesorios: "Accesorios (movilidad · técnica · activación)",
   entrenamiento: "Entrenamiento (fuerza · metcon)",
 };

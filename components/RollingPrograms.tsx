@@ -107,7 +107,6 @@ export function RollingPrograms({ programs, isManager }: { programs: Program[]; 
 function CreateProgramModal({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [aiBriefPrompt, setAiBriefPrompt] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -123,7 +122,6 @@ function CreateProgramModal({ onClose }: { onClose: () => void }) {
       body: JSON.stringify({
         name: name.trim(),
         description: description.trim() || null,
-        aiBriefPrompt: aiBriefPrompt.trim() || null,
       }),
     });
     if (res.ok) {
@@ -169,21 +167,11 @@ function CreateProgramModal({ onClose }: { onClose: () => void }) {
             />
           </div>
 
-          <div>
-            <label className="text-xs text-neutral-500 block mb-1">
-              Brief de IA (opcional)
-            </label>
-            <textarea
-              className="input text-sm w-full font-mono"
-              rows={6}
-              value={aiBriefPrompt}
-              onChange={(e) => setAiBriefPrompt(e.target.value)}
-              placeholder="System prompt propio para 'generar semana con IA' en este programa. Ej: 'Programación híbrida: fuerza compuesta 2x/sem + Zone 2 y VO2max 2x/sem + WOD 1x/sem...'. Déjalo vacío si prefieres programación 100% manual."
-            />
-            <p className="text-[10px] text-neutral-400 mt-1">
-              Si defines un brief, aparecerá el botón "generar con IA" dentro del programa. Si lo dejas vacío, solo programación manual.
-            </p>
-          </div>
+          <p className="text-[11px] text-neutral-500 bg-neutral-50 border border-neutral-200 rounded-lg px-3 py-2">
+            💡 El <strong>brief de IA</strong> de este programa (system prompt + banco de sesiones + ejemplos)
+            lo defines en <span className="font-mono">Brief IA</span> una vez lo hayas creado — aparecerá como
+            una pestaña más junto a "Accesorios" y "Entrenamiento".
+          </p>
 
           {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
 
