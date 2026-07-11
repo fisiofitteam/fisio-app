@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FIXED_DURATION_BY_KIND } from "@/components/AiGenerateSessionModal";
+import { durationForKind } from "@/components/AiGenerateSessionModal";
 
 type Block = { heading: string; body: string; exercises: string[] };
 type Session = { title: string; description: string | null; blocks: Block[] };
@@ -25,15 +25,19 @@ const DAY_LABELS = ["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
 export function AiGenerateWeekModal({
   weekId,
   defaultKind = "accesorios",
+  kindLabel,
   onClose,
   onSaved,
 }: {
   weekId: string;
-  defaultKind?: "accesorios" | "entrenamiento";
+  /** "accesorios" | "entrenamiento" | programId del RollingProgram custom */
+  defaultKind?: string;
+  kindLabel?: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [kind, setKind] = useState<"accesorios" | "entrenamiento">(defaultKind);
+  const [kind, setKind] = useState<string>(defaultKind);
+  const isBuiltin = kind === "accesorios" || kind === "entrenamiento";
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -68,7 +72,7 @@ export function AiGenerateWeekModal({
           kind,
           prompt: prompt.trim(),
           dayOfWeek: dow,
-          durationMin: FIXED_DURATION_BY_KIND[kind],
+          durationMin: durationForKind(kind),
           extraContext: contextParts.join(" "),
         }),
       });
@@ -169,24 +173,30 @@ export function AiGenerateWeekModal({
           <button onClick={onClose} className="text-neutral-400 text-xl leading-none">✕</button>
         </div>
 
-        {/* Kind selector */}
-        <div className="mb-3">
-          <label className="text-[11px] text-neutral-500 block mb-1">Tipo de sesión</label>
-          <div className="flex gap-1">
-            {(["accesorios", "entrenamiento"] as const).map((k) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => setKind(k)}
-                className={`flex-1 text-xs px-2 py-2 rounded border font-medium ${
-                  kind === k ? "bg-neutral-900 text-white border-neutral-900" : "bg-white border-neutral-200"
-                }`}
-              >
-                {k === "accesorios" ? "Accesorios · 15 min/día" : "Entrenamiento · 60 min/día"}
-              </button>
-            ))}
+        {/* Kind selector (solo builtins) */}
+        {isBuiltin ? (
+          <div className="mb-3">
+            <label className="text-[11px] text-neutral-500 block mb-1">Tipo de sesión</label>
+            <div className="flex gap-1">
+              {(["accesorios", "entrenamiento"] as const).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setKind(k)}
+                  className={`flex-1 text-xs px-2 py-2 rounded border font-medium ${
+                    kind === k ? "bg-neutral-900 text-white border-neutral-900" : "bg-white border-neutral-200"
+                  }`}
+                >
+                  {k === "accesorios" ? "Accesorios · 15 min/día" : "Entrenamiento · 60 min/día"}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="mb-3 text-[11px] text-neutral-500 bg-neutral-50 border border-neutral-200 rounded-md px-2 py-1.5">
+            Brief usado: <strong className="text-neutral-800">{kindLabel ?? kind}</strong>
+          </div>
+        )}
 
         {/* Prompt: aquí lo mejor es "temática de la semana" */}
         <div className="mb-3">
@@ -208,7 +218,7 @@ export function AiGenerateWeekModal({
 
         <div className="flex gap-2 items-center justify-between flex-wrap mb-3">
           <p className="text-[11px] text-neutral-500 italic">
-            ⏱ Duración fija · {FIXED_DURATION_BY_KIND[kind]} min por día. 💡 Se generan L→V en secuencia (~40-60s) para no repetir ejercicios.
+            ⏱ Duración fija · {durationForKind(kind)} min por día. 💡 Se generan L→V en secuencia (~40-60s) para no repetir ejercicios.
           </p>
           <button
             onClick={generateAll}

@@ -28,6 +28,20 @@ export const BRIEF_KIND_LABEL: Record<string, string> = {
   entrenamiento: "Entrenamiento (fuerza · metcon)",
 };
 
+/**
+ * Dado el `role` y el `id` de un RollingProgram devuelve qué `kind` (id del
+ * AiTrainingBrief) usar al generar sesiones con IA.
+ *   - "advance-accesorios" | "prevention" → "accesorios" (comparten).
+ *   - "advance-entrenamiento" → "entrenamiento".
+ *   - "" (o cualquier otro) → el propio programId (brief propio del programa).
+ */
+export function resolveBriefKindForProgram(program: { id: string; role: string | null | undefined }): string {
+  const r = program.role || "";
+  if (r === "advance-accesorios" || r === "prevention") return "accesorios";
+  if (r === "advance-entrenamiento") return "entrenamiento";
+  return program.id;
+}
+
 export type AiTrainingBriefData = {
   systemPrompt: string;
   philosophy: string;

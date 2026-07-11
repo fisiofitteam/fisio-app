@@ -14,6 +14,7 @@ import {
 } from "@dnd-kit/core";
 import { AiGenerateSessionModal } from "@/components/AiGenerateSessionModal";
 import { AiGenerateWeekModal } from "@/components/AiGenerateWeekModal";
+import { resolveBriefKindForProgram } from "@/lib/ai-training-brief";
 
 type Program = {
   id: string;
@@ -488,6 +489,8 @@ export function RollingProgramDetail({
         <AiGenerateSessionModal
           weekId={week.id}
           dayOfWeek={aiModal.dayOfWeek}
+          defaultKind={resolveBriefKindForProgram(program)}
+          kindLabel={program.role ? undefined : program.name}
           onClose={() => setAiModal(null)}
           onSaved={async () => {
             setAiModal(null);
@@ -499,6 +502,8 @@ export function RollingProgramDetail({
       {aiWeekModal && week && (
         <AiGenerateWeekModal
           weekId={week.id}
+          defaultKind={resolveBriefKindForProgram(program)}
+          kindLabel={program.role ? undefined : program.name}
           onClose={() => setAiWeekModal(false)}
           onSaved={async () => {
             setAiWeekModal(false);

@@ -9,12 +9,15 @@ type Meta = { model: string; kind: string; exampleIds: string[]; inputTokens: nu
 const DAY_LABELS = ["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
 
 // Duraciones fijas por tipo de sesión (decisión de la CEO): entrenamiento
-// principal siempre ~60 min, accesorios siempre ~15 min. El slider de
-// duración libre se quitó del modal para no dar pie a excepciones.
-export const FIXED_DURATION_BY_KIND: Record<"accesorios" | "entrenamiento", number> = {
+// principal siempre ~60 min, accesorios siempre ~15 min. Los programas
+// custom (kind=programId) heredan 60 min por defecto.
+export const FIXED_DURATION_BY_KIND: Record<string, number> = {
   accesorios: 15,
   entrenamiento: 60,
 };
+export function durationForKind(kind: string): number {
+  return FIXED_DURATION_BY_KIND[kind] ?? 60;
+}
 
 /**
  * Modal completo del flujo "Generar con IA":
@@ -28,16 +31,21 @@ export function AiGenerateSessionModal({
   weekId,
   dayOfWeek,
   defaultKind = "accesorios",
+  kindLabel,
   onClose,
   onSaved,
 }: {
   weekId: string;
   dayOfWeek: number;
-  defaultKind?: "accesorios" | "entrenamiento";
+  /** "accesorios" | "entrenamiento" | programId del RollingProgram custom */
+  defaultKind?: string;
+  /** Label del kind custom para mostrar en el UI. Solo se usa si kind no es builtin. */
+  kindLabel?: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [kind, setKind] = useState<"accesorios" | "entrenamiento">(defaultKind);
+  const [kind, setKind] = useState<string>(defaultKind);
+  const isBuiltin = kind === "accesorios" || kind === "entrenamiento";
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -59,7 +67,7 @@ export function AiGenerateSessionModal({
           kind,
           prompt: prompt.trim(),
           dayOfWeek,
-          durationMin: FIXED_DURATION_BY_KIND[kind],
+          durationMin: durationForKind(kind),
         }),
       });
       const d = await res.json();
@@ -111,24 +119,30 @@ export function AiGenerateSessionModal({
           <button onClick={onClose} className="text-neutral-400 text-xl leading-none">✕</button>
         </div>
 
-        {/* Kind selector */}
-        <div className="mb-3">
-          <label className="text-[11px] text-neutral-500 block mb-1">Tipo de sesión</label>
-          <div className="flex gap-1">
-            {(["accesorios", "entrenamiento"] as const).map((k) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => setKind(k)}
-                className={`flex-1 text-xs px-2 py-2 rounded border font-medium ${
-                  kind === k ? "bg-neutral-900 text-white border-neutral-900" : "bg-white border-neutral-200"
-                }`}
-              >
-                {k === "accesorios" ? "Accesorios (movilidad · técnica)" : "Entrenamiento (fuerza · metcon)"}
-              </button>
-            ))}
+        {/* Kind selector (solo si son builtins; los custom quedan fijos al programa) */}
+        {isBuiltin ? (
+          <div className="mb-3">
+            <label className="text-[11px] text-neutral-500 block mb-1">Tipo de sesión</label>
+            <div className="flex gap-1">
+              {(["accesorios", "entrenamiento"] as const).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setKind(k)}
+                  className={`flex-1 text-xs px-2 py-2 rounded border font-medium ${
+                    kind === k ? "bg-neutral-900 text-white border-neutral-900" : "bg-white border-neutral-200"
+                  }`}
+                >
+                  {k === "accesorios" ? "Accesorios (movilidad · técnica)" : "Entrenamiento (fuerza · metcon)"}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="mb-3 text-[11px] text-neutral-500 bg-neutral-50 border border-neutral-200 rounded-md px-2 py-1.5">
+            Brief usado: <strong className="text-neutral-800">{kindLabel ?? kind}</strong>
+          </div>
+        )}
 
         {/* Prompt */}
         <div className="mb-3">
@@ -148,7 +162,7 @@ export function AiGenerateSessionModal({
 
         <div className="flex gap-2 items-center justify-between flex-wrap mb-3">
           <p className="text-[11px] text-neutral-500 italic">
-            ⏱ Duración fija · {FIXED_DURATION_BY_KIND[kind]} min ({kind === "accesorios" ? "accesorios" : "entrenamiento principal"})
+            ⏱ Duración fija · {durationForKind(kind)} min
           </p>
           <button
             onClick={generate}

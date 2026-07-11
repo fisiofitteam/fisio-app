@@ -16,9 +16,12 @@ export default async function BriefIaPage({
 }: {
   searchParams: { kind?: string };
 }) {
-  // Programas rolling activos → cada uno es un kind adicional.
+  // Solo programas rolling SIN role builtin son "brief propio". Los que tienen
+  // role "advance-accesorios", "advance-entrenamiento" o "prevention" comparten
+  // brief con el builtin correspondiente y NO aparecen como pestaña — así el
+  // CEO no acaba con 4 briefs distintos para lo mismo.
   const rollingPrograms = await prisma.rollingProgram.findMany({
-    where: { isActive: true },
+    where: { isActive: true, role: "" },
     orderBy: { name: "asc" },
     select: { id: true, name: true },
   }).catch(() => [] as Array<{ id: string; name: string }>);
