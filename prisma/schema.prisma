@@ -2346,6 +2346,7 @@ model CommunityFeedPost {
 }
 
 // Comentario en un post. Autor = paciente o profesional (uno de los dos).
+// Puede ser respuesta a otro comentario (parentId) y adjuntar imagen.
 model CommunityComment {
   id             String   @id @default(cuid())
   postId         String

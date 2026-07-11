@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
+import { SendMagicLinkButton } from "@/components/SendMagicLinkButton";
 import { ProgressRing } from "@/components/ProgressRing";
 import { PatientPill, PROGRAM_TYPES, DIFFICULTIES, PROGRAM_LABELS, DIFFICULTY_LABELS } from "@/components/PatientPills";
 import { LegacyCreatePatientModal } from "@/components/LegacyCreatePatientModal";
@@ -316,9 +317,17 @@ function PatientRow({
 }) {
   return (
     <div className="card flex items-center gap-3 hover:border-neutral-300">
-      <Link href={`/fisio/paciente/${patient.id}`} className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-medium">{patient.fullName}</span>
+          <Link href={`/fisio/paciente/${patient.id}`} className="font-medium hover:underline">
+            {patient.fullName}
+          </Link>
+          {/* Botón temporal para enviar magic link por WhatsApp (grupo de seguimiento o chat directo).
+              Se eliminará la semana del 2026-07-14 según indicación del CEO. */}
+          <SendMagicLinkButton
+            patientId={patient.id}
+            whatsappGroupUrl={patient.whatsappGroupUrl ?? null}
+          />
           <PatientPill value={patient.programType} kind="program" />
           {isManager && <PatientPill value={patient.difficulty} kind="difficulty" />}
           {patient.bodyZone && (
@@ -326,9 +335,11 @@ function PatientRow({
           )}
         </div>
         {patient.appliedLevelName && (
-          <div className="text-xs text-emerald-700 mt-1">✓ Control de cargas · {patient.appliedLevelName}</div>
+          <Link href={`/fisio/paciente/${patient.id}`} className="text-xs text-emerald-700 mt-1 block hover:underline">
+            ✓ Control de cargas · {patient.appliedLevelName}
+          </Link>
         )}
-      </Link>
+      </div>
 
       <div className="hidden sm:flex flex-col items-end gap-1 flex-shrink-0">
         {patient.renewalDays !== null && (
