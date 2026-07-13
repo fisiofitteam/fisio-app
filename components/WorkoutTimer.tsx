@@ -133,10 +133,14 @@ function initialSnapshot(): Snapshot {
 
 export function WorkoutTimer({
   taskTitle,
+  taskBody,
   initialConfig,
   onClose,
 }: {
   taskTitle: string;
+  /** Descripción de la tarea (bodyText) — se muestra en un recuadro dentro
+      del timer para que el atleta lo tenga siempre a la vista. */
+  taskBody?: string | null;
   initialConfig?: TimerConfig | null;
   onClose: () => void;
 }) {
@@ -501,7 +505,7 @@ export function WorkoutTimer({
         />
       ) : snap.phase === "ready" && config ? (
         /* Vista READY: resumen claro de los bloques antes de arrancar */
-        <ReadyPreview config={config} onStart={start} />
+        <ReadyPreview config={config} taskBody={taskBody} onStart={start} />
       ) : (
         <div className="flex flex-col items-center justify-center select-none" style={{ color: COLOR.white }}>
           <div className="text-[11px] uppercase tracking-[0.35em] font-bold mb-3" style={{ color: accentColor }}>
@@ -532,7 +536,28 @@ export function WorkoutTimer({
             </div>
           )}
 
-          <div className="mt-10 flex items-center gap-4">
+          {/* Recuadro con el trabajo a realizar — el atleta lo tiene a
+              la vista durante el timer. Sutil, scroll interno si es largo. */}
+          {taskBody && snap.phase !== "done" && (
+            <div
+              className="mt-6 mx-4 rounded-xl border p-3 max-w-md w-full"
+              style={{
+                background: "rgba(255,255,255,0.06)",
+                borderColor: "rgba(255,255,255,0.12)",
+                maxHeight: "22vh",
+                overflowY: "auto",
+              }}
+            >
+              <div
+                className="text-[11px] leading-relaxed whitespace-pre-wrap font-mono"
+                style={{ color: COLOR.white, opacity: 0.85 }}
+              >
+                {taskBody}
+              </div>
+            </div>
+          )}
+
+          <div className="mt-6 flex items-center gap-4">
             <button
               onClick={reset}
               className="w-14 h-14 rounded-full flex items-center justify-center"
@@ -584,9 +609,11 @@ export function WorkoutTimer({
 
 function ReadyPreview({
   config,
+  taskBody,
   onStart,
 }: {
   config: TimerConfig;
+  taskBody?: string | null;
   onStart: () => void;
 }) {
   const total = configDurationSeconds(config);
@@ -607,6 +634,25 @@ function ReadyPreview({
           {n !== workBlocks && ` · ${n - workBlocks} ${n - workBlocks === 1 ? "descanso" : "descansos"}`}
         </div>
       </div>
+
+      {/* Descripción de la tarea (bodyText) — recuadro sutil para que el
+          atleta tenga siempre a la vista el trabajo que va a hacer */}
+      {taskBody && (
+        <div
+          className="rounded-xl border p-3 mb-4"
+          style={{
+            background: "rgba(252,211,77,0.06)",
+            borderColor: "rgba(252,211,77,0.20)",
+          }}
+        >
+          <div className="text-[9px] uppercase tracking-[0.3em] font-bold mb-1.5" style={{ color: COLOR.brandYellow }}>
+            Trabajo
+          </div>
+          <div className="text-[13px] leading-relaxed whitespace-pre-wrap font-mono" style={{ color: COLOR.white }}>
+            {taskBody}
+          </div>
+        </div>
+      )}
 
       {/* Lista de bloques */}
       <div className="space-y-1.5 mb-6">

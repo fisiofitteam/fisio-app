@@ -106,6 +106,7 @@ export function TaskTimerButton({
       {open && (
         <WorkoutTimer
           taskTitle={taskTitle}
+          taskBody={taskBody}
           initialConfig={cfg}
           onClose={() => setOpen(false)}
         />
