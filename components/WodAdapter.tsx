@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type AdaptedLine = {
@@ -16,6 +16,44 @@ type AdaptedLine = {
   physioWarning?: string | null;
 };
 
+// Persistimos el último WOD adaptado en localStorage POR PACIENTE. Petición
+// del CEO: los atletas suelen pegar el WOD la noche de antes para hacerse una
+// idea, y al día siguiente se les habia perdido. Ahora se queda fijo hasta
+// que pulsen "Limpiar" o registren la sesión al terminar.
+const STORAGE_PREFIX = "fisio-wod-adapter-v1:";
+
+type StoredState = {
+  rawText: string;
+  adapted: AdaptedLine[] | null;
+  rpe: number | null;
+  pain: number;
+  savedAt: string;
+};
+
+function storageKey(patientId: string): string {
+  return `${STORAGE_PREFIX}${patientId}`;
+}
+
+function loadFromStorage(patientId: string): StoredState | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(storageKey(patientId));
+    return raw ? (JSON.parse(raw) as StoredState) : null;
+  } catch { return null; }
+}
+
+function saveToStorage(patientId: string, s: Omit<StoredState, "savedAt">) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(storageKey(patientId), JSON.stringify({ ...s, savedAt: new Date().toISOString() }));
+  } catch { /* localStorage lleno o modo privado — no bloqueamos */ }
+}
+
+function clearStorage(patientId: string) {
+  if (typeof window === "undefined") return;
+  try { localStorage.removeItem(storageKey(patientId)); } catch { /* noop */ }
+}
+
 export function WodAdapter({ patientId }: { patientId: string }) {
   const router = useRouter();
   const [rawText, setRawText] = useState("");
@@ -25,11 +63,47 @@ export function WodAdapter({ patientId }: { patientId: string }) {
   const [rpe, setRpe] = useState<number | null>(null);
   const [pain, setPain] = useState<number>(0);
   const [saving, setSaving] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  const [restoredAt, setRestoredAt] = useState<string | null>(null);
 
   // Foto a la pizarra
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [reading, setReading] = useState(false);
   const [imgError, setImgError] = useState<string | null>(null);
+
+  // Hidratar desde localStorage al montar
+  useEffect(() => {
+    const s = loadFromStorage(patientId);
+    if (s) {
+      if (s.rawText) setRawText(s.rawText);
+      if (s.adapted) setAdapted(s.adapted);
+      if (s.rpe !== null && s.rpe !== undefined) setRpe(s.rpe);
+      if (typeof s.pain === "number") setPain(s.pain);
+      if (s.savedAt) setRestoredAt(s.savedAt);
+    }
+    setHydrated(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patientId]);
+
+  // Persistir cuando cambia algo. Solo después de la hidratación para no
+  // machacar los datos guardados con el estado inicial vacío en el primer render.
+  useEffect(() => {
+    if (!hydrated) return;
+    // Si todo está vacío no persistimos (dejamos que "Limpiar" borre).
+    if (!rawText.trim() && !adapted && rpe === null && pain === 0) return;
+    saveToStorage(patientId, { rawText, adapted, rpe, pain });
+  }, [hydrated, patientId, rawText, adapted, rpe, pain]);
+
+  function resetLocal() {
+    setRawText("");
+    setAdapted(null);
+    setRpe(null);
+    setPain(0);
+    setShowLog(false);
+    setImgError(null);
+    setRestoredAt(null);
+    clearStorage(patientId);
+  }
 
   async function readFromPhoto(file: File) {
     setImgError(null);
@@ -87,11 +161,7 @@ export function WodAdapter({ patientId }: { patientId: string }) {
       body: JSON.stringify({ patientId, rawText, adaptedText, rpe, painScore: pain, notes: "" }),
     });
     setSaving(false);
-    setShowLog(false);
-    setRawText("");
-    setAdapted(null);
-    setRpe(null);
-    setPain(0);
+    resetLocal();
     router.refresh();
     alert("Sesión registrada ✅");
   }
@@ -109,7 +179,7 @@ export function WodAdapter({ patientId }: { patientId: string }) {
             {rawText && (
               <button
                 type="button"
-                onClick={() => { setRawText(""); setAdapted(null); setImgError(null); }}
+                onClick={resetLocal}
                 className="text-[11px] text-neutral-400 hover:text-red-600"
               >
                 Limpiar
@@ -143,6 +213,11 @@ export function WodAdapter({ patientId }: { patientId: string }) {
           value={rawText}
           onChange={(e) => setRawText(e.target.value)}
         />
+        {restoredAt && rawText && (
+          <p className="text-[11px] text-neutral-500 mt-2 italic">
+            💾 Recuperado de tu última sesión ({new Date(restoredAt).toLocaleDateString("es-ES", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}). Se queda guardado hasta que pulses <strong>Limpiar</strong> o lo registres al terminar.
+          </p>
+        )}
         {imgError && (
           <p className="text-xs text-red-600 mt-2">⚠️ {imgError}</p>
         )}
