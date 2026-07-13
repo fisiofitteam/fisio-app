@@ -26,14 +26,17 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 
   const patient = await prisma.patient.findUnique({
     where: { id: params.id },
-    select: { id: true, fullName: true, phone: true },
+    select: { id: true, fullName: true, phone: true, whatsappGroupUrl: true },
   });
   if (!patient) {
     return NextResponse.json({ error: "Paciente no encontrado" }, { status: 404 });
   }
-  if (!patient.phone) {
+  // Solo bloqueamos si NI teléfono NI grupo de seguimiento — el botón
+  // funciona con cualquiera de los dos: grupo (copia al portapapeles y
+  // abre el chat del grupo) o teléfono (wa.me con texto prefijado).
+  if (!patient.phone && !patient.whatsappGroupUrl) {
     return NextResponse.json(
-      { error: "Este paciente no tiene WhatsApp guardado en su ficha." },
+      { error: "Este paciente no tiene teléfono ni grupo de WhatsApp en su ficha." },
       { status: 400 },
     );
   }
@@ -52,5 +55,6 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     url,
     waText,
     phone: patient.phone,
+    whatsappGroupUrl: patient.whatsappGroupUrl,
   });
 }
