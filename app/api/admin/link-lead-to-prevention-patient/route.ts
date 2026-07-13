@@ -61,10 +61,14 @@ export async function POST(req: NextRequest) {
   } else if (leadEmail) {
     // Extraer la parte local del email para buscar por username también
     const localPart = leadEmail.split("@")[0];
-    // Intento 1: contactValue contiene el email completo o su username
+    // El Lead tiene `email` como campo dedicado (aparte de contactValue),
+    // que es donde el CEO/setter guarda el correo cuando el contactType
+    // primario es phone o instagram. Consultamos ambos.
     lead = await prisma.lead.findFirst({
       where: {
         OR: [
+          { email:        { equals:   leadEmail, mode: "insensitive" } },
+          { email:        { contains: localPart, mode: "insensitive" } },
           { contactValue: { contains: leadEmail, mode: "insensitive" } },
           { contactValue: { contains: localPart, mode: "insensitive" } },
           { aiSummary:    { contains: leadEmail, mode: "insensitive" } },
@@ -79,7 +83,10 @@ export async function POST(req: NextRequest) {
     const candidates = await prisma.lead.findMany({
       orderBy: { createdAt: "desc" },
       take: 8,
-      select: { id: true, fullName: true, contactType: true, contactValue: true, status: true, createdAt: true, callScheduledAt: true },
+      select: {
+        id: true, fullName: true, contactType: true, contactValue: true,
+        email: true, phone: true, status: true, createdAt: true, callScheduledAt: true,
+      },
     });
     return NextResponse.json({
       error: "Lead no encontrado con esos datos. Aquí tienes los últimos 8 para que copies el id correcto y lo mandes como leadId:",
