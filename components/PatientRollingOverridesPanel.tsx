@@ -2,14 +2,11 @@
 
 /**
  * Panel para que el fisio personalice el rolling de un atleta concreto.
- * Muestra las 2 semanas próximas (actual + siguiente) del rolling asignado,
- * con cada tarea del rolling y la posibilidad de:
- *   - Modificar título / cuerpo / vídeo (solo para este atleta).
- *   - Ocultar la tarea para este atleta.
- *   - Quitar el override (vuelve al original).
- *
- * Solo lectura del rolling maestro — no toca las tareas de todos, solo
- * inserta un PatientRollingTaskOverride que se aplica al renderizar.
+ * Muestra las 2 semanas próximas (actual + siguiente) del rolling asignado
+ * con la MISMA visual que /fisio/rolling-lectura (RollingReadOnlyList):
+ * card por semana + border-l-2 por día + tareas compactas. Al pulsar el
+ * lápiz en una tarea se abre edición inline para modificar título/cuerpo
+ * SOLO para ese atleta. Nunca toca el rolling maestro.
  */
 
 import { useEffect, useState } from "react";
@@ -34,7 +31,7 @@ type RollingWeek = {
 type ProgramWeeks = {
   programId: string;
   programName: string;
-  weeks: RollingWeek[];   // [actual, siguiente]
+  weeks: RollingWeek[];
 };
 
 type Override = {
@@ -45,7 +42,14 @@ type Override = {
   videoId: string | null;
 };
 
-const DAY_NAMES = ["", "Lun", "Mar", "Mié", "Jue", "Vie"];
+const DAY_NAMES = ["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
+
+const TYPE_ICONS: Record<string, string> = {
+  WORKOUT: "💪",
+  VIDEO: "🎥",
+  FORM: "📝",
+  EVOLUTION: "📊",
+};
 
 export function PatientRollingOverridesPanel({
   patientId,
@@ -104,7 +108,7 @@ export function PatientRollingOverridesPanel({
       body: JSON.stringify({ ...next, patientId, taskId }),
     });
     if (!res.ok) flash("err", "No se pudo guardar el cambio");
-    else flash("ok", "Cambio guardado para " + patientName);
+    else flash("ok", `Cambio guardado para ${patientName}`);
   }
 
   async function removeOverride(taskId: string) {
@@ -116,6 +120,8 @@ export function PatientRollingOverridesPanel({
     await fetch(`/api/patient-rolling-overrides?patientId=${patientId}&taskId=${taskId}`, { method: "DELETE" });
     flash("ok", "Vuelve al original");
   }
+
+  const hasContent = acc || trn;
 
   return (
     <section className="card space-y-3">
@@ -143,12 +149,33 @@ export function PatientRollingOverridesPanel({
       {expanded && (
         loading ? (
           <p className="text-xs text-neutral-500 italic">Cargando…</p>
+        ) : !hasContent ? (
+          <p className="text-xs text-neutral-500 italic">No hay contenido programado en las próximas 2 semanas.</p>
         ) : (
-          <div className="space-y-4">
-            {acc && <ProgramSection label="Accesorios" color="#3B82F6" data={acc} overrides={overrides} onSaveOverride={saveOverride} onRemoveOverride={removeOverride} editingTaskId={editingTaskId} setEditingTaskId={setEditingTaskId} />}
-            {trn && <ProgramSection label="Entrenamiento" color="#F59E0B" data={trn} overrides={overrides} onSaveOverride={saveOverride} onRemoveOverride={removeOverride} editingTaskId={editingTaskId} setEditingTaskId={setEditingTaskId} />}
-            {!acc && !trn && (
-              <p className="text-xs text-neutral-500 italic">No hay contenido programado en las próximas 2 semanas.</p>
+          <div className="space-y-6">
+            {acc && (
+              <ProgramReadOnly
+                label="Accesorios"
+                color="#3B82F6"
+                data={acc}
+                overrides={overrides}
+                editingTaskId={editingTaskId}
+                setEditingTaskId={setEditingTaskId}
+                saveOverride={saveOverride}
+                removeOverride={removeOverride}
+              />
+            )}
+            {trn && (
+              <ProgramReadOnly
+                label="Entrenamiento"
+                color="#F59E0B"
+                data={trn}
+                overrides={overrides}
+                editingTaskId={editingTaskId}
+                setEditingTaskId={setEditingTaskId}
+                saveOverride={saveOverride}
+                removeOverride={removeOverride}
+              />
             )}
           </div>
         )
@@ -157,20 +184,22 @@ export function PatientRollingOverridesPanel({
   );
 }
 
-function ProgramSection({
-  label, color, data, overrides, onSaveOverride, onRemoveOverride, editingTaskId, setEditingTaskId,
+// ────────────────────────── Vista tipo RollingReadOnlyList ──────────────────────────
+
+function ProgramReadOnly({
+  label, color, data, overrides, editingTaskId, setEditingTaskId, saveOverride, removeOverride,
 }: {
   label: string;
   color: string;
   data: ProgramWeeks;
   overrides: Record<string, Override>;
-  onSaveOverride: (taskId: string, patch: Partial<Override>) => Promise<void>;
-  onRemoveOverride: (taskId: string) => Promise<void>;
   editingTaskId: string | null;
   setEditingTaskId: (id: string | null) => void;
+  saveOverride: (taskId: string, patch: Partial<Override>) => Promise<void>;
+  removeOverride: (taskId: string) => Promise<void>;
 }) {
   return (
-    <div className="rounded-xl border border-neutral-200 bg-neutral-50/50 p-3">
+    <div>
       <div className="flex items-center gap-2 mb-2">
         <span className="text-[10px] font-bold px-2 py-0.5 rounded" style={{ background: color + "22", color }}>
           {label.toUpperCase()}
@@ -179,44 +208,53 @@ function ProgramSection({
       </div>
 
       {data.weeks.length === 0 ? (
-        <p className="text-[11px] text-neutral-500 italic">Sin semanas programadas.</p>
+        <div className="rounded-xl border border-dashed border-neutral-200 bg-neutral-50 py-6 text-center text-xs text-neutral-500 italic">
+          Sin semanas programadas.
+        </div>
       ) : (
         <div className="space-y-3">
           {data.weeks.map((w) => (
-            <div key={w.id} className="rounded-lg border border-neutral-200 bg-white p-2.5">
-              <div className="flex items-center justify-between mb-1.5">
-                <div className="text-xs font-semibold">
-                  Semana del {new Date(w.weekStartDate).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
+            <div key={w.id} className="rounded-xl border border-neutral-200 bg-white p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-medium text-sm">
+                  Semana del {new Date(w.weekStartDate).toLocaleDateString("es-ES", { day: "numeric", month: "long" })}
                   {w.title && <span className="ml-2 text-neutral-500 font-normal">· {w.title}</span>}
-                </div>
-                {!w.publishedAt && <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-500">Borrador</span>}
+                </h3>
+                {!w.publishedAt && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
+                    Borrador
+                  </span>
+                )}
               </div>
+
               {w.days.length === 0 ? (
-                <p className="text-[11px] text-neutral-400 italic">Sin días programados.</p>
+                <p className="text-xs text-neutral-400 italic">Sin días programados.</p>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {w.days.map((d) => (
-                    <div key={d.dayOfWeek} className="flex items-start gap-2">
-                      <div className="text-[10px] font-bold text-neutral-500 uppercase w-8 pt-1">{DAY_NAMES[d.dayOfWeek]}</div>
-                      <div className="flex-1 space-y-1.5">
-                        {d.tasks.length === 0 ? (
-                          <div className="text-[11px] text-neutral-400 italic">—</div>
-                        ) : (
-                          d.tasks.map((t) => (
-                            <TaskRow
+                    <div key={d.dayOfWeek} className="border-l-2 border-neutral-200 pl-3">
+                      <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider mb-1.5">
+                        {DAY_NAMES[d.dayOfWeek]}
+                      </div>
+                      {d.tasks.length === 0 ? (
+                        <div className="text-xs text-neutral-400 italic">—</div>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {d.tasks.map((t) => (
+                            <TaskEditableRow
                               key={t.id}
                               task={t}
                               override={overrides[t.id]}
                               editing={editingTaskId === t.id}
                               onEdit={() => setEditingTaskId(t.id)}
                               onCancelEdit={() => setEditingTaskId(null)}
-                              onSave={(patch) => { onSaveOverride(t.id, patch); setEditingTaskId(null); }}
-                              onHide={() => onSaveOverride(t.id, { hidden: true })}
-                              onRestore={() => onRemoveOverride(t.id)}
+                              onSave={(patch) => { saveOverride(t.id, patch); setEditingTaskId(null); }}
+                              onHide={() => saveOverride(t.id, { hidden: true })}
+                              onRestore={() => removeOverride(t.id)}
                             />
-                          ))
-                        )}
-                      </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -229,7 +267,7 @@ function ProgramSection({
   );
 }
 
-function TaskRow({
+function TaskEditableRow({
   task, override, editing, onEdit, onCancelEdit, onSave, onHide, onRestore,
 }: {
   task: RollingTask;
@@ -252,70 +290,96 @@ function TaskRow({
   const isHidden = !!override?.hidden;
   const isModified = !isHidden && !!override && (override.title !== null || override.bodyText !== null || override.videoId !== null);
 
+  // Estado edición: fondo azul, inputs, save/cancel
   if (editing) {
     return (
-      <div className="rounded-md border border-blue-300 bg-blue-50/50 p-2">
-        <input
-          className="input text-xs w-full mb-1.5"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Título"
-        />
+      <div className="rounded-md border-2 border-blue-400 bg-blue-50/50 p-3">
+        <div className="flex items-baseline gap-1.5 mb-2">
+          <span className="text-sm">{TYPE_ICONS[task.type] || "•"}</span>
+          <input
+            className="flex-1 text-sm font-medium bg-white border border-neutral-300 rounded px-2 py-1 outline-none focus:border-blue-500"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Título"
+            autoFocus
+          />
+        </div>
         <textarea
-          className="input text-xs w-full font-mono"
-          rows={3}
+          className="w-full text-xs text-neutral-700 bg-white border border-neutral-300 rounded px-2 py-1.5 font-mono outline-none focus:border-blue-500"
+          rows={Math.max(3, Math.min(10, (body.match(/\n/g)?.length ?? 0) + 2))}
           value={body}
           onChange={(e) => setBody(e.target.value)}
           placeholder="Cuerpo (opcional)"
         />
-        <div className="flex justify-end gap-1 mt-1.5">
-          <button onClick={onCancelEdit} className="text-[11px] px-2 py-1 rounded hover:bg-neutral-200">
-            <X size={12} className="inline" /> Cancelar
+        <div className="flex justify-end gap-1 mt-2">
+          <button onClick={onCancelEdit} className="text-[11px] px-2 py-1 rounded hover:bg-neutral-200 text-neutral-600 flex items-center gap-1">
+            <X size={12} /> Cancelar
           </button>
           <button
             onClick={() => onSave({ title: title.trim() || null, bodyText: body.trim() || null, hidden: false })}
-            className="text-[11px] font-semibold px-2 py-1 rounded bg-blue-600 text-white"
+            className="text-[11px] font-semibold px-2.5 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-1"
           >
-            <Save size={12} className="inline" /> Guardar
+            <Save size={12} /> Guardar para este atleta
           </button>
         </div>
       </div>
     );
   }
 
+  // Vista normal: card compacta con hover para mostrar acciones
+  const displayTitle = override?.title ?? task.title;
+  const displayBody = override?.bodyText ?? task.bodyText;
+
+  const rowBg = isHidden
+    ? "border-red-200 bg-red-50/40"
+    : isModified
+      ? "border-amber-300 bg-amber-50/50"
+      : "border-neutral-200 bg-neutral-50 hover:bg-white";
+
   return (
-    <div
-      className={`rounded-md p-2 border transition-colors ${
-        isHidden ? "border-red-200 bg-red-50/30" :
-        isModified ? "border-amber-300 bg-amber-50/40" :
-        "border-neutral-200 bg-white"
-      }`}
-    >
+    <div className={`group rounded-md border p-2.5 transition-colors ${rowBg}`}>
       <div className="flex items-start gap-2">
+        <span className="text-sm mt-0.5">{TYPE_ICONS[task.type] || "•"}</span>
         <div className="flex-1 min-w-0">
-          <div className={`text-xs font-medium ${isHidden ? "line-through text-neutral-400" : ""}`}>
-            {override?.title ?? task.title}
-            {isModified && <span className="ml-2 text-[9px] font-bold text-amber-700">MODIFICADO</span>}
-            {isHidden && <span className="ml-2 text-[9px] font-bold text-red-700">OCULTO</span>}
+          <div className={`text-sm font-medium ${isHidden ? "line-through text-neutral-400" : ""}`}>
+            {displayTitle}
+            {isModified && (
+              <span className="ml-2 text-[9px] font-bold text-amber-700 uppercase tracking-wider">Modificado</span>
+            )}
+            {isHidden && (
+              <span className="ml-2 text-[9px] font-bold text-red-700 uppercase tracking-wider">Oculto</span>
+            )}
           </div>
-          {(override?.bodyText ?? task.bodyText) && !isHidden && (
-            <div className="text-[10px] text-neutral-500 mt-0.5 line-clamp-2 whitespace-pre-wrap">
-              {override?.bodyText ?? task.bodyText}
+          {displayBody && !isHidden && (
+            <div className="text-xs text-neutral-600 mt-1 whitespace-pre-wrap">
+              {displayBody}
             </div>
           )}
         </div>
-        <div className="flex items-center gap-0.5 flex-shrink-0">
+        <div className="flex items-center gap-0.5 flex-shrink-0 md:opacity-0 group-hover:opacity-100 transition-opacity">
           {(isHidden || isModified) && (
-            <button onClick={onRestore} title="Volver al original" className="p-1 rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700">
-              <RotateCcw size={12} />
+            <button
+              onClick={onRestore}
+              title="Volver al original"
+              className="p-1.5 rounded hover:bg-neutral-200 text-neutral-400 hover:text-neutral-700"
+            >
+              <RotateCcw size={13} />
             </button>
           )}
-          <button onClick={onEdit} title="Modificar para este atleta" className="p-1 rounded hover:bg-blue-100 text-neutral-400 hover:text-blue-700">
-            <Pencil size={12} />
+          <button
+            onClick={onEdit}
+            title="Modificar para este atleta"
+            className="p-1.5 rounded hover:bg-blue-100 text-neutral-400 hover:text-blue-700"
+          >
+            <Pencil size={13} />
           </button>
           {!isHidden && (
-            <button onClick={onHide} title="Ocultar para este atleta" className="p-1 rounded hover:bg-red-100 text-neutral-400 hover:text-red-700">
-              <EyeOff size={12} />
+            <button
+              onClick={onHide}
+              title="Ocultar para este atleta"
+              className="p-1.5 rounded hover:bg-red-100 text-neutral-400 hover:text-red-700"
+            >
+              <EyeOff size={13} />
             </button>
           )}
         </div>
