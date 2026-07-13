@@ -71,6 +71,7 @@ export function PatientHomeRolling({
   daysToExpire,
   needsShirtSize,
   shippingComplete = true,
+  individualSessionToday,
 }: {
   firstName: string;
   patientId: string;
@@ -87,6 +88,11 @@ export function PatientHomeRolling({
   needsShirtSize?: boolean;
   /** false → mostramos banner "Completa tu dirección postal" (mismo de Dark). */
   shippingComplete?: boolean;
+  /**
+   * Sesión individual del ProgramAssignment del atleta que toca HOY, si la hay.
+   * Se pinta como header adicional al lado del rolling ("Trabajo específico").
+   */
+  individualSessionToday?: { sessionId: string; programName: string; completed: boolean } | null;
 }) {
   const initial = firstName[0]?.toUpperCase() ?? "?";
 
@@ -230,6 +236,36 @@ export function PatientHomeRolling({
                 </div>
                 <div className="text-xs mt-1.5 font-medium opacity-80">
                   Pulsa para empezar
+                </div>
+              </div>
+              <div className="text-2xl font-bold flex-shrink-0">→</div>
+            </div>
+          </Link>
+        )}
+
+        {/* 🎯 Trabajo específico — el atleta ADVANCE tiene además un Program
+             individual asignado (typo tendinoso, adaptación clínica…). Se
+             muestra como header adicional al lado del rolling. Distinto color
+             para diferenciar (morado suave). */}
+        {individualSessionToday && (
+          <Link
+            href={`/paciente/${patientId}/sesion/${individualSessionToday.sessionId}`}
+            className="block rounded-2xl p-5 mb-5 transition-transform active:scale-[0.98]"
+            style={{
+              background: "linear-gradient(135deg, #7C3AED 0%, #5B21B6 100%)",
+              color: "#FAFAFA",
+            }}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[10px] font-bold tracking-wider uppercase opacity-80 mb-1">
+                  Trabajo específico
+                </div>
+                <div className="text-lg font-bold flex items-center gap-2" style={{ letterSpacing: "-0.02em" }}>
+                  🎯 {individualSessionToday.programName}
+                </div>
+                <div className="text-xs mt-1.5 font-medium opacity-80">
+                  {individualSessionToday.completed ? "Completada · pulsa para revisar" : "Pulsa para empezar"}
                 </div>
               </div>
               <div className="text-2xl font-bold flex-shrink-0">→</div>

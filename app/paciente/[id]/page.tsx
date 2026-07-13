@@ -210,10 +210,25 @@ export default async function PatientHome({ params }: { params: { id: string } }
         },
       });
 
-    const [accWeek, trnWeek, patientOverrides] = await Promise.all([
+    // Sesión individual de HOY (si el atleta ADVANCE tiene además un
+    // ProgramAssignment activo — "trabajo específico" además del rolling).
+    const todayUtc = new Date();
+    todayUtc.setHours(0, 0, 0, 0);
+    const tomorrowUtc = new Date(todayUtc);
+    tomorrowUtc.setDate(todayUtc.getDate() + 1);
+    const individualSessionPromise = prisma.programSession.findFirst({
+      where: {
+        assignment: { patientId: patient.id, isActive: true },
+        scheduledDate: { gte: todayUtc, lt: tomorrowUtc },
+      },
+      include: { assignment: { include: { program: { select: { name: true } } } } },
+    }).catch(() => null);
+
+    const [accWeek, trnWeek, patientOverrides, individualSessionToday] = await Promise.all([
       fetchWeek(accId),
       fetchWeek(trnId),
       fetchOverridesForPatient(patient.id),
+      individualSessionPromise,
     ]);
     // Aplica overrides individuales del atleta a las tareas de cada día del rolling.
     if (accWeek) accWeek.days = accWeek.days.map((d: any) => ({ ...d, tasks: applyRollingOverridesToTasks(d.tasks, patientOverrides as any) }));
@@ -360,6 +375,11 @@ export default async function PatientHome({ params }: { params: { id: string } }
         // de antes y no deben ver el selector.
         needsShirtSize={patient.programType === "ADVANCE" && !patient.shirtSize && !patient.giftsAlreadySent}
         shippingComplete={!!(patient.shippingStreet && patient.shippingNumber && patient.shippingCity && patient.shippingPostalCode)}
+        individualSessionToday={individualSessionToday ? {
+          sessionId: individualSessionToday.id,
+          programName: individualSessionToday.assignment.program.name,
+          completed: !!individualSessionToday.completedAt,
+        } : null}
       />
     );
   }

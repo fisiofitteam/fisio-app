@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { PROGRAM_TYPES, DIFFICULTIES, PROGRAM_LABELS, DIFFICULTY_LABELS } from "./PatientPills";
 import { RollingAssignmentBlock } from "./RollingAssignmentBlock";
 import { PatientRollingOverridesPanel } from "./PatientRollingOverridesPanel";
+import { PatientIndividualProgramPanel } from "./PatientIndividualProgramPanel";
 import { DeletePatientButton } from "./DeletePatientButton";
 import { IssueInvoiceButton } from "./IssueInvoiceButton";
 
@@ -371,6 +372,16 @@ export function ClinicalFile({
           patientName={patient.fullName}
           accessoriesId={patient.rollingAccessoriesId}
           trainingId={patient.rollingTrainingId || patient.rollingProgramId}
+        />
+      )}
+
+      {/* Trabajo específico: programas individuales además del rolling.
+          Solo tiene sentido para ADVANCE en modo rolling (los demás ya
+          usan Program como programa principal). */}
+      {patient.programType === "ADVANCE" && patient.programMode === "rolling" && (
+        <PatientIndividualProgramPanel
+          patientId={patient.id}
+          patientName={patient.fullName}
         />
       )}
 
