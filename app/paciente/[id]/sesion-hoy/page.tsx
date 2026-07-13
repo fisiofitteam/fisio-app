@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { weekStartDate, todayMadridUtc } from "@/lib/program-pauses";
 import { resolveVisibleRollingWeek } from "@/lib/rolling-visible-week";
+import { applyRollingOverridesToTasks, fetchOverridesForPatient } from "@/lib/apply-rolling-overrides";
 import { PatientDailyLogForm } from "@/components/PatientDailyLogForm";
 import { RollingExerciseVideos, type RollingExercise } from "@/components/RollingExerciseVideos";
 import { TaskTimerButton } from "@/components/TaskTimerButton";
@@ -83,11 +84,19 @@ export default async function SesionHoyPage({ params }: { params: { id: string }
     return week.days.flatMap((d: any) => d.tasks);
   }
 
-  const [accTasksRaw, trnTasksRaw] = await Promise.all([fetchDayTasks(accId), fetchDayTasks(trnId)]);
+  const [accTasksRaw, trnTasksRaw, overrides] = await Promise.all([
+    fetchDayTasks(accId),
+    fetchDayTasks(trnId),
+    fetchOverridesForPatient(patient.id),
+  ]);
+  // Aplica overrides individuales del atleta (fisio puede haber ocultado /
+  // modificado tareas para él). Los IDs de RollingTask son estables.
+  const accTasksOv = applyRollingOverridesToTasks(accTasksRaw as any, overrides as any);
+  const trnTasksOv = applyRollingOverridesToTasks(trnTasksRaw as any, overrides as any);
 
   // Resolver vídeos referenciados
   const videoIds = new Set<string>();
-  for (const t of [...accTasksRaw, ...trnTasksRaw]) {
+  for (const t of [...accTasksOv, ...trnTasksOv]) {
     if ((t.type === "VIDEO" || t.type === "WORKOUT") && t.videoId) videoIds.add(t.videoId);
   }
   const videosById: Record<string, { youtubeUrl: string }> = {};
@@ -114,8 +123,8 @@ export default async function SesionHoyPage({ params }: { params: { id: string }
       })) as RollingExercise[],
     }));
 
-  const accTasks = resolve(accTasksRaw);
-  const trnTasks = resolve(trnTasksRaw);
+  const accTasks = resolve(accTasksOv as any);
+  const trnTasks = resolve(trnTasksOv as any);
   const hasAny = accTasks.length > 0 || trnTasks.length > 0;
 
   // Log diario de hoy (para precargar el formulario si ya registró)

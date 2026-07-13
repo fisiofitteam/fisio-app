@@ -161,6 +161,7 @@ model Patient {
   pushTokens      PatientPushToken[]
   loadReviewRecords LoadReviewRecord[]
   categoryLevels  PatientCategoryLevel[]  @relation("PatientCategoryLevels")
+  rollingOverrides PatientRollingTaskOverride[] @relation("PatientRollingOverrides")
   sales           Sale[]
   invoices        PatientInvoice[]
   communityComments  CommunityComment[]
@@ -1611,8 +1612,32 @@ model RollingTask {
   formId      String?
 
   exercises   RollingTaskExercise[]
+  overrides   PatientRollingTaskOverride[]
 
   @@index([dayId])
+}
+
+// Override individual de una RollingTask para UN paciente concreto.
+// Permite al fisio "modificar" (título/cuerpo/vídeo) o "ocultar" una tarea
+// del rolling maestro sólo para ese atleta. La tarea del rolling maestra no
+// se toca — sigue viéndose para todos los demás. Al renderizar el rolling
+// del paciente, si existe override lo aplicamos encima.
+model PatientRollingTaskOverride {
+  id            String   @id @default(cuid())
+  patientId     String
+  patient       Patient  @relation("PatientRollingOverrides", fields: [patientId], references: [id], onDelete: Cascade)
+  taskId        String
+  task          RollingTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  hidden        Boolean  @default(false)   // true = no mostrar esta tarea al atleta
+  title         String?                    // null = usar el título original
+  bodyText      String?                    // null = usar el body original
+  videoId       String?                    // null = usar el vídeo original
+  createdById   String?                    // id del pro que lo creó
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([patientId, taskId])
+  @@index([patientId])
 }
 
 model RollingTaskExercise {

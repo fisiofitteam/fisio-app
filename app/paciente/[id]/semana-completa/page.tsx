@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { weekStartDate } from "@/lib/program-pauses";
 import { resolveVisibleRollingWeek } from "@/lib/rolling-visible-week";
+import { applyRollingOverridesToTasks, fetchOverridesForPatient } from "@/lib/apply-rolling-overrides";
 import { PatientNav } from "@/components/PatientNav";
 import { RollingWeekView } from "@/components/RollingWeekView";
 
@@ -69,7 +70,14 @@ export default async function PatientSemanaCompletaPage({
         orderBy: { dayOfWeek: "asc" },
       },
     });
-  const [accWeek, trnWeek] = await Promise.all([fetchWeek(accId), fetchWeek(trnId)]);
+  const [accWeek, trnWeek, overrides] = await Promise.all([
+    fetchWeek(accId),
+    fetchWeek(trnId),
+    fetchOverridesForPatient(patient.id),
+  ]);
+  // Aplica overrides individuales del atleta a las tareas de cada día.
+  if (accWeek) accWeek.days = accWeek.days.map((d: any) => ({ ...d, tasks: applyRollingOverridesToTasks(d.tasks, overrides as any) }));
+  if (trnWeek) trnWeek.days = trnWeek.days.map((d: any) => ({ ...d, tasks: applyRollingOverridesToTasks(d.tasks, overrides as any) }));
 
   // Vídeos referenciados en las tareas
   const allTasksFlat = [

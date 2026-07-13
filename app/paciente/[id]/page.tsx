@@ -11,6 +11,7 @@ import { pickWelcomeMessage } from "@/lib/welcome-content";
 import { applyVars } from "@/lib/landing-content";
 import { ensurePreventionRollingProgram } from "@/lib/prevention";
 import { resolveVisibleRollingWeek } from "@/lib/rolling-visible-week";
+import { applyRollingOverridesToTasks, fetchOverridesForPatient } from "@/lib/apply-rolling-overrides";
 
 export default async function PatientHome({ params }: { params: { id: string } }) {
   const patient = await prisma.patient.findUnique({
@@ -209,7 +210,14 @@ export default async function PatientHome({ params }: { params: { id: string } }
         },
       });
 
-    const [accWeek, trnWeek] = await Promise.all([fetchWeek(accId), fetchWeek(trnId)]);
+    const [accWeek, trnWeek, patientOverrides] = await Promise.all([
+      fetchWeek(accId),
+      fetchWeek(trnId),
+      fetchOverridesForPatient(patient.id),
+    ]);
+    // Aplica overrides individuales del atleta a las tareas de cada día del rolling.
+    if (accWeek) accWeek.days = accWeek.days.map((d: any) => ({ ...d, tasks: applyRollingOverridesToTasks(d.tasks, patientOverrides as any) }));
+    if (trnWeek) trnWeek.days = trnWeek.days.map((d: any) => ({ ...d, tasks: applyRollingOverridesToTasks(d.tasks, patientOverrides as any) }));
 
     // Resolver vídeos referenciados de ambos rollings
     let videosById: Record<string, { youtubeUrl: string; title: string }> = {};

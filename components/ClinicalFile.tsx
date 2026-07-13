@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PROGRAM_TYPES, DIFFICULTIES, PROGRAM_LABELS, DIFFICULTY_LABELS } from "./PatientPills";
 import { RollingAssignmentBlock } from "./RollingAssignmentBlock";
+import { PatientRollingOverridesPanel } from "./PatientRollingOverridesPanel";
 import { DeletePatientButton } from "./DeletePatientButton";
 import { IssueInvoiceButton } from "./IssueInvoiceButton";
 
@@ -361,6 +362,17 @@ export function ClinicalFile({
           isManager={isManager}
         />
       </section>
+
+      {/* Personalización del rolling para este atleta concreto. Solo aparece
+          si está en modo rolling y tiene al menos un rolling asignado. */}
+      {patient.programMode === "rolling" && (patient.rollingAccessoriesId || patient.rollingTrainingId || patient.rollingProgramId) && (
+        <PatientRollingOverridesPanel
+          patientId={patient.id}
+          patientName={patient.fullName}
+          accessoriesId={patient.rollingAccessoriesId}
+          trainingId={patient.rollingTrainingId || patient.rollingProgramId}
+        />
+      )}
 
       <div className="flex justify-end items-center gap-3">
         {savedAt && <span className="text-xs text-emerald-600">✓ Guardado</span>}
