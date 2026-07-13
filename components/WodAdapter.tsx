@@ -190,17 +190,20 @@ export function WodAdapter({ patientId }: { patientId: string }) {
               onClick={() => fileRef.current?.click()}
               disabled={reading || loading}
               className="text-xs px-2 py-1 rounded bg-neutral-900 text-white hover:bg-neutral-800 disabled:opacity-50"
-              title="Haz una foto de la pizarra y deja que la IA lo transcriba"
+              title="Haz una foto de la pizarra o elige una imagen de la galería"
             >
-              {reading ? "Leyendo pizarra…" : "📸 Foto a la pizarra"}
+              {reading ? "Leyendo pizarra…" : "📸 Foto o galería"}
             </button>
           </div>
         </div>
+        {/* Sin `capture` para que el sistema (iOS/Android/web) muestre el
+             selector con ambas opciones: cámara y galería. El atleta puede
+             estar en el box (foto directa) o revisar en casa una foto que ya
+             hizo antes (galería). */}
         <input
           ref={fileRef}
           type="file"
           accept="image/*"
-          capture="environment"
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];
