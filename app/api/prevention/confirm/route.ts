@@ -128,6 +128,25 @@ export async function POST(req: Request) {
     originSource: "landing",
   });
 
+  // ─── 3.5 Cerrar el ciclo comercial si el link vino de un closer ──────
+  // El endpoint /api/leads/[id]/generate-prevention-link mete leadId +
+  // closerId en la metadata. Si están, marcamos el Lead como won y le
+  // asignamos el closer que cerró la venta.
+  const leadIdFromMeta = typeof session.metadata?.leadId === "string" ? session.metadata.leadId : null;
+  const closerIdFromMeta = typeof session.metadata?.closerId === "string" ? session.metadata.closerId : null;
+  if (leadIdFromMeta) {
+    await prisma.lead.update({
+      where: { id: leadIdFromMeta },
+      data: {
+        status: "won",
+        decidedAt: new Date(),
+        ...(closerIdFromMeta ? { closerId: closerIdFromMeta } : {}),
+      },
+    }).catch((err) => {
+      console.error("[prevention/confirm] Error marcando lead como won:", err);
+    });
+  }
+
   // ─── 4. Crear sesión web para que el paciente entre directo ───────────
   // Solo la primera vez (createdNew). En reintentos (webhook + confirm),
   // no queremos generar otra cookie de sesión.

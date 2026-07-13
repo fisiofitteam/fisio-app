@@ -32,8 +32,15 @@ type ActiveSale = {
   createdAt: string;
 };
 
-type ProgramType = "RECUPERA" | "CONSOLIDA";
+type ProgramType = "RECUPERA" | "CONSOLIDA" | "PREVENTION";
 type Duration = 4 | 6;
+type PreventionPlan = "quarterly" | "semiannual" | "annual";
+
+const PREVENTION_PLAN_LABELS: Record<PreventionPlan, string> = {
+  quarterly: "3 meses",
+  semiannual: "6 meses",
+  annual: "12 meses",
+};
 
 const APP_BASE_URL = "https://app.fisiofitteam.com"; // dominio público para el link
 
@@ -45,9 +52,10 @@ export function PaymentLinkModal({
   onClose: () => void;
 }) {
   // Estados del wizard
-  const [step, setStep] = useState<"loading" | "existing" | "program" | "duration" | "price" | "result">("loading");
+  const [step, setStep] = useState<"loading" | "existing" | "program" | "duration" | "price" | "prevention-plan" | "result">("loading");
   const [program, setProgram] = useState<ProgramType | null>(null);
   const [duration, setDuration] = useState<Duration | null>(null);
+  const [preventionPlan, setPreventionPlan] = useState<PreventionPlan | null>(null);
   // Precio personalizable (en euros). Se prellena con el default Stripe cuando se entra al paso "price".
   const [priceEuros, setPriceEuros] = useState<string>("");
   const [priceSuggested, setPriceSuggested] = useState<number | null>(null); // en céntimos
@@ -183,6 +191,48 @@ export function PaymentLinkModal({
     }
   }
 
+  // ── Acción: crear link Prevention (Stripe subscription) ─────────────
+  async function generatePreventionLink() {
+    if (!preventionPlan) return;
+    setWorking(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/generate-prevention-link`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: preventionPlan }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || "No se pudo generar el link");
+
+      setGeneratedLink(data.url);
+      setGeneratedLabel(data.productLabel);
+
+      // Si tiene teléfono, abrir WhatsApp con mensaje precargado
+      const wa = buildPreventionWhatsAppLink(data.url, PREVENTION_PLAN_LABELS[preventionPlan]);
+      if (wa) window.open(wa, "_blank", "noopener,noreferrer");
+
+      setStep("result");
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  function buildPreventionWhatsAppLink(paymentUrl: string, planLabel: string): string | null {
+    if (lead.contactType !== "phone") return null;
+    const raw = lead.contactValue.replace(/[^\d+]/g, "");
+    if (!raw) return null;
+    const first = lead.fullName.split(" ")[0] || "";
+    const msg =
+      `¡Hola ${first}! 👋\n\n` +
+      `Aquí tienes el link para suscribirte a FisioFit Prevention (${planLabel}):\n\n` +
+      `${paymentUrl}\n\n` +
+      `Tienes 4 días de prueba antes del primer cobro. Cualquier duda, me dices.`;
+    return `https://wa.me/${raw.replace(/^\+/, "")}?text=${encodeURIComponent(msg)}`;
+  }
+
   // ── Copiar al portapapeles ───────────────────────────────────────────────
   async function copyToClipboard(text: string) {
     try {
@@ -282,14 +332,15 @@ export function PaymentLinkModal({
             <p className="text-sm text-neutral-700">¿Qué programa va a contratar?</p>
             <div className="grid grid-cols-1 gap-2">
               {[
-                { value: "RECUPERA", label: "RECUPERA", desc: "Recupera tu rendimiento sin dolor" },
-                { value: "CONSOLIDA", label: "CONSOLIDA", desc: "Mantén la mejora y consolida resultados" },
+                { value: "RECUPERA",   label: "RECUPERA",              desc: "Recupera tu rendimiento sin dolor" },
+                { value: "CONSOLIDA",  label: "CONSOLIDA",             desc: "Mantén la mejora y consolida resultados" },
+                { value: "PREVENTION", label: "FisioFit Prevention 🛡", desc: "Suscripción recurrente · 4 días de prueba" },
               ].map((p) => (
                 <button
                   key={p.value}
                   onClick={() => {
                     setProgram(p.value as ProgramType);
-                    setStep("duration");
+                    setStep(p.value === "PREVENTION" ? "prevention-plan" : "duration");
                   }}
                   className="text-left px-4 py-3 rounded-lg border border-neutral-200 hover:border-neutral-900 hover:bg-neutral-50 transition"
                 >
@@ -298,6 +349,50 @@ export function PaymentLinkModal({
                 </button>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* ── Paso Prevention: elegir plan (3/6/12 meses) ────────────────── */}
+        {step === "prevention-plan" && program === "PREVENTION" && (
+          <div className="space-y-3">
+            <button
+              onClick={() => { setProgram(null); setPreventionPlan(null); setError(""); setStep("program"); }}
+              className="text-xs text-neutral-500 hover:text-neutral-900"
+            >
+              ← Cambiar programa
+            </button>
+            <p className="text-sm text-neutral-700">
+              <strong>FisioFit Prevention 🛡</strong>. ¿Qué compromiso?
+            </p>
+            <div className="grid grid-cols-1 gap-2">
+              {(Object.keys(PREVENTION_PLAN_LABELS) as PreventionPlan[]).map((pl) => (
+                <button
+                  key={pl}
+                  onClick={() => setPreventionPlan(pl)}
+                  className={`px-4 py-3 rounded-lg border font-medium text-sm text-left ${
+                    preventionPlan === pl
+                      ? "bg-neutral-900 text-white border-neutral-900"
+                      : "bg-white border-neutral-200 hover:bg-neutral-50"
+                  }`}
+                >
+                  {PREVENTION_PLAN_LABELS[pl]}
+                  {pl === "annual" && <span className="ml-2 text-[10px] uppercase tracking-wider opacity-70">Mejor precio</span>}
+                </button>
+              ))}
+            </div>
+            {error && (
+              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>
+            )}
+            <button
+              onClick={generatePreventionLink}
+              disabled={!preventionPlan || working}
+              className="btn btn-accent w-full text-sm"
+            >
+              {working ? "Generando link..." : "Generar link de suscripción"}
+            </button>
+            <p className="text-[11px] text-neutral-500 italic">
+              El atleta pagará desde Stripe con 4 días de prueba. Al confirmarse, el lead queda vinculado a ti como cierre.
+            </p>
           </div>
         )}
 

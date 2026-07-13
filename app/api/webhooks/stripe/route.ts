@@ -531,6 +531,24 @@ async function handlePreventionCheckoutCompleted(session: Stripe.Checkout.Sessio
   // Sync los datos frescos de Stripe una vez creada la fila local
   await handlePreventionSubscriptionSync({ id: stripeSubId } as Stripe.Subscription);
 
+  // Cerrar el ciclo comercial si el link vino de un closer (metadata.leadId).
+  // Idempotente con /api/prevention/confirm — si ese endpoint ya marcó el
+  // lead como won, este update es un no-op práctico (mismos campos).
+  const leadIdFromMeta = typeof session.metadata?.leadId === "string" ? session.metadata.leadId : null;
+  const closerIdFromMeta = typeof session.metadata?.closerId === "string" ? session.metadata.closerId : null;
+  if (leadIdFromMeta) {
+    await prisma.lead.update({
+      where: { id: leadIdFromMeta },
+      data: {
+        status: "won",
+        decidedAt: new Date(),
+        ...(closerIdFromMeta ? { closerId: closerIdFromMeta } : {}),
+      },
+    }).catch((err) => {
+      console.error("[stripe-webhook] Error marcando lead como won:", err);
+    });
+  }
+
   // Email de bienvenida con magic link 1-clic (más fiable que depender del
   // código secundario si el paciente cambia de dispositivo).
   try {
