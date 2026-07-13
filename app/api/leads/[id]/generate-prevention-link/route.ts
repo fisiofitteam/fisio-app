@@ -19,7 +19,6 @@ import { getActiveProfessional } from "@/lib/session";
 import {
   stripe,
   PREVENTION_PLAN_CONFIG,
-  PREVENTION_TRIAL_DAYS,
   getPreventionPriceId,
   isPreventionPlan,
 } from "@/lib/stripe";
@@ -78,8 +77,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       mode: "subscription",
       payment_method_types: ["card"],
       line_items: [{ price: priceId, quantity: 1 }],
+      // Sin trial en el flujo del closer: el atleta ya ha hablado por
+      // teléfono, no necesita el "probar 4 días" de la landing. Pago
+      // directo → acceso inmediato.
       subscription_data: {
-        trial_period_days: PREVENTION_TRIAL_DAYS,
         metadata: {
           plan,
           origin: "closer-call",

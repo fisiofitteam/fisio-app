@@ -229,7 +229,7 @@ export function PaymentLinkModal({
       `¡Hola ${first}! 👋\n\n` +
       `Aquí tienes el link para suscribirte a FisioFit Prevention (${planLabel}):\n\n` +
       `${paymentUrl}\n\n` +
-      `Tienes 4 días de prueba antes del primer cobro. Cualquier duda, me dices.`;
+      `En cuanto completes el pago tendrás acceso inmediato. Cualquier duda, me dices.`;
     return `https://wa.me/${raw.replace(/^\+/, "")}?text=${encodeURIComponent(msg)}`;
   }
 
@@ -391,7 +391,7 @@ export function PaymentLinkModal({
               {working ? "Generando link..." : "Generar link de suscripción"}
             </button>
             <p className="text-[11px] text-neutral-500 italic">
-              El atleta pagará desde Stripe con 4 días de prueba. Al confirmarse, el lead queda vinculado a ti como cierre.
+              Pago directo (sin prueba de 4 días — eso queda para la landing pública). Al confirmarse, el lead queda vinculado a ti como cierre y el atleta recibe acceso inmediato.
             </p>
           </div>
         )}
