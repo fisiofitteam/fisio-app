@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { RollingExerciseVideos, type RollingExercise } from "@/components/RollingExerciseVideos";
+import { TaskTimerButton } from "@/components/TaskTimerButton";
 
 type RollingTask = {
   id: string;
@@ -224,6 +225,9 @@ function RollingTaskCard({ task }: { task: RollingTask }) {
         >
           Abrir vídeo →
         </a>
+      )}
+      {task.type === "WORKOUT" && (
+        <TaskTimerButton taskTitle={task.title} taskBody={task.bodyText} />
       )}
       {task.exercises && task.exercises.length > 0 && (
         <RollingExerciseVideos exercises={task.exercises} />

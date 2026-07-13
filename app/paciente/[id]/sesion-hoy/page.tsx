@@ -6,6 +6,7 @@ import { weekStartDate, todayMadridUtc } from "@/lib/program-pauses";
 import { resolveVisibleRollingWeek } from "@/lib/rolling-visible-week";
 import { PatientDailyLogForm } from "@/components/PatientDailyLogForm";
 import { RollingExerciseVideos, type RollingExercise } from "@/components/RollingExerciseVideos";
+import { TaskTimerButton } from "@/components/TaskTimerButton";
 
 const DAY_NAMES = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
@@ -248,6 +249,9 @@ function TaskCard({ task }: { task: ResolvedTask }) {
         >
           Abrir vídeo →
         </a>
+      )}
+      {task.type === "WORKOUT" && (
+        <TaskTimerButton taskTitle={task.title} taskBody={task.bodyText} />
       )}
       {task.exercises && task.exercises.length > 0 && (
         <RollingExerciseVideos exercises={task.exercises} />
