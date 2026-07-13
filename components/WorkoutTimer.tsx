@@ -129,6 +129,63 @@ function initialSnapshot(): Snapshot {
   };
 }
 
+// ────────────────────────── ring de progreso ──────────────────────────
+
+/**
+ * Círculo SVG que rodea el número del countdown y avanza según el
+ * progreso de la fase actual (0 → 1). El color hereda del acento
+ * activo (amarillo por defecto, blanco en rest, etc.).
+ *
+ * Se dibuja con un fondo tenue de referencia + un stroke sobre el que
+ * el dasharray recorta según `progress`. strokeLinecap round para que
+ * el extremo quede como en el mockup del CEO.
+ */
+function ProgressRing({
+  progress,
+  color,
+  phase,
+  children,
+}: {
+  progress: number;
+  color: string;
+  phase: Phase;
+  children: React.ReactNode;
+}) {
+  // viewBox 100x100 · radio 47 · circunferencia = 2πr ≈ 295.31
+  const R = 47;
+  const C = 2 * Math.PI * R;
+  const p = Math.max(0, Math.min(1, progress));
+  const dashOffset = C * (1 - p);
+
+  return (
+    <div
+      className="relative flex items-center justify-center"
+      style={{ width: "min(78vw, 26rem)", height: "min(78vw, 26rem)" }}
+    >
+      <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full" style={{ transform: "rotate(-90deg)" }}>
+        {/* Fondo tenue */}
+        <circle cx="50" cy="50" r={R} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="0.9" />
+        {/* Progreso */}
+        <circle
+          cx="50" cy="50" r={R} fill="none"
+          stroke={color}
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeDasharray={`${C}`}
+          strokeDashoffset={dashOffset}
+          style={{
+            transition: phase === "done" ? "stroke-dashoffset 0.4s ease-out" : "none",
+            filter: `drop-shadow(0 0 6px ${color}55)`,
+          }}
+        />
+      </svg>
+      <div className="relative flex items-center justify-center">
+        {children}
+      </div>
+    </div>
+  );
+}
+
 // ────────────────────────── componente ──────────────────────────
 
 export function WorkoutTimer({
@@ -511,18 +568,40 @@ export function WorkoutTimer({
           <div className="text-[11px] uppercase tracking-[0.35em] font-bold mb-3" style={{ color: accentColor }}>
             {phaseLabel}
           </div>
-          <div
-            className="font-mono font-black tabular-nums leading-none"
-            style={{
-              fontSize: "min(32vw, 20rem)",
-              color: accentColor,
-              textShadow: snap.phase === "work" && currentBlock?.kind !== "rest"
-                ? `0 0 30px ${accentColor}44`
-                : undefined,
-            }}
+
+          {/* Contenedor del número + ring SVG. El SVG se dibuja alrededor
+              usando position absoluta; el número queda centrado. */}
+          <ProgressRing
+            phase={snap.phase}
+            progress={(() => {
+              // For time: hacia arriba (con cap opcional)
+              if (snap.phase === "work" && currentBlock?.kind === "fortime") {
+                if (currentBlock.capSeconds) {
+                  return Math.min(1, snap.blockElapsedMs / (currentBlock.capSeconds * 1000));
+                }
+                return 0;
+              }
+              // Fases con countdown: prep, work (no fortime), rest, block-rest
+              const total = phaseTotalRef.current;
+              if (total <= 0) return 0;
+              const done = 1 - snap.phaseRemainingMs / total;
+              return Math.max(0, Math.min(1, done));
+            })()}
+            color={accentColor}
           >
-            {snap.phase === "prep" ? displaySeconds : fmtDuration(displaySeconds)}
-          </div>
+            <div
+              className="font-mono font-black tabular-nums leading-none"
+              style={{
+                fontSize: "min(28vw, 18rem)",
+                color: accentColor,
+                textShadow: snap.phase === "work" && currentBlock?.kind !== "rest"
+                  ? `0 0 30px ${accentColor}44`
+                  : undefined,
+              }}
+            >
+              {snap.phase === "prep" ? displaySeconds : fmtDuration(displaySeconds)}
+            </div>
+          </ProgressRing>
 
           {snap.totalRounds > 0 && snap.phase !== "prep" && snap.phase !== "done" && (
             <div className="mt-4 text-lg font-bold" style={{ color: COLOR.white }}>
