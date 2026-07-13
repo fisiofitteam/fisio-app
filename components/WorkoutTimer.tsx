@@ -479,8 +479,11 @@ export function WorkoutTimer({
               />
             ))}
           </div>
-          <div className="text-center text-[10px] mt-1.5" style={{ color: COLOR.grayFaint }}>
-            Bloque {Math.min(snap.blockIndex + 1, totalBlocks)}/{totalBlocks} · {currentBlock ? blockLabel(currentBlock) : ""}
+          <div className="text-center text-[11px] mt-1.5 font-medium" style={{ color: COLOR.grayDim }}>
+            Bloque {Math.min(snap.blockIndex + 1, totalBlocks)}/{totalBlocks}
+            {currentBlock && (
+              <> · <span style={{ color: currentBlock.kind === "rest" ? COLOR.brandOrange : COLOR.brandYellow }}>{describeBlockShort(currentBlock)}</span></>
+            )}
           </div>
         </div>
       )}
@@ -496,6 +499,9 @@ export function WorkoutTimer({
             setRunning(false);
           }}
         />
+      ) : snap.phase === "ready" && config ? (
+        /* Vista READY: resumen claro de los bloques antes de arrancar */
+        <ReadyPreview config={config} onStart={start} />
       ) : (
         <div className="flex flex-col items-center justify-center select-none" style={{ color: COLOR.white }}>
           <div className="text-[11px] uppercase tracking-[0.35em] font-bold mb-3" style={{ color: accentColor }}>
@@ -554,7 +560,7 @@ export function WorkoutTimer({
               </button>
             ) : (
               <button
-                onClick={snap.phase === "ready" ? start : resume}
+                onClick={resume}
                 className="w-24 h-24 rounded-full flex items-center justify-center"
                 style={{
                   background: COLOR.brandYellow,
@@ -568,16 +574,124 @@ export function WorkoutTimer({
             )}
             <div className="w-14 h-14" />
           </div>
-
-          {config && snap.phase === "ready" && (
-            <div className="mt-6 text-[11px]" style={{ color: COLOR.grayFaint }}>
-              Duración total: {fmtDuration(totalConfigSec)} · {totalBlocks} {totalBlocks === 1 ? "bloque" : "bloques"}
-            </div>
-          )}
         </div>
       )}
     </div>
   );
+}
+
+// ────────────────────────── vista READY (preview de bloques) ──────────────────────────
+
+function ReadyPreview({
+  config,
+  onStart,
+}: {
+  config: TimerConfig;
+  onStart: () => void;
+}) {
+  const total = configDurationSeconds(config);
+  const n = config.blocks.length;
+  const workBlocks = config.blocks.filter((b) => b.kind !== "rest").length;
+
+  return (
+    <div className="w-full max-w-md px-5 pt-24 pb-8 overflow-y-auto max-h-screen" style={{ color: COLOR.white }}>
+      <div className="text-center mb-5">
+        <div className="text-[10px] uppercase tracking-[0.35em] font-bold mb-1" style={{ color: COLOR.brandYellow }}>
+          Listo para empezar
+        </div>
+        <div className="text-3xl font-black" style={{ color: COLOR.white }}>
+          {fmtDuration(total)}
+        </div>
+        <div className="text-[11px] mt-1" style={{ color: COLOR.grayFaint }}>
+          {workBlocks} {workBlocks === 1 ? "bloque de trabajo" : "bloques de trabajo"}
+          {n !== workBlocks && ` · ${n - workBlocks} ${n - workBlocks === 1 ? "descanso" : "descansos"}`}
+        </div>
+      </div>
+
+      {/* Lista de bloques */}
+      <div className="space-y-1.5 mb-6">
+        {config.blocks.map((b, i) => (
+          <BlockPreviewRow key={i} block={b} index={i} />
+        ))}
+      </div>
+
+      {/* Botón play prominente */}
+      <div className="flex flex-col items-center">
+        <button
+          onClick={onStart}
+          className="w-24 h-24 rounded-full flex items-center justify-center"
+          style={{
+            background: COLOR.brandYellow,
+            color: "#0A0A0A",
+            boxShadow: `0 0 40px ${COLOR.brandYellow}66`,
+          }}
+          aria-label="Iniciar"
+        >
+          <Play size={36} className="ml-1" />
+        </button>
+        <div className="mt-3 text-[10px] uppercase tracking-widest" style={{ color: COLOR.grayFaint }}>
+          Toca para arrancar · 3-2-1 y a por ello
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BlockPreviewRow({ block, index }: { block: TimerBlock; index: number }) {
+  const isRest = block.kind === "rest";
+  const bg = isRest ? "rgba(245,158,11,0.10)" : "rgba(252,211,77,0.08)";
+  const border = isRest ? "rgba(245,158,11,0.30)" : "rgba(252,211,77,0.25)";
+  const chipBg = isRest ? COLOR.brandOrange : COLOR.brandYellow;
+  const chipTxt = "#0A0A0A";
+
+  return (
+    <div className="flex items-center gap-3 rounded-lg px-3 py-2.5 border" style={{ background: bg, borderColor: border }}>
+      <div
+        className="w-7 h-7 rounded-md flex items-center justify-center text-[11px] font-black tabular-nums"
+        style={{ background: chipBg, color: chipTxt }}
+      >
+        {String(index + 1).padStart(2, "0")}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-bold" style={{ color: COLOR.white }}>
+          {describeBlockShort(block)}
+        </div>
+        <div className="text-[10px] mt-0.5" style={{ color: COLOR.grayDim }}>
+          {describeBlockDetail(block)}
+        </div>
+      </div>
+      <div className="text-[11px] font-mono tabular-nums font-bold" style={{ color: isRest ? COLOR.brandOrange : COLOR.brandYellow }}>
+        {fmtDuration(blockDur(block))}
+      </div>
+    </div>
+  );
+}
+
+/** Etiqueta corta que dice de un vistazo qué es el bloque. */
+function describeBlockShort(b: TimerBlock): string {
+  switch (b.kind) {
+    case "amrap":     return `AMRAP ${Math.round(b.totalSeconds / 60)}′`;
+    case "emom":      return `EMOM ${Math.round(b.totalSeconds / 60)}′ · cada ${b.intervalSeconds}s`;
+    case "tabata":    return `Tabata ${b.workSeconds}/${b.restSeconds} × ${b.rounds}`;
+    case "intervals": return `Intervalos ${b.workSeconds}″/${b.restSeconds}″ × ${b.rounds}`;
+    case "fortime":   return b.capSeconds ? `For time (cap ${Math.round(b.capSeconds / 60)}′)` : "For time";
+    case "rest":      return `Descanso ${b.totalSeconds < 60 ? `${b.totalSeconds}″` : `${Math.round(b.totalSeconds / 60)}′`}`;
+  }
+}
+
+/** Segunda línea con más detalle o número de rondas totales. */
+function describeBlockDetail(b: TimerBlock): string {
+  switch (b.kind) {
+    case "amrap":     return "Cuenta atrás · máximas rondas";
+    case "emom": {
+      const rounds = Math.max(1, Math.round(b.totalSeconds / b.intervalSeconds));
+      return `${rounds} intervalos`;
+    }
+    case "tabata":    return `${b.rounds} rondas · Work + Rest`;
+    case "intervals": return `${b.rounds} rondas · Work + Rest`;
+    case "fortime":   return "Cronómetro hacia arriba";
+    case "rest":      return "Recupera antes del siguiente bloque";
+  }
 }
 
 // ────────────────────────── editor de bloques ──────────────────────────

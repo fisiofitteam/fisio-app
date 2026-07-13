@@ -50,14 +50,24 @@ Bloques soportados (kind):
 
 INTERPRETACIÓN DE PATRONES (importante):
 
-1. "EMOM X" o "EMOM X'" o "EMOM X min":
-   → emom(totalSeconds = X*60, intervalSeconds = 60).
-   Ej: "EMOM 30" → emom(1800, 60). NO es un for-time de 30s. NO es AMRAP.
-   "EMOM 30" significa "Every Minute On the Minute durante 30 minutos, intervalo por defecto 60s".
+1. EMOM (Every Minute On the Minute) — TODAS ESTAS FORMAS SON EMOM:
+   - "EMOM 30" → emom(1800, 60). Sin apóstrofe = 30 minutos. NO es for-time. NO es AMRAP.
+   - "EMOM 30'" → emom(1800, 60).
+   - "EMOM 30 min" → emom(1800, 60).
+   - "EMOM 12": emom(720, 60).
+   - "EMOM x 15" → emom(900, 60).
+   - "cada minuto durante 12 minutos" (sin decir EMOM literal) → emom(720, 60).
 
-2. "EMOM X' cada Ys":
-   → emom(totalSeconds = X*60, intervalSeconds = Y).
-   Ej: "EMOM 12' cada 90s" → emom(720, 90).
+2. EMOM con intervalo custom (no 60s):
+   - "EMOM 12' cada 90s" → emom(720, 90).
+   - "cada 45s por 3 minutos" → emom(180, 45).
+   - "cada 30 segundos durante 4 min" → emom(240, 30).
+   - "EMOM 15' con intervalo de 90 segundos" → emom(900, 90).
+   La estructura es: "cada X (unidad) por/durante Y (unidad)". X va a intervalSeconds. Y a totalSeconds.
+
+3. EMOM con ejercicios detallados (IGNORA los ejercicios, solo mira duración e intervalo):
+   - "EMOM 20' de: minuto 1 → 10 pull-ups, minuto 2 → 15 push-ups" → emom(1200, 60).
+   - "EMOM 12 min alternando A/B: 30s hollow / 30s side plank" → emom(720, 60) (30s hollow + 30s side = 1 min, así que el intervalo real es 60s, alterna el ejercicio dentro).
 
 3. Intervalos ON/OFF: "W\" ON / R\" OFF durante T minutos" o "W ON / R OFF x T'"
    → intervals(workSeconds = W, restSeconds = R, rounds = floor(T*60 / (W+R))).
@@ -107,6 +117,26 @@ Salida:
 Descripción: "EMOM 30 de: 5 burpees + 10 KBS"
 Salida:
 {"confident": true, "blocks":[{"kind":"emom","totalSeconds":1800,"intervalSeconds":60}]}
+
+---
+Descripción: "EMOM 20 minutos"
+Salida:
+{"confident": true, "blocks":[{"kind":"emom","totalSeconds":1200,"intervalSeconds":60}]}
+
+---
+Descripción: "cada 45 segundos por 6 minutos de: 2 power snatch"
+Salida:
+{"confident": true, "blocks":[{"kind":"emom","totalSeconds":360,"intervalSeconds":45}]}
+
+---
+Descripción: "EMOM 15' cada 90s: 5 pull-ups + 10 push-ups"
+Salida:
+{"confident": true, "blocks":[{"kind":"emom","totalSeconds":900,"intervalSeconds":90}]}
+
+---
+Descripción: "cada minuto durante 10 minutos: 12 wall balls"
+Salida:
+{"confident": true, "blocks":[{"kind":"emom","totalSeconds":600,"intervalSeconds":60}]}
 
 ---
 Descripción: "AMRAP 15': 12 wall-ball, 9 pull-ups, 6 burpees"

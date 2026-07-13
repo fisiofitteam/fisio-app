@@ -14,7 +14,7 @@ import { Timer, Sparkles } from "lucide-react";
 import { WorkoutTimer } from "@/components/WorkoutTimer";
 import { detectTimerConfig, type TimerConfig } from "@/lib/parse-timer-config";
 
-const CACHE_PREFIX = "fisio-timer-cfg-v3:";
+const CACHE_PREFIX = "fisio-timer-cfg-v4:";
 
 function contentHash(s: string): string {
   // Hash simple djb2 — suficiente para cache key
