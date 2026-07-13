@@ -49,21 +49,42 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `No hay Patient con email ${patientEmail}` }, { status: 404 });
   }
 
-  // Buscar el Lead
+  // Buscar el Lead — tolerante a cómo el closer guardó los datos:
+  //   - Por id: exacto.
+  //   - Por leadEmail: busca contactValue que contenga ese email (case-
+  //     insensitive) sin importar el contactType. Muchas veces el closer
+  //     guarda el contacto como phone/instagram y el email en aiSummary
+  //     o en el fullName.
   let lead;
   if (leadId) {
     lead = await prisma.lead.findUnique({ where: { id: leadId } });
   } else if (leadEmail) {
+    // Extraer la parte local del email para buscar por username también
+    const localPart = leadEmail.split("@")[0];
+    // Intento 1: contactValue contiene el email completo o su username
     lead = await prisma.lead.findFirst({
       where: {
-        contactType: "email",
-        contactValue: { equals: leadEmail, mode: "insensitive" },
+        OR: [
+          { contactValue: { contains: leadEmail, mode: "insensitive" } },
+          { contactValue: { contains: localPart, mode: "insensitive" } },
+          { aiSummary:    { contains: leadEmail, mode: "insensitive" } },
+          { fullName:     { contains: localPart, mode: "insensitive" } },
+        ],
       },
       orderBy: { createdAt: "desc" },
     });
   }
   if (!lead) {
-    return NextResponse.json({ error: "Lead no encontrado" }, { status: 404 });
+    // Devolver los últimos 5 leads recientes para que el CEO identifique el correcto
+    const candidates = await prisma.lead.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 8,
+      select: { id: true, fullName: true, contactType: true, contactValue: true, status: true, createdAt: true, callScheduledAt: true },
+    });
+    return NextResponse.json({
+      error: "Lead no encontrado con esos datos. Aquí tienes los últimos 8 para que copies el id correcto y lo mandes como leadId:",
+      candidates,
+    }, { status: 404 });
   }
 
   const updatedLead = await prisma.lead.update({
