@@ -8,9 +8,6 @@
  *   - Wake Lock para no dormir el iPhone durante la sesión.
  *   - Precisión via performance.now() + requestAnimationFrame (no
  *     acumulamos drift del setInterval).
- *
- * Si viene con `initialConfig` (detectado desde el título/body de la tarea)
- * arranca en la pantalla READY. Si no, muestra selector de modo.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -34,7 +31,6 @@ function fmtTime(seconds: number): string {
 
 // ────────────────────────── audio + vibración ──────────────────────────
 
-// Pito programático con OscillatorNode. Único audio-context reutilizado.
 let _audioCtx: AudioContext | null = null;
 function getAudioCtx(): AudioContext | null {
   if (typeof window === "undefined") return null;
@@ -99,23 +95,23 @@ type Phase = "ready" | "prep" | "work" | "rest" | "done";
 
 type Snapshot = {
   phase: Phase;
-  round: number;          // 1-based
-  totalRounds: number;    // 0 = no aplica (AMRAP / For time)
+  round: number;
+  totalRounds: number;      // 0 = no aplica (AMRAP / For time)
   phaseRemainingMs: number;
-  totalElapsedMs: number; // For time
+  totalElapsedMs: number;
 };
 
-const PREP_MS = 3000; // 3 segundos de cuenta atrás antes de arrancar
+const PREP_MS = 3000;
 
 function initialSnapshot(cfg: TimerConfig): Snapshot {
   switch (cfg.mode) {
     case "emom": {
       const totalRounds = Math.max(1, Math.round(cfg.totalSeconds / cfg.intervalSeconds));
-      return { phase: "ready", round: 1, totalRounds, phaseRemainingMs: cfg.intervalSeconds * 1000, totalElapsedMs: 0 };
+      return { phase: "ready", round: 0, totalRounds, phaseRemainingMs: cfg.intervalSeconds * 1000, totalElapsedMs: 0 };
     }
     case "tabata":
     case "intervals":
-      return { phase: "ready", round: 1, totalRounds: cfg.rounds, phaseRemainingMs: cfg.workSeconds * 1000, totalElapsedMs: 0 };
+      return { phase: "ready", round: 0, totalRounds: cfg.rounds, phaseRemainingMs: cfg.workSeconds * 1000, totalElapsedMs: 0 };
     case "amrap":
       return { phase: "ready", round: 0, totalRounds: 0, phaseRemainingMs: cfg.totalSeconds * 1000, totalElapsedMs: 0 };
     case "fortime":
@@ -141,134 +137,184 @@ export function WorkoutTimer({
   const [vibrateOn, setVibrateOn] = useState(true);
   const [showConfig, setShowConfig] = useState(!config);
 
+  // Refs para audio/vibra sin re-crear callbacks en cada render
+  const audioOnRef = useRef(audioOn);
+  const vibrateOnRef = useRef(vibrateOn);
+  useEffect(() => { audioOnRef.current = audioOn; }, [audioOn]);
+  useEffect(() => { vibrateOnRef.current = vibrateOn; }, [vibrateOn]);
+
   useWakeLock(running);
 
-  // ─── Motor del tiempo: performance.now() + rAF ───
-  // Guardamos la marca absoluta de comienzo de la fase, y en cada frame
-  // recalculamos remainingMs para no acumular drift.
-  const phaseStartRef = useRef<number>(0);       // performance.now() al empezar la fase actual
-  const phaseTotalRef = useRef<number>(0);        // duración total en ms de la fase actual
-  const totalStartRef = useRef<number>(0);        // performance.now() al empezar el timer
-  const rafRef = useRef<number | null>(null);
-  const prevSecondRef = useRef<number>(-1);       // para no repetir beeps al bajar del mismo segundo
+  // Refs del motor del tiempo
+  const phaseStartRef = useRef<number>(0);
+  const phaseTotalRef = useRef<number>(0);
+  const totalStartRef = useRef<number>(0);
+  const prevSecondRef = useRef<number>(-1);
 
-  const scheduleFrame = useCallback(() => {
-    rafRef.current = requestAnimationFrame(tick);
+  // Feedback
+  const tickBeep = useCallback(() => {
+    if (audioOnRef.current) beep(880, 120);
+    if (vibrateOnRef.current) vibrate(80);
+  }, []);
+  const countdownBeep = useCallback(() => {
+    if (audioOnRef.current) beep(660, 80);
+    if (vibrateOnRef.current) vibrate(50);
+  }, []);
+  const startBeep = useCallback(() => {
+    if (audioOnRef.current) beep(880, 180);
+    if (vibrateOnRef.current) vibrate([120, 50, 120]);
+  }, []);
+  const restBeep = useCallback(() => {
+    if (audioOnRef.current) beep(440, 200);
+    if (vibrateOnRef.current) vibrate(120);
+  }, []);
+  const finishBeep = useCallback(() => {
+    if (audioOnRef.current) {
+      beep(1046, 250);
+      setTimeout(() => beep(1318, 300), 260);
+    }
+    if (vibrateOnRef.current) vibrate([200, 100, 200, 100, 400]);
   }, []);
 
-  const tick = useCallback(() => {
-    setSnap((prev) => {
-      if (!prev || !config) return prev;
-      const now = performance.now();
-      const phaseElapsed = now - phaseStartRef.current;
-      const totalElapsed = now - totalStartRef.current;
-
-      // For time: sube. El resto: baja.
-      if (config.mode === "fortime") {
-        // ¿cap alcanzado?
-        if (config.capSeconds && totalElapsed >= config.capSeconds * 1000) {
-          finishBeep();
-          setRunning(false);
-          return { ...prev, phase: "done", totalElapsedMs: config.capSeconds * 1000 };
-        }
-        // Beep cada minuto exacto
-        const currentSec = Math.floor(totalElapsed / 1000);
-        if (currentSec !== prevSecondRef.current && currentSec > 0 && currentSec % 60 === 0) {
-          tickBeep();
-        }
-        prevSecondRef.current = currentSec;
-        return { ...prev, totalElapsedMs: totalElapsed };
-      }
-
-      const remainingMs = phaseTotalRef.current - phaseElapsed;
-
-      // Últimos 3s de la fase: pitos cortos por segundo
-      const remainingSec = Math.ceil(remainingMs / 1000);
-      if (remainingSec !== prevSecondRef.current && remainingSec > 0 && remainingSec <= 3) {
-        countdownBeep();
-      }
-      prevSecondRef.current = remainingSec;
-
-      if (remainingMs <= 0) {
-        return advancePhase(config, prev, totalElapsed);
-      }
-      return { ...prev, phaseRemainingMs: remainingMs, totalElapsedMs: totalElapsed };
-    });
-    if (rafRef.current !== null) scheduleFrame();
-  }, [config, scheduleFrame]);
-
-  // ─── Feedback: beeps + vibración ───
-  const tickBeep = () => { if (audioOn) beep(880, 120); if (vibrateOn) vibrate(80); };
-  const countdownBeep = () => { if (audioOn) beep(660, 80); if (vibrateOn) vibrate(50); };
-  const startBeep = () => { if (audioOn) { beep(880, 180); } if (vibrateOn) vibrate([120, 50, 120]); };
-  const restBeep = () => { if (audioOn) beep(440, 200); if (vibrateOn) vibrate(120); };
-  const finishBeep = () => {
-    if (audioOn) { beep(1046, 250); setTimeout(() => beep(1318, 300), 260); }
-    if (vibrateOn) vibrate([200, 100, 200, 100, 400]);
-  };
-
-  // ─── Avance de fase (llamado cuando remainingMs llega a 0) ───
-  function advancePhase(cfg: TimerConfig, curr: Snapshot, totalElapsed: number): Snapshot {
-    const now = performance.now();
-
-    switch (cfg.mode) {
-      case "emom": {
-        if (curr.round >= curr.totalRounds) {
-          finishBeep();
-          setRunning(false);
-          return { ...curr, phase: "done", phaseRemainingMs: 0, totalElapsedMs: totalElapsed };
-        }
-        tickBeep();
-        const nextRound = curr.round + 1;
+  // ─── Avance de fase ───
+  const advancePhase = useCallback(
+    (cfg: TimerConfig, curr: Snapshot, totalElapsedNow: number, now: number): Snapshot => {
+      // PREP → primera fase real de trabajo
+      if (curr.phase === "prep") {
+        startBeep();
         phaseStartRef.current = now;
-        phaseTotalRef.current = cfg.intervalSeconds * 1000;
         prevSecondRef.current = -1;
-        return { ...curr, round: nextRound, phase: "work", phaseRemainingMs: cfg.intervalSeconds * 1000, totalElapsedMs: totalElapsed };
-      }
-      case "tabata":
-      case "intervals": {
-        if (curr.phase === "work" || curr.phase === "prep") {
-          // Pasa a rest, salvo que restSeconds sea 0 y saltamos directo a la próxima work
-          if (cfg.restSeconds > 0) {
-            restBeep();
-            phaseStartRef.current = now;
-            phaseTotalRef.current = cfg.restSeconds * 1000;
-            prevSecondRef.current = -1;
-            return { ...curr, phase: "rest", phaseRemainingMs: cfg.restSeconds * 1000, totalElapsedMs: totalElapsed };
-          }
+        totalStartRef.current = now;
+        if (cfg.mode === "fortime") {
+          return { ...curr, phase: "work", phaseRemainingMs: 0, totalElapsedMs: 0 };
         }
-        // Terminó rest (o work sin rest) → próxima ronda o fin
-        if (curr.round >= curr.totalRounds) {
-          finishBeep();
-          setRunning(false);
-          return { ...curr, phase: "done", phaseRemainingMs: 0, totalElapsedMs: totalElapsed };
+        if (cfg.mode === "amrap") {
+          phaseTotalRef.current = cfg.totalSeconds * 1000;
+          return { ...curr, phase: "work", phaseRemainingMs: cfg.totalSeconds * 1000, totalElapsedMs: 0 };
         }
-        tickBeep();
-        phaseStartRef.current = now;
+        if (cfg.mode === "emom") {
+          phaseTotalRef.current = cfg.intervalSeconds * 1000;
+          return { ...curr, phase: "work", round: 1, phaseRemainingMs: cfg.intervalSeconds * 1000, totalElapsedMs: 0 };
+        }
+        // tabata / intervals
         phaseTotalRef.current = cfg.workSeconds * 1000;
-        prevSecondRef.current = -1;
-        return { ...curr, phase: "work", round: curr.round + 1, phaseRemainingMs: cfg.workSeconds * 1000, totalElapsedMs: totalElapsed };
+        return { ...curr, phase: "work", round: 1, phaseRemainingMs: cfg.workSeconds * 1000, totalElapsedMs: 0 };
       }
-      case "amrap": {
-        finishBeep();
-        setRunning(false);
-        return { ...curr, phase: "done", phaseRemainingMs: 0, totalElapsedMs: totalElapsed };
+
+      switch (cfg.mode) {
+        case "emom": {
+          if (curr.round >= curr.totalRounds) {
+            finishBeep();
+            queueMicrotask(() => setRunning(false));
+            return { ...curr, phase: "done", phaseRemainingMs: 0, totalElapsedMs: totalElapsedNow };
+          }
+          tickBeep();
+          phaseStartRef.current = now;
+          phaseTotalRef.current = cfg.intervalSeconds * 1000;
+          prevSecondRef.current = -1;
+          return { ...curr, round: curr.round + 1, phase: "work", phaseRemainingMs: cfg.intervalSeconds * 1000, totalElapsedMs: totalElapsedNow };
+        }
+        case "tabata":
+        case "intervals": {
+          // Termina un WORK → si hay rest, ir a rest. Si no, siguiente work o fin.
+          if (curr.phase === "work") {
+            if (cfg.restSeconds > 0 && curr.round < curr.totalRounds) {
+              restBeep();
+              phaseStartRef.current = now;
+              phaseTotalRef.current = cfg.restSeconds * 1000;
+              prevSecondRef.current = -1;
+              return { ...curr, phase: "rest", phaseRemainingMs: cfg.restSeconds * 1000, totalElapsedMs: totalElapsedNow };
+            }
+            // Sin rest: work terminado → siguiente work o done
+            if (curr.round >= curr.totalRounds) {
+              finishBeep();
+              queueMicrotask(() => setRunning(false));
+              return { ...curr, phase: "done", phaseRemainingMs: 0, totalElapsedMs: totalElapsedNow };
+            }
+            tickBeep();
+            phaseStartRef.current = now;
+            phaseTotalRef.current = cfg.workSeconds * 1000;
+            prevSecondRef.current = -1;
+            return { ...curr, round: curr.round + 1, phase: "work", phaseRemainingMs: cfg.workSeconds * 1000, totalElapsedMs: totalElapsedNow };
+          }
+          // Termina un REST → siguiente work o done
+          if (curr.round >= curr.totalRounds) {
+            finishBeep();
+            queueMicrotask(() => setRunning(false));
+            return { ...curr, phase: "done", phaseRemainingMs: 0, totalElapsedMs: totalElapsedNow };
+          }
+          tickBeep();
+          phaseStartRef.current = now;
+          phaseTotalRef.current = cfg.workSeconds * 1000;
+          prevSecondRef.current = -1;
+          return { ...curr, round: curr.round + 1, phase: "work", phaseRemainingMs: cfg.workSeconds * 1000, totalElapsedMs: totalElapsedNow };
+        }
+        case "amrap": {
+          finishBeep();
+          queueMicrotask(() => setRunning(false));
+          return { ...curr, phase: "done", phaseRemainingMs: 0, totalElapsedMs: totalElapsedNow };
+        }
+        case "fortime": {
+          // No cuenta atrás excepto por cap manejado antes; no debería llegar aquí.
+          return curr;
+        }
       }
-      case "fortime": {
-        // Nunca llegamos aquí normalmente (For time no cuenta atrás salvo cap)
-        return curr;
-      }
-    }
-  }
+    },
+    [startBeep, tickBeep, restBeep, finishBeep],
+  );
+
+  // ─── Bucle rAF único ───
+  useEffect(() => {
+    if (!running || !config) return;
+    let raf = 0;
+    const loop = () => {
+      setSnap((prev) => {
+        if (!prev) return prev;
+        const now = performance.now();
+        const totalElapsed = now - totalStartRef.current;
+
+        // For time: sube. No cambia de fase salvo por cap.
+        if (config.mode === "fortime" && prev.phase !== "prep") {
+          if (config.capSeconds && totalElapsed >= config.capSeconds * 1000) {
+            finishBeep();
+            queueMicrotask(() => setRunning(false));
+            return { ...prev, phase: "done", totalElapsedMs: config.capSeconds * 1000 };
+          }
+          const currentSec = Math.floor(totalElapsed / 1000);
+          if (currentSec !== prevSecondRef.current && currentSec > 0 && currentSec % 60 === 0) {
+            tickBeep();
+          }
+          prevSecondRef.current = currentSec;
+          return { ...prev, totalElapsedMs: totalElapsed };
+        }
+
+        // Cuenta atrás dentro de la fase actual
+        const phaseElapsed = now - phaseStartRef.current;
+        const remainingMs = phaseTotalRef.current - phaseElapsed;
+
+        const remainingSec = Math.ceil(remainingMs / 1000);
+        if (remainingSec !== prevSecondRef.current && remainingSec > 0 && remainingSec <= 3) {
+          countdownBeep();
+        }
+        prevSecondRef.current = remainingSec;
+
+        if (remainingMs <= 0) {
+          return advancePhase(config, prev, totalElapsed, now);
+        }
+        return { ...prev, phaseRemainingMs: remainingMs, totalElapsedMs: totalElapsed };
+      });
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [running, config, advancePhase, countdownBeep, tickBeep, finishBeep]);
 
   // ─── Control START/PAUSE/RESET ───
   const start = () => {
     if (!config) return;
-    // Un tap del user habilita el audio en iOS
     const ctx = getAudioCtx();
     if (ctx?.state === "suspended") ctx.resume().catch(() => {});
 
-    // Prep de 3 segundos
     setSnap((prev) => {
       if (!prev) return prev;
       const now = performance.now();
@@ -282,16 +328,11 @@ export function WorkoutTimer({
     setShowConfig(false);
   };
 
-  const pause = () => {
-    // Cancela el rAF; guarda cuánto tiempo llevaba de fase y luego, al reanudar,
-    // vuelve a marcar phaseStartRef ajustando ese offset.
-    setRunning(false);
-  };
+  const pause = () => setRunning(false);
 
   const resume = () => {
     if (!snap || !config) return;
     const now = performance.now();
-    // Rehacer phase/total start references
     phaseStartRef.current = now - (phaseTotalRef.current - snap.phaseRemainingMs);
     totalStartRef.current = now - snap.totalElapsedMs;
     prevSecondRef.current = -1;
@@ -300,60 +341,12 @@ export function WorkoutTimer({
 
   const reset = () => {
     if (!config) return;
-    setSnap(initialSnapshot(config));
     setRunning(false);
+    setSnap(initialSnapshot(config));
     prevSecondRef.current = -1;
   };
 
-  // ─── Bucle rAF ligado a running ───
-  useEffect(() => {
-    if (!running) {
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-      return;
-    }
-    // Cuando se reanuda tras pause, tick() ya calcula sobre las refs actualizadas.
-    rafRef.current = requestAnimationFrame(tick);
-    return () => {
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-    };
-  }, [running, tick]);
-
-  // ─── Prep → primera fase real ───
-  // Cuando la fase "prep" llega a 0, arrancamos "work" (o el modo directo).
-  useEffect(() => {
-    if (!snap || snap.phase !== "prep") return;
-    if (snap.phaseRemainingMs > 0) return;
-    if (!config) return;
-    // Arrancar fase real
-    startBeep();
-    const now = performance.now();
-    phaseStartRef.current = now;
-    prevSecondRef.current = -1;
-
-    if (config.mode === "fortime") {
-      totalStartRef.current = now;
-      setSnap((s) => (s ? { ...s, phase: "work", phaseRemainingMs: 0, totalElapsedMs: 0 } : s));
-      return;
-    }
-    if (config.mode === "amrap") {
-      phaseTotalRef.current = config.totalSeconds * 1000;
-      setSnap((s) => (s ? { ...s, phase: "work", phaseRemainingMs: config.totalSeconds * 1000 } : s));
-      return;
-    }
-    if (config.mode === "emom") {
-      phaseTotalRef.current = config.intervalSeconds * 1000;
-      setSnap((s) => (s ? { ...s, phase: "work", phaseRemainingMs: config.intervalSeconds * 1000, round: 1 } : s));
-      return;
-    }
-    // tabata / intervals
-    phaseTotalRef.current = config.workSeconds * 1000;
-    setSnap((s) => (s ? { ...s, phase: "work", phaseRemainingMs: config.workSeconds * 1000, round: 1 } : s));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [snap?.phase, snap?.phaseRemainingMs, config]);
-
-  // ─── UI ───
+  // ─── UI derivada ───
   const displaySeconds = useMemo(() => {
     if (!snap || !config) return 0;
     if (snap.phase === "done") return 0;
@@ -382,7 +375,6 @@ export function WorkoutTimer({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ background: bgColor }}>
-      {/* Cabecera fija */}
       <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 py-3 text-white">
         <button onClick={onClose} aria-label="Cerrar" className="p-2 -ml-2">
           <X size={22} />
@@ -392,7 +384,7 @@ export function WorkoutTimer({
           {config && (
             <div className="text-[10px] uppercase tracking-widest opacity-50">
               {modeLabel(config.mode)}
-              {snap && snap.totalRounds > 0 ? ` · ${snap.round}/${snap.totalRounds}` : ""}
+              {snap && snap.totalRounds > 0 ? ` · ${Math.max(1, snap.round)}/${snap.totalRounds}` : ""}
             </div>
           )}
         </div>
@@ -411,7 +403,6 @@ export function WorkoutTimer({
         </div>
       </div>
 
-      {/* Config panel o display principal */}
       {showConfig ? (
         <ConfigPanel
           initial={config}
@@ -431,7 +422,7 @@ export function WorkoutTimer({
           </div>
           {config && snap.totalRounds > 0 && (
             <div className="mt-4 text-sm opacity-70">
-              Ronda {snap.round} / {snap.totalRounds}
+              Ronda {Math.max(1, snap.round)} / {snap.totalRounds}
             </div>
           )}
           <div className="mt-10 flex items-center gap-3">
@@ -486,7 +477,6 @@ function ConfigPanel({
   onCancel: () => void;
 }) {
   const [mode, setMode] = useState<TimerMode>(initial?.mode ?? "amrap");
-  // Un state por modo para no perder valores al alternar
   const [emomMin, setEmomMin] = useState<number>(initial?.mode === "emom" ? initial.totalSeconds / 60 : 12);
   const [emomInterval, setEmomInterval] = useState<number>(initial?.mode === "emom" ? initial.intervalSeconds : 60);
   const [tabWork, setTabWork] = useState<number>(initial?.mode === "tabata" ? initial.workSeconds : 20);
@@ -580,6 +570,12 @@ function ConfigPanel({
   );
 }
 
+/**
+ * Input numérico controlado por string local — no clamea mientras escribes.
+ * Solo al hacer blur (o al pulsar Enter) se aplica el clamp min/max.
+ * Fix del bug: antes, si borrabas "20" a "0" y min=5, saltaba a "5" y no
+ * dejaba escribir "50". Ahora el input muestra siempre lo que has tecleado.
+ */
 function NumInput({
   label, value, onChange, min, max, step = 1,
 }: {
@@ -590,17 +586,43 @@ function NumInput({
   max: number;
   step?: number;
 }) {
+  const [text, setText] = useState<string>(String(value));
+  const lastPropRef = useRef(value);
+  useEffect(() => {
+    // Sincroniza si el padre cambia el value externamente (ej. cambio de modo)
+    if (lastPropRef.current !== value) {
+      lastPropRef.current = value;
+      setText(String(value));
+    }
+  }, [value]);
+
+  function commit() {
+    const trimmed = text.trim();
+    if (trimmed === "") {
+      // vacío → volver al valor actual del padre
+      setText(String(value));
+      return;
+    }
+    const n = Number(trimmed);
+    if (!isFinite(n)) {
+      setText(String(value));
+      return;
+    }
+    const clamped = Math.max(min, Math.min(max, n));
+    lastPropRef.current = clamped;
+    setText(String(clamped));
+    if (clamped !== value) onChange(clamped);
+  }
+
   return (
     <label className="block">
       <span className="text-[11px] uppercase tracking-wider text-white/60 block mb-1">{label}</span>
       <input
         type="number"
-        value={value}
-        onChange={(e) => {
-          const n = Number(e.target.value);
-          if (!isFinite(n)) return;
-          onChange(Math.max(min, Math.min(max, n)));
-        }}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur(); }}
         min={min}
         max={max}
         step={step}
@@ -610,5 +632,4 @@ function NumInput({
   );
 }
 
-// Helper exportado por si otros consumidores quieren detectar sin instanciar el componente.
 export { detectTimerConfig };
