@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { youtubeEmbedUrl } from "@/lib/youtube";
+import { TaskTimerButton } from "@/components/TaskTimerButton";
 
 export type Exercise = { id: string; name: string; category: string; youtubeUrl: string | null; description: string | null };
 
@@ -100,6 +101,7 @@ export function SessionRunner({
                   {task.bodyText}
                 </pre>
               )}
+              <TaskTimerButton taskTitle={task.title} taskBody={task.bodyText} />
               {ex.length > 0 && (
                 <div className="mt-3">
                   <div className="text-xs text-neutral-500 mb-2">Vídeos de referencia</div>
