@@ -1,74 +1,98 @@
 /**
- * Detecta la configuración de un timer de entrenamiento a partir del título
- * y/o cuerpo de una tarea del rolling. Se ejecuta en cliente cuando el
- * paciente abre una tarea WORKOUT y quiere lanzar el cronómetro.
+ * Modelo del timer: un TimerConfig es una SECUENCIA de bloques.
+ * Un timer sencillo tiene 1 bloque. Uno complejo puede ser p.ej.
+ *   [ EMOM 4' cada 60s, REST 1', EMOM 3' cada 45s, REST 1', EMOM 2' cada 30s ]
+ * o
+ *   [ AMRAP 5', REST 2', AMRAP 5', REST 2', AMRAP 5' ]
  *
- * Cubre los 5 modos clásicos:
- *   - EMOM (Every Minute On the Minute)
- *   - Tabata (20s/10s × 8 por defecto, configurable)
- *   - Intervals (work + rest custom × rondas)
- *   - AMRAP (cuenta atrás)
- *   - For time (cuenta arriba, opcional cap)
- *
- * Regex diseñadas para no falsear: si no hay match claro, devuelve null y
- * el UI muestra selector manual.
+ * El motor del WorkoutTimer recorre los bloques uno a uno. Cada bloque
+ * gestiona su cuenta atrás; al terminar, pasa al siguiente. Cuando no
+ * hay siguiente → DONE.
  */
 
-export type TimerMode = "emom" | "tabata" | "intervals" | "amrap" | "fortime";
+export type TimerBlockKind = "amrap" | "emom" | "tabata" | "intervals" | "fortime" | "rest";
 
-export type TimerConfig =
-  | { mode: "emom"; totalSeconds: number; intervalSeconds: number }
-  | { mode: "tabata"; workSeconds: number; restSeconds: number; rounds: number }
-  | { mode: "intervals"; workSeconds: number; restSeconds: number; rounds: number }
-  | { mode: "amrap"; totalSeconds: number }
-  | { mode: "fortime"; capSeconds: number | null };
+export type TimerBlock =
+  | { kind: "amrap"; totalSeconds: number; label?: string }
+  | { kind: "emom"; totalSeconds: number; intervalSeconds: number; label?: string }
+  | { kind: "tabata"; workSeconds: number; restSeconds: number; rounds: number; label?: string }
+  | { kind: "intervals"; workSeconds: number; restSeconds: number; rounds: number; label?: string }
+  | { kind: "fortime"; capSeconds: number | null; label?: string }
+  | { kind: "rest"; totalSeconds: number; label?: string };
+
+export type TimerConfig = {
+  blocks: TimerBlock[];
+};
+
+// ────────────────────────── helpers ──────────────────────────
+
+export function blockLabel(b: TimerBlock): string {
+  switch (b.kind) {
+    case "amrap":     return b.label ?? "AMRAP";
+    case "emom":      return b.label ?? "EMOM";
+    case "tabata":    return b.label ?? "Tabata";
+    case "intervals": return b.label ?? "Intervalos";
+    case "fortime":   return b.label ?? "For time";
+    case "rest":      return b.label ?? "Descanso";
+  }
+}
+
+export function blockDurationSeconds(b: TimerBlock): number {
+  switch (b.kind) {
+    case "amrap":     return b.totalSeconds;
+    case "emom":      return b.totalSeconds;
+    case "tabata":    return (b.workSeconds + b.restSeconds) * b.rounds;
+    case "intervals": return (b.workSeconds + b.restSeconds) * b.rounds;
+    case "fortime":   return b.capSeconds ?? 0;
+    case "rest":      return b.totalSeconds;
+  }
+}
+
+export function configDurationSeconds(cfg: TimerConfig): number {
+  return cfg.blocks.reduce((sum, b) => sum + blockDurationSeconds(b), 0);
+}
+
+export function fmtDuration(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds));
+  const m = Math.floor(s / 60);
+  const ss = s % 60;
+  return `${m}:${ss.toString().padStart(2, "0")}`;
+}
+
+// ────────────────────────── parser local (regex) ──────────────────────────
+
+// Parser básico que cubre los patrones más comunes en título/body cortos.
+// Para casos con multi-bloque el pipeline llama al endpoint IA como refuerzo.
 
 function normalize(s: string | null | undefined): string {
   return (s ?? "").toLowerCase();
 }
 
-/** Parsea "12'", "12 min", "12min", "12m", "12 minutos" → 720 (segundos). */
-function parseMinutesToken(txt: string): number | null {
-  const m = txt.match(/(\d+)\s*(?:'|min\b|minutos?\b|m\b)/i);
-  if (!m) return null;
-  const n = Number(m[1]);
-  return isFinite(n) && n > 0 ? n * 60 : null;
-}
-
-/** Parsea "20s", "30 seg", "45 segundos" → segundos. */
-function parseSecondsToken(txt: string): number | null {
-  const m = txt.match(/(\d+)\s*(?:s\b|seg\b|segundos?\b|"|\)?s)/i);
-  if (!m) return null;
-  const n = Number(m[1]);
-  return isFinite(n) && n > 0 ? n : null;
-}
-
 /**
- * Detecta config desde texto. Prioridad:
- *   1. Tabata explícito.
- *   2. EMOM N'.
- *   3. AMRAP N'.
- *   4. For time (con o sin cap).
- *   5. Intervals NxT'/R' (ej. "5x3'/3'" o "4x800m / 90s").
- * Si nada matchea → null.
+ * Detecta un TimerConfig sencillo (1 bloque) desde texto libre.
+ * Si detecta multi-bloque devuelve null y el frontend cae a IA.
  */
 export function detectTimerConfig(input: { title?: string | null; body?: string | null }): TimerConfig | null {
   const raw = `${input.title ?? ""}\n${input.body ?? ""}`;
   const txt = normalize(raw);
 
-  // Tabata: por defecto 20/10 × 8 salvo que el body diga otra cosa
+  // Si tiene ≥2 palabras clave, probablemente es multi-bloque → dejamos que la IA lo maneje
+  const keywords = ["amrap", "emom", "tabata", "for time", "por tiempo"];
+  const hits = keywords.reduce((n, k) => n + (txt.includes(k) ? 1 : 0), 0);
+  if (hits >= 2) return null;
+
+  // Tabata
   if (/\btabata\b/.test(txt)) {
-    // Intentamos "tabata 30/15 x 6" o similar
     const custom = txt.match(/tabata[^0-9]*(\d+)\s*[\/x]\s*(\d+)(?:\s*(?:x|×|por)\s*(\d+))?/i);
     if (custom) {
       const work = Number(custom[1]);
       const rest = Number(custom[2]);
       const rounds = custom[3] ? Number(custom[3]) : 8;
       if (work > 0 && rest > 0 && rounds > 0) {
-        return { mode: "tabata", workSeconds: work, restSeconds: rest, rounds };
+        return { blocks: [{ kind: "tabata", workSeconds: work, restSeconds: rest, rounds }] };
       }
     }
-    return { mode: "tabata", workSeconds: 20, restSeconds: 10, rounds: 8 };
+    return { blocks: [{ kind: "tabata", workSeconds: 20, restSeconds: 10, rounds: 8 }] };
   }
 
   // EMOM
@@ -76,10 +100,9 @@ export function detectTimerConfig(input: { title?: string | null; body?: string 
   if (emom) {
     const totalMin = Number(emom[1]);
     if (isFinite(totalMin) && totalMin > 0) {
-      // Intervalo custom "EMOM 15' cada 90s" — raro pero soportado
       const intervalMatch = txt.match(/cada\s*(\d+)\s*s/i);
       const intervalSeconds = intervalMatch ? Math.max(10, Number(intervalMatch[1])) : 60;
-      return { mode: "emom", totalSeconds: totalMin * 60, intervalSeconds };
+      return { blocks: [{ kind: "emom", totalSeconds: totalMin * 60, intervalSeconds }] };
     }
   }
 
@@ -88,59 +111,46 @@ export function detectTimerConfig(input: { title?: string | null; body?: string 
   if (amrap) {
     const totalMin = Number(amrap[1]);
     if (isFinite(totalMin) && totalMin > 0) {
-      return { mode: "amrap", totalSeconds: totalMin * 60 };
+      return { blocks: [{ kind: "amrap", totalSeconds: totalMin * 60 }] };
     }
   }
 
-  // For time (con cap opcional)
+  // For time
   if (/\bfor\s*time\b|\bpor\s*tiempo\b/.test(txt)) {
     const cap = txt.match(/cap[^0-9]*(\d+)\s*(?:'|min|minutos?)/i);
     const capSeconds = cap ? Number(cap[1]) * 60 : null;
-    return { mode: "fortime", capSeconds };
+    return { blocks: [{ kind: "fortime", capSeconds }] };
   }
 
-  // Intervals: patrón "5x3'/3'" o "4x800m R:90s" o "10x30s/15s"
+  // Intervals: "5x3'/3'"
   const intervals = txt.match(/(\d+)\s*[x×]\s*(\d+)\s*['"]?\s*[\/:]\s*(\d+)\s*(['"]|s|min|m|seg)?/i);
   if (intervals) {
     const rounds = Number(intervals[1]);
     const workNum = Number(intervals[2]);
     const restNum = Number(intervals[3]);
     const restUnit = normalize(intervals[4]);
-    // Heurística: si el rest es <= 10 → asumimos que work y rest son en la misma unidad
-    // del work. Si el work no tiene unidad clara pero parece minutos (>=1 y <= 20),
-    // los tratamos como minutos.
     const workSeconds = workNum <= 20 ? workNum * 60 : workNum;
     const restSeconds = /min|m|['"]/.test(restUnit) || (restUnit === "" && restNum <= 10)
       ? restNum * 60
       : restNum;
     if (rounds > 0 && workSeconds > 0 && restSeconds >= 0) {
-      return { mode: "intervals", workSeconds, restSeconds, rounds };
+      return { blocks: [{ kind: "intervals", workSeconds, restSeconds, rounds }] };
     }
   }
 
   return null;
 }
 
-/** Duración total estimada del timer en segundos (para preview en el botón). */
-export function estimateTimerTotalSeconds(cfg: TimerConfig): number {
-  switch (cfg.mode) {
-    case "emom":
-    case "amrap":
-      return cfg.totalSeconds;
-    case "tabata":
-    case "intervals":
-      return (cfg.workSeconds + cfg.restSeconds) * cfg.rounds;
-    case "fortime":
-      return cfg.capSeconds ?? 0;
-  }
-}
-
-export function modeLabel(mode: TimerMode): string {
-  switch (mode) {
-    case "emom": return "EMOM";
-    case "tabata": return "Tabata";
+// Compat con imports antiguos
+export type TimerMode = TimerBlockKind;
+export const modeLabel = (m: TimerMode): string => {
+  switch (m) {
+    case "amrap":     return "AMRAP";
+    case "emom":      return "EMOM";
+    case "tabata":    return "Tabata";
     case "intervals": return "Intervalos";
-    case "amrap": return "AMRAP";
-    case "fortime": return "For time";
+    case "fortime":   return "For time";
+    case "rest":      return "Descanso";
   }
-}
+};
+export const estimateTimerTotalSeconds = configDurationSeconds;
