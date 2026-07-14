@@ -81,7 +81,7 @@ export function CombinedSessionRunner({
           {showSeparators && g.tasks.length > 0 && (
             <div className="flex items-center gap-2 mt-1">
               <div className="text-[10px] font-bold tracking-wider uppercase" style={{ color: "var(--p-text-faint)" }}>
-                {g.programName}
+                Bloque {gi + 1}
               </div>
               <div className="flex-1 h-px" style={{ background: "var(--p-border)" }} />
             </div>

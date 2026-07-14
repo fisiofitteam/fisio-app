@@ -261,8 +261,8 @@ export function PatientHomeRolling({
                 <div className="text-[10px] font-bold tracking-wider uppercase opacity-80 mb-1">
                   Trabajo específico
                 </div>
-                <div className="text-lg font-bold flex items-center gap-2" style={{ letterSpacing: "-0.02em" }}>
-                  🎯 {individualSessionToday.programName}
+                <div className="text-2xl font-bold flex items-center gap-2" style={{ letterSpacing: "-0.025em" }}>
+                  🎯 Sesión de hoy
                 </div>
                 <div className="text-xs mt-1.5 font-medium opacity-80">
                   {individualSessionToday.completed ? "Completada · pulsa para revisar" : "Pulsa para empezar"}

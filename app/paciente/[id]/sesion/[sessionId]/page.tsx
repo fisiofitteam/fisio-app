@@ -28,8 +28,7 @@ export default async function PatientSessionPage({
         <Link href={`/paciente/${params.id}`} className="text-xs text-neutral-500">← Tu semana</Link>
         <h1 className="text-xl font-semibold mt-1">{DAY_NAMES[dow]}</h1>
         <p className="text-sm text-neutral-500">
-          {date.toLocaleDateString("es-ES", { day: "numeric", month: "long" })} ·{" "}
-          {session.assignment.program.name}
+          {date.toLocaleDateString("es-ES", { day: "numeric", month: "long" })}
         </p>
       </header>
 

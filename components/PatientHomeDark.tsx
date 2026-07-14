@@ -403,7 +403,7 @@ export function PatientHomeDark({
                           {new Date(nextSession.date).toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
                         </div>
                         <div className="text-xs mt-0.5" style={{ color: "var(--p-text-dim)" }}>
-                          {nextSession.programName} · {nextSession.tasksCount} tareas
+                          {nextSession.tasksCount} tareas
                         </div>
                       </div>
                       <ChevronRight size={18} style={{ color: "var(--p-accent)" }} />
@@ -463,7 +463,7 @@ export function PatientHomeDark({
                         <div className="text-xs mt-0.5" style={{ color: "var(--p-text-dim)" }}>
                           {totalTasksPending} {totalTasksPending === 1 ? "tarea" : "tareas"}
                           {pending.length > 1 && (
-                            <span> · {pending.map((s) => s.programName).join(" + ")}</span>
+                            <span> · {pending.length} bloques</span>
                           )}
                         </div>
                       </div>
@@ -491,7 +491,7 @@ export function PatientHomeDark({
                       <div className="flex justify-between items-start">
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium" style={{ letterSpacing: "-0.015em" }}>
-                            {s.programName}
+                            Sesión completada
                           </div>
                           <div className="text-xs mt-0.5" style={{ color: "var(--p-text-dim)" }}>
                             {s.tasksCount} {s.tasksCount === 1 ? "tarea" : "tareas"}
