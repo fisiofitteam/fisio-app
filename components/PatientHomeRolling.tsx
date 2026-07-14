@@ -297,7 +297,12 @@ export function PatientHomeRolling({
           </Link>
         )}
 
-        {/* Grid de accesos compactos */}
+        {/* Grid de accesos compactos.
+            Orden por parejas (izq / der):
+              Trabajo específico · Semana completa
+              Mis métricas       · Mis PRs
+              Comunidad          · Reto del mes
+              Biblioteca         · Timer                                 */}
         <div className="grid grid-cols-2 gap-3 mb-6">
           {hasIndividualWork && (
             <RollingActionCard
@@ -307,18 +312,6 @@ export function PatientHomeRolling({
               sublabel="Sesiones propias de tu fisio"
             />
           )}
-          <RollingActionCard
-            href={`/paciente/${patientId}/timer`}
-            Icon={Timer}
-            label="Timer"
-            sublabel="EMOM, AMRAP, Tabata…"
-          />
-          <RollingActionCard
-            href={`/paciente/${patientId}/prs`}
-            Icon={Trophy}
-            label="Mis PRs"
-            sublabel="Tus máximos"
-          />
           <RollingActionCard
             href={`/paciente/${patientId}/semana-completa`}
             Icon={CalendarDays}
@@ -332,10 +325,10 @@ export function PatientHomeRolling({
             sublabel="Fatiga, RPE, sueño…"
           />
           <RollingActionCard
-            href={`/paciente/${patientId}/biblioteca`}
-            Icon={BookOpen}
-            label="Biblioteca"
-            sublabel="Recursos y vídeos"
+            href={`/paciente/${patientId}/prs`}
+            Icon={Trophy}
+            label="Mis PRs"
+            sublabel="Tus máximos"
           />
           <RollingActionCard
             href={`/paciente/${patientId}/comunidad`}
@@ -352,6 +345,18 @@ export function PatientHomeRolling({
               sublabel={challenge.title}
             />
           )}
+          <RollingActionCard
+            href={`/paciente/${patientId}/biblioteca`}
+            Icon={BookOpen}
+            label="Biblioteca"
+            sublabel="Recursos y vídeos"
+          />
+          <RollingActionCard
+            href={`/paciente/${patientId}/timer`}
+            Icon={Timer}
+            label="Timer"
+            sublabel="EMOM, AMRAP, Tabata…"
+          />
         </div>
 
         {/* Aviso ligero cuando la semana aún no está publicada. La vista completa
