@@ -63,63 +63,6 @@ Esta primera semana la llamamos "Semana 0" — es tu semana de configuración. E
 
 Cuando terminemos esto, ya estarás dentro del programa 100%. Cualquier duda me dices por aquí.`,
   },
-  {
-    id: "envio-anamnesis",
-    label: "Envío de anamnesis",
-    emoji: "📝",
-    target: "direct",
-    body:
-`Hola {nombre}, aquí te dejo la anamnesis para que la rellenes con calma:
-
-👉 [PEGA AQUÍ EL LINK DE LA ANAMNESIS]
-
-Es importante que la contestes con detalle — cuanto más sepamos de tu caso, mejor podré diseñar tu plan. Tienes hasta antes de nuestra primera llamada para completarla.
-
-Cualquier duda, me dices.`,
-  },
-  {
-    id: "envio-contrato",
-    label: "Envío de contrato",
-    emoji: "📄",
-    target: "direct",
-    body:
-`Hola {nombre}, aquí tienes el contrato de servicio para firmar:
-
-👉 [PEGA AQUÍ EL LINK DEL CONTRATO]
-
-Léelo tranquila, y si algo no te queda claro me lo dices antes de firmar. Cuando lo firmes ya podemos empezar oficialmente.`,
-  },
-  {
-    id: "primera-sesion-agendada",
-    label: "Primera sesión agendada",
-    emoji: "📅",
-    target: "direct",
-    body:
-`Hola {nombre}, confirmada tu primera sesión clínica 💪
-
-📅 [PON AQUÍ DÍA Y HORA]
-🔗 [PON AQUÍ EL LINK DE GOOGLE MEET]
-
-Prepárate para hablar en detalle de tu situación y salir con un plan claro. Si necesitas cambiarla, avísame con antelación.
-
-¡Nos vemos!`,
-  },
-  {
-    id: "recordatorio-tareas",
-    label: "Recordatorio tareas pendientes",
-    emoji: "⚠️",
-    target: "direct",
-    body:
-`Hola {nombre} 👋
-
-Veo que aún tienes tareas pendientes de la Semana 0. Recuerda que para poder empezar el programa necesito:
-
-· Anamnesis completada
-· Contrato firmado
-· Primera sesión agendada
-
-Cuando termines esto ya podemos ponernos en marcha. Si necesitas ayuda con algo, dime.`,
-  },
 ];
 
 export function OnboardingMessagesButton({
