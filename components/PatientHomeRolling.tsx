@@ -71,7 +71,7 @@ export function PatientHomeRolling({
   daysToExpire,
   needsShirtSize,
   shippingComplete = true,
-  individualSessionToday,
+  individualSessionsToday,
   hasIndividualWork,
 }: {
   firstName: string;
@@ -90,10 +90,16 @@ export function PatientHomeRolling({
   /** false → mostramos banner "Completa tu dirección postal" (mismo de Dark). */
   shippingComplete?: boolean;
   /**
-   * Sesión individual del ProgramAssignment del atleta que toca HOY, si la hay.
-   * Se pinta como header adicional al lado del rolling ("Trabajo específico").
+   * Sesiones individuales del atleta que tocan HOY (puede haber varias si
+   * tiene varios ProgramAssignments activos). Se pinta como header morado
+   * "Trabajo específico" que enlaza a /sesion-combinada-hoy — esa ruta
+   * decide si redirige a la única sesión o combina varias.
    */
-  individualSessionToday?: { sessionId: string; programName: string; completed: boolean } | null;
+  individualSessionsToday?: {
+    count: number;
+    allCompleted: boolean;
+    singleSessionId: string | null;
+  } | null;
   /** true si el atleta tiene ProgramAssignments activos (en cualquier día).
    *  Se usa para mostrar la tarjeta "Trabajo específico" en el grid. */
   hasIndividualWork?: boolean;
@@ -247,13 +253,17 @@ export function PatientHomeRolling({
           </Link>
         )}
 
-        {/* 🎯 Trabajo específico — el atleta ADVANCE tiene además un Program
-             individual asignado (typo tendinoso, adaptación clínica…). Se
-             muestra como header adicional al lado del rolling. Distinto color
-             para diferenciar (morado suave). */}
-        {individualSessionToday && (
+        {/* 🎯 Trabajo específico — el atleta ADVANCE tiene además Programs
+             individuales asignados. Si hay 1 sesión de hoy vamos directo a
+             ella; si hay varias, /sesion-combinada-hoy las une en una sola
+             pantalla. */}
+        {individualSessionsToday && individualSessionsToday.count > 0 && (
           <Link
-            href={`/paciente/${patientId}/sesion/${individualSessionToday.sessionId}`}
+            href={
+              individualSessionsToday.singleSessionId
+                ? `/paciente/${patientId}/sesion/${individualSessionsToday.singleSessionId}`
+                : `/paciente/${patientId}/sesion-combinada-hoy`
+            }
             className="block rounded-2xl p-5 mb-5 transition-transform active:scale-[0.98]"
             style={{
               background: "linear-gradient(135deg, #7C3AED 0%, #5B21B6 100%)",
@@ -266,10 +276,14 @@ export function PatientHomeRolling({
                   Trabajo específico
                 </div>
                 <div className="text-2xl font-bold flex items-center gap-2" style={{ letterSpacing: "-0.025em" }}>
-                  🎯 Sesión de hoy
+                  🎯 {individualSessionsToday.count === 1 ? "Sesión de hoy" : `${individualSessionsToday.count} sesiones de hoy`}
                 </div>
                 <div className="text-xs mt-1.5 font-medium opacity-80">
-                  {individualSessionToday.completed ? "Completada · pulsa para revisar" : "Pulsa para empezar"}
+                  {individualSessionsToday.allCompleted
+                    ? "Completada · pulsa para revisar"
+                    : individualSessionsToday.count === 1
+                      ? "Pulsa para empezar"
+                      : "Pulsa para hacerlas todas juntas"}
                 </div>
               </div>
               <div className="text-2xl font-bold flex-shrink-0">→</div>

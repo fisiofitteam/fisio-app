@@ -216,13 +216,17 @@ export default async function PatientHome({ params }: { params: { id: string } }
     todayUtc.setHours(0, 0, 0, 0);
     const tomorrowUtc = new Date(todayUtc);
     tomorrowUtc.setDate(todayUtc.getDate() + 1);
-    const individualSessionPromise = prisma.programSession.findFirst({
+    // Buscamos TODAS las sesiones individuales de HOY (varios assignments
+    // = varias sesiones el mismo día). Antes usábamos findFirst y solo se
+    // veía la primera en el header morado.
+    const individualSessionsTodayPromise = prisma.programSession.findMany({
       where: {
         assignment: { patientId: patient.id, isActive: true },
         scheduledDate: { gte: todayUtc, lt: tomorrowUtc },
       },
       include: { assignment: { include: { program: { select: { name: true } } } } },
-    }).catch(() => null);
+      orderBy: { scheduledDate: "asc" },
+    }).catch(() => [] as any[]);
 
     // ¿El atleta tiene ProgramAssignments activos? Se usa para decidir si
     // mostrar la tarjeta "Trabajo específico" en el grid de accesos.
@@ -230,11 +234,11 @@ export default async function PatientHome({ params }: { params: { id: string } }
       where: { patientId: patient.id, isActive: true },
     }).then((n) => n > 0).catch(() => false);
 
-    const [accWeek, trnWeek, patientOverrides, individualSessionToday, hasIndividualWork] = await Promise.all([
+    const [accWeek, trnWeek, patientOverrides, individualSessionsToday, hasIndividualWork] = await Promise.all([
       fetchWeek(accId),
       fetchWeek(trnId),
       fetchOverridesForPatient(patient.id),
-      individualSessionPromise,
+      individualSessionsTodayPromise,
       hasIndividualWorkPromise,
     ]);
     // Aplica overrides individuales del atleta a las tareas de cada día del rolling.
@@ -382,10 +386,13 @@ export default async function PatientHome({ params }: { params: { id: string } }
         // de antes y no deben ver el selector.
         needsShirtSize={patient.programType === "ADVANCE" && !patient.shirtSize && !patient.giftsAlreadySent}
         shippingComplete={!!(patient.shippingStreet && patient.shippingNumber && patient.shippingCity && patient.shippingPostalCode)}
-        individualSessionToday={individualSessionToday ? {
-          sessionId: individualSessionToday.id,
-          programName: individualSessionToday.assignment.program.name,
-          completed: !!individualSessionToday.completedAt,
+        individualSessionsToday={individualSessionsToday.length > 0 ? {
+          count: individualSessionsToday.length,
+          allCompleted: individualSessionsToday.every((s: any) => !!s.completedAt),
+          // Si solo hay 1, el link puede ir directo a esa sesión; si hay
+          // varias, dejamos que /sesion-combinada-hoy decida (redirige a
+          // esa sesión si es 1 sola, o pinta CombinedSessionRunner si más).
+          singleSessionId: individualSessionsToday.length === 1 ? individualSessionsToday[0].id : null,
         } : null}
         hasIndividualWork={hasIndividualWork}
       />
