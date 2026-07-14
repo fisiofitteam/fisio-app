@@ -224,11 +224,18 @@ export default async function PatientHome({ params }: { params: { id: string } }
       include: { assignment: { include: { program: { select: { name: true } } } } },
     }).catch(() => null);
 
-    const [accWeek, trnWeek, patientOverrides, individualSessionToday] = await Promise.all([
+    // ¿El atleta tiene ProgramAssignments activos? Se usa para decidir si
+    // mostrar la tarjeta "Trabajo específico" en el grid de accesos.
+    const hasIndividualWorkPromise = prisma.programAssignment.count({
+      where: { patientId: patient.id, isActive: true },
+    }).then((n) => n > 0).catch(() => false);
+
+    const [accWeek, trnWeek, patientOverrides, individualSessionToday, hasIndividualWork] = await Promise.all([
       fetchWeek(accId),
       fetchWeek(trnId),
       fetchOverridesForPatient(patient.id),
       individualSessionPromise,
+      hasIndividualWorkPromise,
     ]);
     // Aplica overrides individuales del atleta a las tareas de cada día del rolling.
     if (accWeek) accWeek.days = accWeek.days.map((d: any) => ({ ...d, tasks: applyRollingOverridesToTasks(d.tasks, patientOverrides as any) }));
@@ -380,6 +387,7 @@ export default async function PatientHome({ params }: { params: { id: string } }
           programName: individualSessionToday.assignment.program.name,
           completed: !!individualSessionToday.completedAt,
         } : null}
+        hasIndividualWork={hasIndividualWork}
       />
     );
   }

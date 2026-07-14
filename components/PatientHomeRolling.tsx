@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Trophy, BarChart3, BookOpen, Users, Target, CalendarDays, Settings } from "lucide-react";
+import { ArrowLeft, Trophy, BarChart3, BookOpen, Users, Target, CalendarDays, Settings, Sparkles, Timer } from "lucide-react";
 import { PatientSessionMenu, patientLogout } from "@/components/PatientSessionMenu";
 import { PatientNav } from "@/components/PatientNav";
 import { PatientShirtSizePicker } from "@/components/PatientShirtSizePicker";
@@ -72,6 +72,7 @@ export function PatientHomeRolling({
   needsShirtSize,
   shippingComplete = true,
   individualSessionToday,
+  hasIndividualWork,
 }: {
   firstName: string;
   patientId: string;
@@ -93,6 +94,9 @@ export function PatientHomeRolling({
    * Se pinta como header adicional al lado del rolling ("Trabajo específico").
    */
   individualSessionToday?: { sessionId: string; programName: string; completed: boolean } | null;
+  /** true si el atleta tiene ProgramAssignments activos (en cualquier día).
+   *  Se usa para mostrar la tarjeta "Trabajo específico" en el grid. */
+  hasIndividualWork?: boolean;
 }) {
   const initial = firstName[0]?.toUpperCase() ?? "?";
 
@@ -275,6 +279,20 @@ export function PatientHomeRolling({
 
         {/* Grid de accesos compactos */}
         <div className="grid grid-cols-2 gap-3 mb-6">
+          {hasIndividualWork && (
+            <RollingActionCard
+              href={`/paciente/${patientId}/semana`}
+              Icon={Sparkles}
+              label="Trabajo específico"
+              sublabel="Sesiones propias de tu fisio"
+            />
+          )}
+          <RollingActionCard
+            href={`/paciente/${patientId}/timer`}
+            Icon={Timer}
+            label="Timer"
+            sublabel="EMOM, AMRAP, Tabata…"
+          />
           <RollingActionCard
             href={`/paciente/${patientId}/prs`}
             Icon={Trophy}
