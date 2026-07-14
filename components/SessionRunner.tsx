@@ -78,17 +78,32 @@ export function SessionRunner({
   return (
     <div className="space-y-4">
       {completed && (
-        <div className="card bg-emerald-50 border-emerald-200 text-sm text-emerald-900">
+        <div
+          className="rounded-2xl p-3 text-sm"
+          style={{
+            background: "var(--p-green-bg)",
+            border: "1px solid var(--p-green-border)",
+            color: "var(--p-green-text)",
+          }}
+        >
           ✓ Sesión completada. Puedes consultar tus respuestas abajo.
         </div>
       )}
 
       {tasks.map((task) => (
-        <div key={task.id} className="card">
+        <div
+          key={task.id}
+          className="rounded-2xl p-4"
+          style={{ background: "var(--p-surface)", border: "1px solid var(--p-border)" }}
+        >
           <div className="flex justify-between items-start mb-3">
             <div className="flex-1">
-              <div className="text-xs uppercase text-neutral-400 tracking-wide">{typeLabel(task.type)}</div>
-              <h2 className="font-medium mt-0.5">{task.title}</h2>
+              <div className="text-[10px] font-bold tracking-wider uppercase" style={{ color: "var(--p-text-faint)" }}>
+                {typeLabel(task.type)}
+              </div>
+              <h2 className="font-semibold text-base mt-0.5" style={{ letterSpacing: "-0.015em" }}>
+                {task.title}
+              </h2>
             </div>
           </div>
 
@@ -97,41 +112,45 @@ export function SessionRunner({
             return (
             <div>
               {task.bodyText && (
-                <pre className="whitespace-pre-wrap font-mono text-sm bg-neutral-50 p-3 rounded-lg">
+                <pre
+                  className="whitespace-pre-wrap font-mono text-sm p-3 rounded-lg"
+                  style={{ background: "var(--p-surface-2)", color: "var(--p-text-dim)" }}
+                >
                   {task.bodyText}
                 </pre>
               )}
               <TaskTimerButton taskTitle={task.title} taskBody={task.bodyText} />
               {ex.length > 0 && (
                 <div className="mt-3">
-                  <div className="text-xs text-neutral-500 mb-2">Vídeos de referencia</div>
+                  <div className="text-xs mb-2" style={{ color: "var(--p-text-faint)" }}>Vídeos de referencia</div>
                   <div className="space-y-2">
                     {ex.map((ex) => {
                       const embed = ex.youtubeUrl ? youtubeEmbedUrl(ex.youtubeUrl) : null;
                       const isOpen = expandedExercise === ex.id;
                       return (
-                        <div key={ex.id} className="border border-neutral-200 rounded-lg overflow-hidden">
+                        <div key={ex.id} className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--p-border)" }}>
                           <button
                             onClick={() => setExpandedExercise(isOpen ? null : ex.id)}
-                            className="w-full text-left p-3 hover:bg-neutral-50 flex justify-between items-center"
+                            className="w-full text-left p-3 flex justify-between items-center"
+                            style={{ color: "var(--p-text)" }}
                           >
                             <div>
                               <div className="font-medium text-sm">{ex.name}</div>
-                              <div className="text-xs text-neutral-500">{ex.category}</div>
+                              <div className="text-xs" style={{ color: "var(--p-text-faint)" }}>{ex.category}</div>
                             </div>
-                            <span className="text-neutral-300">{isOpen ? "▴" : "▾"}</span>
+                            <span style={{ color: "var(--p-text-faint)" }}>{isOpen ? "▴" : "▾"}</span>
                           </button>
                           {isOpen && (
-                            <div className="border-t border-neutral-200 p-3 bg-neutral-50">
+                            <div className="p-3" style={{ borderTop: "1px solid var(--p-border)", background: "var(--p-surface-2)" }}>
                               {embed ? (
                                 <div className="aspect-video rounded-lg overflow-hidden bg-black mb-2">
                                   <iframe src={embed} className="w-full h-full" allowFullScreen />
                                 </div>
                               ) : (
-                                <p className="text-xs text-neutral-500">Sin vídeo asociado.</p>
+                                <p className="text-xs" style={{ color: "var(--p-text-faint)" }}>Sin vídeo asociado.</p>
                               )}
                               {ex.description && (
-                                <p className="text-xs text-neutral-600 italic">{ex.description}</p>
+                                <p className="text-xs italic" style={{ color: "var(--p-text-dim)" }}>{ex.description}</p>
                               )}
                             </div>
                           )}
@@ -153,7 +172,12 @@ export function SessionRunner({
                 </div>
               )}
               {task.description && (
-                <p className="text-sm text-neutral-700 mt-2">{task.description}</p>
+                <p className="text-sm whitespace-pre-wrap mt-2" style={{ color: "var(--p-text-dim)" }}>{task.description}</p>
+              )}
+              {/* El fisio a veces usa VIDEO para "enunciado + demo" en RECUPERA/CONSOLIDA.
+                  Ofrecemos timer si hay algo de texto donde parsear (título + descripción). */}
+              {(task.description || task.title) && (
+                <TaskTimerButton taskTitle={task.title} taskBody={task.description ?? ""} />
               )}
             </div>
           )}
@@ -267,7 +291,7 @@ export function FormResponder({ task, completed, response, onChange }: any) {
           <div key={q.id ?? `q-${qi}`}>
             <label className="text-sm font-medium block">{q.text ?? "(sin texto)"}</label>
             {q.description && (
-              <p className="text-xs text-neutral-400 italic mb-1">{q.description}</p>
+              <p className="text-xs italic mb-1" style={{ color: "var(--p-text-faint)" }}>{q.description}</p>
             )}
             {!q.description && <div className="mb-1" />}
             {q.type === "text" && (
@@ -290,37 +314,51 @@ export function FormResponder({ task, completed, response, onChange }: any) {
                   onChange={(e) => onChange({ ...safeResponse, [q.id]: Number(e.target.value) })}
                   className="w-full"
                 />
-                <div className="text-xs text-neutral-500 text-center">
+                <div className="text-xs text-center" style={{ color: "var(--p-text-faint)" }}>
                   {val ?? q.min ?? 0} / {q.max ?? 10}
                 </div>
               </div>
             )}
             {q.type === "yesno" && (
               <div className="flex gap-2">
-                {["Sí", "No"].map((opt) => (
-                  <button
-                    key={opt}
-                    disabled={completed}
-                    onClick={() => onChange({ ...safeResponse, [q.id]: opt })}
-                    className={`flex-1 py-2 text-sm rounded-lg ${val === opt ? "bg-neutral-900 text-white" : "bg-neutral-100"}`}
-                  >
-                    {opt}
-                  </button>
-                ))}
+                {["Sí", "No"].map((opt) => {
+                  const selected = val === opt;
+                  return (
+                    <button
+                      key={opt}
+                      disabled={completed}
+                      onClick={() => onChange({ ...safeResponse, [q.id]: opt })}
+                      className="flex-1 py-2 text-sm rounded-lg"
+                      style={{
+                        background: selected ? "var(--p-accent)" : "var(--p-surface-2)",
+                        color: selected ? "var(--p-accent-ink)" : "var(--p-text)",
+                      }}
+                    >
+                      {opt}
+                    </button>
+                  );
+                })}
               </div>
             )}
             {q.type === "choice" && (
               <div className="space-y-1">
-                {(Array.isArray(q.options) ? q.options : []).map((opt: string, oi: number) => (
-                  <button
-                    key={`${opt}-${oi}`}
-                    disabled={completed}
-                    onClick={() => onChange({ ...safeResponse, [q.id]: opt })}
-                    className={`w-full text-left py-2 px-3 text-sm rounded-lg ${val === opt ? "bg-neutral-900 text-white" : "bg-neutral-100"}`}
-                  >
-                    {opt}
-                  </button>
-                ))}
+                {(Array.isArray(q.options) ? q.options : []).map((opt: string, oi: number) => {
+                  const selected = val === opt;
+                  return (
+                    <button
+                      key={`${opt}-${oi}`}
+                      disabled={completed}
+                      onClick={() => onChange({ ...safeResponse, [q.id]: opt })}
+                      className="w-full text-left py-2 px-3 text-sm rounded-lg"
+                      style={{
+                        background: selected ? "var(--p-accent)" : "var(--p-surface-2)",
+                        color: selected ? "var(--p-accent-ink)" : "var(--p-text)",
+                      }}
+                    >
+                      {opt}
+                    </button>
+                  );
+                })}
               </div>
             )}
             {q.type === "likert" && (
@@ -335,9 +373,20 @@ export function FormResponder({ task, completed, response, onChange }: any) {
                       key={idx}
                       disabled={completed}
                       onClick={() => onChange({ ...safeResponse, [q.id]: value })}
-                      className={`w-full text-left py-2 px-3 text-sm rounded-lg flex items-center gap-2 ${selected ? "bg-neutral-900 text-white" : "bg-neutral-100"}`}
+                      className="w-full text-left py-2 px-3 text-sm rounded-lg flex items-center gap-2"
+                      style={{
+                        background: selected ? "var(--p-accent)" : "var(--p-surface-2)",
+                        color: selected ? "var(--p-accent-ink)" : "var(--p-text)",
+                      }}
                     >
-                      <span className={`flex-shrink-0 w-5 h-5 rounded-full border flex items-center justify-center text-[10px] ${selected ? "bg-white text-neutral-900 border-white" : "border-neutral-300 text-neutral-500"}`}>
+                      <span
+                        className="flex-shrink-0 w-5 h-5 rounded-full border flex items-center justify-center text-[10px]"
+                        style={
+                          selected
+                            ? { background: "var(--p-accent-ink)", color: "var(--p-accent)", borderColor: "var(--p-accent-ink)" }
+                            : { borderColor: "var(--p-border-strong)", color: "var(--p-text-faint)" }
+                        }
+                      >
                         {value}
                       </span>
                       <span>{label}</span>
@@ -396,10 +445,15 @@ export function EvolutionResponder({ task, completed, response, onChange }: any)
   return (
     <div className="space-y-3">
       {task.instructions && (
-        <p className="text-xs text-neutral-600 italic bg-neutral-50 p-2 rounded">{task.instructions}</p>
+        <p
+          className="text-xs italic p-2 rounded"
+          style={{ background: "var(--p-surface-2)", color: "var(--p-text-dim)" }}
+        >
+          {task.instructions}
+        </p>
       )}
       {!loaded && (
-        <p className="text-xs text-neutral-400 italic">Cargando métricas…</p>
+        <p className="text-xs italic" style={{ color: "var(--p-text-faint)" }}>Cargando métricas…</p>
       )}
       {loaded && metrics.map((m) => (
         <ScaleField

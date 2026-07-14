@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { PatientNav } from "@/components/PatientNav";
 import { SessionRunner } from "@/components/SessionRunner";
@@ -23,25 +24,36 @@ export default async function PatientSessionPage({
   const tasks = JSON.parse(session.tasksSnapshot) as any[];
 
   return (
-    <main className="max-w-md mx-auto px-4 py-6 pb-24">
-      <header className="mb-4">
-        <Link href={`/paciente/${params.id}`} className="text-xs text-neutral-500">← Tu semana</Link>
-        <h1 className="text-xl font-semibold mt-1">{DAY_NAMES[dow]}</h1>
-        <p className="text-sm text-neutral-500">
-          {date.toLocaleDateString("es-ES", { day: "numeric", month: "long" })}
-        </p>
-      </header>
+    <main className="min-h-screen" style={{ color: "var(--p-text)" }}>
+      <div className="relative max-w-md mx-auto px-5 py-7 pb-28">
+        <Link
+          href={`/paciente/${params.id}`}
+          className="inline-flex items-center gap-1 text-xs mb-6"
+          style={{ color: "var(--p-text-faint)" }}
+        >
+          <ArrowLeft size={12} /> Volver al inicio
+        </Link>
 
-      <SessionRunner
-        sessionId={session.id}
-        patientId={params.id}
-        tasks={tasks}
-        completed={!!session.completedAt}
-        existingResponses={session.responses}
-        whatsappUrl={session.assignment.patient.whatsappGroupUrl}
-      />
+        <header className="mb-6">
+          <div className="text-[10px] font-bold tracking-wider uppercase mb-1" style={{ color: "var(--p-text-faint)" }}>
+            {DAY_NAMES[dow]} · {date.toLocaleDateString("es-ES", { day: "numeric", month: "long" })}
+          </div>
+          <h1 className="text-3xl font-bold flex items-center gap-2" style={{ letterSpacing: "-0.03em" }}>
+            💪 Tu sesión
+          </h1>
+        </header>
 
-      <PatientNav patientId={params.id} active="home" />
+        <SessionRunner
+          sessionId={session.id}
+          patientId={params.id}
+          tasks={tasks}
+          completed={!!session.completedAt}
+          existingResponses={session.responses}
+          whatsappUrl={session.assignment.patient.whatsappGroupUrl}
+        />
+
+        <PatientNav patientId={params.id} active="home" />
+      </div>
     </main>
   );
 }
