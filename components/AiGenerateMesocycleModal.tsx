@@ -145,7 +145,12 @@ export function AiGenerateMesocycleModal({
       parts.push("Evita repetir la misma familia de ejercicios más de 2-3 veces en las 16 sesiones totales. Varía el estímulo entre días.");
     }
 
-    parts.push(`El jueves de cada semana es DESCANSO ACTIVO fijo (Z2 + movilidad) — no lo programes tú, se añade aparte.`);
+    parts.push(
+      `El jueves de cada semana es DESCANSO ACTIVO fijo (rodaje aeróbico Z2 + movilidad, 25-35 min) — no lo programes tú, se añade aparte.\n` +
+      `IMPLICACIÓN IMPORTANTE: como el trabajo Z2 continuo YA está cubierto en jueves, NO metas otro día de rodaje continuo aeróbico en L/M/X/V. ` +
+      `Los 4 días de trabajo deben priorizar fuerza, potencia, velocidad e intervalos (HIIT, EMOM, AMRAP, tempo runs, sprints, series cortas Z4-Z5). ` +
+      `Si el estilo del programa incluye trabajo cardiovascular, hazlo con intervalos, no con rodaje. Un buen reparto típico sería fuerza pesada en un día y trabajo con intervalos/metcon en otro.`
+    );
 
     return parts.join("\n\n");
   }

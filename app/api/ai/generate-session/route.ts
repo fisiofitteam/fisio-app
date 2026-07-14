@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     ? Number(body.dayOfWeek) : null;
   const durationMin = Number.isInteger(body?.durationMin) && body.durationMin >= 5 && body.durationMin <= 240
     ? Number(body.durationMin) : null;
-  const extraContext = typeof body?.extraContext === "string" ? body.extraContext.slice(0, 1000) : null;
+  const extraContext = typeof body?.extraContext === "string" ? body.extraContext.slice(0, 2000) : null;
 
   try {
     const result = await generateSession({
