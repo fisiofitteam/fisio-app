@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { SendMagicLinkButton } from "@/components/SendMagicLinkButton";
+import { OnboardingMessagesButton } from "@/components/OnboardingMessagesButton";
 import { ProgressRing } from "@/components/ProgressRing";
 import { PatientPill, PROGRAM_TYPES, DIFFICULTIES, PROGRAM_LABELS, DIFFICULTY_LABELS } from "@/components/PatientPills";
 import { LegacyCreatePatientModal } from "@/components/LegacyCreatePatientModal";
@@ -1149,7 +1150,14 @@ function StagedPatientList({
                   isManager={isManager}
                   onReassign={() => onReassign(p)}
                 />
-                <Week0Toggle patientId={p.id} />
+                <div className="flex items-center justify-between pl-3 pr-1 mt-2 flex-wrap gap-2">
+                  <Week0Toggle patientId={p.id} />
+                  <OnboardingMessagesButton
+                    patientId={p.id}
+                    patientName={p.fullName}
+                    whatsappGroupUrl={p.whatsappGroupUrl}
+                  />
+                </div>
               </div>
             ))}
           </div>
@@ -1231,7 +1239,7 @@ function Week0Toggle({ patientId }: { patientId: string }) {
 
   return (
     <label
-      className="flex items-center gap-2 text-xs mt-2 pl-3 cursor-pointer select-none"
+      className="flex items-center gap-2 text-xs cursor-pointer select-none"
       style={{ color: "#78350F" }}
     >
       <input
