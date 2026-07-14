@@ -484,6 +484,7 @@ export function CalendarMonth({
       {editingSession && (
         <EditSessionModal
           session={editingSession}
+          patientId={patientId}
           onClose={() => setEditingSession(null)}
           onSaved={() => {
             setEditingSession(null);
@@ -1146,11 +1147,13 @@ function AssignModal({
 
 function EditSessionModal({
   session,
+  patientId,
   onClose,
   onSaved,
   onDeleted,
 }: {
   session: Session;
+  patientId: string;
   onClose: () => void;
   onSaved: () => void;
   onDeleted: () => void;
@@ -1159,6 +1162,7 @@ function EditSessionModal({
   const [saving, setSaving] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [replicateOpen, setReplicateOpen] = useState(false);
 
   const editingTask = tasks.find((t) => t.id === editingTaskId);
 
@@ -1258,11 +1262,23 @@ function EditSessionModal({
               + Añadir nueva tarea
             </button>
 
-            <div className="flex justify-between pt-3 border-t border-neutral-100">
+            <div className="flex justify-between items-center pt-3 border-t border-neutral-100 flex-wrap gap-2">
               <button onClick={remove} className="text-xs text-red-600">🗑️ Eliminar sesión</button>
-              <button onClick={save} disabled={saving} className="btn btn-primary">
-                {saving ? "Guardando..." : "Guardar"}
-              </button>
+              <div className="flex items-center gap-2">
+                {session.isStandalone && tasks.length > 0 && (
+                  <button
+                    onClick={() => setReplicateOpen(true)}
+                    disabled={saving}
+                    className="text-xs font-medium px-3 py-1.5 rounded border border-neutral-300 hover:bg-neutral-50 disabled:opacity-50"
+                    title="Crea copias de esta sesión (con su contenido) en otros días"
+                  >
+                    🔁 Replicar en más días
+                  </button>
+                )}
+                <button onClick={save} disabled={saving} className="btn btn-primary">
+                  {saving ? "Guardando..." : "Guardar"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1272,6 +1288,16 @@ function EditSessionModal({
         <TaskTypeModal
           onSelect={(type) => addTaskOfType(type)}
           onClose={() => setPickerOpen(false)}
+        />
+      )}
+
+      {replicateOpen && (
+        <ReplicateSessionModal
+          session={session}
+          patientId={patientId}
+          tasks={tasks}
+          onClose={() => setReplicateOpen(false)}
+          onReplicated={() => { setReplicateOpen(false); onSaved(); }}
         />
       )}
 
@@ -1748,6 +1774,169 @@ function StandaloneRecurrenceModal({
                 : mode === "single"
                   ? "Crear sesión"
                   : `Crear ${previewCount} sesion${previewCount === 1 ? "" : "es"}`}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Modal para REPLICAR una sesión existente (que ya tiene contenido) en
+ * varios días. A diferencia de StandaloneRecurrenceModal — que se abre al
+ * crear una sesión desde 0 y por eso genera sesiones vacías — este modal
+ * hereda el `tasks` de la sesión actual y lo replica en cada nueva copia.
+ *
+ * Uso: el fisio crea la sesión, la rellena con tareas, y luego pulsa
+ * "🔁 Replicar en más días" en el EditSessionModal.
+ */
+function ReplicateSessionModal({
+  session,
+  patientId,
+  tasks,
+  onClose,
+  onReplicated,
+}: {
+  session: Session;
+  patientId: string;
+  tasks: any[];
+  onClose: () => void;
+  onReplicated: () => void;
+}) {
+  const baseDate = new Date(session.scheduledDate);
+  const baseDow = baseDate.getDay() === 0 ? 7 : baseDate.getDay();
+  const [daysOfWeek, setDaysOfWeek] = useState<number[]>([baseDow]);
+  const [weeks, setWeeks] = useState<number>(4);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function toggleDay(dow: number) {
+    setDaysOfWeek((prev) =>
+      prev.includes(dow) ? prev.filter((x) => x !== dow) : [...prev, dow].sort((a, b) => a - b),
+    );
+  }
+
+  // Preview: mismo cálculo que StandaloneRecurrenceModal.
+  const previewCount = (() => {
+    if (daysOfWeek.length === 0) return 0;
+    let n = 0;
+    for (let w = 0; w < weeks; w++) {
+      for (const dx of daysOfWeek) {
+        if (w === 0 && dx < baseDow) continue;
+        n++;
+      }
+    }
+    // La sesión original ya existe → no la duplicamos. Restamos 1 si la
+    // primera ocurrencia coincide con el día base.
+    if (daysOfWeek.includes(baseDow)) n = Math.max(0, n - 1);
+    return n;
+  })();
+
+  async function replicate() {
+    setError(null);
+    if (daysOfWeek.length === 0) {
+      setError("Selecciona al menos un día de la semana");
+      return;
+    }
+    if (previewCount === 0) {
+      setError("La selección actual no genera copias adicionales");
+      return;
+    }
+    setSaving(true);
+    try {
+      // Empezamos DESPUÉS del día base para no duplicar la sesión actual.
+      // Si el día base está en daysOfWeek, la primera ocurrencia coincide
+      // y hay que saltarla → cogemos el día siguiente como scheduledDate.
+      let startDate = new Date(baseDate);
+      startDate.setDate(startDate.getDate() + 1);
+      startDate.setHours(10, 0, 0, 0);
+
+      const res = await fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          patientId,
+          scheduledDate: startDate.toISOString(),
+          title: `Sesión copia de ${baseDate.toLocaleDateString("es-ES")}`,
+          tasksSnapshot: tasks,
+          recurrence: { daysOfWeek, weeks },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "No se pudo replicar");
+      onReplicated();
+    } catch (e: any) {
+      setError(e?.message || "Error inesperado");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const dayLabels = ["L", "M", "X", "J", "V", "S", "D"];
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl max-w-md w-full p-4" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3">
+          <h3 className="font-medium">🔁 Replicar sesión</h3>
+          <p className="text-xs text-neutral-500 mt-0.5">
+            Se crearán copias de esta sesión (con sus <strong>{tasks.length}</strong> {tasks.length === 1 ? "tarea" : "tareas"}) en los días que elijas.
+            La original del {baseDate.toLocaleDateString("es-ES", { day: "numeric", month: "long" })} queda como está.
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-neutral-500 block mb-2">Días de la semana</label>
+            <div className="flex gap-1">
+              {dayLabels.map((label, i) => {
+                const dow = i + 1;
+                const active = daysOfWeek.includes(dow);
+                return (
+                  <button
+                    key={dow}
+                    onClick={() => toggleDay(dow)}
+                    className={`flex-1 py-2 text-xs font-medium rounded ${
+                      active ? "bg-neutral-900 text-white" : "bg-neutral-100 text-neutral-500"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Durante cuántas semanas</label>
+            <select
+              value={weeks}
+              onChange={(e) => setWeeks(Number(e.target.value))}
+              className="input text-sm w-full"
+            >
+              {[1, 2, 3, 4, 6, 8, 12].map((w) => (
+                <option key={w} value={w}>{w} semana{w === 1 ? "" : "s"}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="rounded-lg bg-neutral-50 border border-neutral-200 px-3 py-2 text-xs text-neutral-700">
+            📊 Se crearán <strong>{previewCount}</strong> {previewCount === 1 ? "copia" : "copias"} adicionales con el mismo contenido.
+          </div>
+
+          {error && (
+            <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>
+          )}
+
+          <div className="flex gap-2 pt-2">
+            <button onClick={onClose} className="btn btn-ghost text-sm flex-1">Cancelar</button>
+            <button
+              onClick={replicate}
+              disabled={saving || previewCount === 0}
+              className="btn btn-primary text-sm flex-1"
+            >
+              {saving ? "Replicando…" : `Replicar (${previewCount})`}
             </button>
           </div>
         </div>
