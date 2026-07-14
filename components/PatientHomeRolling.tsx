@@ -5,6 +5,7 @@ import { ArrowLeft, Trophy, BarChart3, BookOpen, Users, Target, CalendarDays, Se
 import { PatientSessionMenu, patientLogout } from "@/components/PatientSessionMenu";
 import { PatientNav } from "@/components/PatientNav";
 import { PatientShirtSizePicker } from "@/components/PatientShirtSizePicker";
+import { PendingFormsBanner } from "@/components/PendingFormsBanner";
 
 // Icono de WhatsApp en amarillo (currentColor para compat con la API de Lucide).
 function WhatsAppIcon({ size = 22, style, className }: { size?: number; strokeWidth?: number; style?: React.CSSProperties; className?: string }) {
@@ -73,6 +74,7 @@ export function PatientHomeRolling({
   shippingComplete = true,
   individualSessionsToday,
   hasIndividualWork,
+  pendingForms = [],
 }: {
   firstName: string;
   patientId: string;
@@ -103,6 +105,7 @@ export function PatientHomeRolling({
   /** true si el atleta tiene ProgramAssignments activos (en cualquier día).
    *  Se usa para mostrar la tarjeta "Trabajo específico" en el grid. */
   hasIndividualWork?: boolean;
+  pendingForms?: import("@/lib/pending-forms").PendingForm[];
 }) {
   const initial = firstName[0]?.toUpperCase() ?? "?";
 
@@ -136,6 +139,11 @@ export function PatientHomeRolling({
   return (
     <main className="min-h-screen" style={{ color: "var(--p-text)" }}>
       <div className="relative max-w-md mx-auto px-5 py-7 pb-28">
+        {pendingForms.length > 0 && (
+          <div className="mb-5">
+            <PendingFormsBanner patientId={patientId} pending={pendingForms} variant="dark" />
+          </div>
+        )}
         {/* Header */}
         <header className="mb-7">
           <div className="flex justify-between items-center mb-5">

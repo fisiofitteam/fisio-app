@@ -12,6 +12,7 @@ import { applyVars } from "@/lib/landing-content";
 import { ensurePreventionRollingProgram } from "@/lib/prevention";
 import { resolveVisibleRollingWeek } from "@/lib/rolling-visible-week";
 import { applyRollingOverridesToTasks, fetchOverridesForPatient } from "@/lib/apply-rolling-overrides";
+import { getPendingFormsForPatient } from "@/lib/pending-forms";
 
 export default async function PatientHome({ params }: { params: { id: string } }) {
   const patient = await prisma.patient.findUnique({
@@ -21,6 +22,9 @@ export default async function PatientHome({ params }: { params: { id: string } }
   if (!patient) notFound();
 
   const firstName = patient.fullName.split(" ")[0];
+  // Formularios pendientes por rellenar. Persisten aunque la sesión haya
+  // pasado de día — el banner del home los recuerda hasta que se rellenan.
+  const pendingForms = await getPendingFormsForPatient(patient.id).catch(() => []);
 
   // --- 1. Si está pausado → vista de pausa con countdown ---
   const pauseSnapshot = await getPauseSnapshot(patient.id);
@@ -395,6 +399,7 @@ export default async function PatientHome({ params }: { params: { id: string } }
           singleSessionId: individualSessionsToday.length === 1 ? individualSessionsToday[0].id : null,
         } : null}
         hasIndividualWork={hasIndividualWork}
+        pendingForms={pendingForms}
       />
     );
   }
@@ -560,6 +565,7 @@ export default async function PatientHome({ params }: { params: { id: string } }
         title: n.title,
         body: n.body,
       }))}
+      pendingForms={pendingForms}
     />
   );
 }

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { colorForSession, PROGRAM_PALETTE } from "@/lib/session-colors";
+import { PendingFormsBanner } from "@/components/PendingFormsBanner";
 import {
   Zap,
   Calendar,
@@ -84,6 +85,7 @@ export function PatientHomeDark({
   welcomeLine2 = "Ya estás aquí.",
   assignmentIndexEntries = [],
   programEndsInDays,
+  pendingForms = [],
 }: {
   patient: Patient;
   todaySessions: TodaySession[];
@@ -99,6 +101,7 @@ export function PatientHomeDark({
   /** Días restantes de programa fijo. Usado para el banner upsell a
    *  Prevention cuando quedan pocos. null si no aplica. */
   programEndsInDays?: number | null;
+  pendingForms?: import("@/lib/pending-forms").PendingForm[];
 }) {
   const assignmentIndex = new Map<string, number>(assignmentIndexEntries);
   const dow = new Date().getDay() === 0 ? 7 : new Date().getDay();
@@ -121,6 +124,11 @@ export function PatientHomeDark({
   return (
     <main className="min-h-screen text-white" style={{ color: "var(--p-text)" }}>
       <div className="relative max-w-md mx-auto px-5 py-7 pb-28">
+        {pendingForms.length > 0 && (
+          <div className="mb-4">
+            <PendingFormsBanner patientId={patient.id} pending={pendingForms} variant="dark" />
+          </div>
+        )}
         {/* Notificaciones persistentes (vacaciones del fisio, etc) */}
         {visibleNotifications.map((n) => (
           <div
