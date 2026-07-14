@@ -14,6 +14,7 @@ import {
   ArrowLeft,
   Settings,
   Users,
+  Timer,
 } from "lucide-react";
 
 // Icono de WhatsApp compatible con la API de Lucide (acepta size + style.color).
@@ -354,6 +355,12 @@ export function PatientHomeDark({
             label="Comunidad"
             sublabel={patient.communityUnread > 0 ? "Tienes novedades" : "Equipo y otros atletas"}
             badge={patient.communityUnread}
+          />
+          <ActionCard
+            href={`/paciente/${patient.id}/timer`}
+            Icon={Timer}
+            label="Timer"
+            sublabel="EMOM, AMRAP, Tabata…"
           />
           {patient.whatsappGroupUrl && (
             <ActionCard
