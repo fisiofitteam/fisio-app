@@ -19,11 +19,16 @@ export default async function CombinedSessionTodayPage({ params }: { params: { i
   const tomorrow = new Date(today);
   tomorrow.setDate(today.getDate() + 1);
 
+  // Cargamos TODAS las sesiones de hoy (completadas incluidas). Antes
+  // filtrabamos por completedAt: null y, si un atleta tenía 2+ sesiones y
+  // ya las había completado, esta ruta rebotaba al home — el botón
+  // "Trabajo específico" parecía roto. Ahora si hay alguna pendiente el
+  // runner sigue en marcha; si están todas completadas dejamos al menos
+  // ver la primera para revisarla.
   const sessions = await prisma.programSession.findMany({
     where: {
       assignment: { patientId: patient.id, isActive: true },
       scheduledDate: { gte: today, lt: tomorrow },
-      completedAt: null,
     },
     include: { assignment: { include: { program: true } } },
     orderBy: { scheduledDate: "asc" },
@@ -33,8 +38,16 @@ export default async function CombinedSessionTodayPage({ params }: { params: { i
     redirect(`/paciente/${patient.id}`);
   }
 
-  // Si solo hay 1 sesión, usar la ruta clásica (mantiene UX exacta).
+  // Si solo hay 1 sesión, usar la ruta clásica (maneja completed).
   if (sessions.length === 1) {
+    redirect(`/paciente/${patient.id}/sesion/${sessions[0].id}`);
+  }
+
+  // Multi-sesión pero todas completadas: mandamos a la primera individual
+  // — CombinedSessionRunner no sabe pintar respuestas guardadas, así que
+  // al menos el atleta puede revisar una de ellas.
+  const anyPending = sessions.some((s) => s.completedAt === null);
+  if (!anyPending) {
     redirect(`/paciente/${patient.id}/sesion/${sessions[0].id}`);
   }
 
