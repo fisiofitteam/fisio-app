@@ -368,17 +368,26 @@ export function EvolutionResponder({ task, completed, response, onChange }: any)
   useEffect(() => {
     (async () => {
       try {
-        const r = await fetch("/api/patient/active-metrics", { cache: "no-store" });
+        // Si la tarea trae una selección custom (elegida por el fisio en el
+        // calendario), pedimos solo esas keys. Si no, la API devuelve el
+        // default del paciente (todas sus PatientMetric visibles).
+        const sel = task?.metricSelection;
+        const url = sel?.mode === "custom" && Array.isArray(sel.metricKeys) && sel.metricKeys.length > 0
+          ? `/api/patient/active-metrics?keys=${encodeURIComponent(sel.metricKeys.join(","))}`
+          : "/api/patient/active-metrics";
+        const r = await fetch(url, { cache: "no-store" });
         if (r.ok) {
           const data = await r.json();
           if (Array.isArray(data?.metrics) && data.metrics.length > 0) {
             setMetrics(data.metrics);
+          } else if (Array.isArray(data?.metrics)) {
+            setMetrics([]);
           }
         }
       } catch {}
       setLoaded(true);
     })();
-  }, []);
+  }, [task?.metricSelection?.mode, task?.metricSelection?.metricKeys?.join(",")]);
 
   // Soporta retrocompat: si la respuesta previa tenía claves antiguas (rpe,
   // pain, stiffness) y no aparecen en metrics, igual las dejamos en BD pero

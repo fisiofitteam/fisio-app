@@ -1364,7 +1364,7 @@ function EditSessionModal({
                 <FormTaskEditor task={editingTask} onClose={() => setEditingTaskId(null)} onSave={applyEditedTask} />
               )}
               {editingTask.type === "EVOLUTION" && (
-                <EvolutionTaskEditor task={editingTask} onClose={() => setEditingTaskId(null)} onSave={applyEditedTask} />
+                <EvolutionTaskEditor task={editingTask} onClose={() => setEditingTaskId(null)} onSave={applyEditedTask} patientId={patientId} />
               )}
             </div>
           </div>
