@@ -14,6 +14,7 @@ import {
 } from "@dnd-kit/core";
 import { AiGenerateSessionModal } from "@/components/AiGenerateSessionModal";
 import { AiGenerateWeekModal } from "@/components/AiGenerateWeekModal";
+import { AiGenerateMesocycleModal } from "@/components/AiGenerateMesocycleModal";
 import { resolveBriefKindForProgram } from "@/lib/ai-training-brief";
 
 type Program = {
@@ -143,6 +144,7 @@ export function RollingProgramDetail({
   const [editTask, setEditTask] = useState<Task | null>(null);
   const [aiModal, setAiModal] = useState<{ dayOfWeek: number } | null>(null);
   const [aiWeekModal, setAiWeekModal] = useState(false);
+  const [aiMesocycleModal, setAiMesocycleModal] = useState(false);
 
   // Cargar semana
   async function loadWeek(monday: Date) {
@@ -356,6 +358,14 @@ export function RollingProgramDetail({
               >
                 ✨ Generar semana con IA
               </button>
+              <button
+                onClick={() => setAiMesocycleModal(true)}
+                className="text-xs font-medium px-2.5 py-1 rounded-md"
+                style={{ background: "linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)", color: "#0A0A0A" }}
+                title="Generar 4 semanas completas de mesociclo (16 sesiones + 4 descansos activos)"
+              >
+                🗓 Generar mesociclo (4 sem)
+              </button>
               {siblingLabel && (
                 <button
                   onClick={copyFromSibling}
@@ -507,6 +517,20 @@ export function RollingProgramDetail({
           onClose={() => setAiWeekModal(false)}
           onSaved={async () => {
             setAiWeekModal(false);
+            await loadWeek(currentMonday);
+          }}
+        />
+      )}
+
+      {aiMesocycleModal && (
+        <AiGenerateMesocycleModal
+          programId={program.id}
+          defaultKind={resolveBriefKindForProgram(program)}
+          kindLabel={program.role ? undefined : program.name}
+          startMonday={currentMonday.toISOString()}
+          onClose={() => setAiMesocycleModal(false)}
+          onSaved={async () => {
+            setAiMesocycleModal(false);
             await loadWeek(currentMonday);
           }}
         />
