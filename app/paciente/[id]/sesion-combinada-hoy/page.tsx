@@ -59,8 +59,7 @@ export default async function CombinedSessionTodayPage({ params }: { params: { i
         <Link href={`/paciente/${params.id}`} className="text-xs text-neutral-500">← Tu semana</Link>
         <h1 className="text-xl font-semibold mt-1">Sesión de hoy</h1>
         <p className="text-sm text-neutral-500">
-          {DAY_NAMES[dow]} · {today.toLocaleDateString("es-ES", { day: "numeric", month: "long" })} ·{" "}
-          {groups.length} programa{groups.length !== 1 ? "s" : ""}
+          {DAY_NAMES[dow]} · {today.toLocaleDateString("es-ES", { day: "numeric", month: "long" })}
         </p>
       </header>
 

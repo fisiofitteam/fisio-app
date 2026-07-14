@@ -276,14 +276,12 @@ export function PatientHomeRolling({
                   Trabajo específico
                 </div>
                 <div className="text-2xl font-bold flex items-center gap-2" style={{ letterSpacing: "-0.025em" }}>
-                  🎯 {individualSessionsToday.count === 1 ? "Sesión de hoy" : `${individualSessionsToday.count} sesiones de hoy`}
+                  🎯 Sesión de hoy
                 </div>
                 <div className="text-xs mt-1.5 font-medium opacity-80">
                   {individualSessionsToday.allCompleted
                     ? "Completada · pulsa para revisar"
-                    : individualSessionsToday.count === 1
-                      ? "Pulsa para empezar"
-                      : "Pulsa para hacerlas todas juntas"}
+                    : "Pulsa para empezar"}
                 </div>
               </div>
               <div className="text-2xl font-bold flex-shrink-0">→</div>

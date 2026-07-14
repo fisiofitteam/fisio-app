@@ -72,20 +72,13 @@ export function CombinedSessionRunner({
     router.refresh();
   }
 
-  const showSeparators = groups.length > 1;
-
+  // Sin separadores por sesión — el atleta ve "la sesión del día" con TODAS
+  // las tareas seguidas. Que técnicamente vengan de varias ProgramSession
+  // (por el modelo actual) es un detalle interno que no aporta al usuario.
   return (
     <div className="space-y-4">
-      {groupsWithoutEvolution.map((g, gi) => (
+      {groupsWithoutEvolution.map((g) => (
         <div key={g.sessionId} className="space-y-3">
-          {showSeparators && g.tasks.length > 0 && (
-            <div className="flex items-center gap-2 mt-1">
-              <div className="text-[10px] font-bold tracking-wider uppercase" style={{ color: "var(--p-text-faint)" }}>
-                Bloque {gi + 1}
-              </div>
-              <div className="flex-1 h-px" style={{ background: "var(--p-border)" }} />
-            </div>
-          )}
           {g.tasks.map((task) => (
             <TaskBlock
               key={task.id}
@@ -101,14 +94,6 @@ export function CombinedSessionRunner({
 
       {canonicalEvolution && (
         <div className="space-y-3">
-          {showSeparators && (
-            <div className="flex items-center gap-2 mt-1">
-              <div className="text-[10px] font-bold tracking-wider uppercase" style={{ color: "var(--p-text-faint)" }}>
-                Métricas de hoy
-              </div>
-              <div className="flex-1 h-px" style={{ background: "var(--p-border)" }} />
-            </div>
-          )}
           <TaskBlock
             task={canonicalEvolution}
             response={responses[canonicalEvolution.id] ?? {}}
