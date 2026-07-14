@@ -133,7 +133,10 @@ export function CalendarMonth({
   // Modal de "Sesión suelta" con opción de recurrencia. Aparece tras
   // pulsar ⚡ Sesión suelta en AddOrAssignModal. Si el fisio elige
   // "solo este día" crea 1; si activa recurrencia, crea varias.
-  const [standaloneRecurrenceModal, setStandaloneRecurrenceModal] = useState<{ date: string } | null>(null);
+  // Nota: standaloneRecurrenceModal (creación con recurrencia previa a
+  // meter contenido) se retiró — el fisio pedía crear vacía, meter
+  // contenido, y decidir replicar DESPUÉS desde el editor. El componente
+  // StandaloneRecurrenceModal sigue en el archivo por si se recupera el flujo.
   const [editingSession, setEditingSession] = useState<Session | null>(null);
   const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null);
   const [dragging, setDragging] = useState<Session | null>(null);
@@ -439,31 +442,53 @@ export function CalendarMonth({
           date={addChoice.date}
           allPrograms={allPrograms}
           onClose={() => setAddChoice(null)}
-          onPickStandalone={() => {
+          onPickStandalone={async () => {
+            // Nuevo flujo: crear la sesion suelta VACIA directamente y abrir
+            // el editor. La opcion "recurrente" ya no aparece aqui — vive
+            // en el editor como boton "🔁 Replicar en mas dias" (que ya
+            // usa el contenido guardado).
             const date = addChoice.date;
             setAddChoice(null);
-            setStandaloneRecurrenceModal({ date });
+            const d = parseKey(date);
+            const baseDateIso = (() => {
+              const dt = new Date(d);
+              dt.setHours(10, 0, 0, 0);
+              return dt.toISOString();
+            })();
+            try {
+              const res = await fetch("/api/sessions", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  patientId,
+                  scheduledDate: baseDateIso,
+                  title: `Sesión ${d.toLocaleDateString("es-ES")}`,
+                  tasksSnapshot: [],
+                }),
+              });
+              const data = await res.json();
+              if (!res.ok) throw new Error(data?.error || "No se pudo crear la sesión");
+              const newSession: Session = {
+                id: data.id,
+                scheduledDate: data.scheduledDate,
+                completedAt: null,
+                weekNumber: 1,
+                programName: `Sesión ${d.toLocaleDateString("es-ES")}`,
+                programType: "Suelta",
+                tasksSnapshot: "[]",
+                responses: null,
+                formReviewedAt: null,
+                isStandalone: true,
+              };
+              setEditingSession(newSession);
+              router.refresh();
+            } catch (e: any) {
+              alert(e?.message || "Error creando sesión");
+            }
           }}
           onPickProgram={(date) => {
             setAddChoice(null);
             setAssignmentModal({ date });
-          }}
-        />
-      )}
-
-      {standaloneRecurrenceModal && (
-        <StandaloneRecurrenceModal
-          patientId={patientId}
-          date={standaloneRecurrenceModal.date}
-          onClose={() => setStandaloneRecurrenceModal(null)}
-          onCreatedSingle={(newSession) => {
-            setStandaloneRecurrenceModal(null);
-            setEditingSession(newSession);
-            router.refresh();
-          }}
-          onCreatedMany={() => {
-            setStandaloneRecurrenceModal(null);
-            router.refresh();
           }}
         />
       )}
@@ -1200,6 +1225,18 @@ function EditSessionModal({
     onSaved();
   }
 
+  /** Persiste los cambios actuales en el server y devuelve. Se usa cuando
+   *  el fisio pulsa "🔁 Replicar" antes de guardar — asegura que la
+   *  sesión original queda con el contenido correcto en BD antes de crear
+   *  las copias, sin cerrar el editor. */
+  async function saveInPlace() {
+    await fetch("/api/sessions", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: session.id, tasksSnapshot: tasks }),
+    });
+  }
+
   async function remove() {
     if (!confirm("¿Eliminar esta sesión?")) return;
     await fetch(`/api/sessions?id=${session.id}`, { method: "DELETE" });
@@ -1267,12 +1304,20 @@ function EditSessionModal({
               <div className="flex items-center gap-2">
                 {session.isStandalone && tasks.length > 0 && (
                   <button
-                    onClick={() => setReplicateOpen(true)}
+                    onClick={async () => {
+                      // Guarda la sesión original antes de abrir el modal —
+                      // así la sesión "madre" no queda vacía si el fisio
+                      // no había pulsado Guardar todavía.
+                      setSaving(true);
+                      try { await saveInPlace(); } catch {}
+                      setSaving(false);
+                      setReplicateOpen(true);
+                    }}
                     disabled={saving}
                     className="text-xs font-medium px-3 py-1.5 rounded border border-neutral-300 hover:bg-neutral-50 disabled:opacity-50"
-                    title="Crea copias de esta sesión (con su contenido) en otros días"
+                    title="Guarda esta sesión y crea copias con el mismo contenido en otros días"
                   >
-                    🔁 Replicar en más días
+                    🔁 Guardar y replicar en más días
                   </button>
                 )}
                 <button onClick={save} disabled={saving} className="btn btn-primary">
