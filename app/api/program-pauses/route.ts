@@ -20,6 +20,29 @@ function addDays(d: Date, days: number): Date {
 }
 
 /**
+ * Normaliza una fecha a UTC midnight del día calendario en Europe/Madrid.
+ * El fisio elige la pausa por día calendario (no hora), así el shift debe
+ * comparar con las sesiones a resolución diaria.
+ *
+ * Sin esto, `new Date("2026-08-01")` de un input date llega como UTC 00:00,
+ * pero si el server local no es UTC el `>= fromDate` puede saltarse la
+ * sesión programada a las 00:00 UTC del propio día (que en Madrid ya es +2h).
+ */
+function startOfDayMadridUtc(d: Date): Date {
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Madrid",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = fmt.formatToParts(d);
+  const y = Number(parts.find((p) => p.type === "year")!.value);
+  const m = Number(parts.find((p) => p.type === "month")!.value) - 1;
+  const day = Number(parts.find((p) => p.type === "day")!.value);
+  return new Date(Date.UTC(y, m, day));
+}
+
+/**
  * Calcula los días a desplazar las sesiones según la duración de la pausa.
  *
  * Regla: las sesiones siempre se desplazan en MÚLTIPLOS DE 7 días,
@@ -89,10 +112,14 @@ async function extendSubscriptionByDays(patientId: string, days: number) {
  */
 async function shiftFutureSessions(patientId: string, fromDate: Date, days: number) {
   if (days === 0) return;
+  // Comparamos contra el inicio del día calendario Madrid — así una sesión
+  // programada el mismo día que arranca la pausa entra en el shift (antes
+  // podía quedarse fuera por TZ si la hora quedaba justo antes de fromDate).
+  const from = startOfDayMadridUtc(fromDate);
   const sessions = await prisma.programSession.findMany({
     where: {
       assignment: { patientId, isActive: true },
-      scheduledDate: { gte: fromDate },
+      scheduledDate: { gte: from },
       completedAt: null,
     },
   });
@@ -141,8 +168,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const start = new Date(startDate);
-  const end = new Date(endDate);
+  // Fechas de pausa se guardan como UTC midnight del día calendario Madrid
+  // para que shift y comparaciones sean estables sin depender de la TZ del
+  // server ni de la hora a la que se envió el POST.
+  const start = startOfDayMadridUtc(new Date(startDate));
+  const end = startOfDayMadridUtc(new Date(endDate));
   if (end <= start) {
     return NextResponse.json(
       { error: "La fecha de fin debe ser posterior a la de inicio" },
@@ -217,8 +247,8 @@ export async function PATCH(req: NextRequest) {
         { status: 400 }
       );
     }
-    const newStart = startDate ? new Date(startDate) : pause.startDate;
-    const newEnd = endDate ? new Date(endDate) : pause.endDate;
+    const newStart = startDate ? startOfDayMadridUtc(new Date(startDate)) : pause.startDate;
+    const newEnd = endDate ? startOfDayMadridUtc(new Date(endDate)) : pause.endDate;
     if (newEnd <= newStart) {
       return NextResponse.json({ error: "Fechas inválidas" }, { status: 400 });
     }

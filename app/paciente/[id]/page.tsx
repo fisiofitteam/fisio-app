@@ -501,10 +501,28 @@ export default async function PatientHome({ params }: { params: { id: string } }
 
   // Días para el fin del programa fijo (RECUPERA/CONSOLIDA). Si quedan pocos,
   // el home muestra un banner de upsell a Prevention como "siguiente paso".
+  //
+  // Fuente de verdad: `SubscriptionRenewal.endDate` del periodo activo, que
+  // YA incluye extensiones por pausas del paciente y vacaciones del fisio
+  // (lo actualiza extendSubscriptionByDays en /api/program-pauses). Antes
+  // calculábamos desde subscriptionStartDate + subscriptionPeriodMonths, que
+  // solo se actualiza en múltiplos de 30 días — pausas cortas se perdían.
+  const activeRenewal = patient.subscriptionStartDate
+    ? await prisma.subscriptionRenewal.findFirst({
+        where: { patientId: patient.id, status: "active" },
+        orderBy: { startDate: "desc" },
+        select: { endDate: true },
+      }).catch(() => null)
+    : null;
   const programEndsInDays = (() => {
     if (!patient.subscriptionStartDate) return null;
-    const end = new Date(patient.subscriptionStartDate);
-    end.setMonth(end.getMonth() + (patient.subscriptionPeriodMonths ?? 0));
+    const end = activeRenewal?.endDate
+      ? new Date(activeRenewal.endDate)
+      : (() => {
+          const e = new Date(patient.subscriptionStartDate!);
+          e.setMonth(e.getMonth() + (patient.subscriptionPeriodMonths ?? 0));
+          return e;
+        })();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     end.setHours(0, 0, 0, 0);
