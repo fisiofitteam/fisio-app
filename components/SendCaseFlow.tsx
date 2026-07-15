@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { interpolate, buildWhatsAppUrl } from "@/lib/message-render";
 import { extractYouTubeId } from "@/components/SuccessCasesList";
+import { formatCallDate } from "@/components/SendDirectButton";
 
 export type SuccessCaseOption = {
   id: string;
@@ -22,6 +23,10 @@ export type SendCaseTarget = {
   leadPhone: string | null;
   closerFullName: string;
   closerIntro: string | null;
+  /** Fecha de la próxima cita del lead. Si viene, interpolamos {cita.*}
+   *  en la plantilla del caso (útil para "Nos vemos el {cita.cuando}..."). */
+  callDate?: Date | null;
+  meetingUrl?: string | null;
 };
 
 /**
@@ -53,7 +58,7 @@ export function SendCaseFlow({
   if (!open) return null;
 
   function pick(c: SuccessCaseOption) {
-    const text = interpolate(template.body, {
+    const vars: Record<string, string> = {
       nombre: target.leadName,
       closer: target.closerFullName,
       fisio: target.closerFullName,
@@ -62,7 +67,18 @@ export function SendCaseFlow({
       "caso.nombre": c.name,
       "caso.lesion": c.injury,
       "caso.link": c.youtubeUrl,
-    });
+    };
+    if (target.callDate) {
+      const f = formatCallDate(target.callDate);
+      vars["cita.fecha"] = f.fecha;
+      vars["cita.fecha_corta"] = f.fecha_corta;
+      vars["cita.dia"] = f.dia;
+      vars["cita.hora"] = f.hora;
+      vars["cita.hora12"] = f.hora12;
+      vars["cita.cuando"] = f.cuando;
+      vars["cita.meet"] = target.meetingUrl ?? "";
+    }
+    const text = interpolate(template.body, vars);
     const url = buildWhatsAppUrl(target.leadPhone, text);
     if (!url) {
       // Sin teléfono → fallback: portapapeles.

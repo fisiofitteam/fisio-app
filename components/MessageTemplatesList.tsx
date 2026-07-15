@@ -141,6 +141,13 @@ const CASE_VARS: { token: string; desc: string }[] = [
   { token: "{caso.nombre}", desc: "Nombre del paciente del caso" },
   { token: "{caso.lesion}", desc: "Lesión / motivo" },
   { token: "{caso.link}", desc: "Link de YouTube del vídeo" },
+  { token: "{cita.cuando}", desc: "Relativo a hoy: 'hoy', 'mañana', 'el martes'…" },
+  { token: "{cita.fecha}", desc: "Fecha larga: 'martes 5 de junio'" },
+  { token: "{cita.fecha_corta}", desc: "Fecha corta: '5/6/2026'" },
+  { token: "{cita.dia}", desc: "Solo el día: 'martes'" },
+  { token: "{cita.hora}", desc: "Hora 24h: '17:30'" },
+  { token: "{cita.hora12}", desc: "Hora 12h: '5:30 pm'" },
+  { token: "{cita.meet}", desc: "URL de Google Meet (si el lead la tiene)" },
 ];
 
 const REMINDER_VARS: { token: string; desc: string }[] = [

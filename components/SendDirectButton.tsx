@@ -37,7 +37,7 @@ type Target = {
  *  - hora12:       "5:30 pm"
  *  - cuando:       "mañana", "hoy", "el martes", o fecha larga si > 7 días.
  */
-function formatCallDate(d: Date): {
+export function formatCallDate(d: Date): {
   fecha: string;
   fecha_corta: string;
   dia: string;

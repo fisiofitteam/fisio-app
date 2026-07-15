@@ -628,6 +628,8 @@ function AlwaysAvailableCallActions({
             leadPhone: lead.phone,
             closerFullName: currentUser.fullName,
             closerIntro: sendCaseProps.currentUserCloserIntro,
+            callDate: new Date(lead.callScheduledAt),
+            meetingUrl: lead.meetingUrl,
           }}
           cases={sendCaseProps.successCases}
         />
