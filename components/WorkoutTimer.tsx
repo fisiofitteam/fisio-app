@@ -14,6 +14,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   X, Play, Pause, RotateCcw, Volume2, VolumeX, Vibrate,
   Settings2, Plus, Trash2, ChevronUp, ChevronDown, Sliders,
@@ -297,6 +298,29 @@ export function WorkoutTimer({
 
   useWakeLock(running);
 
+  // Bloquear scroll de la app de fondo mientras el timer esté abierto.
+  // Sin esto, en móvil los deslizamientos "traspasan" y se ve moverse el
+  // contenido por detrás — especialmente si el timer se abrió desde una
+  // sesión con página scrolleable. Restauramos al desmontar.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const prevOverflow = document.body.style.overflow;
+    const prevPosition = document.body.style.position;
+    const prevWidth = document.body.style.width;
+    const scrollY = window.scrollY;
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.body.style.position = prevPosition;
+      document.body.style.top = "";
+      document.body.style.width = prevWidth;
+      window.scrollTo(0, scrollY);
+    };
+  }, []);
+
   // Refs del motor
   const phaseStartRef = useRef<number>(0);
   const phaseTotalRef = useRef<number>(0);
@@ -575,7 +599,15 @@ export function WorkoutTimer({
   const totalBlocks = config?.blocks.length ?? 0;
   const totalConfigSec = config ? configDurationSeconds(config) : 0;
 
-  return (
+  // Renderizamos en un portal directo a <body> para escapar de cualquier
+  // ancestro que tenga `transform`, `filter` o `will-change` (esas
+  // propiedades rompen `position: fixed` y hacen que el modal se ancle a un
+  // container en vez del viewport → parece que hay un hueco arriba).
+  const [mountEl, setMountEl] = useState<HTMLElement | null>(null);
+  useEffect(() => { setMountEl(document.body); }, []);
+  if (!mountEl) return null;
+
+  const modal = (
     <div
       className="fixed z-[100] flex items-center justify-center transition-colors duration-500"
       style={{
@@ -585,6 +617,10 @@ export function WorkoutTimer({
         // no quede hueco cuando aparece la url bar en móvil.
         top: 0, left: 0, right: 0, bottom: 0,
         width: "100vw", height: "100dvh",
+        // Sin esto, en iOS un swipe vertical en los bordes rebota el
+        // contenido de fondo (rubber-banding) y se ve la app por detrás.
+        overscrollBehavior: "contain",
+        touchAction: "none",
       }}
     >
       {/* Cabecera — respeta el notch/safe-area para no comerse los botones */}
@@ -797,6 +833,8 @@ export function WorkoutTimer({
       )}
     </div>
   );
+
+  return createPortal(modal, mountEl);
 }
 
 // ────────────────────────── vista READY (preview de bloques) ──────────────────────────

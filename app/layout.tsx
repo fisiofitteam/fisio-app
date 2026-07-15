@@ -26,6 +26,11 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  // "cover" hace que el viewport se extienda por debajo del notch/status bar
+  // en iOS. Sin esto, un modal fixed inset-0 queda dentro del safe area y se
+  // ve una franja del contenido por detrás en la parte superior — es el bug
+  // reportado con el timer.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
