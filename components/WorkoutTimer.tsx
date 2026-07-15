@@ -167,6 +167,7 @@ const LS_VOLUME = "fisio-timer-volume";
 const LS_PREP = "fisio-timer-prep-seconds";
 const LS_AUDIO = "fisio-timer-audio-on";
 const LS_VIBRATE = "fisio-timer-vibrate-on";
+const LS_ADVANCED = "fisio-timer-advanced-mode";
 
 function readStoredNumber(key: string, def: number): number {
   if (typeof window === "undefined") return def;
@@ -177,6 +178,16 @@ function readStoredBool(key: string, def: boolean): boolean {
   if (typeof window === "undefined") return def;
   const v = localStorage.getItem(key);
   return v == null ? def : v === "1";
+}
+
+/** Formatea milisegundos como m:ss o h:mm:ss según duración. */
+function formatMs(ms: number): string {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return `${m}:${String(s).padStart(2, "0")}`;
 }
 
 function initialSnapshot(): Snapshot {
@@ -275,6 +286,15 @@ export function WorkoutTimer({
   const [showConfig, setShowConfig] = useState(!config || (config?.blocks.length ?? 0) === 0);
   const [showPrefs, setShowPrefs] = useState(false);
 
+  // Modo ADVANCE (rondas + splits estilo Garmin laps). Solo se activa desde
+  // /paciente/[id]/ajustes en pacientes ADVANCE. Aquí solo leemos el flag.
+  const [advancedMode, setAdvancedMode] = useState(false);
+  // Splits acumulados durante el timer: cada uno es el totalElapsedMs en el
+  // momento de la pulsación de "Ronda". Vacío al arrancar.
+  const [splits, setSplits] = useState<number[]>([]);
+  // Modal de resumen al terminar el WOD.
+  const [showRecap, setShowRecap] = useState(false);
+
   const audioOnRef = useRef(audioOn);
   const vibrateOnRef = useRef(vibrateOn);
   const volumeRef = useRef(volume);
@@ -290,6 +310,7 @@ export function WorkoutTimer({
     setPrepSeconds(readStoredNumber(LS_PREP, DEFAULT_PREP_SECONDS));
     setAudioOn(readStoredBool(LS_AUDIO, true));
     setVibrateOn(readStoredBool(LS_VIBRATE, true));
+    setAdvancedMode(readStoredBool(LS_ADVANCED, false));
   }, []);
   useEffect(() => { if (typeof window !== "undefined") localStorage.setItem(LS_VOLUME, String(volume)); }, [volume]);
   useEffect(() => { if (typeof window !== "undefined") localStorage.setItem(LS_PREP, String(prepSeconds)); }, [prepSeconds]);
@@ -554,7 +575,24 @@ export function WorkoutTimer({
     setRunning(false);
     setSnap(initialSnapshot());
     prevSecondRef.current = -1;
+    setSplits([]);
+    setShowRecap(false);
   };
+
+  /** Registra una vuelta: guarda el tiempo total actual como split. */
+  const markLap = useCallback(() => {
+    if (snap.phase === "ready" || snap.phase === "done" || snap.phase === "prep") return;
+    tickBeep();
+    setSplits((prev) => [...prev, snap.totalElapsedMs]);
+  }, [snap.phase, snap.totalElapsedMs, tickBeep]);
+
+  /** Cierra el WOD manualmente (antes del "done" natural del timer) y abre
+   *  el mini-informe con los splits acumulados. */
+  const finishWod = useCallback(() => {
+    setRunning(false);
+    finishBeep();
+    setShowRecap(true);
+  }, [finishBeep]);
 
   // ─── UI derivada ───
   const currentBlock: TimerBlock | undefined = config?.blocks[snap.blockIndex];
@@ -829,12 +867,181 @@ export function WorkoutTimer({
             )}
             <div className="w-14 h-14" />
           </div>
+
+          {/* Modo ADVANCE: registrar rondas + terminar WOD.
+              Solo visible cuando el timer ya arrancó (no en prep/ready). */}
+          {advancedMode && snap.phase !== "ready" && snap.phase !== "prep" && snap.phase !== "done" && (
+            <div className="mt-5 flex items-center gap-3">
+              <button
+                onClick={markLap}
+                className="flex-1 py-3 rounded-xl font-bold text-sm"
+                style={{
+                  background: "rgba(255,255,255,0.10)",
+                  color: COLOR.white,
+                  border: "1px solid rgba(255,255,255,0.18)",
+                }}
+              >
+                🏁 Ronda {splits.length > 0 && <span style={{ color: COLOR.brandYellow }}>· {splits.length}</span>}
+              </button>
+              <button
+                onClick={finishWod}
+                className="flex-1 py-3 rounded-xl font-bold text-sm"
+                style={{ background: COLOR.brandOrange, color: "#0A0A0A" }}
+              >
+                ✅ Terminar WOD
+              </button>
+            </div>
+          )}
+
+          {/* Splits acumulados en curso — lista compacta, últimos 3 visibles */}
+          {advancedMode && splits.length > 0 && !showRecap && (
+            <div className="mt-3 max-w-xs w-full">
+              <div className="text-[10px] uppercase tracking-widest mb-1.5 text-center" style={{ color: COLOR.grayFaint }}>
+                Últimas rondas
+              </div>
+              <div className="space-y-1">
+                {splits.slice(-3).map((totalMs, i) => {
+                  const idx = splits.length - Math.min(3, splits.length) + i;
+                  const prev = idx === 0 ? 0 : splits[idx - 1];
+                  const lapMs = totalMs - prev;
+                  return (
+                    <div key={idx} className="flex justify-between text-xs font-mono" style={{ color: COLOR.grayDim }}>
+                      <span>#{idx + 1}</span>
+                      <span>{formatMs(lapMs)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
+      )}
+
+      {showRecap && (
+        <WodRecapPanel
+          splits={splits}
+          totalMs={snap.totalElapsedMs}
+          onClose={() => setShowRecap(false)}
+          onReset={() => { setShowRecap(false); reset(); }}
+        />
       )}
     </div>
   );
 
   return createPortal(modal, mountEl);
+}
+
+/**
+ * Mini-informe al pulsar "Terminar WOD". Lista todos los splits con su
+ * tiempo de vuelta, mejor/peor, media y total. Estilo laps de Garmin.
+ */
+function WodRecapPanel({
+  splits,
+  totalMs,
+  onClose,
+  onReset,
+}: {
+  splits: number[];
+  totalMs: number;
+  onClose: () => void;
+  onReset: () => void;
+}) {
+  // Convertimos splits (acumulados) a duraciones de cada ronda.
+  const lapDurations: number[] = splits.map((t, i) => t - (i === 0 ? 0 : splits[i - 1]));
+  // Si el atleta pulsó "Terminar" DESPUÉS de la última ronda registrada,
+  // añadimos una ronda extra con el tiempo restante hasta totalMs.
+  if (splits.length === 0 || splits[splits.length - 1] < totalMs - 1000) {
+    lapDurations.push(totalMs - (splits[splits.length - 1] ?? 0));
+  }
+  const best = lapDurations.length > 0 ? Math.min(...lapDurations) : 0;
+  const worst = lapDurations.length > 0 ? Math.max(...lapDurations) : 0;
+  const avg = lapDurations.length > 0 ? lapDurations.reduce((a, b) => a + b, 0) / lapDurations.length : 0;
+
+  return (
+    <div
+      className="absolute z-[120] flex items-center justify-center p-4"
+      style={{ top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.85)" }}
+      onClick={onClose}
+    >
+      <div
+        className="rounded-2xl max-w-sm w-full p-5"
+        style={{
+          background: "#141414",
+          border: "1px solid rgba(255,255,255,0.12)",
+          color: COLOR.white,
+          maxHeight: "80vh",
+          overflowY: "auto",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="text-center mb-4">
+          <div className="text-[10px] uppercase tracking-[0.3em] font-bold" style={{ color: COLOR.brandYellow }}>
+            WOD completado
+          </div>
+          <div className="text-4xl font-bold mt-1 tabular-nums">{formatMs(totalMs)}</div>
+          <div className="text-xs mt-0.5" style={{ color: COLOR.grayDim }}>
+            {lapDurations.length} {lapDurations.length === 1 ? "ronda" : "rondas"}
+          </div>
+        </div>
+
+        {lapDurations.length > 1 && (
+          <div className="grid grid-cols-3 gap-2 mb-4 text-center">
+            <div className="p-2 rounded-lg" style={{ background: "rgba(255,255,255,0.05)" }}>
+              <div className="text-[9px] uppercase tracking-wider" style={{ color: COLOR.grayFaint }}>Mejor</div>
+              <div className="text-sm font-bold tabular-nums" style={{ color: COLOR.brandYellow }}>{formatMs(best)}</div>
+            </div>
+            <div className="p-2 rounded-lg" style={{ background: "rgba(255,255,255,0.05)" }}>
+              <div className="text-[9px] uppercase tracking-wider" style={{ color: COLOR.grayFaint }}>Media</div>
+              <div className="text-sm font-bold tabular-nums">{formatMs(avg)}</div>
+            </div>
+            <div className="p-2 rounded-lg" style={{ background: "rgba(255,255,255,0.05)" }}>
+              <div className="text-[9px] uppercase tracking-wider" style={{ color: COLOR.grayFaint }}>Peor</div>
+              <div className="text-sm font-bold tabular-nums" style={{ color: COLOR.brandOrange }}>{formatMs(worst)}</div>
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-1 mb-4">
+          {lapDurations.map((lapMs, i) => {
+            const isBest = lapMs === best && lapDurations.length > 1;
+            const isWorst = lapMs === worst && lapDurations.length > 1 && best !== worst;
+            return (
+              <div
+                key={i}
+                className="flex justify-between items-baseline text-sm py-1.5 px-3 rounded"
+                style={{ background: "rgba(255,255,255,0.04)" }}
+              >
+                <span className="font-semibold" style={{ color: COLOR.grayDim }}>Ronda {i + 1}</span>
+                <span
+                  className="font-mono tabular-nums font-semibold"
+                  style={{ color: isBest ? COLOR.brandYellow : isWorst ? COLOR.brandOrange : COLOR.white }}
+                >
+                  {formatMs(lapMs)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 rounded-lg text-sm font-semibold"
+            style={{ background: "rgba(255,255,255,0.10)", color: COLOR.white }}
+          >
+            Cerrar
+          </button>
+          <button
+            onClick={onReset}
+            className="flex-1 py-2.5 rounded-lg text-sm font-bold"
+            style={{ background: COLOR.brandYellow, color: "#0A0A0A" }}
+          >
+            Nuevo WOD
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ────────────────────────── vista READY (preview de bloques) ──────────────────────────
