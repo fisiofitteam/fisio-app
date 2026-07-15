@@ -8,6 +8,7 @@ import {
   Target,
   CalendarDays,
   Settings,
+  Timer,
 } from "lucide-react";
 import { PatientSessionMenu, patientLogout } from "@/components/PatientSessionMenu";
 import { PatientNav } from "@/components/PatientNav";
@@ -246,6 +247,12 @@ export function PatientHomePrevention({
               sublabel={challenge.title}
             />
           )}
+          <PreventionActionCard
+            href={`/paciente/${patientId}/timer`}
+            Icon={Timer}
+            label="Timer"
+            sublabel="EMOM, AMRAP, Tabata…"
+          />
         </div>
 
         {/* Aviso ligero cuando la semana aún no está publicada */}

@@ -262,6 +262,12 @@ function TaskCard({ task }: { task: ResolvedTask }) {
       {task.type === "WORKOUT" && (
         <TaskTimerButton taskTitle={task.title} taskBody={task.bodyText} />
       )}
+      {/* En VIDEO también ofrecemos timer: el fisio a veces mete el enunciado
+          del trabajo en la descripción del vídeo demostrativo (patrón
+          típico de RECUPERA/CONSOLIDA/PREVENTION). */}
+      {task.type === "VIDEO" && (
+        <TaskTimerButton taskTitle={task.title} taskBody={task.bodyText} />
+      )}
       {task.exercises && task.exercises.length > 0 && (
         <RollingExerciseVideos exercises={task.exercises} />
       )}

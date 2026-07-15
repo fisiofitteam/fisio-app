@@ -229,6 +229,11 @@ function RollingTaskCard({ task }: { task: RollingTask }) {
       {task.type === "WORKOUT" && (
         <TaskTimerButton taskTitle={task.title} taskBody={task.bodyText} />
       )}
+      {/* En VIDEO también, por si el fisio mete el enunciado del trabajo
+          en la descripción del vídeo demostrativo. */}
+      {task.type === "VIDEO" && (
+        <TaskTimerButton taskTitle={task.title} taskBody={task.bodyText} />
+      )}
       {task.exercises && task.exercises.length > 0 && (
         <RollingExerciseVideos exercises={task.exercises} />
       )}
