@@ -255,22 +255,27 @@ function ProgressRing({
   color,
   phase,
   children,
+  compact = false,
 }: {
   progress: number;
   color: string;
   phase: Phase;
   children: React.ReactNode;
+  /** Reduce el tamaño para dejar sitio a otros elementos (enunciado del
+   *  workout, botones de rondas del modo ADVANCE, etc). */
+  compact?: boolean;
 }) {
   // viewBox 100x100 · radio 47 · circunferencia = 2πr ≈ 295.31
   const R = 47;
   const C = 2 * Math.PI * R;
   const p = Math.max(0, Math.min(1, progress));
   const dashOffset = C * (1 - p);
+  const size = compact ? "min(52vw, 18rem)" : "min(78vw, 26rem)";
 
   return (
     <div
       className="relative flex items-center justify-center"
-      style={{ width: "min(78vw, 26rem)", height: "min(78vw, 26rem)" }}
+      style={{ width: size, height: size }}
     >
       <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full" style={{ transform: "rotate(-90deg)" }}>
         {/* Fondo tenue */}
@@ -839,38 +844,51 @@ export function WorkoutTimer({
           )}
 
           {/* Contenedor del número + ring SVG. El SVG se dibuja alrededor
-              usando position absoluta; el número queda centrado. */}
-          <ProgressRing
-            phase={snap.phase}
-            progress={(() => {
-              // For time: hacia arriba (con cap opcional)
-              if (snap.phase === "work" && currentBlock?.kind === "fortime") {
-                if (currentBlock.capSeconds) {
-                  return Math.min(1, snap.blockElapsedMs / (currentBlock.capSeconds * 1000));
-                }
-                return 0;
-              }
-              // Fases con countdown: prep, work (no fortime), rest, block-rest
-              const total = phaseTotalRef.current;
-              if (total <= 0) return 0;
-              const done = 1 - snap.phaseRemainingMs / total;
-              return Math.max(0, Math.min(1, done));
-            })()}
-            color={accentColor}
-          >
-            <div
-              className="font-mono font-black tabular-nums leading-none"
-              style={{
-                fontSize: "min(28vw, 18rem)",
-                color: accentColor,
-                textShadow: snap.phase === "work" && currentBlock?.kind !== "rest"
-                  ? `0 0 30px ${accentColor}44`
-                  : undefined,
-              }}
-            >
-              {snap.phase === "prep" ? displaySeconds : fmtDuration(displaySeconds)}
-            </div>
-          </ProgressRing>
+              usando position absoluta; el número queda centrado.
+              El ring se reduce cuando hay más contenido debajo
+              (enunciado del wod, botones de rondas ADVANCE) para que todo
+              entre sin scroll. */}
+          {(() => {
+            const showsAdvancedButtons =
+              advancedMode &&
+              (currentBlock?.kind === "amrap" || currentBlock?.kind === "fortime") &&
+              snap.phase !== "ready" && snap.phase !== "prep" && snap.phase !== "done";
+            const compact = Boolean(taskBody) || showsAdvancedButtons;
+            return (
+              <ProgressRing
+                phase={snap.phase}
+                compact={compact}
+                progress={(() => {
+                  // For time: hacia arriba (con cap opcional)
+                  if (snap.phase === "work" && currentBlock?.kind === "fortime") {
+                    if (currentBlock.capSeconds) {
+                      return Math.min(1, snap.blockElapsedMs / (currentBlock.capSeconds * 1000));
+                    }
+                    return 0;
+                  }
+                  // Fases con countdown: prep, work (no fortime), rest, block-rest
+                  const total = phaseTotalRef.current;
+                  if (total <= 0) return 0;
+                  const done = 1 - snap.phaseRemainingMs / total;
+                  return Math.max(0, Math.min(1, done));
+                })()}
+                color={accentColor}
+              >
+                <div
+                  className="font-mono font-black tabular-nums leading-none"
+                  style={{
+                    fontSize: compact ? "min(18vw, 11rem)" : "min(28vw, 18rem)",
+                    color: accentColor,
+                    textShadow: snap.phase === "work" && currentBlock?.kind !== "rest"
+                      ? `0 0 30px ${accentColor}44`
+                      : undefined,
+                  }}
+                >
+                  {snap.phase === "prep" ? displaySeconds : fmtDuration(displaySeconds)}
+                </div>
+              </ProgressRing>
+            );
+          })()}
 
           {snap.totalRounds > 0 && snap.phase !== "prep" && snap.phase !== "done" && (
             <div className="mt-4 text-lg font-bold" style={{ color: COLOR.white }}>
@@ -884,10 +902,26 @@ export function WorkoutTimer({
             </div>
           )}
 
-          {/* El recuadro con el enunciado del workout (taskBody) se muestra
-              en ReadyPreview antes de arrancar. Durante el timer NO lo
-              pintamos — el atleta ya lo ha leído y son textos que sobran
-              en pantalla mientras entrena. */}
+          {/* Recuadro con el trabajo a realizar — el atleta lo tiene a
+              la vista durante el timer. Sutil, scroll interno si es largo. */}
+          {taskBody && snap.phase !== "done" && (
+            <div
+              className="mt-6 mx-4 rounded-xl border p-3 max-w-md w-full"
+              style={{
+                background: "rgba(255,255,255,0.06)",
+                borderColor: "rgba(255,255,255,0.12)",
+                maxHeight: "22vh",
+                overflowY: "auto",
+              }}
+            >
+              <div
+                className="text-[11px] leading-relaxed whitespace-pre-wrap font-mono"
+                style={{ color: COLOR.white, opacity: 0.85 }}
+              >
+                {taskBody}
+              </div>
+            </div>
+          )}
 
           <div className="mt-6 flex items-center gap-4">
             <button
