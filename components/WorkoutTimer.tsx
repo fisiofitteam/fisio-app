@@ -50,13 +50,42 @@ const COLOR = {
 let _audioCtx: AudioContext | null = null;
 function getAudioCtx(): AudioContext | null {
   if (typeof window === "undefined") return null;
-  if (_audioCtx) return _audioCtx;
+  // iOS puede dejar el contexto en estado "closed" (tras backgroundeo largo,
+  // o si el sistema cortó el audio). En ese caso hay que crear uno nuevo o
+  // los siguientes .createOscillator() lanzarán y el beep desaparece
+  // silenciosamente — es el bug del "a veces suena, a veces no".
+  if (_audioCtx && (_audioCtx as any).state !== "closed") return _audioCtx;
   try {
     const AC = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext | undefined;
     if (!AC) return null;
     _audioCtx = new AC();
     return _audioCtx;
   } catch { return null; }
+}
+
+/** Desbloquea el AudioContext en iOS. Debe llamarse DENTRO de un user
+ *  gesture (tap del atleta). Reproduce un buffer silencioso de 1 sample
+ *  para primar el pipeline: sin esto, el primer beep real puede fallar y
+ *  los siguientes salir a medias. Es el patrón estándar para bypassar
+ *  las restricciones de Safari mobile. */
+function unlockAudio(): void {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  if (ctx.state === "suspended") {
+    ctx.resume().catch(() => {});
+  }
+  // "interrupted" es un estado exclusivo de iOS (tras llamada, Siri, etc).
+  // resume() lo recupera igual que en suspended.
+  if ((ctx as any).state === "interrupted") {
+    ctx.resume().catch(() => {});
+  }
+  try {
+    const buffer = ctx.createBuffer(1, 1, 22050);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.start(0);
+  } catch { /* noop — algunos navegadores fallan silenciosamente aquí */ }
 }
 /** Reproduce un beep FUERTE. Optimizado para oírse sobre música de gym:
  *
@@ -75,6 +104,13 @@ function beep(freq: number, durationMs: number, volume = 1) {
   if (!ctx) return;
   const v = Math.max(0, Math.min(1, volume));
   if (v === 0) return;
+  // Si el contexto quedó suspendido entre gestos (backgroundeo, DST, etc)
+  // intentamos reanudarlo en el acto — es best-effort porque iOS a veces
+  // requiere gesto real, pero no cuesta nada.
+  const st = (ctx as any).state as string;
+  if (st === "suspended" || st === "interrupted") {
+    ctx.resume().catch(() => {});
+  }
 
   const comp = ctx.createDynamicsCompressor();
   comp.threshold.value = -14;
@@ -324,6 +360,26 @@ export function WorkoutTimer({
 
   useWakeLock(running);
 
+  // Al volver del background (bloqueo pantalla, notificación, cambio de app)
+  // el AudioContext queda suspended/interrupted en iOS y los siguientes
+  // beeps se pierden hasta que el atleta vuelva a tocar la pantalla. Con
+  // esto lo reanudamos de forma proactiva cada vez que la app vuelve al
+  // foreground.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        const ctx = getAudioCtx();
+        const st = (ctx as any)?.state as string | undefined;
+        if (st === "suspended" || st === "interrupted") {
+          ctx?.resume().catch(() => {});
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
   // Bloquear scroll de la app de fondo mientras el timer esté abierto.
   // Sin esto, en móvil los deslizamientos "traspasan" y se ve moverse el
   // contenido por detrás — especialmente si el timer se abrió desde una
@@ -546,8 +602,9 @@ export function WorkoutTimer({
   // ─── Control ───
   const start = () => {
     if (!config || config.blocks.length === 0) return;
-    const ctx = getAudioCtx();
-    if (ctx?.state === "suspended") ctx.resume().catch(() => {});
+    // Desbloqueo iOS: dentro del user gesture del propio botón de start.
+    // Ver comentario en unlockAudio() — patrón estándar Safari mobile.
+    unlockAudio();
 
     const now = performance.now();
     const prepMs = Math.max(1, prepSecondsRef.current) * 1000;
@@ -566,6 +623,7 @@ export function WorkoutTimer({
   const pause = () => setRunning(false);
   const resume = () => {
     if (!snap || !config) return;
+    unlockAudio();
     const now = performance.now();
     if (snap.phase === "work" && config.blocks[snap.blockIndex]?.kind === "fortime") {
       blockStartRef.current = now - snap.blockElapsedMs;
@@ -587,6 +645,7 @@ export function WorkoutTimer({
   /** Registra una vuelta: guarda el tiempo total actual como split. */
   const markLap = useCallback(() => {
     if (snap.phase === "ready" || snap.phase === "done" || snap.phase === "prep") return;
+    unlockAudio(); // gesto del atleta — buena oportunidad para revivir audio.
     tickBeep();
     setSplits((prev) => [...prev, snap.totalElapsedMs]);
   }, [snap.phase, snap.totalElapsedMs, tickBeep]);
