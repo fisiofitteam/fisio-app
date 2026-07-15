@@ -678,10 +678,17 @@ export function WorkoutTimer({
           <X size={22} />
         </button>
         <div className="text-center min-w-0 flex-1 mx-2">
-          <div className="text-[10px] uppercase tracking-[0.3em] font-semibold" style={{ color: COLOR.brandYellow, letterSpacing: "0.3em" }}>
-            FisioFit Timer
-          </div>
-          <div className="text-xs font-medium truncate mt-0.5" style={{ color: COLOR.grayDim }}>{taskTitle}</div>
+          {/* Brand + título de la tarea solo antes de arrancar. Cuando el
+              timer corre son ruido visual: se solapan con el phase label
+              y no aportan info nueva. */}
+          {snap.phase === "ready" && (
+            <>
+              <div className="text-[10px] uppercase tracking-[0.3em] font-semibold" style={{ color: COLOR.brandYellow, letterSpacing: "0.3em" }}>
+                FisioFit Timer
+              </div>
+              <div className="text-xs font-medium truncate mt-0.5" style={{ color: COLOR.grayDim }}>{taskTitle}</div>
+            </>
+          )}
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -762,9 +769,15 @@ export function WorkoutTimer({
         <ReadyPreview config={config} taskBody={taskBody} onStart={start} />
       ) : (
         <div className="flex flex-col items-center justify-center select-none" style={{ color: COLOR.white }}>
-          <div className="text-[11px] uppercase tracking-[0.35em] font-bold mb-3" style={{ color: accentColor }}>
-            {phaseLabel}
-          </div>
+          {/* Mostramos el label solo cuando aporta: cuenta atrás inicial,
+              descanso o completado. Cuando dice el nombre del bloque
+              (AMRAP / FOR TIME / GO) es ruido — el color del número ya
+              informa del estado y encima se superponía con el header. */}
+          {(snap.phase === "prep" || snap.phase === "done" || snap.phase === "rest" || snap.phase === "block-rest") && (
+            <div className="text-[11px] uppercase tracking-[0.35em] font-bold mb-3" style={{ color: accentColor }}>
+              {phaseLabel}
+            </div>
+          )}
 
           {/* Contenedor del número + ring SVG. El SVG se dibuja alrededor
               usando position absoluta; el número queda centrado. */}
