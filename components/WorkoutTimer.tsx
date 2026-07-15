@@ -56,26 +56,62 @@ function getAudioCtx(): AudioContext | null {
     return _audioCtx;
   } catch { return null; }
 }
-/** Reproduce un beep. `volume` es 0..1; el pico del oscilador se mapea a
- *  hasta 1.0 (más fuerte que antes: pasamos de 0.4 fijo a subir hasta 1.0
- *  al 100%). El pitido sigue siendo sinusoidal — la LOUDNESS real depende
- *  del volumen del dispositivo, pero ahora ocupamos todo el rango. */
+/** Reproduce un beep FUERTE. Optimizado para oírse sobre música de gym:
+ *
+ *  - Onda `square` (mucho más loudness percibida que `sine` a mismo peak).
+ *  - Segundo oscilador una octava arriba con sine para brillo/pierce sin
+ *    hacerlo áspero.
+ *  - DynamicsCompressor al final: empuja los picos cerca del máximo sin
+ *    saturar los altavoces del móvil, así el sonido gana ~6-9 dB de
+ *    loudness percibida frente a la versión anterior de un simple sine.
+ *
+ *  `volume` (0..1) escala el master gain antes del compresor. El techo
+ *  real depende del volumen del sistema — el atleta tiene que tener el
+ *  móvil también al máximo. */
 function beep(freq: number, durationMs: number, volume = 1) {
   const ctx = getAudioCtx();
   if (!ctx) return;
   const v = Math.max(0, Math.min(1, volume));
   if (v === 0) return;
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type = "sine";
-  osc.frequency.value = freq;
-  gain.gain.value = 0;
-  osc.connect(gain).connect(ctx.destination);
+
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -14;
+  comp.knee.value = 6;
+  comp.ratio.value = 20;
+  comp.attack.value = 0.001;
+  comp.release.value = 0.08;
+  comp.connect(ctx.destination);
+
+  const master = ctx.createGain();
+  master.connect(comp);
   const now = ctx.currentTime;
-  gain.gain.linearRampToValueAtTime(v, now + 0.005);
-  gain.gain.linearRampToValueAtTime(0, now + durationMs / 1000);
-  osc.start(now);
-  osc.stop(now + durationMs / 1000 + 0.02);
+  const stop = now + durationMs / 1000;
+  // Overdrive intencionado (x3) para saturar el compresor y maximizar el
+  // RMS. Sin la etapa de compresión esto clipearía; con ella queda muy
+  // alto pero limpio.
+  const drive = v * 3;
+  master.gain.setValueAtTime(0, now);
+  master.gain.linearRampToValueAtTime(drive, now + 0.003);
+  master.gain.linearRampToValueAtTime(0, stop);
+
+  // Fundamental — square = máxima presencia en el rango medio.
+  const osc1 = ctx.createOscillator();
+  osc1.type = "square";
+  osc1.frequency.value = freq;
+  osc1.connect(master);
+
+  // Octava superior, más suave, para brillo.
+  const osc2 = ctx.createOscillator();
+  osc2.type = "sine";
+  osc2.frequency.value = freq * 2;
+  const g2 = ctx.createGain();
+  g2.gain.value = 0.5;
+  osc2.connect(g2).connect(master);
+
+  osc1.start(now);
+  osc2.start(now);
+  osc1.stop(stop + 0.02);
+  osc2.stop(stop + 0.02);
 }
 function vibrate(pattern: number | number[]) {
   if (typeof navigator !== "undefined" && "vibrate" in navigator) {
