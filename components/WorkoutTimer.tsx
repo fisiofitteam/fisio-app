@@ -16,7 +16,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   X, Play, Pause, RotateCcw, Volume2, VolumeX, Vibrate,
-  Settings2, Plus, Trash2, ChevronUp, ChevronDown,
+  Settings2, Plus, Trash2, ChevronUp, ChevronDown, Sliders,
 } from "lucide-react";
 import {
   blockLabel,
@@ -56,9 +56,15 @@ function getAudioCtx(): AudioContext | null {
     return _audioCtx;
   } catch { return null; }
 }
-function beep(freq: number, durationMs: number) {
+/** Reproduce un beep. `volume` es 0..1; el pico del oscilador se mapea a
+ *  hasta 1.0 (más fuerte que antes: pasamos de 0.4 fijo a subir hasta 1.0
+ *  al 100%). El pitido sigue siendo sinusoidal — la LOUDNESS real depende
+ *  del volumen del dispositivo, pero ahora ocupamos todo el rango. */
+function beep(freq: number, durationMs: number, volume = 1) {
   const ctx = getAudioCtx();
   if (!ctx) return;
+  const v = Math.max(0, Math.min(1, volume));
+  if (v === 0) return;
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
   osc.type = "sine";
@@ -66,7 +72,7 @@ function beep(freq: number, durationMs: number) {
   gain.gain.value = 0;
   osc.connect(gain).connect(ctx.destination);
   const now = ctx.currentTime;
-  gain.gain.linearRampToValueAtTime(0.4, now + 0.005);
+  gain.gain.linearRampToValueAtTime(v, now + 0.005);
   gain.gain.linearRampToValueAtTime(0, now + durationMs / 1000);
   osc.start(now);
   osc.stop(now + durationMs / 1000 + 0.02);
@@ -115,7 +121,26 @@ type Snapshot = {
   blockElapsedMs: number;   // For time cuenta esto
 };
 
-const PREP_MS = 3000;
+const DEFAULT_PREP_SECONDS = 3;
+const PREP_OPTIONS = [3, 5, 10] as const;
+
+// Persistencia en localStorage — mantener preferencias del atleta entre
+// aperturas del timer (aunque cierre y vuelva a abrir desde otra tarea).
+const LS_VOLUME = "fisio-timer-volume";
+const LS_PREP = "fisio-timer-prep-seconds";
+const LS_AUDIO = "fisio-timer-audio-on";
+const LS_VIBRATE = "fisio-timer-vibrate-on";
+
+function readStoredNumber(key: string, def: number): number {
+  if (typeof window === "undefined") return def;
+  const v = Number(localStorage.getItem(key));
+  return Number.isFinite(v) && v > 0 ? v : def;
+}
+function readStoredBool(key: string, def: boolean): boolean {
+  if (typeof window === "undefined") return def;
+  const v = localStorage.getItem(key);
+  return v == null ? def : v === "1";
+}
 
 function initialSnapshot(): Snapshot {
   return {
@@ -206,12 +231,33 @@ export function WorkoutTimer({
   const [running, setRunning] = useState(false);
   const [audioOn, setAudioOn] = useState(true);
   const [vibrateOn, setVibrateOn] = useState(true);
+  // Preferencias de sonido/cuenta atrás. Se leen de localStorage al montar y
+  // se persisten al cambiar, así el atleta no las reconfigura cada vez.
+  const [volume, setVolume] = useState<number>(1);
+  const [prepSeconds, setPrepSeconds] = useState<number>(DEFAULT_PREP_SECONDS);
   const [showConfig, setShowConfig] = useState(!config || (config?.blocks.length ?? 0) === 0);
+  const [showPrefs, setShowPrefs] = useState(false);
 
   const audioOnRef = useRef(audioOn);
   const vibrateOnRef = useRef(vibrateOn);
+  const volumeRef = useRef(volume);
+  const prepSecondsRef = useRef(prepSeconds);
   useEffect(() => { audioOnRef.current = audioOn; }, [audioOn]);
   useEffect(() => { vibrateOnRef.current = vibrateOn; }, [vibrateOn]);
+  useEffect(() => { volumeRef.current = volume; }, [volume]);
+  useEffect(() => { prepSecondsRef.current = prepSeconds; }, [prepSeconds]);
+
+  // Hidratar preferencias desde localStorage (solo cliente).
+  useEffect(() => {
+    setVolume(readStoredNumber(LS_VOLUME, 1));
+    setPrepSeconds(readStoredNumber(LS_PREP, DEFAULT_PREP_SECONDS));
+    setAudioOn(readStoredBool(LS_AUDIO, true));
+    setVibrateOn(readStoredBool(LS_VIBRATE, true));
+  }, []);
+  useEffect(() => { if (typeof window !== "undefined") localStorage.setItem(LS_VOLUME, String(volume)); }, [volume]);
+  useEffect(() => { if (typeof window !== "undefined") localStorage.setItem(LS_PREP, String(prepSeconds)); }, [prepSeconds]);
+  useEffect(() => { if (typeof window !== "undefined") localStorage.setItem(LS_AUDIO, audioOn ? "1" : "0"); }, [audioOn]);
+  useEffect(() => { if (typeof window !== "undefined") localStorage.setItem(LS_VIBRATE, vibrateOn ? "1" : "0"); }, [vibrateOn]);
 
   useWakeLock(running);
 
@@ -224,32 +270,32 @@ export function WorkoutTimer({
 
   // ─── Feedback ───
   const tickBeep = useCallback(() => {
-    if (audioOnRef.current) beep(880, 120);
+    if (audioOnRef.current) beep(880, 120, volumeRef.current);
     if (vibrateOnRef.current) vibrate(80);
   }, []);
   const countdownBeep = useCallback(() => {
-    if (audioOnRef.current) beep(660, 80);
+    if (audioOnRef.current) beep(660, 80, volumeRef.current);
     if (vibrateOnRef.current) vibrate(50);
   }, []);
   const startBeep = useCallback(() => {
-    if (audioOnRef.current) beep(880, 180);
+    if (audioOnRef.current) beep(880, 180, volumeRef.current);
     if (vibrateOnRef.current) vibrate([120, 50, 120]);
   }, []);
   const restBeep = useCallback(() => {
-    if (audioOnRef.current) beep(440, 200);
+    if (audioOnRef.current) beep(440, 200, volumeRef.current);
     if (vibrateOnRef.current) vibrate(120);
   }, []);
   const finishBeep = useCallback(() => {
     if (audioOnRef.current) {
-      beep(1046, 250);
-      setTimeout(() => beep(1318, 300), 260);
+      beep(1046, 250, volumeRef.current);
+      setTimeout(() => beep(1318, 300, volumeRef.current), 260);
     }
     if (vibrateOnRef.current) vibrate([200, 100, 200, 100, 400]);
   }, []);
   const blockAdvanceBeep = useCallback(() => {
     if (audioOnRef.current) {
-      beep(659, 150);
-      setTimeout(() => beep(880, 200), 160);
+      beep(659, 150, volumeRef.current);
+      setTimeout(() => beep(880, 200, volumeRef.current), 160);
     }
     if (vibrateOnRef.current) vibrate([120, 80, 120]);
   }, []);
@@ -418,13 +464,14 @@ export function WorkoutTimer({
     if (ctx?.state === "suspended") ctx.resume().catch(() => {});
 
     const now = performance.now();
+    const prepMs = Math.max(1, prepSecondsRef.current) * 1000;
     phaseStartRef.current = now;
-    phaseTotalRef.current = PREP_MS;
+    phaseTotalRef.current = prepMs;
     totalStartRef.current = now;
     prevSecondRef.current = -1;
     setSnap({
       blockIndex: 0, phase: "prep", round: 0, totalRounds: 0,
-      phaseRemainingMs: PREP_MS, totalElapsedMs: 0, blockElapsedMs: 0,
+      phaseRemainingMs: prepMs, totalElapsedMs: 0, blockElapsedMs: 0,
     });
     setRunning(true);
     setShowConfig(false);
@@ -493,9 +540,25 @@ export function WorkoutTimer({
   const totalConfigSec = config ? configDurationSeconds(config) : 0;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center transition-colors duration-500" style={{ background: bgColor }}>
-      {/* Cabecera */}
-      <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 py-3" style={{ color: COLOR.white }}>
+    <div
+      className="fixed z-[100] flex items-center justify-center transition-colors duration-500"
+      style={{
+        background: bgColor,
+        // Cubrimos toda la pantalla, incluso bajo la barra de estado del
+        // sistema (iOS/Android). Usamos 100dvh (viewport dinámico) para que
+        // no quede hueco cuando aparece la url bar en móvil.
+        top: 0, left: 0, right: 0, bottom: 0,
+        width: "100vw", height: "100dvh",
+      }}
+    >
+      {/* Cabecera — respeta el notch/safe-area para no comerse los botones */}
+      <div
+        className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 py-3"
+        style={{
+          color: COLOR.white,
+          paddingTop: "max(0.75rem, env(safe-area-inset-top))",
+        }}
+      >
         <button onClick={onClose} aria-label="Cerrar" className="p-2 -ml-2">
           <X size={22} />
         </button>
@@ -506,19 +569,35 @@ export function WorkoutTimer({
           <div className="text-xs font-medium truncate mt-0.5" style={{ color: COLOR.grayDim }}>{taskTitle}</div>
         </div>
         <div className="flex items-center gap-1">
-          <button onClick={() => setAudioOn((v) => !v)} className="p-2" aria-label="Sonido">
-            {audioOn ? <Volume2 size={18} /> : <VolumeX size={18} />}
-          </button>
-          <button onClick={() => setVibrateOn((v) => !v)} className={`p-2 ${vibrateOn ? "" : "opacity-40"}`} aria-label="Vibración">
-            <Vibrate size={18} />
+          <button
+            onClick={() => setShowPrefs((v) => !v)}
+            className={`p-2 ${showPrefs ? "opacity-100" : "opacity-90"}`}
+            aria-label="Preferencias de sonido"
+            title="Preferencias (volumen, cuenta atrás, vibración)"
+          >
+            <Sliders size={18} />
           </button>
           {config && (
-            <button onClick={() => setShowConfig((v) => !v)} className="p-2" aria-label="Configuración">
+            <button onClick={() => setShowConfig((v) => !v)} className="p-2" aria-label="Configuración de bloques">
               <Settings2 size={18} />
             </button>
           )}
         </div>
       </div>
+
+      {showPrefs && (
+        <PreferencesPanel
+          audioOn={audioOn}
+          onToggleAudio={() => setAudioOn((v) => !v)}
+          vibrateOn={vibrateOn}
+          onToggleVibrate={() => setVibrateOn((v) => !v)}
+          volume={volume}
+          onChangeVolume={setVolume}
+          prepSeconds={prepSeconds}
+          onChangePrep={setPrepSeconds}
+          onClose={() => setShowPrefs(false)}
+        />
+      )}
 
       {/* Barra de progreso de bloques */}
       {config && totalBlocks > 1 && !showConfig && (
@@ -1095,4 +1174,127 @@ function blockDur(b: TimerBlock): number {
     case "fortime":   return b.capSeconds ?? 0;
     case "rest":      return b.totalSeconds;
   }
+}
+
+/**
+ * Panel deslizable de preferencias del timer. Se abre desde el icono
+ * "sliders" de la cabecera. Guarda: volumen, duración de la cuenta atrás
+ * inicial y toggles de sonido/vibración. Los valores se persisten en
+ * localStorage en el componente padre.
+ */
+function PreferencesPanel({
+  audioOn, onToggleAudio,
+  vibrateOn, onToggleVibrate,
+  volume, onChangeVolume,
+  prepSeconds, onChangePrep,
+  onClose,
+}: {
+  audioOn: boolean;
+  onToggleAudio: () => void;
+  vibrateOn: boolean;
+  onToggleVibrate: () => void;
+  volume: number;
+  onChangeVolume: (v: number) => void;
+  prepSeconds: number;
+  onChangePrep: (v: number) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="absolute z-[110] left-0 right-0"
+      style={{
+        top: "max(3.5rem, calc(env(safe-area-inset-top) + 3rem))",
+      }}
+    >
+      <div
+        className="mx-auto max-w-md rounded-2xl p-4 space-y-4"
+        style={{
+          background: "rgba(0,0,0,0.85)",
+          border: "1px solid rgba(255,255,255,0.12)",
+          color: COLOR.white,
+          backdropFilter: "blur(8px)",
+        }}
+      >
+        <div className="flex items-center justify-between">
+          <div className="text-xs uppercase tracking-[0.25em] font-bold" style={{ color: COLOR.brandYellow }}>
+            Preferencias
+          </div>
+          <button onClick={onClose} className="p-1 -mr-1" aria-label="Cerrar preferencias">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Volumen */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-sm font-medium">Volumen</label>
+            <span className="text-xs tabular-nums" style={{ color: COLOR.grayDim }}>
+              {Math.round(volume * 100)}%
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={onToggleAudio} className="p-1" aria-label="Sonido on/off">
+              {audioOn ? <Volume2 size={18} /> : <VolumeX size={18} />}
+            </button>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={Math.round(volume * 100)}
+              onChange={(e) => onChangeVolume(Number(e.target.value) / 100)}
+              className="flex-1 accent-yellow-400"
+              disabled={!audioOn}
+            />
+          </div>
+          <p className="text-[10px] mt-1" style={{ color: COLOR.grayFaint }}>
+            El máximo real depende del volumen del móvil. Sube ambos para el ruido gordo del gym.
+          </p>
+        </div>
+
+        {/* Cuenta atrás inicial */}
+        <div>
+          <label className="text-sm font-medium block mb-1.5">Cuenta atrás inicial</label>
+          <div className="grid grid-cols-3 gap-2">
+            {PREP_OPTIONS.map((opt) => {
+              const selected = prepSeconds === opt;
+              return (
+                <button
+                  key={opt}
+                  onClick={() => onChangePrep(opt)}
+                  className="py-2 text-sm rounded-lg font-semibold"
+                  style={{
+                    background: selected ? COLOR.brandYellow : "rgba(255,255,255,0.08)",
+                    color: selected ? "#0A0A0A" : COLOR.white,
+                    border: selected ? "1px solid transparent" : "1px solid rgba(255,255,255,0.15)",
+                  }}
+                >
+                  {opt}s
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Vibración */}
+        <div className="flex items-center justify-between">
+          <div>
+            <label className="text-sm font-medium block">Vibración</label>
+            <p className="text-[10px]" style={{ color: COLOR.grayFaint }}>Feedback háptico en los avisos.</p>
+          </div>
+          <button
+            onClick={onToggleVibrate}
+            className="p-2 rounded-lg"
+            style={{
+              background: vibrateOn ? COLOR.brandYellow : "rgba(255,255,255,0.08)",
+              color: vibrateOn ? "#0A0A0A" : COLOR.white,
+            }}
+            aria-label="Vibración on/off"
+          >
+            <Vibrate size={16} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
