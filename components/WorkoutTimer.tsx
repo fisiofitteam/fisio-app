@@ -879,21 +879,44 @@ export function WorkoutTimer({
           {/* Modo ADVANCE: registrar rondas + terminar WOD.
               Solo visible cuando el timer ya arrancó (no en prep/ready). */}
           {advancedMode && snap.phase !== "ready" && snap.phase !== "prep" && snap.phase !== "done" && (
-            <div className="mt-5 flex items-center gap-3">
+            <div className="mt-6 w-full max-w-md px-4 space-y-3">
+              {/* Botón RONDA a lo grande, con el contador prominente */}
               <button
                 onClick={markLap}
-                className="flex-1 py-3 rounded-xl font-bold text-sm"
+                className="w-full rounded-2xl py-5 px-5 flex items-center justify-between active:scale-[0.98] transition-transform"
                 style={{
-                  background: "rgba(255,255,255,0.10)",
+                  background: "rgba(255,255,255,0.08)",
                   color: COLOR.white,
-                  border: "1px solid rgba(255,255,255,0.18)",
+                  border: "2px solid rgba(255,255,255,0.20)",
+                  boxShadow: `inset 0 0 40px rgba(252,211,77,0.05)`,
                 }}
+                aria-label="Marcar ronda"
               >
-                🏁 Ronda {splits.length > 0 && <span style={{ color: COLOR.brandYellow }}>· {splits.length}</span>}
+                <div className="flex flex-col items-start leading-none">
+                  <span className="text-[10px] font-bold tracking-[0.3em] uppercase" style={{ color: COLOR.grayDim }}>
+                    Toca para
+                  </span>
+                  <span className="text-2xl font-bold mt-1" style={{ letterSpacing: "-0.02em" }}>
+                    🏁 Nueva ronda
+                  </span>
+                </div>
+                <div className="flex flex-col items-end leading-none">
+                  <span className="text-[9px] font-bold tracking-[0.3em] uppercase" style={{ color: COLOR.grayFaint }}>
+                    Ronda
+                  </span>
+                  <span
+                    className="text-5xl font-black tabular-nums mt-0.5"
+                    style={{ color: COLOR.brandYellow, letterSpacing: "-0.05em" }}
+                  >
+                    {String(splits.length + 1).padStart(2, "0")}
+                  </span>
+                </div>
               </button>
+
+              {/* Botón TERMINAR WOD tambien ancho, pero mas discreto */}
               <button
                 onClick={finishWod}
-                className="flex-1 py-3 rounded-xl font-bold text-sm"
+                className="w-full rounded-2xl py-3.5 font-bold text-base active:scale-[0.98] transition-transform"
                 style={{ background: COLOR.brandOrange, color: "#0A0A0A" }}
               >
                 ✅ Terminar WOD
@@ -901,25 +924,41 @@ export function WorkoutTimer({
             </div>
           )}
 
-          {/* Splits acumulados en curso — lista compacta, últimos 3 visibles */}
+          {/* Splits acumulados — grid de tarjetas coloreadas por posicion */}
           {advancedMode && splits.length > 0 && !showRecap && (
-            <div className="mt-3 max-w-xs w-full">
-              <div className="text-[10px] uppercase tracking-widest mb-1.5 text-center" style={{ color: COLOR.grayFaint }}>
-                Últimas rondas
+            <div className="mt-4 w-full max-w-md px-4">
+              <div className="text-[10px] uppercase tracking-[0.3em] font-bold mb-2 text-center" style={{ color: COLOR.grayFaint }}>
+                Rondas completadas
               </div>
-              <div className="space-y-1">
-                {splits.slice(-3).map((totalMs, i) => {
-                  const idx = splits.length - Math.min(3, splits.length) + i;
+              <div className="grid grid-cols-4 gap-2">
+                {splits.slice(-4).map((totalMs, i) => {
+                  const idx = splits.length - Math.min(4, splits.length) + i;
                   const prev = idx === 0 ? 0 : splits[idx - 1];
                   const lapMs = totalMs - prev;
                   return (
-                    <div key={idx} className="flex justify-between text-xs font-mono" style={{ color: COLOR.grayDim }}>
-                      <span>#{idx + 1}</span>
-                      <span>{formatMs(lapMs)}</span>
+                    <div
+                      key={idx}
+                      className="rounded-xl p-2 text-center"
+                      style={{
+                        background: "rgba(255,255,255,0.06)",
+                        border: "1px solid rgba(255,255,255,0.12)",
+                      }}
+                    >
+                      <div className="text-[9px] font-bold tracking-widest uppercase" style={{ color: COLOR.brandYellow }}>
+                        #{idx + 1}
+                      </div>
+                      <div className="text-base font-bold font-mono mt-0.5" style={{ color: COLOR.white }}>
+                        {formatMs(lapMs)}
+                      </div>
                     </div>
                   );
                 })}
               </div>
+              {splits.length > 4 && (
+                <div className="text-[10px] text-center mt-1.5" style={{ color: COLOR.grayFaint }}>
+                  +{splits.length - 4} anteriores en el informe final
+                </div>
+              )}
             </div>
           )}
         </div>
