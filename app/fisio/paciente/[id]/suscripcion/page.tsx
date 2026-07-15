@@ -54,8 +54,17 @@ export default async function PatientSuscripcionTab({ params }: { params: { id: 
   // Métricas (solo se muestran al CEO en SubscriptionView, las calculamos siempre por simplicidad)
   const renewals = await prisma.subscriptionRenewal.findMany({
     where: { patientId: patient.id },
-    select: { periodMonths: true, amountPaid: true },
+    select: { periodMonths: true, amountPaid: true, startDate: true, endDate: true },
   });
+
+  // Meses reales por renewal calculados desde startDate → endDate (no desde
+  // el campo periodMonths guardado, que en pacientes migrados diverge).
+  function monthsBetween(s: Date | null, e: Date | null): number {
+    if (!s || !e) return 0;
+    let m = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth());
+    if (e.getDate() < s.getDate()) m -= 1;
+    return Math.max(0, m);
+  }
 
   // Periodo VIGENTE: preferimos el renewal con status="active"; si no hay,
   // el último renewal por startDate. Es la fuente de verdad ÚNICA para el
@@ -86,7 +95,7 @@ export default async function PatientSuscripcionTab({ params }: { params: { id: 
   const totalDaysExtended = activePauses.reduce((acc, p) => acc + (p.daysExtended || 0), 0);
   const incomeTransactions = transactions.filter((t) => t.type.startsWith("income"));
   const metrics = {
-    totalMonths: renewals.reduce((acc, r) => acc + (r.periodMonths || 0), 0),
+    totalMonths: renewals.reduce((acc, r) => acc + monthsBetween(r.startDate, r.endDate), 0),
     lifetimeValue: incomeTransactions.reduce((acc, t) => acc + t.amount, 0),
     renewalsCount: Math.max(0, renewals.length - 1),
   };

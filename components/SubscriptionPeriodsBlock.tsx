@@ -189,7 +189,19 @@ export function SubscriptionPeriodsBlock({
 
                 <div className="text-xs flex items-baseline gap-3 flex-wrap" style={{ color: "#737373" }}>
                   <span className="font-medium" style={{ color: "#0A0A0A" }}>
-                    {r.periodMonths} {r.periodMonths === 1 ? "mes" : "meses"}
+                    {(() => {
+                      // Calcular meses reales desde las fechas; fallback al
+                      // periodMonths guardado si faltan.
+                      const s = r.startDate ? new Date(r.startDate) : null;
+                      const e = r.endDate ? new Date(r.endDate) : null;
+                      let m: number = r.periodMonths ?? 0;
+                      if (s && e) {
+                        m = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth());
+                        if (e.getDate() < s.getDate()) m -= 1;
+                        m = Math.max(0, m);
+                      }
+                      return `${m} ${m === 1 ? "mes" : "meses"}`;
+                    })()}
                   </span>
                   <span>
                     {formatDate(r.startDate)} → {formatDate(r.endDate)}

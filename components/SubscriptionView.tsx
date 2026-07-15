@@ -55,6 +55,26 @@ function formatDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" });
 }
 
+/**
+ * Meses "completos" entre dos fechas — cuenta cuántos meses de calendario
+ * caben desde start hasta end. Ejemplos:
+ *   13-abr → 14-jul (día ≥) = 3 meses
+ *   13-abr → 13-jul (día ≥) = 3 meses
+ *   13-abr → 12-jul (día <) = 2 meses
+ *
+ * Se usa en lugar del campo `periodMonths` almacenado porque en pacientes
+ * migrados o editados a mano las dos verdades pueden divergir. La UI ha de
+ * reflejar la duración REAL según las fechas visibles.
+ */
+function monthsBetween(startISO: string | null, endISO: string | null): number | null {
+  if (!startISO || !endISO) return null;
+  const s = new Date(startISO);
+  const e = new Date(endISO);
+  let months = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth());
+  if (e.getDate() < s.getDate()) months -= 1;
+  return Math.max(0, months);
+}
+
 function formatDateTime(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -124,7 +144,14 @@ export function SubscriptionView({
     d.setDate(d.getDate() + totalDaysExtended);
     return d.toISOString();
   })();
-  const cpDurationMonths = currentPeriod?.periodMonths ?? patient.programDurationMonths ?? null;
+  // Duración = meses reales entre fechas del renewal vigente. No usamos el
+  // campo periodMonths guardado porque en pacientes migrados suele estar
+  // desalineado con las fechas (el fisio veía "4 meses" en un rango de 3).
+  const cpDurationMonths =
+    monthsBetween(cpStartDate, cpEndDate) ??
+    currentPeriod?.periodMonths ??
+    patient.programDurationMonths ??
+    null;
   const cpProgramType = currentPeriod?.programType ?? patient.programType ?? "—";
   return (
     <div className="space-y-4">
