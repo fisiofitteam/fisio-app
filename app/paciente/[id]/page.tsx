@@ -376,6 +376,7 @@ export default async function PatientHome({ params }: { params: { id: string } }
         patientPhotoUrl={patient.photoUrl}
         whatsappGroupUrl={patient.whatsappGroupUrl}
         communityUnread={rollingUnread}
+        programType={patient.programType}
         challenge={currentChallenge ? {
           id: currentChallenge.id,
           title: currentChallenge.title,

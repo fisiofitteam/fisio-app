@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { colorForSession, PROGRAM_PALETTE } from "@/lib/session-colors";
 import { PendingFormsBanner } from "@/components/PendingFormsBanner";
+import { writeCachedProgramType } from "@/lib/patient-program-type-cache";
 import {
   Zap,
   Calendar,
@@ -108,6 +109,10 @@ export function PatientHomeDark({
   const dow = new Date().getDay() === 0 ? 7 : new Date().getDay();
   const todayDate = new Date();
   const initial = patient.firstName[0]?.toUpperCase() ?? "?";
+
+  // Cachea el programType en localStorage para que el WorkoutTimer sepa si
+  // el atleta es ADVANCE sin necesidad de pasar la prop por 5 componentes.
+  useEffect(() => { writeCachedProgramType(patient.programType); }, [patient.programType]);
 
   // Estado local para ocultar notificaciones tras marcarlas leídas
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());

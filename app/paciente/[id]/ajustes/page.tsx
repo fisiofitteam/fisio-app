@@ -8,7 +8,6 @@ import { PatientPhotoUploader } from "@/components/PatientPhotoUploader";
 import { PatientShippingForm } from "@/components/PatientShippingForm";
 import { PatientDailyReminderToggle } from "@/components/PatientDailyReminderToggle";
 import { PreventionCancelForm } from "@/components/PreventionCancelForm";
-import { AdvancedTimerToggle } from "@/components/AdvancedTimerToggle";
 
 export const dynamic = "force-dynamic";
 
@@ -102,22 +101,6 @@ export default async function PatientSettingsPage({ params }: { params: { id: st
           </div>
           <PatientDailyReminderToggle initial={patient.dailyReminderEnabled} />
         </section>
-
-        {patient.programType === "ADVANCE" && (
-          <section
-            className="rounded-2xl p-4 mb-3"
-            style={{ background: "var(--p-surface)", border: "1px solid var(--p-border)" }}
-          >
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-lg">⚡</span>
-              <h2 className="font-semibold text-sm">Modo ADVANCE</h2>
-            </div>
-            <p className="text-xs mb-3" style={{ color: "var(--p-text-dim)" }}>
-              Funciones pro solo para atletas ADVANCE.
-            </p>
-            <AdvancedTimerToggle />
-          </section>
-        )}
 
         <section
           className="rounded-2xl p-4 mb-3"

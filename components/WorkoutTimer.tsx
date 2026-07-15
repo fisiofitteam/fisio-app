@@ -15,6 +15,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { readCachedProgramType } from "@/lib/patient-program-type-cache";
 import {
   X, Play, Pause, RotateCcw, Volume2, VolumeX, Vibrate,
   Settings2, Plus, Trash2, ChevronUp, ChevronDown, Sliders,
@@ -286,9 +287,11 @@ export function WorkoutTimer({
   const [showConfig, setShowConfig] = useState(!config || (config?.blocks.length ?? 0) === 0);
   const [showPrefs, setShowPrefs] = useState(false);
 
-  // Modo ADVANCE (rondas + splits estilo Garmin laps). Solo se activa desde
-  // /paciente/[id]/ajustes en pacientes ADVANCE. Aquí solo leemos el flag.
+  // Modo ADVANCE (rondas + splits estilo Garmin laps). Toggle exclusivo
+  // para atletas ADVANCE — lo cambia el atleta desde el panel de
+  // preferencias del propio timer.
   const [advancedMode, setAdvancedMode] = useState(false);
+  const [isAdvancePatient, setIsAdvancePatient] = useState(false);
   // Splits acumulados durante el timer: cada uno es el totalElapsedMs en el
   // momento de la pulsación de "Ronda". Vacío al arrancar.
   const [splits, setSplits] = useState<number[]>([]);
@@ -311,11 +314,13 @@ export function WorkoutTimer({
     setAudioOn(readStoredBool(LS_AUDIO, true));
     setVibrateOn(readStoredBool(LS_VIBRATE, true));
     setAdvancedMode(readStoredBool(LS_ADVANCED, false));
+    setIsAdvancePatient(readCachedProgramType() === "ADVANCE");
   }, []);
   useEffect(() => { if (typeof window !== "undefined") localStorage.setItem(LS_VOLUME, String(volume)); }, [volume]);
   useEffect(() => { if (typeof window !== "undefined") localStorage.setItem(LS_PREP, String(prepSeconds)); }, [prepSeconds]);
   useEffect(() => { if (typeof window !== "undefined") localStorage.setItem(LS_AUDIO, audioOn ? "1" : "0"); }, [audioOn]);
   useEffect(() => { if (typeof window !== "undefined") localStorage.setItem(LS_VIBRATE, vibrateOn ? "1" : "0"); }, [vibrateOn]);
+  useEffect(() => { if (typeof window !== "undefined") localStorage.setItem(LS_ADVANCED, advancedMode ? "1" : "0"); }, [advancedMode]);
 
   useWakeLock(running);
 
@@ -705,6 +710,9 @@ export function WorkoutTimer({
           onChangeVolume={setVolume}
           prepSeconds={prepSeconds}
           onChangePrep={setPrepSeconds}
+          advancedMode={advancedMode}
+          onToggleAdvanced={() => setAdvancedMode((v) => !v)}
+          isAdvancePatient={isAdvancePatient}
           onClose={() => setShowPrefs(false)}
         />
       )}
@@ -1468,6 +1476,8 @@ function PreferencesPanel({
   vibrateOn, onToggleVibrate,
   volume, onChangeVolume,
   prepSeconds, onChangePrep,
+  advancedMode, onToggleAdvanced,
+  isAdvancePatient,
   onClose,
 }: {
   audioOn: boolean;
@@ -1478,6 +1488,9 @@ function PreferencesPanel({
   onChangeVolume: (v: number) => void;
   prepSeconds: number;
   onChangePrep: (v: number) => void;
+  advancedMode: boolean;
+  onToggleAdvanced: () => void;
+  isAdvancePatient: boolean;
   onClose: () => void;
 }) {
   return (
@@ -1575,6 +1588,50 @@ function PreferencesPanel({
             <Vibrate size={16} />
           </button>
         </div>
+
+        {/* Modo ADVANCE — solo visible para pacientes ADVANCE, con look
+            especial para reforzar la sensación de exclusividad. */}
+        {isAdvancePatient && (
+          <div
+            className="pt-3 mt-2 rounded-xl p-3"
+            style={{
+              background: "linear-gradient(135deg, rgba(252,211,77,0.10), rgba(245,158,11,0.05))",
+              border: "1px solid rgba(252,211,77,0.35)",
+            }}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="text-[9px] font-bold tracking-[0.25em] uppercase mb-1" style={{ color: COLOR.brandYellow }}>
+                  ⚡ Exclusivo ADVANCE
+                </div>
+                <div className="text-sm font-semibold" style={{ color: COLOR.white }}>
+                  Rondas + splits
+                </div>
+                <p className="text-[10px] mt-1 leading-snug" style={{ color: COLOR.grayDim }}>
+                  Botón "Ronda" durante el timer y mini-informe al terminar el WOD,
+                  estilo laps de Garmin. Solo para atletas ADVANCE.
+                </p>
+              </div>
+              <button
+                onClick={onToggleAdvanced}
+                aria-pressed={advancedMode}
+                className="relative w-12 h-7 rounded-full shrink-0 transition-colors"
+                style={{
+                  background: advancedMode ? COLOR.brandYellow : "rgba(255,255,255,0.10)",
+                  border: `1px solid ${advancedMode ? COLOR.brandYellow : "rgba(255,255,255,0.20)"}`,
+                }}
+              >
+                <span
+                  className="absolute top-0.5 w-5 h-5 rounded-full transition-all"
+                  style={{
+                    left: advancedMode ? "calc(100% - 1.375rem)" : "0.125rem",
+                    background: advancedMode ? "#0A0A0A" : COLOR.white,
+                  }}
+                />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

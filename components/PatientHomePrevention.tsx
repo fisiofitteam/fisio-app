@@ -1,6 +1,9 @@
 "use client";
 
+"use client";
+
 import Link from "next/link";
+import { useEffect } from "react";
 import {
   ArrowLeft,
   BarChart3,
@@ -12,6 +15,7 @@ import {
 } from "lucide-react";
 import { PatientSessionMenu, patientLogout } from "@/components/PatientSessionMenu";
 import { PatientNav } from "@/components/PatientNav";
+import { writeCachedProgramType } from "@/lib/patient-program-type-cache";
 
 type PreventionTask = {
   id: string;
@@ -70,6 +74,10 @@ export function PatientHomePrevention({
   cancelAtPeriodEnd?: boolean;
 }) {
   const initial = firstName[0]?.toUpperCase() ?? "?";
+
+  // Cachea programType en localStorage → el WorkoutTimer sabe que no es
+  // ADVANCE y no muestra las features exclusivas.
+  useEffect(() => { writeCachedProgramType("PREVENTION"); }, []);
 
   // Localizar tareas de HOY para saber si mostrar CTA de sesión
   const daysByDow: Record<number, PreventionTask[]> = {};

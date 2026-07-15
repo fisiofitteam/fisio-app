@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
 import { ArrowLeft, Trophy, BarChart3, BookOpen, Users, Target, CalendarDays, Settings, Sparkles, Timer } from "lucide-react";
 import { PatientSessionMenu, patientLogout } from "@/components/PatientSessionMenu";
 import { PatientNav } from "@/components/PatientNav";
 import { PatientShirtSizePicker } from "@/components/PatientShirtSizePicker";
 import { PendingFormsBanner } from "@/components/PendingFormsBanner";
+import { writeCachedProgramType } from "@/lib/patient-program-type-cache";
 
 // Icono de WhatsApp en amarillo (currentColor para compat con la API de Lucide).
 function WhatsAppIcon({ size = 22, style, className }: { size?: number; strokeWidth?: number; style?: React.CSSProperties; className?: string }) {
@@ -75,6 +77,7 @@ export function PatientHomeRolling({
   individualSessionsToday,
   hasIndividualWork,
   pendingForms = [],
+  programType,
 }: {
   firstName: string;
   patientId: string;
@@ -106,8 +109,15 @@ export function PatientHomeRolling({
    *  Se usa para mostrar la tarjeta "Trabajo específico" en el grid. */
   hasIndividualWork?: boolean;
   pendingForms?: import("@/lib/pending-forms").PendingForm[];
+  /** Se cachea en localStorage para que el WorkoutTimer sepa si el atleta
+   *  es ADVANCE sin plumbing extra. */
+  programType?: string | null;
 }) {
   const initial = firstName[0]?.toUpperCase() ?? "?";
+
+  // Cachea programType en localStorage → el WorkoutTimer lo usa para
+  // decidir si muestra el modo ADVANCE en sus preferencias.
+  useEffect(() => { writeCachedProgramType(programType ?? null); }, [programType]);
 
   if (mode === "expired") {
     return (
