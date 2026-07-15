@@ -58,6 +58,7 @@ export default async function PatientCargasTab({ params }: { params: { id: strin
           substitutionText: a.substitutionText ?? "",
           loadConstraint: a.loadConstraint ?? "",
           physioWarning: a.physioWarning ?? "",
+          isCustomized: (a as any).isCustomized ?? false,
         }))}
         movements={movements.map((m) => ({
           id: m.id,

@@ -11,6 +11,7 @@ type Adaptation = {
   substitutionText: string;
   loadConstraint: string;
   physioWarning: string;
+  isCustomized?: boolean;
 };
 
 type Movement = {
@@ -131,19 +132,18 @@ export function AdaptationEditor({
       body: JSON.stringify({ patientId, ...item }),
     });
     if (res.ok) {
-      setAdaptations((prev) => ({ ...prev, [mov.id]: item }));
+      // El server marca isCustomized=true al guardar a mano — reflejamos aquí
+      // para que el badge aparezca sin esperar al refresh.
+      setAdaptations((prev) => ({ ...prev, [mov.id]: { ...item, isCustomized: true } }));
       setEditingMov(null);
       router.refresh();
     }
   }
 
-  async function resetToOk(mov: Movement) {
-    // Si existe adaptación, la borramos (volverá a default OK)
-    const existing = adaptations[mov.id];
-    if (!existing) {
-      setEditingMov(null);
-      return;
-    }
+  async function resetToLevel(mov: Movement) {
+    // Borra la personalización y re-materializa las reglas del nivel activo.
+    // El server hace todo el trabajo; nosotros solo refrescamos para leer el
+    // nuevo estado (que puede ser una regla del nivel o "OK" implícito).
     await fetch(`/api/adaptations?patientId=${patientId}&movementId=${mov.id}`, { method: "DELETE" });
     setAdaptations((prev) => {
       const next = { ...prev };
@@ -331,7 +331,18 @@ export function AdaptationEditor({
                             >
                               <div className="flex justify-between items-start gap-2">
                                 <div className="flex-1 min-w-0">
-                                  <div className="font-medium text-sm">{mov.displayName}</div>
+                                  <div className="font-medium text-sm flex items-center gap-1.5">
+                                    {mov.displayName}
+                                    {a.isCustomized && (
+                                      <span
+                                        title="Personalizada por el fisio. Los cambios de nivel no la pisan."
+                                        className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
+                                        style={{ background: "#EDE9FE", color: "#5B21B6" }}
+                                      >
+                                        ✎ personalizada
+                                      </span>
+                                    )}
+                                  </div>
                                   {(a.substitutionText || a.loadConstraint) && (
                                     <div className="text-xs text-neutral-600 mt-0.5 truncate">
                                       {a.substitutionText && (
@@ -367,7 +378,7 @@ export function AdaptationEditor({
                               current={a}
                               onSave={(item) => saveAdaptation(mov, item)}
                               onCancel={() => setEditingMov(null)}
-                              onReset={() => resetToOk(mov)}
+                              onReset={() => resetToLevel(mov)}
                             />
                           )}
                         </div>
@@ -439,8 +450,12 @@ function InlineEditor({
           onChange={(e) => setItem({ ...item, physioWarning: e.target.value })}
         />
         <div className="flex justify-between gap-2 pt-1">
-          <button onClick={onReset} className="text-xs text-neutral-500 underline">
-            Volver a default (OK)
+          <button
+            onClick={onReset}
+            className="text-xs text-neutral-500 underline"
+            title="Borra tu personalización y aplica lo que dicte el nivel de esa categoría"
+          >
+            ↺ Restablecer al nivel
           </button>
           <button onClick={() => onSave(item)} className="btn btn-primary text-xs">
             Guardar

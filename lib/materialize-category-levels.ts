@@ -91,19 +91,28 @@ export async function materializePatientCategoryLevels(patientId: string) {
 
   const keepIds = [...chosen.keys()];
 
+  // Adaptaciones que el fisio ha editado a mano — no las pisamos NUNCA aunque
+  // el paciente cambie de nivel. Volver al default requiere el botón
+  // "Restablecer al nivel" en el editor (endpoint DELETE de adaptations).
+  const customized = await prisma.patientAdaptation.findMany({
+    where: { patientId, isCustomized: true },
+    select: { movementId: true },
+  });
+  const customizedIds = new Set(customized.map((c) => c.movementId));
+
   // Borrar adaptaciones de movimientos que ya no tienen regla en ninguna
-  // categoría seleccionada. Si `keepIds` está vacío borra todas las
-  // adaptaciones de patrones — que es lo correcto (todos los niveles del
-  // paciente son "OK" para ese movimiento).
+  // categoría seleccionada, EXCEPTO las personalizadas por el fisio.
   await prisma.patientAdaptation.deleteMany({
     where: {
       patientId,
+      isCustomized: false,
       ...(keepIds.length ? { movementId: { notIn: keepIds } } : {}),
     },
   });
 
-  // Upsert de las elegidas (más restrictivas).
+  // Upsert de las elegidas (más restrictivas), saltando las personalizadas.
   for (const [mid, rule] of chosen) {
+    if (customizedIds.has(mid)) continue;
     await prisma.patientAdaptation.upsert({
       where: { patientId_movementId: { patientId, movementId: mid } },
       create: {
@@ -112,12 +121,14 @@ export async function materializePatientCategoryLevels(patientId: string) {
         loadConstraint: rule.loadConstraint,
         substitutionText: rule.substitutionText,
         physioWarning: rule.physioWarning,
+        isCustomized: false,
       },
       update: {
         state: rule.state,
         loadConstraint: rule.loadConstraint,
         substitutionText: rule.substitutionText,
         physioWarning: rule.physioWarning,
+        // isCustomized se mantiene false — solo el editor manual lo pone true.
       },
     });
   }

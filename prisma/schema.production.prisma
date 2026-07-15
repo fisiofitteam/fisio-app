@@ -568,6 +568,12 @@ model PatientAdaptation {
   loadConstraint   String?
   physioWarning    String?
 
+  // true si el fisio ha editado esta adaptación a mano desde el editor. Cuando
+  // es true, materializePatientCategoryLevels() NO la pisa aunque cambie el
+  // nivel del paciente. Volver a "por defecto del nivel" requiere el botón
+  // explícito "Restablecer al nivel".
+  isCustomized     Boolean  @default(false)
+
   updatedAt        DateTime @updatedAt
 
   @@unique([patientId, movementId])
