@@ -43,9 +43,10 @@ export function RollingAssignmentBlock({
       .catch(() => setLoading(false));
   }, []);
 
-  // Solo mostrar el bloque si es ADVANCE (los demás programas no admiten rolling)
-  if (programType !== "ADVANCE") return null;
-
+  // Antes teníamos guard `programType !== "ADVANCE" → null`, pero el fisio
+  // necesita poder decidir modo rolling/fijo también para RECUPERA/CONSOLIDA
+  // (y verlo aunque acabe de cambiar el programType en la misma pantalla,
+  // que hasta guardar no repropaga la prop). Renderizamos siempre.
   const accProgram = programs.find((p) => p.id === (currentAccessoriesId || ""));
   const trnProgram = programs.find((p) => p.id === (currentTrainingId || currentRollingProgramId || ""));
 
@@ -80,7 +81,7 @@ export function RollingAssignmentBlock({
   return (
     <div className="mt-3 pt-3" style={{ borderTop: "1px dashed #E5E5E5" }}>
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-medium">Programas Rolling de ADVANCE</h3>
+        <h3 className="text-sm font-medium">Modo de programa</h3>
         {!editing && (
           <button
             onClick={() => setEditing(true)}
