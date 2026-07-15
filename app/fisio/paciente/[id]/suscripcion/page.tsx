@@ -57,15 +57,22 @@ export default async function PatientSuscripcionTab({ params }: { params: { id: 
     select: { periodMonths: true, amountPaid: true },
   });
 
-  // Fin real del periodo actual: lo lee del SubscriptionRenewal activo. Es
-  // la fuente de verdad — /api/program-pauses ya suma los días de la pausa
-  // a este endDate. Fallback al programEndDate del Patient si no hay
-  // periodo activo (raro, pero cubre pacientes antiguos sin renewal).
-  const activePeriod = await prisma.subscriptionRenewal.findFirst({
-    where: { patientId: patient.id, status: "active" },
-    select: { endDate: true },
-    orderBy: { startDate: "desc" },
-  });
+  // Periodo VIGENTE: preferimos el renewal con status="active"; si no hay,
+  // el último renewal por startDate. Es la fuente de verdad ÚNICA para el
+  // bloque "Programa actual" — antes teníamos duración/inicio/fin del
+  // Patient (legacy) mientras que abajo se mostraban los renewals: dos
+  // verdades distintas que no coincidían y confundían al fisio.
+  const currentRenewal =
+    (await prisma.subscriptionRenewal.findFirst({
+      where: { patientId: patient.id, status: "active" },
+      orderBy: { startDate: "desc" },
+      select: { startDate: true, endDate: true, periodMonths: true, programType: true },
+    })) ||
+    (await prisma.subscriptionRenewal.findFirst({
+      where: { patientId: patient.id },
+      orderBy: { startDate: "desc" },
+      select: { startDate: true, endDate: true, periodMonths: true, programType: true },
+    }));
 
   // Pausas activas o programadas: sumamos sus daysExtended a programEndDate
   // para mostrar la fecha de fin REAL (la BD no la actualiza al crear pausas)
@@ -91,7 +98,12 @@ export default async function PatientSuscripcionTab({ params }: { params: { id: 
       totalDaysExtended={totalDaysExtended}
       isManager={user.isManager}
       canEditSubscription={canEditSubscription}
-      activePeriodEndDate={activePeriod?.endDate?.toISOString() ?? null}
+      currentPeriod={currentRenewal && currentRenewal.startDate ? {
+        startDate: currentRenewal.startDate.toISOString(),
+        endDate: currentRenewal.endDate?.toISOString() ?? null,
+        periodMonths: currentRenewal.periodMonths,
+        programType: currentRenewal.programType ?? patient.programType ?? "—",
+      } : null}
       patient={{
         id: patient.id,
         fullName: patient.fullName,

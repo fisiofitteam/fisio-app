@@ -88,7 +88,7 @@ export function SubscriptionView({
   metrics,
   totalDaysExtended,
   canEditSubscription,
-  activePeriodEndDate,
+  currentPeriod,
 }: {
   patient: Patient;
   sale: Sale | null;
@@ -101,22 +101,31 @@ export function SubscriptionView({
   // Managers siempre; fisios solo si el paciente no vino por Stripe (alta
   // manual o legacy). Se calcula en el server.
   canEditSubscription: boolean;
-  // Fin del periodo activo según SubscriptionRenewal.endDate. Ya incluye
-  // las extensiones por pausas (el endpoint /api/program-pauses las
-  // aplica ahí). Es la fuente de verdad para "Fin previsto".
-  activePeriodEndDate: string | null;
+  // Renewal vigente (active o más reciente). Fuente de verdad ÚNICA para
+  // "Programa actual". Antes mostrábamos duración/inicio/fin del Patient
+  // (campos legacy) que podían diverger del renewal — llevaba a que
+  // "Duración contratada" y "Meses contratados" contradijeran a los
+  // periodos listados abajo.
+  currentPeriod: {
+    startDate: string;
+    endDate: string | null;
+    periodMonths: number;
+    programType: string;
+  } | null;
 }) {
-  // Fin real: preferimos el SubscriptionRenewal.endDate (ya extendido
-  // por las pausas). Fallback al programEndDate del Patient + suma
-  // manual — solo por si un paciente antiguo no tiene periodo activo.
-  const realProgramEndDate = (() => {
-    if (activePeriodEndDate) return activePeriodEndDate;
+  // Datos "Programa actual" con currentPeriod como fuente de verdad.
+  const cpStartDate = currentPeriod?.startDate ?? patient.programStartDate ?? patient.subscriptionStartDate;
+  const cpEndDate = (() => {
+    if (currentPeriod?.endDate) return currentPeriod.endDate;
+    // Fallback: patient.programEndDate + días extendidos (pacientes antiguos).
     if (!patient.programEndDate) return null;
     if (!totalDaysExtended) return patient.programEndDate;
     const d = new Date(patient.programEndDate);
     d.setDate(d.getDate() + totalDaysExtended);
     return d.toISOString();
   })();
+  const cpDurationMonths = currentPeriod?.periodMonths ?? patient.programDurationMonths ?? null;
+  const cpProgramType = currentPeriod?.programType ?? patient.programType ?? "—";
   return (
     <div className="space-y-4">
       {/* Cuadro de KPIs (solo CEO) */}
@@ -140,12 +149,12 @@ export function SubscriptionView({
           </p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-          <Field label="Programa" value={patient.programType || "—"} />
-          <Field label="Duración contratada" value={patient.programDurationMonths ? `${patient.programDurationMonths} meses` : "—"} />
-          <Field label="Inicio del programa" value={formatDate(patient.programStartDate)} />
+          <Field label="Programa" value={cpProgramType} />
+          <Field label="Duración contratada" value={cpDurationMonths ? `${cpDurationMonths} ${cpDurationMonths === 1 ? "mes" : "meses"}` : "—"} />
+          <Field label="Inicio del programa" value={formatDate(cpStartDate)} />
           <Field label="Fin previsto" value={
             <span>
-              {formatDate(realProgramEndDate)}
+              {formatDate(cpEndDate)}
               {totalDaysExtended > 0 && (
                 <span className="text-[11px] text-neutral-500 ml-1">(+{totalDaysExtended}d por pausas)</span>
               )}
