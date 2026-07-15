@@ -1495,28 +1495,39 @@ function PreferencesPanel({
 }) {
   return (
     <div
-      className="absolute z-[110] left-0 right-0"
+      className="absolute z-[110]"
       style={{
-        top: "max(3.5rem, calc(env(safe-area-inset-top) + 3rem))",
+        top: 0, left: 0, right: 0, bottom: 0,
+        background: "#0A0A0A",
+        color: COLOR.white,
+        overflowY: "auto",
+        paddingTop: "max(1rem, env(safe-area-inset-top))",
+        paddingBottom: "max(1rem, env(safe-area-inset-bottom))",
       }}
     >
-      <div
-        className="mx-auto max-w-md rounded-2xl p-4 space-y-4"
-        style={{
-          background: "rgba(0,0,0,0.85)",
-          border: "1px solid rgba(255,255,255,0.12)",
-          color: COLOR.white,
-          backdropFilter: "blur(8px)",
-        }}
-      >
-        <div className="flex items-center justify-between">
-          <div className="text-xs uppercase tracking-[0.25em] font-bold" style={{ color: COLOR.brandYellow }}>
-            Preferencias
-          </div>
-          <button onClick={onClose} className="p-1 -mr-1" aria-label="Cerrar preferencias">
-            <X size={16} />
+      {/* Cabecera propia con back para que se sienta como pantalla real */}
+      <div className="max-w-md mx-auto px-5">
+        <div className="flex items-center gap-3 pb-4 mb-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+          <button
+            onClick={onClose}
+            className="text-sm font-medium py-2 pr-2 -ml-1"
+            style={{ color: COLOR.white }}
+            aria-label="Volver al timer"
+          >
+            ← Volver
           </button>
+          <div className="flex-1 text-center">
+            <div className="text-[10px] uppercase tracking-[0.3em] font-bold" style={{ color: COLOR.brandYellow }}>
+              Preferencias
+            </div>
+            <div className="text-sm font-medium mt-0.5" style={{ color: COLOR.grayDim }}>
+              Timer
+            </div>
+          </div>
+          <div className="w-14" />
         </div>
+
+        <div className="space-y-5 py-3">
 
         {/* Volumen */}
         <div>
@@ -1632,6 +1643,7 @@ function PreferencesPanel({
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   );
