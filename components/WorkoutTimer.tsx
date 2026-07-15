@@ -884,26 +884,10 @@ export function WorkoutTimer({
             </div>
           )}
 
-          {/* Recuadro con el trabajo a realizar — el atleta lo tiene a
-              la vista durante el timer. Sutil, scroll interno si es largo. */}
-          {taskBody && snap.phase !== "done" && (
-            <div
-              className="mt-6 mx-4 rounded-xl border p-3 max-w-md w-full"
-              style={{
-                background: "rgba(255,255,255,0.06)",
-                borderColor: "rgba(255,255,255,0.12)",
-                maxHeight: "22vh",
-                overflowY: "auto",
-              }}
-            >
-              <div
-                className="text-[11px] leading-relaxed whitespace-pre-wrap font-mono"
-                style={{ color: COLOR.white, opacity: 0.85 }}
-              >
-                {taskBody}
-              </div>
-            </div>
-          )}
+          {/* El recuadro con el enunciado del workout (taskBody) se muestra
+              en ReadyPreview antes de arrancar. Durante el timer NO lo
+              pintamos — el atleta ya lo ha leído y son textos que sobran
+              en pantalla mientras entrena. */}
 
           <div className="mt-6 flex items-center gap-4">
             <button
@@ -949,8 +933,13 @@ export function WorkoutTimer({
           </div>
 
           {/* Modo ADVANCE: registrar rondas + terminar WOD.
-              Solo visible cuando el timer ya arrancó (no en prep/ready). */}
-          {advancedMode && snap.phase !== "ready" && snap.phase !== "prep" && snap.phase !== "done" && (
+              Solo tiene sentido en bloques donde el atleta marca su propio
+              ritmo — AMRAP (cuenta rondas hasta que suena) y FOR TIME
+              (mide cuánto tarda). En EMOM / Tabata / Intervals el propio
+              timer ya avanza rondas automáticas; en Descanso, obviamente
+              tampoco. */}
+          {advancedMode && (currentBlock?.kind === "amrap" || currentBlock?.kind === "fortime") &&
+            snap.phase !== "ready" && snap.phase !== "prep" && snap.phase !== "done" && (
             <div className="mt-6 w-full max-w-md px-4 space-y-3">
               {/* Botón RONDA a lo grande, con el contador prominente */}
               <button
@@ -996,8 +985,10 @@ export function WorkoutTimer({
             </div>
           )}
 
-          {/* Splits acumulados — grid de tarjetas coloreadas por posicion */}
-          {advancedMode && splits.length > 0 && !showRecap && (
+          {/* Splits acumulados — grid de tarjetas coloreadas por posicion.
+              Solo tiene sentido mostrarlos en bloques AMRAP/FOR TIME. */}
+          {advancedMode && (currentBlock?.kind === "amrap" || currentBlock?.kind === "fortime") &&
+            splits.length > 0 && !showRecap && (
             <div className="mt-4 w-full max-w-md px-4">
               <div className="text-[10px] uppercase tracking-[0.3em] font-bold mb-2 text-center" style={{ color: COLOR.grayFaint }}>
                 Rondas completadas
