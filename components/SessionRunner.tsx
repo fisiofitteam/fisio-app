@@ -59,6 +59,32 @@ export function SessionRunner({
     setResponses((prev) => ({ ...prev, [taskId]: data }));
   }
 
+  const [savingForm, setSavingForm] = useState<string | null>(null);
+  /** Guarda un FORM aislado sin tocar el resto de la sesión. Se usa cuando
+   *  la sesión ya está completada pero el paciente aún no había rellenado
+   *  el formulario (banner del home). */
+  async function savePendingForm(taskId: string) {
+    setSavingForm(taskId);
+    try {
+      await fetch("/api/sessions/save-form", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, taskId, response: responses[taskId] ?? {} }),
+      });
+      router.refresh();
+    } catch {}
+    setSavingForm(null);
+  }
+
+  /** True si este FORM está vacío en las respuestas guardadas. Solo entonces
+   *  desbloqueamos edición sobre una sesión completada. */
+  function isFormEmpty(taskId: string): boolean {
+    const r = responses[taskId];
+    if (r === undefined || r === null) return true;
+    if (typeof r === "object" && Object.keys(r).length === 0) return true;
+    return false;
+  }
+
   async function complete() {
     setSaving(true);
     await fetch("/api/sessions/complete", {
@@ -182,14 +208,34 @@ export function SessionRunner({
             </div>
           )}
 
-          {task.type === "FORM" && (
-            <FormResponder
-              task={task}
-              completed={completed}
-              response={responses[task.id] ?? {}}
-              onChange={(data) => setTaskResponse(task.id, data)}
-            />
-          )}
+          {task.type === "FORM" && (() => {
+            // Si la sesión ya está completada pero este formulario quedó
+            // sin rellenar, lo desbloqueamos: el paciente puede editar y
+            // guardar SOLO este FORM sin tocar el resto (evita el
+            // "atrapamiento" del banner del home).
+            const emptyPending = completed && isFormEmpty(task.id);
+            const readOnly = completed && !emptyPending;
+            return (
+              <>
+                <FormResponder
+                  task={task}
+                  completed={readOnly}
+                  response={responses[task.id] ?? {}}
+                  onChange={(data) => setTaskResponse(task.id, data)}
+                />
+                {emptyPending && (
+                  <button
+                    onClick={() => savePendingForm(task.id)}
+                    disabled={savingForm === task.id}
+                    className="mt-3 w-full font-semibold rounded-lg py-2.5 text-sm disabled:opacity-60"
+                    style={{ background: "var(--p-accent)", color: "var(--p-accent-ink)" }}
+                  >
+                    {savingForm === task.id ? "Guardando…" : "💾 Guardar respuesta del formulario"}
+                  </button>
+                )}
+              </>
+            );
+          })()}
 
           {task.type === "EVOLUTION" && (
             <EvolutionResponder
