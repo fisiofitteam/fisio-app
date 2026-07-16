@@ -27,6 +27,7 @@ Reglas:
 - Castellano: dominadas=Pull-up, sentadilla=Squat, fondos=Push-up, peso muerto=Deadlift, zancadas=Lunge, saltos al cajón=Box jump, remo=Row, comba=Jump rope, balanceos de pesa rusa=KB swing, etc.
 - IGNORA líneas que solo describen estructura: "For time", "AMRAP 20'", "EMOM 12'", "21-15-9", "5 rounds", "Buy-in", "Cash-out", "Rest", tiempos de descanso, números sueltos, etc.
 - Para cada movimiento detectado extrae reps (string, puede ser "21-15-9" o "10") y load (string con unidad, ej. "42.5 kg", "20 lb", "24 kg").
+- CRÍTICO: NO te saltes movimientos "obvios" como burpees, wall balls, ring dips, box jumps, dominadas, etc. Cada línea del WOD que menciona un ejercicio debe generar una entrada. Si ves "10 burpees" DEBE aparecer en la salida.
 
 IMPORTANTE — Movimientos compuestos / variantes:
 Para movimientos compuestos como "Hang power snatch", "Hang power clean", "Squat clean thruster" etc., NO basta con asignar UN solo id. Devuelve también la lista \`relatedMovementIds\` con TODAS las variantes del catálogo de las que ese movimiento "hereda": el sistema combinará las restricciones del paciente y se quedará con la más estricta.

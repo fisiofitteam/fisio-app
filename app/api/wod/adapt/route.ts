@@ -8,26 +8,35 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "missing params" }, { status: 400 });
   }
 
-  // Estrategia: si tenemos API key de Anthropic, parseamos con Claude (mucho más
-  // robusto a abreviaturas, castellano, variantes...). Si la IA falla por cualquier
-  // motivo (red, formato inesperado, sin matches), caemos al parser heurístico.
-  let parsed = [] as Awaited<ReturnType<typeof parseWod>>;
-  let usedAi = false;
+  // Estrategia: parseamos con Claude (mucho más robusto a abreviaturas,
+  // castellano y variantes) Y con el heurístico. Combinamos los dos:
+  // Claude aporta las líneas ricas (con relatedMovementIds y buenas
+  // reps/carga); el heurístico rellena movimientos que la IA se saltó
+  // (safety-net contra alucinaciones y skips). Si la IA falla, el
+  // heurístico se queda solo.
+  let aiLines: Awaited<ReturnType<typeof parseWod>> = [];
   if (aiWodConfigured()) {
-    try {
-      const aiLines = await parseWodWithAI(rawText);
-      if (aiLines.length > 0) {
-        parsed = aiLines;
-        usedAi = true;
-      }
-    } catch (e) {
-      console.error("[wod/adapt] IA falló, fallback al heurístico:", e);
-    }
+    try { aiLines = await parseWodWithAI(rawText); }
+    catch (e) { console.error("[wod/adapt] IA falló, sigo con heurístico:", e); }
   }
-  if (!usedAi) {
-    parsed = await parseWod(rawText);
-  }
+  const heurLines = await parseWod(rawText);
+
+  // Merge: partimos de la IA y añadimos del heurístico los movementIds que
+  // la IA NO detectó. Evita perder ejercicios comunes (burpees, ring dips)
+  // por skips del LLM. Nota: si un WOD repite dos veces el mismo mov, la
+  // IA suele devolver ambas entradas — el filtro por Set evita añadir
+  // duplicados extra desde el heurístico.
+  const aiIds = new Set(aiLines.map((l) => l.matchedMovementId).filter(Boolean));
+  const extraFromHeuristic = heurLines.filter(
+    (l) => l.matchedMovementId && !aiIds.has(l.matchedMovementId)
+  );
+  const parsed = aiLines.length > 0
+    ? [...aiLines, ...extraFromHeuristic]
+    : heurLines;
 
   const adapted = await adaptWod(parsed, patientId);
-  return NextResponse.json({ lines: adapted, source: usedAi ? "ai" : "heuristic" });
+  const source = aiLines.length > 0
+    ? (extraFromHeuristic.length > 0 ? "ai+heuristic" : "ai")
+    : "heuristic";
+  return NextResponse.json({ lines: adapted, source });
 }
