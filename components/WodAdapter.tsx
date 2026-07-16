@@ -264,8 +264,18 @@ export function WodAdapter({ patientId }: { patientId: string }) {
                     : "border-emerald-200 bg-emerald-50"
                 }`}
               >
-                <div className="flex justify-between items-start">
-                  <div className="font-mono text-xs text-neutral-600">{line.raw}</div>
+                <div className="flex justify-between items-start gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-mono text-xs text-neutral-600">{line.raw}</div>
+                    {/* Muestra con qué movimiento del catálogo lo emparejó
+                        el matcher — útil para detectar rápido si escogió
+                        el ID equivocado (aparecería como OK sin razón). */}
+                    {line.matchedMovementName && (
+                      <div className="text-[10px] text-neutral-400 mt-0.5">
+                        detectado como: {line.matchedMovementName}
+                      </div>
+                    )}
+                  </div>
                   {line.state && (
                     <span
                       className={

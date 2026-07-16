@@ -28,6 +28,7 @@ Reglas:
 - IGNORA líneas que solo describen estructura: "For time", "AMRAP 20'", "EMOM 12'", "21-15-9", "5 rounds", "Buy-in", "Cash-out", "Rest", tiempos de descanso, números sueltos, etc.
 - Para cada movimiento detectado extrae reps (string, puede ser "21-15-9" o "10") y load (string con unidad, ej. "42.5 kg", "20 lb", "24 kg").
 - CRÍTICO: NO te saltes movimientos "obvios" como burpees, wall balls, ring dips, box jumps, dominadas, etc. Cada línea del WOD que menciona un ejercicio debe generar una entrada. Si ves "10 burpees" DEBE aparecer en la salida.
+- Prefijos como "weighted", "banded", "russian", "kipping", "strict", "assisted", "tempo", "paused", "single arm", "single leg" NO son movimientos distintos: usa el movementId BASE del catálogo (ej. "3 weighted ring dip" → movementId de "Ring dip"; "20 banded tricep extension" → id de "Tricep extension" si existe; "3 strict pull-up" → id de "Pull-up"). Ese matching base es esencial para que el sistema encuentre la adaptación del paciente. Solo usa una variante específica si aparece explícitamente en el catálogo.
 
 IMPORTANTE — Movimientos compuestos / variantes:
 Para movimientos compuestos como "Hang power snatch", "Hang power clean", "Squat clean thruster" etc., NO basta con asignar UN solo id. Devuelve también la lista \`relatedMovementIds\` con TODAS las variantes del catálogo de las que ese movimiento "hereda": el sistema combinará las restricciones del paciente y se quedará con la más estricta.
