@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { COMMUNITY_CATEGORIES, categoryMeta } from "@/lib/community";
 
-type Post = { id: string; date: string; category: string; assignedToId: string | null; text: string | null; done: boolean };
+type Post = { id: string; date: string; category: string; categories?: string[]; assignedToId: string | null; text: string | null; note?: string | null; done: boolean };
 type Idea = { id: string; categories: string[]; text: string };
 type TeamMember = { id: string; fullName: string };
 
@@ -130,14 +130,25 @@ export function CommunityView({
               } hover:border-neutral-400`}
             >
               <div className="text-[11px] text-neutral-400 mb-1">{d}</div>
-              {post && meta && (
+              {post && (
                 <div className="space-y-1">
-                  <span className={`inline-block text-[9px] uppercase font-medium px-1.5 py-0.5 rounded border ${meta.badge}`}>
-                    {meta.label}
-                  </span>
+                  <div className="flex flex-wrap gap-0.5">
+                    {(post.categories && post.categories.length > 0 ? post.categories : [post.category]).map((cat) => {
+                      const m = categoryMeta(cat);
+                      return (
+                        <span
+                          key={cat}
+                          className={`inline-block text-[9px] uppercase font-medium px-1.5 py-0.5 rounded border ${m.badge}`}
+                        >
+                          {m.label}
+                        </span>
+                      );
+                    })}
+                  </div>
                   {post.assignedToId && teamMap[post.assignedToId] && (
                     <div className="text-[10px] text-neutral-500 truncate">{teamMap[post.assignedToId]}</div>
                   )}
+                  {post.note && <div className="text-[10px] text-neutral-700 italic line-clamp-1">📌 {post.note}</div>}
                   {post.text && <div className="text-[10px] text-neutral-600 line-clamp-2">{post.text}</div>}
                 </div>
               )}
@@ -276,22 +287,34 @@ function PostModal({
   onDeleted: (id: string) => void;
 }) {
   const date = post ? post.date.slice(0, 10) : dateStr!;
-  const [category, setCategory] = useState<string>(post?.category ?? "educar");
+  // Multi-etiqueta: post.categories tiene prioridad; fallback a [category].
+  const initialCats = post?.categories && post.categories.length > 0
+    ? post.categories
+    : post?.category ? [post.category] : ["educar"];
+  const [categories, setCategories] = useState<string[]>(initialCats);
   const [assignedToId, setAssignedToId] = useState(post?.assignedToId ?? "");
   const [text, setText] = useState(post?.text ?? "");
+  const [note, setNote] = useState(post?.note ?? "");
   const [done, setDone] = useState(post?.done ?? false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   const prettyDate = new Date(date + "T00:00:00.000Z").toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
 
+  function toggleCategory(c: string) {
+    setCategories((prev) => prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]);
+  }
+
   async function save() {
+    if (categories.length === 0) { setError("Elige al menos una categoría."); return; }
     setSaving(true);
     setError("");
     const res = await fetch("/api/community/posts", {
       method: post ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(post ? { id: post.id, category, assignedToId, text, done } : { date, category, assignedToId, text }),
+      body: JSON.stringify(post
+        ? { id: post.id, categories, assignedToId, text, note, done }
+        : { date, categories, assignedToId, text, note }),
     });
     const data = await res.json().catch(() => ({}));
     if (res.ok) onSaved(data);
@@ -312,8 +335,26 @@ function PostModal({
       <div className="space-y-3">
         <p className="text-xs text-neutral-500 capitalize">{prettyDate}</p>
         <div>
-          <label className="text-xs text-neutral-500 block mb-1">Categoría</label>
-          <CategorySelect value={category} onChange={setCategory} />
+          <label className="text-xs text-neutral-500 block mb-1">Etiquetas (una o varias)</label>
+          <div className="flex flex-wrap gap-1.5">
+            {COMMUNITY_CATEGORIES.map((c) => {
+              const selected = categories.includes(c.value);
+              return (
+                <button
+                  key={c.value}
+                  type="button"
+                  onClick={() => toggleCategory(c.value)}
+                  className="text-xs font-medium px-2.5 py-1 rounded-full border transition-colors"
+                  style={selected
+                    ? { background: "#0A0A0A", color: "#FAFAFA", borderColor: "#0A0A0A" }
+                    : { background: "#FFFFFF", color: "#525252", borderColor: "#D4D4D4" }
+                  }
+                >
+                  {c.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
         <div>
           <label className="text-xs text-neutral-500 block mb-1">Fisio que publica</label>
@@ -321,6 +362,17 @@ function PostModal({
             <option value="">Sin asignar</option>
             {team.map((t) => <option key={t.id} value={t.id}>{t.fullName}</option>)}
           </select>
+        </div>
+        <div>
+          <label className="text-xs text-neutral-500 block mb-1">
+            Nota / temática <span className="text-neutral-400">(opcional)</span>
+          </label>
+          <input
+            className="input text-sm"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Ej: caso de éxito con dolor de hombro"
+          />
         </div>
         <div>
           <label className="text-xs text-neutral-500 block mb-1">Contenido / idea</label>

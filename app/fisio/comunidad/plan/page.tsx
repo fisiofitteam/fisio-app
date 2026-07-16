@@ -41,8 +41,10 @@ export default async function PlanContenidoInternoPage() {
           id: p.id,
           date: p.date.toISOString(),
           category: p.category,
+          categories: parseCategories((p as any).categories ?? "[]"),
           assignedToId: p.assignedToId,
           text: p.text,
+          note: (p as any).note ?? null,
           done: p.done,
         }))}
         initialIdeas={ideas.map((i) => ({ id: i.id, categories: parseCategories(i.categories), text: i.text }))}

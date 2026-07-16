@@ -18,7 +18,12 @@ export const COMMUNITY_CATEGORIES: {
 export const COMMUNITY_CATEGORY_VALUES = COMMUNITY_CATEGORIES.map((c) => c.value);
 
 export function categoryMeta(value: string) {
-  return COMMUNITY_CATEGORIES.find((c) => c.value === value);
+  return (
+    COMMUNITY_CATEGORIES.find((c) => c.value === value) ??
+    // Fallback seguro cuando llega un valor viejo/desconocido; evita nulls
+    // en la UI.
+    { value: value as CommunityCategory, label: value, badge: "bg-neutral-100 text-neutral-700 border-neutral-200", dot: "#737373" }
+  );
 }
 
 // Parsea el campo categories (JSON string) a un array de valores válidos.

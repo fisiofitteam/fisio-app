@@ -19,6 +19,14 @@
     {
       "path": "/api/cron/prevention-daily",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/notify-community-posts",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/notify-community-posts",
+      "schedule": "0 7 * * *"
     }
   ]
 }

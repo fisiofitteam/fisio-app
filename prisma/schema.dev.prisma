@@ -2271,10 +2271,13 @@ model ClinicalSessionCase {
 model CommunityPost {
   id           String   @id @default(cuid())
   date         DateTime @unique                          // día del post (UTC midnight)
-  category     String
+  category     String                                    // categoría legacy (primera de categories)
+  categories   String   @default("[]")                   // JSON array — permite varias etiquetas por día
   assignedToId String?                                   // fisio que publica (manual)
   text         String?                                   // idea / contenido del día
+  note         String?                                   // nota de temática del post (opcional)
   done         Boolean  @default(false)
+  notifiedAt   DateTime?                                 // fecha en que el cron avisó al fisio (evita duplicados)
   createdById  String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
