@@ -15,6 +15,14 @@ export default async function ComunidadPage() {
   const canModerate = true;
   const canManageClassroom = user.role === "ceo" || user.role === "head_success" || user.role === "fisio";
 
+  // Timestamp de la última visita ANTES del reset — se usa para pintar
+  // badges "NUEVO" en posts y comentarios creados desde entonces.
+  const prof = await prisma.professional.findUnique({
+    where: { id: user.id },
+    select: { communityLastSeenAt: true } as any,
+  }) as { communityLastSeenAt: Date | null } | null;
+  const lastSeenAt = prof?.communityLastSeenAt ?? new Date(0);
+
   // Marcar la comunidad como vista → resetea el badge del sidebar. Fire-and-forget
   // (no bloquea la carga del feed). El campo comienza como null en el schema y se
   // crea en el primer entra.
@@ -45,6 +53,7 @@ export default async function ComunidadPage() {
       <CommunityManager
         canManageClassroom={canManageClassroom}
         canModerate={canModerate}
+        lastSeenAt={lastSeenAt.toISOString()}
         initialCourses={courses.map((c) => ({
           id: c.id,
           title: c.title,

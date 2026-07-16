@@ -52,13 +52,17 @@ async function api(url: string, method: string, body?: unknown) {
 }
 
 export function CommunityManager({
-  initialCourses, initialPosts, canManageClassroom = true, canModerate = true,
+  initialCourses, initialPosts, canManageClassroom = true, canModerate = true, lastSeenAt,
 }: {
   initialCourses: Course[];
   initialPosts: Post[];
   canManageClassroom?: boolean;
   canModerate?: boolean;
+  /** ISO. Timestamp de la última visita ANTES de esta pantalla. Se usa
+   *  para pintar badges "NUEVO" en posts y comentarios. */
+  lastSeenAt?: string;
 }) {
+  const lastSeenMs = lastSeenAt ? new Date(lastSeenAt).getTime() : 0;
   const [tab, setTab] = useState<Tab>("community");
   const [courses, setCourses] = useState<Course[]>(initialCourses);
   const [posts, setPosts] = useState<Post[]>(initialPosts);
@@ -108,7 +112,7 @@ export function CommunityManager({
       )}
 
       {tab === "classroom" && canManageClassroom && <ClassroomSection courses={courses} setCourses={setCourses} fail={fail} />}
-      {tab === "community" && <CommunitySection posts={posts} setPosts={setPosts} fail={fail} canModerate={canModerate} />}
+      {tab === "community" && <CommunitySection posts={posts} setPosts={setPosts} fail={fail} canModerate={canModerate} lastSeenMs={lastSeenMs} />}
     </div>
   );
 }
@@ -253,12 +257,13 @@ function CourseCard({
 /* ─────────────────────────── COMMUNITY (muro) ─────────────────────────── */
 
 function CommunitySection({
-  posts, setPosts, fail, canModerate,
+  posts, setPosts, fail, canModerate, lastSeenMs = 0,
 }: {
   posts: Post[];
   setPosts: React.Dispatch<React.SetStateAction<Post[]>>;
   fail: (e: unknown) => void;
   canModerate: boolean;
+  lastSeenMs?: number;
 }) {
   const [adding, setAdding] = useState(false);
   const [viewingPost, setViewingPost] = useState<Post | null>(null);
@@ -291,6 +296,7 @@ function CommunitySection({
             onChange={(u) => setPosts((a) => a.map((x) => (x.id === p.id ? u : x)))}
             onDelete={() => setPosts((a) => a.filter((x) => x.id !== p.id))}
             fail={fail}
+            lastSeenMs={lastSeenMs}
           />
         ))
       )}
@@ -300,6 +306,7 @@ function CommunitySection({
           post={viewingPost}
           canModerate={canModerate}
           onClose={() => setViewingPost(null)}
+          lastSeenMs={lastSeenMs}
           onCommentAdded={() => {
             // Actualiza el contador del post en la lista
             setPosts((a) => a.map((x) => x.id === viewingPost.id ? { ...x, comments: x.comments + 1 } : x));
@@ -377,7 +384,7 @@ function PostForm({
 }
 
 function PostCard({
-  post, onOpen, onChange, onDelete, fail, canModerate,
+  post, onOpen, onChange, onDelete, fail, canModerate, lastSeenMs = 0,
 }: {
   post: Post;
   onOpen: () => void;
@@ -385,7 +392,9 @@ function PostCard({
   onDelete: () => void;
   fail: (e: unknown) => void;
   canModerate: boolean;
+  lastSeenMs?: number;
 }) {
+  const postIsNew = new Date(post.createdAt).getTime() > lastSeenMs;
   const [editing, setEditing] = useState(false);
 
   async function patch(data: any) {
@@ -418,7 +427,7 @@ function PostCard({
   const date = new Date(post.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
 
   return (
-    <div className="card">
+    <div className="card" style={postIsNew ? { borderLeft: "4px solid #F59E0B" } : undefined}>
       {/* Cabecera: avatar + autor + fecha + acciones de moderación */}
       <div className="flex items-start gap-2 mb-2">
         <Avatar url={post.authorPhotoUrl} name={post.authorName ?? "Equipo"} size={28} />
@@ -428,6 +437,11 @@ function PostCard({
             <span className="font-medium text-sm truncate">{post.authorName ?? "Equipo"}</span>
             {!post.isPatient && <BadgeCheck size={14} className="text-blue-600 flex-shrink-0" fill="#2563EB" stroke="#FFFFFF" />}
             <span className="text-[11px] text-neutral-400">· {date}</span>
+            {postIsNew && (
+              <span className="text-[9px] font-bold tracking-widest uppercase px-1.5 py-0.5 rounded-full bg-amber-500 text-white">
+                Nuevo
+              </span>
+            )}
             {!post.published && <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-500">Oculto</span>}
           </div>
         </div>
@@ -512,7 +526,7 @@ type Comment = {
 };
 
 function PostDetailModal({
-  post, canModerate, onClose, onCommentAdded, onCommentDeleted, onLikeChange,
+  post, canModerate, onClose, onCommentAdded, onCommentDeleted, onLikeChange, lastSeenMs = 0,
 }: {
   post: Post;
   canModerate: boolean;
@@ -520,6 +534,7 @@ function PostDetailModal({
   onCommentAdded: () => void;
   onCommentDeleted: () => void;
   onLikeChange: (liked: boolean, count: number) => void;
+  lastSeenMs?: number;
 }) {
   const [comments, setComments] = useState<Comment[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -688,6 +703,7 @@ function PostDetailModal({
                   onDelete={() => deleteComment(c.id)}
                   onDeleteReply={(rid) => { if (confirm("¿Borrar esta respuesta?")) deleteComment(rid); }}
                   deleting={deleting}
+                  lastSeenMs={lastSeenMs}
                 />
               ))}
             </div>
@@ -759,7 +775,7 @@ function PostDetailModal({
 }
 
 function CommentItem({
-  c, replies, canModerate, onReply, onDelete, onDeleteReply, deleting,
+  c, replies, canModerate, onReply, onDelete, onDeleteReply, deleting, lastSeenMs = 0,
 }: {
   c: Comment;
   replies: Comment[];
@@ -768,15 +784,25 @@ function CommentItem({
   onDelete: () => void;
   onDeleteReply: (replyId: string) => void;
   deleting: string | null;
+  lastSeenMs?: number;
 }) {
+  const isNew = new Date(c.createdAt).getTime() > lastSeenMs;
   return (
-    <div className="flex gap-2.5 group">
+    <div
+      className="flex gap-2.5 group"
+      style={isNew ? { borderLeft: "3px solid #F59E0B", paddingLeft: 8, marginLeft: -11 } : undefined}
+    >
       <span className="mt-0.5"><Avatar url={c.authorPhotoUrl} name={c.authorName} size={28} /></span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1 text-xs">
           <span className="font-medium">{c.authorName}</span>
           {!c.isPatient && <BadgeCheck size={12} className="text-blue-600" fill="#2563EB" stroke="#FFFFFF" />}
           <span className="text-neutral-400 ml-1">· {new Date(c.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}</span>
+          {isNew && (
+            <span className="text-[9px] font-bold tracking-widest uppercase px-1.5 rounded ml-1 bg-amber-500 text-white">
+              Nuevo
+            </span>
+          )}
         </div>
         {c.body && <p className="text-sm text-neutral-700 mt-0.5 break-words">{c.body}</p>}
         {c.imageUrl && (
@@ -793,7 +819,9 @@ function CommentItem({
 
         {replies.length > 0 && (
           <div className="mt-2 space-y-2 pl-3 border-l-2 border-neutral-100">
-            {replies.map((r) => (
+            {replies.map((r) => {
+              const rIsNew = new Date(r.createdAt).getTime() > lastSeenMs;
+              return (
               <div key={r.id} className="flex gap-2 group">
                 <span className="mt-0.5"><Avatar url={r.authorPhotoUrl} name={r.authorName} size={22} /></span>
                 <div className="flex-1 min-w-0">
@@ -801,6 +829,11 @@ function CommentItem({
                     <span className="font-medium">{r.authorName}</span>
                     {!r.isPatient && <BadgeCheck size={10} className="text-blue-600" fill="#2563EB" stroke="#FFFFFF" />}
                     <span className="text-neutral-400 ml-1">· {new Date(r.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}</span>
+                    {rIsNew && (
+                      <span className="text-[8px] font-bold tracking-widest uppercase px-1 rounded ml-0.5 bg-amber-500 text-white">
+                        Nuevo
+                      </span>
+                    )}
                   </div>
                   {r.body && <p className="text-[13px] text-neutral-700 mt-0.5 break-words">{r.body}</p>}
                   {r.imageUrl && (
@@ -820,7 +853,8 @@ function CommentItem({
                   </button>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

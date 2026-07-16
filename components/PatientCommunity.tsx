@@ -50,7 +50,7 @@ async function api(url: string, method: string, body?: unknown) {
 }
 
 export function PatientCommunity({
-  patientId, myName, myPhotoUrl, initialPosts, courses, navVariant = "default",
+  patientId, myName, myPhotoUrl, initialPosts, courses, navVariant = "default", lastSeenAt,
 }: {
   patientId: string;
   myName: string;
@@ -58,9 +58,14 @@ export function PatientCommunity({
   initialPosts: Post[];
   courses: Course[];
   navVariant?: "default" | "advance" | "prevention";
+  /** ISO. Timestamp de la última visita del usuario a la comunidad ANTES
+   *  de esta pantalla. Se usa para pintar badges "NUEVO" en posts y
+   *  comentarios más recientes. */
+  lastSeenAt?: string;
 }) {
   const [tab, setTab] = useState<"community" | "classroom">("community");
   const [posts, setPosts] = useState<Post[]>(initialPosts);
+  const lastSeenMs = lastSeenAt ? new Date(lastSeenAt).getTime() : 0;
 
   return (
     <main className="min-h-screen text-white" style={{ color: "var(--p-text)" }}>
@@ -85,7 +90,7 @@ export function PatientCommunity({
         </div>
 
         {tab === "community" ? (
-          <CommunityFeed posts={posts} setPosts={setPosts} myName={myName} myPhotoUrl={myPhotoUrl} />
+          <CommunityFeed posts={posts} setPosts={setPosts} myName={myName} myPhotoUrl={myPhotoUrl} lastSeenMs={lastSeenMs} />
         ) : (
           <Classroom courses={courses} patientId={patientId} />
         )}
@@ -99,12 +104,13 @@ export function PatientCommunity({
 /* ─────────────────── COMMUNITY (muro) ─────────────────── */
 
 function CommunityFeed({
-  posts, setPosts, myName, myPhotoUrl,
+  posts, setPosts, myName, myPhotoUrl, lastSeenMs,
 }: {
   posts: Post[];
   setPosts: React.Dispatch<React.SetStateAction<Post[]>>;
   myName: string;
   myPhotoUrl: string | null;
+  lastSeenMs: number;
 }) {
   const [composing, setComposing] = useState(false);
 
@@ -133,7 +139,12 @@ function CommunityFeed({
         <p className="text-sm text-center py-8" style={{ color: "var(--p-text-faint)" }}>No hay publicaciones todavía.</p>
       ) : (
         posts.map((p) => (
-          <PostItem key={p.id} post={p} onChange={(u) => setPosts((a) => a.map((x) => (x.id === p.id ? u : x)))} />
+          <PostItem
+            key={p.id}
+            post={p}
+            onChange={(u) => setPosts((a) => a.map((x) => (x.id === p.id ? u : x)))}
+            lastSeenMs={lastSeenMs}
+          />
         ))
       )}
     </div>
@@ -270,12 +281,16 @@ function Composer({ myName, myPhotoUrl, onCancel, onPublished }: { myName: strin
   );
 }
 
-function PostItem({ post, onChange }: { post: Post; onChange: (p: Post) => void }) {
+function PostItem({ post, onChange, lastSeenMs }: { post: Post; onChange: (p: Post) => void; lastSeenMs: number }) {
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState<Comment[] | null>(null);
   const [loadingComments, setLoadingComments] = useState(false);
   const [newComment, setNewComment] = useState("");
   const date = new Date(post.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+  const postIsNew = new Date(post.createdAt).getTime() > lastSeenMs;
+  const newCommentsCount = comments
+    ? comments.filter((c) => new Date(c.createdAt).getTime() > lastSeenMs).length
+    : 0;
 
   async function toggleLike() {
     // optimista
@@ -311,13 +326,29 @@ function PostItem({ post, onChange }: { post: Post; onChange: (p: Post) => void 
   }
 
   return (
-    <div className={CARD} style={CARD_STYLE}>
+    <div
+      className={CARD}
+      style={{
+        ...CARD_STYLE,
+        // Post nuevo: borde izquierdo amarillo grueso — se ve de un
+        // vistazo al scrollear sin necesidad de leer badges.
+        ...(postIsNew ? { borderLeft: "4px solid var(--p-accent)" } : {}),
+      }}
+    >
       <div className="flex items-center gap-2.5 mb-2">
         <Avatar url={post.authorPhotoUrl} name={post.authorName} size={32} />
         <div className="flex-1 min-w-0">
           <AuthorName name={post.authorName} isPatient={post.isPatient} />
           <div className="text-[11px]" style={{ color: "var(--p-text-faint)" }}>{date}</div>
         </div>
+        {postIsNew && (
+          <span
+            className="text-[9px] font-bold tracking-widest uppercase px-2 py-0.5 rounded-full"
+            style={{ background: "var(--p-accent)", color: "var(--p-accent-ink)" }}
+          >
+            Nuevo
+          </span>
+        )}
       </div>
 
       <div className="flex gap-3">
@@ -348,23 +379,48 @@ function PostItem({ post, onChange }: { post: Post; onChange: (p: Post) => void 
         <button onClick={toggleLike} className="flex items-center gap-1.5 text-sm" style={{ color: post.likedByMe ? "var(--p-accent)" : "var(--p-text-dim)" }}>
           <Heart size={16} fill={post.likedByMe ? "var(--p-accent)" : "none"} /> {post.reactions}
         </button>
-        <button onClick={openComments} className="flex items-center gap-1.5 text-sm" style={{ color: "var(--p-text-dim)" }}>
+        <button onClick={openComments} className="flex items-center gap-1.5 text-sm relative" style={{ color: "var(--p-text-dim)" }}>
           <MessageCircle size={16} /> {post.comments}
+          {newCommentsCount > 0 && (
+            <span
+              className="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+              style={{ background: "var(--p-accent)", color: "var(--p-accent-ink)" }}
+            >
+              +{newCommentsCount}
+            </span>
+          )}
         </button>
       </div>
 
       {showComments && (
         <div className="mt-3 space-y-3">
           {loadingComments && <p className="text-xs" style={{ color: "var(--p-text-faint)" }}>Cargando…</p>}
-          {comments?.map((c) => (
-            <div key={c.id} className="flex gap-2.5">
-              <span className="mt-0.5"><Avatar url={c.authorPhotoUrl} name={c.authorName} size={24} /></span>
-              <div className="flex-1 min-w-0">
-                <AuthorName name={c.authorName} isPatient={c.isPatient} size="xs" />
-                <p className="text-sm" style={{ color: "var(--p-text-soft)" }}>{c.body}</p>
+          {comments?.map((c) => {
+            const commentIsNew = new Date(c.createdAt).getTime() > lastSeenMs;
+            return (
+              <div
+                key={c.id}
+                className="flex gap-2.5"
+                style={commentIsNew ? { borderLeft: "3px solid var(--p-accent)", paddingLeft: 8, marginLeft: -11 } : undefined}
+              >
+                <span className="mt-0.5"><Avatar url={c.authorPhotoUrl} name={c.authorName} size={24} /></span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <AuthorName name={c.authorName} isPatient={c.isPatient} size="xs" />
+                    {commentIsNew && (
+                      <span
+                        className="text-[8px] font-bold tracking-widest uppercase px-1.5 rounded"
+                        style={{ background: "var(--p-accent)", color: "var(--p-accent-ink)" }}
+                      >
+                        Nuevo
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm" style={{ color: "var(--p-text-soft)" }}>{c.body}</p>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           <div className="flex items-center gap-2">
             <input
               className="flex-1 text-sm rounded-lg px-3 py-2 outline-none"
