@@ -5,6 +5,8 @@ import Link from "next/link";
 import { ImageUpload } from "@/components/ImageUpload";
 import { CourseCover } from "@/components/CourseCover";
 import { parseVideo } from "@/lib/video";
+import { RichTextEditor } from "@/components/RichTextEditor";
+import { sanitizeRichText, isRichTextEmpty } from "@/lib/rich-text";
 import {
   GraduationCap, MessageSquare, Plus, Trash2, Pencil, Pin,
   Eye, EyeOff, Heart, MessageCircle, BadgeCheck, X, Send, Video,
@@ -345,7 +347,12 @@ function PostForm({
   return (
     <div className="card space-y-2">
       <input className="input text-sm font-medium" placeholder="Título (opcional)" value={title} onChange={(e) => setTitle(e.target.value)} />
-      <textarea className="input text-sm" rows={4} placeholder="Escribe algo para la comunidad..." value={body} onChange={(e) => setBody(e.target.value)} />
+      <RichTextEditor
+        initialHtml={body}
+        onChange={setBody}
+        placeholder="Escribe algo para la comunidad..."
+        minHeight={110}
+      />
       <div>
         <label className="text-xs text-neutral-500 block mb-1">Imagen (opcional)</label>
         <ImageUpload value={imageUrl} onChange={setImageUrl} hint="Imagen del post." />
@@ -372,8 +379,12 @@ function PostForm({
       <div className="flex justify-end gap-2">
         <button onClick={onCancel} className="btn text-sm">Cancelar</button>
         <button
-          onClick={() => body.trim() && videoOk && onSave({ title: title.trim() || null, body: body.trim(), category: "general", imageUrl: imageUrl.trim() || null, videoUrl: videoUrl.trim() || null, pinned })}
-          disabled={!body.trim() || !videoOk}
+          onClick={() => {
+            const clean = sanitizeRichText(body);
+            if (isRichTextEmpty(clean) || !videoOk) return;
+            onSave({ title: title.trim() || null, body: clean, category: "general", imageUrl: imageUrl.trim() || null, videoUrl: videoUrl.trim() || null, pinned });
+          }}
+          disabled={isRichTextEmpty(sanitizeRichText(body)) || !videoOk}
           className="btn btn-primary text-sm disabled:opacity-50"
         >
           Publicar
@@ -465,7 +476,10 @@ function PostCard({
         <div className="flex gap-3">
           <div className="flex-1 min-w-0">
             {post.title && <h3 className="font-semibold text-base mb-1 group-hover:underline">{post.title}</h3>}
-            <p className="text-sm whitespace-pre-line text-neutral-700 line-clamp-3 break-words">{post.body}</p>
+            <div
+              className="text-sm whitespace-pre-line text-neutral-700 line-clamp-3 break-words"
+              dangerouslySetInnerHTML={{ __html: sanitizeRichText(post.body) }}
+            />
           </div>
           {(() => {
             const videoInfo = post.videoUrl ? parseVideo(post.videoUrl) : null;
@@ -654,7 +668,10 @@ function PostDetailModal({
         </div>
 
         {post.title && <h2 className="font-semibold text-lg mb-2" style={{ letterSpacing: "-0.015em" }}>{post.title}</h2>}
-        <p className="text-sm whitespace-pre-line text-neutral-700 break-words">{post.body}</p>
+        <div
+          className="text-sm whitespace-pre-line text-neutral-700 break-words"
+          dangerouslySetInnerHTML={{ __html: sanitizeRichText(post.body) }}
+        />
         {post.imageUrl && (
           <a href={post.imageUrl} target="_blank" rel="noreferrer">
             <img src={post.imageUrl} alt="" className="rounded-xl mt-3 w-full object-cover max-h-96 border border-neutral-200" />

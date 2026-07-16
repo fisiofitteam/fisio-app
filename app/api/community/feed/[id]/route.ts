@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 import { FEED_CATEGORY_VALUES } from "@/lib/community-feed";
+import { sanitizeRichText } from "@/lib/rich-text";
 
 function canManage(role: string): boolean {
   // Todos los profesionales del equipo pueden moderar (incluye setter/closer).
@@ -16,7 +17,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const b = await req.json().catch(() => ({}));
   const data: any = {};
   if ("title" in b) data.title = b.title?.trim() || null;
-  if (typeof b?.body === "string") data.body = b.body.trim();
+  if (typeof b?.body === "string") data.body = sanitizeRichText(b.body.trim());
   if ("imageUrl" in b) data.imageUrl = b.imageUrl?.trim() || null;
   if (typeof b?.pinned === "boolean") data.pinned = b.pinned;
   if (typeof b?.published === "boolean") data.published = b.published;

@@ -3,6 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { PatientNav } from "@/components/PatientNav";
+import { RichTextEditor } from "@/components/RichTextEditor";
+import { sanitizeRichText, isRichTextEmpty } from "@/lib/rich-text";
 import { CourseCover } from "@/components/CourseCover";
 import { Heart, MessageCircle, Send, ChevronRight, BadgeCheck, ImagePlus, X } from "lucide-react";
 import { upload } from "@vercel/blob/client";
@@ -189,13 +191,14 @@ function Composer({ myName, myPhotoUrl, onCancel, onPublished }: { myName: strin
   }
 
   async function publish() {
-    if (!body.trim()) return;
+    const cleanBody = sanitizeRichText(body);
+    if (isRichTextEmpty(cleanBody)) return;
     setSaving(true);
     setErr(null);
     try {
       const created = await api("/api/community/feed", "POST", {
         title: title.trim() || null,
-        body: body.trim(),
+        body: cleanBody,
         category: "general",
         imageUrl: media?.kind === "image" ? media.url : null,
         videoUrl: media?.kind === "video" ? media.url : null,
@@ -224,13 +227,11 @@ function Composer({ myName, myPhotoUrl, onCancel, onPublished }: { myName: strin
         onChange={(e) => setTitle(e.target.value)}
         style={{ color: "var(--p-text)" }}
       />
-      <textarea
-        className="w-full bg-transparent text-sm outline-none resize-none"
-        rows={4}
+      <RichTextEditor
+        initialHtml={body}
+        onChange={setBody}
         placeholder="¿Qué quieres compartir?"
-        value={body}
-        onChange={(e) => setBody(e.target.value)}
-        style={{ color: "var(--p-text)" }}
+        minHeight={90}
         autoFocus
       />
 
@@ -354,7 +355,16 @@ function PostItem({ post, onChange, lastSeenMs }: { post: Post; onChange: (p: Po
       <div className="flex gap-3">
         <div className="flex-1 min-w-0">
           {post.title && <h3 className="font-semibold text-base mb-1" style={{ letterSpacing: "-0.015em" }}>{post.title}</h3>}
-          <p className="text-sm whitespace-pre-line break-words" style={{ color: "var(--p-text-soft)" }}>{post.body}</p>
+          {/* Body puede llevar formato B/I/U del composer. Sanitizamos al
+              renderizar como defensa en profundidad — el composer también
+              lo hace al guardar. Sin sanitize, aunque el body venga de
+              un texto legacy plano, dangerouslySetInnerHTML es seguro
+              porque sanitizeRichText escapa cualquier tag desconocido. */}
+          <div
+            className="text-sm whitespace-pre-line break-words rich-text-body"
+            style={{ color: "var(--p-text-soft)" }}
+            dangerouslySetInnerHTML={{ __html: sanitizeRichText(post.body) }}
+          />
         </div>
         {post.imageUrl && (
           <a href={post.imageUrl} target="_blank" rel="noreferrer" className="flex-shrink-0">

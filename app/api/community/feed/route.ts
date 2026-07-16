@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 import { getCommunityActor } from "@/lib/community-actor";
 import { FEED_CATEGORY_VALUES } from "@/lib/community-feed";
+import { sanitizeRichText, isRichTextEmpty } from "@/lib/rich-text";
 
 function canManage(role: string): boolean {
   return role === "ceo" || role === "head_success" || role === "fisio" || role === "setter" || role === "closer";
@@ -33,8 +34,12 @@ export async function POST(req: NextRequest) {
   if (!actor) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const b = await req.json().catch(() => ({}));
-  const body = typeof b?.body === "string" ? b.body.trim() : "";
-  if (!body) return NextResponse.json({ error: "El texto del post es obligatorio." }, { status: 400 });
+  // Sanitizamos el body: el composer permite B/I/U y guarda HTML. Aquí
+  // filtramos cualquier tag que no esté en la whitelist como defensa en
+  // profundidad (el cliente también lo hace).
+  const bodyRaw = typeof b?.body === "string" ? b.body.trim() : "";
+  const body = sanitizeRichText(bodyRaw);
+  if (isRichTextEmpty(body)) return NextResponse.json({ error: "El texto del post es obligatorio." }, { status: 400 });
   const category = FEED_CATEGORY_VALUES.includes(b?.category) ? b.category : "general";
 
   const created = await prisma.communityFeedPost.create({
