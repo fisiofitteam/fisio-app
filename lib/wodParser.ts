@@ -20,22 +20,50 @@ export type AdaptedLine = ParsedLine & {
   physioWarning?: string | null;
 };
 
+/** Normalización "espaciada": minúsculas, sin acentos, sin hyphens ni
+ *  underscores (los sustituimos por espacio), espacios múltiples colapsados.
+ *  Ej: "Wall-Balls" → "wall balls"; "Handstand Push-Up" → "handstand push up".
+ *  Se usa para el matching con \b (word boundaries funcionan bien sobre esta
+ *  representación). */
+function normalizeSpaced(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")   // sin diacríticos (á → a)
+    .replace(/[-_/]+/g, " ")             // hyphens/underscores/slashes → espacio
+    .replace(/\s+/g, " ")                // colapsa espacios
+    .trim();
+}
+
+/** Normalización "colapsada": la anterior + sin espacios. Sirve para pillar
+ *  variantes pegadas típicas del CrossFit ("wallballs", "toestobar",
+ *  "kbswing"). Se usa como segunda pasada por si el alias no matcheó
+ *  espaciado. */
+function normalizeCollapsed(s: string): string {
+  return normalizeSpaced(s).replace(/\s+/g, "");
+}
+
 // Tokeniza el WOD en líneas y detecta movimientos por aliases
 export async function parseWod(rawText: string): Promise<ParsedLine[]> {
   const movements = await prisma.movement.findMany();
 
-  // Construir índice: alias -> movement
-  const aliasIndex: Array<{ alias: string; mov: typeof movements[0] }> = [];
+  // Índice: guardamos las dos normalizaciones de cada alias para poder
+  // matchear "wall balls" ↔ "wallballs" ↔ "wall-balls" indistintamente.
+  const aliasIndex: Array<{ spaced: string; collapsed: string; mov: typeof movements[0] }> = [];
   for (const mov of movements) {
-    const aliases = mov.aliases.split(",").map((a) => a.trim().toLowerCase()).filter(Boolean);
-    aliases.push(mov.canonicalName.toLowerCase());
-    aliases.push(mov.displayName.toLowerCase());
-    for (const alias of aliases) {
-      aliasIndex.push({ alias, mov });
+    const rawAliases = [
+      ...mov.aliases.split(",").map((a) => a.trim()).filter(Boolean),
+      mov.canonicalName,
+      mov.displayName,
+    ];
+    for (const raw of rawAliases) {
+      const spaced = normalizeSpaced(raw);
+      if (!spaced) continue;
+      aliasIndex.push({ spaced, collapsed: spaced.replace(/\s+/g, ""), mov });
     }
   }
   // Ordenar por longitud descendente para matchear "ring muscle up" antes que "muscle up"
-  aliasIndex.sort((a, b) => b.alias.length - a.alias.length);
+  aliasIndex.sort((a, b) => b.spaced.length - a.spaced.length);
 
   // Separar el texto en líneas
   const lines = rawText
@@ -46,14 +74,22 @@ export async function parseWod(rawText: string): Promise<ParsedLine[]> {
   const result: ParsedLine[] = [];
 
   for (const line of lines) {
-    const lowerLine = line.toLowerCase();
+    const spaced = normalizeSpaced(line);
+    const collapsed = normalizeCollapsed(line);
 
-    // Buscar el primer alias que matchee
+    // Pasada 1 — match espaciado con word boundaries. Cubre el 95% de casos.
+    // Pasada 2 — match sobre versión sin espacios (para "wallballs" cuando el
+    // catálogo dice "wall balls" y viceversa). Sin \b porque perderíamos
+    // demasiado; buscamos como substring y filtramos por longitud mínima
+    // para no dar falsos positivos con aliases cortos.
     let matched: typeof aliasIndex[0] | undefined;
     for (const entry of aliasIndex) {
-      // Buscar como palabra independiente (no parte de otra)
-      const regex = new RegExp(`(^|[^a-z0-9])${escapeRegex(entry.alias)}([^a-z0-9]|$)`, "i");
-      if (regex.test(lowerLine)) {
+      const spacedRe = new RegExp(`(^|\\W)${escapeRegex(entry.spaced)}(\\W|$)`, "i");
+      if (spacedRe.test(spaced)) { matched = entry; break; }
+      // La versión colapsada solo la usamos si el alias tiene >=5 chars —
+      // umbral bajo para pillar plurales como "squats"/"cleans", pero no
+      // aliases muy cortos ("row") que darían falsos positivos.
+      if (entry.collapsed.length >= 5 && collapsed.includes(entry.collapsed)) {
         matched = entry;
         break;
       }
