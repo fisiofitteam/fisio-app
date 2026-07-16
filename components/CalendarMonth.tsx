@@ -228,11 +228,28 @@ export function CalendarMonth({
     clearAdvance();
     if (!e.over) return;
     const overId = String(e.over.id);
-    // Si soltó sobre las zonas de auto-avance, no hacemos nada (era solo para
-    // cambiar de mes; ya se aplicó si mantuvo 500ms).
     if (overId === "__prev_month__" || overId === "__next_month__") return;
-    const sessionId = String(e.active.id);
-    const session = sessions.find((s) => s.id === sessionId);
+    const activeId = String(e.active.id);
+
+    // Caso especial: id con prefijo "task:<sessionId>:<taskId>" → el fisio
+    // arrastró UNA sola tarea de una sesión con varias. Split: sacamos esa
+    // tarea del snapshot origen y creamos una sesión standalone nueva en el
+    // día destino con esa tarea.
+    if (activeId.startsWith("task:")) {
+      const rest = activeId.slice("task:".length);
+      const firstColon = rest.indexOf(":");
+      if (firstColon < 0) return;
+      const sessionId = rest.slice(0, firstColon);
+      const taskId = rest.slice(firstColon + 1);
+      const session = sessions.find((s) => s.id === sessionId);
+      if (!session) return;
+      const currentKey = dayKey(new Date(session.scheduledDate));
+      if (currentKey === overId) return;
+      executeMoveTask(session, taskId, overId);
+      return;
+    }
+
+    const session = sessions.find((s) => s.id === activeId);
     if (!session) return;
     const currentKey = dayKey(new Date(session.scheduledDate));
     if (currentKey === overId) return;
@@ -247,8 +264,30 @@ export function CalendarMonth({
     setDropAction({ session, targetKey: overId });
   }
 
+  async function executeMoveTask(session: Session, taskId: string, targetKey: string) {
+    const newDate = parseKey(targetKey);
+    const oldDate = new Date(session.scheduledDate);
+    newDate.setHours(oldDate.getHours(), oldDate.getMinutes(), 0, 0);
+    await fetch("/api/sessions/move-task", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: session.id,
+        taskId,
+        targetDate: newDate.toISOString(),
+      }),
+    });
+    router.refresh();
+  }
+
   function onDragStart(e: any) {
-    const session = sessions.find((s) => s.id === String(e.active.id));
+    const activeId = String(e.active.id);
+    // Los draggables de tarea individual llevan prefijo "task:". Extraemos
+    // el sessionId para pintar el overlay igual que si fuera la sesión.
+    const sid = activeId.startsWith("task:")
+      ? activeId.slice("task:".length).split(":")[0]
+      : activeId;
+    const session = sessions.find((s) => s.id === sid);
     if (session) setDragging(session);
   }
 
@@ -773,23 +812,13 @@ function DraggableSession({
   assignmentIndex: Map<string, number>;
   onMoveToDate: () => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: session.id });
-  const style = transform
-    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, opacity: isDragging ? 0.4 : 1 }
-    : undefined;
-
-  // Parseamos las tareas y las mostramos como filas independientes,
-  // cada una con su propio color según su tipo (VIDEO=rojo,
-  // EVOLUTION/FORM=azul claro, resto=color de la asignación). Así el
-  // fisio ve directamente cada tarea en el calendario, sin "+N".
+  // Parseamos las tareas.
   let tasks: any[] = [];
   try {
     const parsed = JSON.parse(session.tasksSnapshot);
     if (Array.isArray(parsed)) tasks = parsed;
   } catch {}
 
-  // Si es sesión standalone sin tareas, dejamos la fila con el nombre
-  // del programa (comportamiento histórico).
   const fallbackLabel = tasks.length === 0 && session.isStandalone
     ? session.programName
     : null;
@@ -797,6 +826,66 @@ function DraggableSession({
 
   const isCompleted = !!session.completedAt;
   const idx = session.assignmentId ? (assignmentIndex.get(session.assignmentId) ?? 0) : 0;
+  const multi = tasks.length > 1;
+
+  // 1 tarea: comportamiento antiguo — el chip entero arrastra la sesión.
+  // Multi-tarea: cada task-chip es su propio draggable con id
+  // "task:<sessionId>:<taskId>". El wrapper ya NO es draggable — así el
+  // fisio puede mover una sola tarea sin arrastrar el resto.
+  if (!multi) {
+    return (
+      <SingleSessionChip
+        session={session}
+        onMoveToDate={onMoveToDate}
+        tasks={tasks}
+        fallbackLabel={fallbackLabel}
+        isCompleted={isCompleted}
+        idx={idx}
+      />
+    );
+  }
+
+  return (
+    <div className="relative group space-y-0.5">
+      {tasks.map((t, i) => (
+        <DraggableTaskChip
+          key={t?.id ?? i}
+          sessionId={session.id}
+          task={t}
+          idx={idx}
+          isCompleted={isCompleted}
+          showCheck={isCompleted && i === 0}
+        />
+      ))}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onMoveToDate(); }}
+        onPointerDown={(e) => e.stopPropagation()}
+        className="absolute right-0.5 top-0 px-1 text-[10px] leading-none rounded hover:bg-black/10"
+        title="Mover TODA la sesión a otra fecha"
+      >
+        ↗
+      </button>
+    </div>
+  );
+}
+
+/** Chip de una sesión de 1 sola tarea (o standalone vacía). Arrastra la
+ *  sesión entera con id = session.id — compat con el flujo original. */
+function SingleSessionChip({
+  session, onMoveToDate, tasks, fallbackLabel, isCompleted, idx,
+}: {
+  session: Session;
+  onMoveToDate: () => void;
+  tasks: any[];
+  fallbackLabel: string | null;
+  isCompleted: boolean;
+  idx: number;
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: session.id });
+  const style = transform
+    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, opacity: isDragging ? 0.4 : 1 }
+    : undefined;
 
   return (
     <div
@@ -808,7 +897,6 @@ function DraggableSession({
       title={isCompleted ? "Arrastra para duplicar esta sesión completada en otro día" : "Arrastra para mover o duplicar"}
     >
       {fallbackLabel ? (
-        // Sesión sin tareas: una sola fila neutra con el nombre.
         (() => {
           const cSess = colorForSession({
             tasksSnapshot: session.tasksSnapshot,
@@ -816,29 +904,18 @@ function DraggableSession({
             completed: isCompleted,
           });
           return (
-            <div
-              className={`text-[10px] px-1 py-0.5 pr-4 rounded truncate ${cSess.bgClass} ${cSess.textClass}`}
-            >
-              {isCompleted && "✓ "}
-              {fallbackLabel}
+            <div className={`text-[10px] px-1 py-0.5 pr-4 rounded truncate ${cSess.bgClass} ${cSess.textClass}`}>
+              {isCompleted && "✓ "}{fallbackLabel}
             </div>
           );
         })()
       ) : (
         tasks.map((t, i) => {
-          const c = colorForTask({
-            taskType: t?.type,
-            assignmentIndex: idx,
-            completed: isCompleted,
-          });
+          const c = colorForTask({ taskType: t?.type, assignmentIndex: idx, completed: isCompleted });
           const title = String(t?.title ?? "").trim() || "(sin título)";
           return (
-            <div
-              key={t?.id ?? i}
-              className={`text-[10px] px-1 py-0.5 rounded truncate ${c.bgClass} ${c.textClass} ${i === 0 ? "pr-4" : ""}`}
-            >
-              {isCompleted && i === 0 && "✓ "}
-              {title}
+            <div key={t?.id ?? i} className={`text-[10px] px-1 py-0.5 rounded truncate ${c.bgClass} ${c.textClass} ${i === 0 ? "pr-4" : ""}`}>
+              {isCompleted && i === 0 && "✓ "}{title}
             </div>
           );
         })
@@ -852,6 +929,40 @@ function DraggableSession({
       >
         ↗
       </button>
+    </div>
+  );
+}
+
+/** Chip de una tarea concreta dentro de una sesión con varias tareas.
+ *  Arrastra con id "task:<sessionId>:<taskId>" — al soltar sobre otro
+ *  día, la lógica en onDragEnd hace split de esa tarea a una nueva
+ *  sesión standalone. */
+function DraggableTaskChip({
+  sessionId, task, idx, isCompleted, showCheck,
+}: {
+  sessionId: string;
+  task: any;
+  idx: number;
+  isCompleted: boolean;
+  showCheck: boolean;
+}) {
+  const dragId = `task:${sessionId}:${task?.id}`;
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: dragId });
+  const style = transform
+    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, opacity: isDragging ? 0.4 : 1 }
+    : undefined;
+  const c = colorForTask({ taskType: task?.type, assignmentIndex: idx, completed: isCompleted });
+  const title = String(task?.title ?? "").trim() || "(sin título)";
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...listeners}
+      {...attributes}
+      className={`text-[10px] px-1 py-0.5 rounded truncate cursor-grab active:cursor-grabbing ${c.bgClass} ${c.textClass}`}
+      title="Arrastra esta tarea sola a otro día"
+    >
+      {showCheck && "✓ "}{title}
     </div>
   );
 }
