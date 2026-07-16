@@ -139,7 +139,7 @@ export default async function PatientWeekPage({
         <Link
           href={`/paciente/${patient.id}/semana?view=prev`}
           className={`flex-1 px-3 py-1.5 text-xs rounded-md text-center transition-colors ${
-            view === "prev" ? "bg-white shadow-sm font-medium" : "text-neutral-600"
+            view === "prev" ? "bg-white shadow-sm font-medium text-neutral-900" : "text-neutral-600"
           }`}
         >
           ← Anterior
@@ -147,7 +147,7 @@ export default async function PatientWeekPage({
         <Link
           href={`/paciente/${patient.id}/semana`}
           className={`flex-1 px-3 py-1.5 text-xs rounded-md text-center transition-colors ${
-            view === "current" ? "bg-white shadow-sm font-medium" : "text-neutral-600"
+            view === "current" ? "bg-white shadow-sm font-medium text-neutral-900" : "text-neutral-600"
           }`}
         >
           Esta semana
@@ -156,7 +156,7 @@ export default async function PatientWeekPage({
           <Link
             href={`/paciente/${patient.id}/semana?view=next`}
             className={`flex-1 px-3 py-1.5 text-xs rounded-md text-center transition-colors ${
-              view === "next" ? "bg-white shadow-sm font-medium" : "text-neutral-600"
+              view === "next" ? "bg-white shadow-sm font-medium text-neutral-900" : "text-neutral-600"
             }`}
           >
             Siguiente →
