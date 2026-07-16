@@ -17,6 +17,7 @@ export type PauseSnapshot = {
     startDate: Date;
     endDate: Date;
     daysRemaining: number;
+    daysExtended: number;               // días con los que alarga el programa (múltiplo de 7)
     reason: string | null;
   } | null;
   upcomingPause: {
@@ -88,6 +89,7 @@ export async function getPauseSnapshot(patientId: string): Promise<PauseSnapshot
         startDate: p.startDate,
         endDate: p.endDate,
         daysRemaining: Math.max(0, daysBetween(today, p.endDate)),
+        daysExtended: p.daysExtended ?? 0,
         reason: p.reason,
       };
     } else if (p.startDate > today) {

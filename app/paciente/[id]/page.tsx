@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PatientHomeDark } from "@/components/PatientHomeDark";
-import { PatientHomePaused } from "@/components/PatientHomePaused";
 import { PatientHomeRolling } from "@/components/PatientHomeRolling";
 import { PatientHomePrevention } from "@/components/PatientHomePrevention";
 import { calculateAdherence } from "@/lib/adherence";
@@ -26,18 +25,11 @@ export default async function PatientHome({ params }: { params: { id: string } }
   // pasado de día — el banner del home los recuerda hasta que se rellenan.
   const pendingForms = await getPendingFormsForPatient(patient.id).catch(() => []);
 
-  // --- 1. Si está pausado → vista de pausa con countdown ---
+  // Snapshot de pausas — antes redirigíamos a PatientHomePaused si había
+  // una activa, pero ahora el paciente conserva acceso normal para hacer
+  // el trabajo sustitutivo. El aviso persistente vive en el layout como
+  // banner azul en la parte de arriba de todas las pantallas.
   const pauseSnapshot = await getPauseSnapshot(patient.id);
-  if (pauseSnapshot.isPaused && pauseSnapshot.activePause) {
-    return (
-      <PatientHomePaused
-        firstName={firstName}
-        endDate={pauseSnapshot.activePause.endDate.toISOString()}
-        daysRemaining={pauseSnapshot.activePause.daysRemaining}
-        reason={pauseSnapshot.activePause.reason}
-      />
-    );
-  }
 
   // --- 2a. Si es PREVENTION → vista dedicada de suscriptor ---
   // Prevention es una suscripción low-ticket recurrente con UN SOLO rolling
