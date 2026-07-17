@@ -2,6 +2,7 @@
 // modo oscuro, aclarada con blanco en modo claro) + halo amarillo + grano.
 // El tema se aplica por clase (.patient-light) y todo sale de variables CSS.
 import type { Theme } from "@/lib/theme";
+import { PatientTimezoneSync } from "@/components/PatientTimezoneSync";
 
 const BOX_IMAGE_URL = "/box.jpg";
 
@@ -28,6 +29,7 @@ export function PatientShell({ children, theme = "dark" }: { children: React.Rea
         }}
       />
 
+      <PatientTimezoneSync />
       <div className="relative z-10">{children}</div>
     </div>
   );

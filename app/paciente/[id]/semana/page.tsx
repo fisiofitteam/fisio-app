@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PatientNav } from "@/components/PatientNav";
 import { buildAssignmentIndexMap, colorForSession, colorForTask } from "@/lib/session-colors";
+import { todayForPatient, dowForPatient, weekStartForPatient } from "@/lib/patient-dates";
 
 const DAY_NAMES = ["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 
@@ -27,14 +28,11 @@ export default async function PatientWeekPage({
   const view: "prev" | "current" | "next" =
     rawView === "prev" ? "prev" : rawView === "next" ? "next" : "current";
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  // Calcular el LUNES de la semana actual
-  // getDay() devuelve 0 para domingo, 1-6 lun-sáb
-  const dow = today.getDay() === 0 ? 7 : today.getDay();
-  const mondayThisWeek = new Date(today);
-  mondayThisWeek.setDate(today.getDate() - (dow - 1));
+  // "Hoy" y lunes-de-la-semana en la TZ del paciente. Para atletas fuera
+  // de Madrid, esto evita que vean la semana de aquí en vez de la suya.
+  const today = todayForPatient(patient.timezone);
+  const dow = dowForPatient(patient.timezone);
+  const mondayThisWeek = weekStartForPatient(patient.timezone);
 
   // La navegación a "semana siguiente" solo se ofrece desde el viernes en
   // adelante (dow >= 5). Antes no tiene mucho sentido: no ha empezado
@@ -52,24 +50,24 @@ export default async function PatientWeekPage({
   if (view === "prev") {
     // Lunes-domingo de la semana pasada
     rangeStart = new Date(mondayThisWeek);
-    rangeStart.setDate(mondayThisWeek.getDate() - 7);
+    rangeStart.setUTCDate(mondayThisWeek.getUTCDate() - 7);
     rangeEnd = new Date(mondayThisWeek);
-    rangeEnd.setDate(mondayThisWeek.getDate() - 1);
+    rangeEnd.setUTCDate(mondayThisWeek.getUTCDate() - 1);
   } else if (view === "next") {
     // Lunes-domingo de la próxima semana
     rangeStart = new Date(mondayThisWeek);
-    rangeStart.setDate(mondayThisWeek.getDate() + 7);
+    rangeStart.setUTCDate(mondayThisWeek.getUTCDate() + 7);
     rangeEnd = new Date(mondayThisWeek);
-    rangeEnd.setDate(mondayThisWeek.getDate() + 13);
+    rangeEnd.setUTCDate(mondayThisWeek.getUTCDate() + 13);
   } else {
     // Lunes-domingo de la semana actual (+ siguiente si dow >= viernes)
     rangeStart = new Date(mondayThisWeek);
     rangeEnd = new Date(mondayThisWeek);
-    rangeEnd.setDate(mondayThisWeek.getDate() + (showNextWeek ? 13 : 6));
+    rangeEnd.setUTCDate(mondayThisWeek.getUTCDate() + (showNextWeek ? 13 : 6));
   }
 
   const rangeEndExclusive = new Date(rangeEnd);
-  rangeEndExclusive.setDate(rangeEnd.getDate() + 1);
+  rangeEndExclusive.setUTCDate(rangeEnd.getUTCDate() + 1);
 
   const sessions = await prisma.programSession.findMany({
     where: {
@@ -101,7 +99,7 @@ export default async function PatientWeekPage({
   const days: { date: Date; key: string; sessions: typeof sessions }[] = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(rangeStart);
-    d.setDate(rangeStart.getDate() + i);
+    d.setUTCDate(rangeStart.getUTCDate() + i);
     const key = d.toISOString().split("T")[0];
     days.push({ date: d, key, sessions: sessionsByDay[key] ?? [] });
   }
@@ -111,7 +109,7 @@ export default async function PatientWeekPage({
   if (showNextWeek) {
     for (let i = 7; i < 14; i++) {
       const d = new Date(rangeStart);
-      d.setDate(rangeStart.getDate() + i);
+      d.setUTCDate(rangeStart.getUTCDate() + i);
       const key = d.toISOString().split("T")[0];
       nextDays.push({ date: d, key, sessions: sessionsByDay[key] ?? [] });
     }
@@ -177,7 +175,7 @@ export default async function PatientWeekPage({
 
       <div className="space-y-3">
         {days.map((d) => (
-          <DayCard key={d.key} patientId={patient.id} day={d} assignmentIndex={assignmentIndex} />
+          <DayCard key={d.key} patientId={patient.id} day={d} assignmentIndex={assignmentIndex} todayKey={today.toISOString().slice(0, 10)} />
         ))}
       </div>
 
@@ -195,7 +193,7 @@ export default async function PatientWeekPage({
           </p>
           <div className="space-y-3">
             {nextDays.map((d) => (
-              <DayCard key={d.key} patientId={patient.id} day={d} assignmentIndex={assignmentIndex} />
+              <DayCard key={d.key} patientId={patient.id} day={d} assignmentIndex={assignmentIndex} todayKey={today.toISOString().slice(0, 10)} />
             ))}
           </div>
         </>
@@ -210,6 +208,7 @@ function DayCard({
   patientId,
   day,
   assignmentIndex,
+  todayKey,
 }: {
   patientId: string;
   day: {
@@ -218,10 +217,14 @@ function DayCard({
     sessions: { id: string; completedAt: Date | null; tasksSnapshot: string; assignmentId: string }[];
   };
   assignmentIndex: Map<string, number>;
+  /** "YYYY-MM-DD" de hoy calculado en la TZ del paciente. Se compara con
+   *  day.key para marcar el día actual — antes usábamos toDateString del
+   *  server (UTC) y en TZ negativas fallaba. */
+  todayKey: string;
 }) {
   const { date, sessions: daySessions } = day;
-  const dow = date.getDay() === 0 ? 7 : date.getDay();
-  const isToday = date.toDateString() === new Date().toDateString();
+  const dow = date.getUTCDay() === 0 ? 7 : date.getUTCDay();
+  const isToday = day.key === todayKey;
   return (
     <div className={`card ${isToday ? "border-neutral-900" : ""}`}>
       <div className="flex justify-between items-baseline mb-2">

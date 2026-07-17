@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActivePatient } from "@/lib/session";
-import { todayMadridUtc } from "@/lib/program-pauses";
+import { todayForPatient } from "@/lib/patient-dates";
 
 // POST /api/patient/daily-log — upsert del log de HOY del paciente activo.
 // body: { fatigue, rpe, sleep } — cada uno entero 0..10.
@@ -17,7 +17,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Faltan valores o están fuera de rango (0-10)" }, { status: 400 });
   }
 
-  const recordedDate = todayMadridUtc();
+  // "Hoy" según la TZ del paciente — un atleta en Colombia que registra
+  // a las 23:30 hora local (04:30 UTC del día siguiente) guarda con la
+  // fecha calendario de Colombia, no la de Madrid.
+  const full = await prisma.patient.findUnique({
+    where: { id: patient.id },
+    select: { timezone: true },
+  });
+  const recordedDate = todayForPatient(full?.timezone ?? null);
   const saved = await prisma.patientDailyLog.upsert({
     where: { patientId_recordedDate: { patientId: patient.id, recordedDate } },
     create: { patientId: patient.id, recordedDate, fatigue, rpe, sleep },
@@ -32,12 +39,16 @@ export async function GET() {
   const patient = await getActivePatient();
   if (!patient) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
+  const full = await prisma.patient.findUnique({
+    where: { id: patient.id },
+    select: { timezone: true },
+  });
   const entries = await prisma.patientDailyLog.findMany({
     where: { patientId: patient.id },
     orderBy: { recordedDate: "desc" },
     take: 60,
   });
-  const today = todayMadridUtc();
+  const today = todayForPatient(full?.timezone ?? null);
   const todayEntry = entries.find((e) => e.recordedDate.getTime() === today.getTime()) ?? null;
   return NextResponse.json({ entries, todayEntry, todayIso: today.toISOString() });
 }

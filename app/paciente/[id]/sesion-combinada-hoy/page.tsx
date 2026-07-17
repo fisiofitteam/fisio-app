@@ -3,21 +3,21 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { PatientNav } from "@/components/PatientNav";
 import { CombinedSessionRunner, type CombinedGroup } from "@/components/CombinedSessionRunner";
+import { todayForPatient, dowForPatient } from "@/lib/patient-dates";
 
 const DAY_NAMES = ["", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
 export default async function CombinedSessionTodayPage({ params }: { params: { id: string } }) {
   const patient = await prisma.patient.findUnique({
     where: { id: params.id },
-    select: { id: true, whatsappGroupUrl: true },
+    select: { id: true, whatsappGroupUrl: true, timezone: true },
   });
   if (!patient) notFound();
 
-  // Sesiones de hoy NO completadas (de programas fijos del paciente).
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // "Hoy" en la TZ del paciente — no la del server ni Madrid.
+  const today = todayForPatient(patient.timezone);
   const tomorrow = new Date(today);
-  tomorrow.setDate(today.getDate() + 1);
+  tomorrow.setUTCDate(today.getUTCDate() + 1);
 
   // Cargamos TODAS las sesiones de hoy (completadas incluidas). Antes
   // filtrabamos por completedAt: null y, si un atleta tenía 2+ sesiones y
@@ -64,7 +64,7 @@ export default async function CombinedSessionTodayPage({ params }: { params: { i
     };
   });
 
-  const dow = today.getDay() === 0 ? 7 : today.getDay();
+  const dow = dowForPatient(patient.timezone);
 
   return (
     <main className="max-w-md mx-auto px-4 py-6 pb-24">

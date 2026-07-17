@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { weekStartDate, todayMadridUtc } from "@/lib/program-pauses";
+import { dowForPatient, weekStartForPatient } from "@/lib/patient-dates";
 import { resolveVisibleRollingWeek } from "@/lib/rolling-visible-week";
 import { applyRollingOverridesToTasks, fetchOverridesForPatient } from "@/lib/apply-rolling-overrides";
 import { PatientDailyLogForm } from "@/components/PatientDailyLogForm";
@@ -40,6 +41,7 @@ export default async function SesionHoyPage({ params }: { params: { id: string }
       id: true,
       fullName: true,
       programType: true,
+      timezone: true,
       rollingAccessoriesId: true,
       rollingTrainingId: true,
       rollingProgramId: true,
@@ -48,8 +50,12 @@ export default async function SesionHoyPage({ params }: { params: { id: string }
   if (!patient) notFound();
 
   const today = new Date();
-  const todayDow = today.getDay(); // 0..6 (0=domingo). Las tareas usan 1..5.
-  const thisMonday = weekStartDate(today);
+  // Día de la semana y lunes calculados EN LA ZONA HORARIA DEL PACIENTE —
+  // para atletas en América "hoy" no es lo mismo que aquí en Madrid.
+  // Fallback a Madrid si el paciente aún no ha sincronizado su TZ.
+  const dowMondayBased = dowForPatient(patient.timezone, today); // 1..7 (lunes=1)
+  const todayDow = dowMondayBased % 7; // 0..6 (0=dom) para compat con la lógica siguiente
+  const thisMonday = weekStartForPatient(patient.timezone, today);
 
   const isPrevention = patient.programType === "PREVENTION";
   // Prevention: single-rolling en el campo legacy rollingProgramId.

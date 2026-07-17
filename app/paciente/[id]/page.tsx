@@ -12,6 +12,7 @@ import { ensurePreventionRollingProgram } from "@/lib/prevention";
 import { resolveVisibleRollingWeek } from "@/lib/rolling-visible-week";
 import { applyRollingOverridesToTasks, fetchOverridesForPatient } from "@/lib/apply-rolling-overrides";
 import { getPendingFormsForPatient } from "@/lib/pending-forms";
+import { todayForPatient, weekStartForPatient } from "@/lib/patient-dates";
 
 export default async function PatientHome({ params }: { params: { id: string } }) {
   const patient = await prisma.patient.findUnique({
@@ -36,9 +37,10 @@ export default async function PatientHome({ params }: { params: { id: string } }
   // (equivalente a los accesorios de ADVANCE). El paciente no tiene fisio
   // asignado ni ve PRs.
   if (patient.programType === "PREVENTION" && patient.programMode === "rolling") {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const thisMonday = weekStartDate(today);
+    // "Hoy" y el lunes-de-esta-semana calculados en la TZ del paciente —
+    // sin esto un paciente en Colombia veria "hoy" de Madrid.
+    const today = todayForPatient(patient.timezone);
+    const thisMonday = weekStartForPatient(patient.timezone);
     // Auto-heal: si el paciente Prevention no está enlazado a un rolling
     // (ej. pacientes creados antes de este fix, o el programa Prevention
     // se creó después del alta), le asignamos el primer activo aquí en
@@ -168,9 +170,8 @@ export default async function PatientHome({ params }: { params: { id: string } }
   const hasAnyRolling = Boolean(accId || trnId);
 
   if (patient.programMode === "rolling" && hasAnyRolling) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const thisMonday = weekStartDate(today);
+    const today = todayForPatient(patient.timezone);
+    const thisMonday = weekStartForPatient(patient.timezone);
 
     // Calcular fecha de fin de suscripción (para avisos de caducidad)
     const subEnd = patient.subscriptionStartDate
@@ -208,10 +209,10 @@ export default async function PatientHome({ params }: { params: { id: string } }
 
     // Sesión individual de HOY (si el atleta ADVANCE tiene además un
     // ProgramAssignment activo — "trabajo específico" además del rolling).
-    const todayUtc = new Date();
-    todayUtc.setHours(0, 0, 0, 0);
+    // Rango "hoy" calculado en la TZ del paciente (UTC midnight → +1 día).
+    const todayUtc = todayForPatient(patient.timezone);
     const tomorrowUtc = new Date(todayUtc);
-    tomorrowUtc.setDate(todayUtc.getDate() + 1);
+    tomorrowUtc.setUTCDate(todayUtc.getUTCDate() + 1);
     // Buscamos TODAS las sesiones individuales de HOY (varios assignments
     // = varias sesiones el mismo día). Antes usábamos findFirst y solo se
     // veía la primera en el header morado.
@@ -409,10 +410,11 @@ export default async function PatientHome({ params }: { params: { id: string } }
   });
   const assignmentIndexEntries: Array<[string, number]> = allActiveAssignments.map((a, i) => [a.id, i]);
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // "Hoy" en la TZ del paciente. Un paciente en Bogotá a las 3am (10am Madrid)
+  // sigue viendo "hoy" como el mismo día que él, no el que aparece en Madrid.
+  const today = todayForPatient(patient.timezone);
   const tomorrow = new Date(today);
-  tomorrow.setDate(today.getDate() + 1);
+  tomorrow.setUTCDate(today.getUTCDate() + 1);
 
   const todaySessions = await prisma.programSession.findMany({
     where: {
