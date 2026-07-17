@@ -194,6 +194,24 @@ h1, h2, h3, h4, h5 {
   --p-red-text: #FCA5A5;
   color: var(--p-text);
 }
+
+/* Inputs y textareas dentro de la app del paciente:
+ * el .input global no fija color de texto y muchos navegadores dan
+ * fondo blanco por defecto → texto blanco (var(--p-text) en tema dark)
+ * sobre fondo blanco = invisible. Aquí forzamos color acorde al tema y
+ * fondo de la superficie 2 para que se vea bien en dark y light. */
+.patient-scope input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]),
+.patient-scope textarea,
+.patient-scope select {
+  background: var(--p-surface-2);
+  color: var(--p-text);
+  border-color: var(--p-border);
+}
+.patient-scope input::placeholder,
+.patient-scope textarea::placeholder {
+  color: var(--p-text-faint);
+}
+
 /* ── MODO CLARO PACIENTE · V2: foto con velo blanco fuerte + tarjetas sólidas ── */
 .patient-scope.patient-light {
   --p-text: #0A0A0A;
