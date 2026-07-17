@@ -1,12 +1,13 @@
 /**
- * POST /api/fisio-ai/chat — chat con Fisio IA.
+ * POST /api/fisio-ai/chat — chat con un agente concreto de Fisio IA.
  *
- * Body: { messages: [{role: "user" | "assistant", content: string}] }
+ * Body: { agentSlug: string, messages: [{role: "user" | "assistant", content: string}] }
  *   → devuelve { reply: string }
  *
- * Se envía como system prompt el brief guardado en FisioAiBrief. El model
- * usado es Claude Sonnet 4.6 (mayor calidad, ideal para brainstorming y
- * ayuda a fisios). Restricción: solo CEO mientras estamos en beta.
+ * El system prompt es el `brief` del agente indicado por `agentSlug`. Si el
+ * agente no existe o su brief está vacío, cae a un fallback minimalista.
+ * Modelo: Claude Sonnet 4.6 (calidad para brainstorming).
+ * Restricción: solo CEO mientras estamos en beta.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -27,9 +28,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "ANTHROPIC_API_KEY no configurado en el server" }, { status: 500 });
   }
 
-  const { messages } = await req.json().catch(() => ({}));
+  const { messages, agentSlug } = await req.json().catch(() => ({}));
   if (!Array.isArray(messages) || messages.length === 0) {
     return NextResponse.json({ error: "messages requerido" }, { status: 400 });
+  }
+  if (typeof agentSlug !== "string" || !agentSlug.trim()) {
+    return NextResponse.json({ error: "agentSlug requerido" }, { status: 400 });
   }
   const clean: ChatMessage[] = messages
     .filter((m: any) => (m?.role === "user" || m?.role === "assistant") && typeof m?.content === "string" && m.content.trim())
@@ -38,10 +42,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "sin mensajes válidos" }, { status: 400 });
   }
 
-  const brief = await (prisma as any).fisioAiBrief.findFirst({ orderBy: { createdAt: "asc" } });
-  const systemPrompt = (brief?.content ?? "").trim() ||
-    // Fallback minimalista si el CEO aún no ha guardado brief.
-    "Eres Fisio IA, asistente para el equipo de FisioFit. Ayudas a preparar llamadas de optimización y renovación, resolver casos de pacientes difíciles y redactar mensajes. Responde en español, breve y directo, con foco práctico.";
+  const agent = await (prisma as any).fisioAiAgent.findUnique({ where: { slug: agentSlug } });
+  const systemPrompt = (agent?.brief ?? "").trim() ||
+    "Eres Fisio IA, asistente para el equipo de FisioFit. Responde en español, breve y directo, con foco práctico.";
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",

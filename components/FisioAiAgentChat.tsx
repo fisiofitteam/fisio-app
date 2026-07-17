@@ -6,17 +6,35 @@ import { Send, Save, Trash2, Settings2, ChevronDown, ChevronUp, Loader2 } from "
 type ChatMessage = { role: "user" | "assistant"; content: string };
 
 /**
- * Panel de Fisio IA (versión CEO-only mientras probamos).
- * - Arriba (colapsable): editor del brief que sirve como system prompt.
- * - Debajo: chat transitorio. No persistimos las conversaciones para
- *   iterar rápido en la fase de tunning del brief. Al recargar se pierde.
+ * Chat con UN agente concreto de Fisio IA. Recibe el `slug` (para llamar
+ * al endpoint de chat con el agente correcto) y el brief inicial. El
+ * editor del brief está colapsable arriba — solo CEO por ahora, pero la
+ * UI ya está preparada para más adelante si abrimos a más roles.
+ *
+ * El chat es transitorio: no persistimos conversaciones mientras iteramos
+ * los briefs. Al recargar se pierde.
  */
-export function FisioAiPanel({ initialBrief }: { initialBrief: string }) {
+export function FisioAiAgentChat({
+  slug,
+  initialBrief,
+  initialName,
+  initialDescription,
+  initialIcon,
+}: {
+  slug: string;
+  initialBrief: string;
+  initialName: string;
+  initialDescription: string;
+  initialIcon: string;
+}) {
   const [brief, setBrief] = useState(initialBrief);
   const [briefSaved, setBriefSaved] = useState(initialBrief);
-  const [briefOpen, setBriefOpen] = useState(initialBrief.trim().length === 0);
-  const [savingBrief, setSavingBrief] = useState(false);
-  const [briefFeedback, setBriefFeedback] = useState<string | null>(null);
+  const [name, setName] = useState(initialName);
+  const [description, setDescription] = useState(initialDescription);
+  const [icon, setIcon] = useState(initialIcon);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -28,23 +46,23 @@ export function FisioAiPanel({ initialBrief }: { initialBrief: string }) {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, sending]);
 
-  async function saveBrief() {
-    setSavingBrief(true);
-    setBriefFeedback(null);
+  async function saveAgent() {
+    setSaving(true);
+    setFeedback(null);
     try {
-      const res = await fetch("/api/fisio-ai/brief", {
+      const res = await fetch(`/api/fisio-ai/agents/${slug}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: brief }),
+        body: JSON.stringify({ brief, name, description, icon }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Error");
       setBriefSaved(brief);
-      setBriefFeedback("✓ Brief guardado");
-      setTimeout(() => setBriefFeedback(null), 2000);
+      setFeedback("✓ Guardado");
+      setTimeout(() => setFeedback(null), 2000);
     } catch (e: any) {
-      setBriefFeedback(e?.message || "No se pudo guardar");
+      setFeedback(e?.message || "No se pudo guardar");
     }
-    setSavingBrief(false);
+    setSaving(false);
   }
 
   async function send() {
@@ -59,7 +77,7 @@ export function FisioAiPanel({ initialBrief }: { initialBrief: string }) {
       const res = await fetch("/api/fisio-ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: next }),
+        body: JSON.stringify({ agentSlug: slug, messages: next }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Error");
@@ -77,52 +95,78 @@ export function FisioAiPanel({ initialBrief }: { initialBrief: string }) {
     setChatError(null);
   }
 
-  const briefDirty = brief !== briefSaved;
+  const briefDirty = brief !== briefSaved || name !== initialName || description !== initialDescription || icon !== initialIcon;
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
-      {/* Brief editor */}
+      {/* Editor del agente (nombre + descripcion + icono + brief) */}
       <section className="card">
         <button
           type="button"
-          onClick={() => setBriefOpen((v) => !v)}
+          onClick={() => setEditorOpen((v) => !v)}
           className="w-full flex items-center justify-between gap-2"
         >
           <div className="flex items-center gap-2">
             <Settings2 size={16} className="text-neutral-500" />
-            <h2 className="font-medium text-sm">Brief del agente (system prompt)</h2>
+            <h2 className="font-medium text-sm">Editar agente</h2>
             {briefDirty && (
               <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
                 sin guardar
               </span>
             )}
           </div>
-          {briefOpen ? <ChevronUp size={16} className="text-neutral-500" /> : <ChevronDown size={16} className="text-neutral-500" />}
+          {editorOpen ? <ChevronUp size={16} className="text-neutral-500" /> : <ChevronDown size={16} className="text-neutral-500" />}
         </button>
-        {briefOpen && (
+        {editorOpen && (
           <div className="mt-3 space-y-3">
-            <p className="text-xs text-neutral-500">
-              Aquí defines qué es y cómo actúa Fisio IA. Se envía como system prompt en cada
-              conversación. Cambios se guardan al pulsar el botón.
-            </p>
-            <textarea
-              className="input text-sm font-mono"
-              rows={12}
-              placeholder="Ej: Eres Fisio IA, asistente para el equipo de FisioFit. Ayudas a preparar llamadas de optimización, resolver casos de pacientes difíciles..."
-              value={brief}
-              onChange={(e) => setBrief(e.target.value)}
-            />
+            <div className="grid grid-cols-[80px_1fr] gap-3 items-start">
+              <div>
+                <label className="text-xs text-neutral-500 block mb-1">Icono</label>
+                <input
+                  className="input text-2xl text-center"
+                  value={icon}
+                  onChange={(e) => setIcon(e.target.value)}
+                  maxLength={4}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-neutral-500 block mb-1">Nombre</label>
+                <input
+                  className="input text-sm font-medium"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">Descripción corta</label>
+              <input
+                className="input text-sm"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Frase que se ve debajo del nombre en la tarjeta"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">
+                Brief (system prompt del agente)
+              </label>
+              <textarea
+                className="input text-sm font-mono"
+                rows={14}
+                value={brief}
+                onChange={(e) => setBrief(e.target.value)}
+              />
+            </div>
             <div className="flex justify-between items-center gap-2">
-              <span className="text-xs text-neutral-500">
-                {briefFeedback}
-              </span>
+              <span className="text-xs text-neutral-500">{feedback}</span>
               <button
-                onClick={saveBrief}
-                disabled={savingBrief || !briefDirty}
+                onClick={saveAgent}
+                disabled={saving || !briefDirty}
                 className="btn btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-50"
               >
-                {savingBrief ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                {savingBrief ? "Guardando..." : "Guardar brief"}
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                {saving ? "Guardando..." : "Guardar cambios"}
               </button>
             </div>
           </div>
@@ -146,8 +190,8 @@ export function FisioAiPanel({ initialBrief }: { initialBrief: string }) {
         <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
           {messages.length === 0 && !sending && (
             <div className="text-center py-10 text-sm text-neutral-500">
-              <p>Empieza escribiendo algo abajo.</p>
-              <p className="text-xs mt-1">Ideas: "prepárame la llamada de renovación de X paciente", "ayúdame a redactar un mensaje para un cliente que quiere darse de baja", etc.</p>
+              <p>Empieza escribiendo abajo.</p>
+              <p className="text-xs mt-1">Cuenta el caso, pega datos concretos si los tienes, y verás cómo responde este agente con su brief.</p>
             </div>
           )}
           {messages.map((m, i) => (
@@ -160,7 +204,7 @@ export function FisioAiPanel({ initialBrief }: { initialBrief: string }) {
               }`}
             >
               <div className="text-[10px] uppercase tracking-wider font-bold opacity-60 mb-1">
-                {m.role === "user" ? "Tú" : "Fisio IA"}
+                {m.role === "user" ? "Tú" : name}
               </div>
               <div className="whitespace-pre-wrap leading-relaxed">{m.content}</div>
             </div>
