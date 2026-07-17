@@ -344,8 +344,9 @@ export function PatientHomeDark({
               href={href}
               className="block rounded-2xl p-5 mb-5 transition-transform active:scale-[0.98]"
               style={{
-                background: "linear-gradient(135deg, #7C3AED 0%, #5B21B6 100%)",
-                color: "#FAFAFA",
+                background: "linear-gradient(135deg, #FCD34D 0%, #B45309 100%)",
+                color: "#1A1400",
+                boxShadow: "0 8px 24px -8px rgba(180, 83, 9, 0.55)",
               }}
             >
               <div className="flex items-center justify-between gap-3">
@@ -634,7 +635,10 @@ function ActionCard({
   external?: boolean;
   badge?: number;
 }) {
-  const className = "block rounded-2xl px-3 py-3 transition-transform active:scale-95 relative";
+  // Mismo tamaño y layout que RollingActionCard de ADVANCE — icono grande
+  // arriba, texto centrado debajo. El flag `highlight` se conserva para
+  // pintar "Adaptar WOD" como CTA con fondo gradiente amarillo.
+  const className = "block rounded-2xl px-3 py-5 transition-transform active:scale-95 relative";
   const style = {
     background: highlight ? "linear-gradient(135deg, var(--p-accent) 0%, #F59E0B 100%)" : "var(--p-surface)",
     color: highlight ? "var(--p-accent-ink)" : "var(--p-text)",
@@ -656,19 +660,18 @@ function ActionCard({
           {badge > 9 ? "9+" : badge}
         </span>
       )}
-      <div className="flex items-center gap-2.5">
+      <div className="flex flex-col items-center text-center gap-2">
         <Icon
-          size={22}
+          size={28}
           strokeWidth={2}
-          className="flex-shrink-0"
           style={{ color: highlight ? "var(--p-accent-ink)" : "var(--p-accent)" }}
         />
-        <div className="min-w-0">
-          <div className="font-semibold text-sm leading-tight truncate" style={{ letterSpacing: "-0.02em" }}>
+        <div className="min-w-0 w-full">
+          <div className="font-semibold text-sm leading-tight" style={{ letterSpacing: "-0.02em" }}>
             {label}
           </div>
           <div
-            className="text-[10px] leading-tight truncate"
+            className="text-[11px] leading-tight mt-0.5 truncate"
             style={{
               color: highlight ? "rgba(10,10,10,0.7)" : "var(--p-text-dim)",
               letterSpacing: "-0.005em",
