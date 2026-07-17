@@ -327,6 +327,47 @@ export function PatientHomeDark({
           </p>
         </header>
 
+        {/* 🎯 Sesión de hoy — banner prominente arriba, mismo patrón que
+             el header morado de "Trabajo específico" en ADVANCE. Solo si
+             hay sesión hoy; si no, la "Próxima sesión" sigue apareciendo
+             en el bloque neutral más abajo. */}
+        {todaySessions.length > 0 && (() => {
+          const pending = todaySessions.filter((s) => !s.completed);
+          const allDone = pending.length === 0;
+          const href = pending.length === 1
+            ? `/paciente/${patient.id}/sesion/${pending[0].id}`
+            : allDone && todaySessions.length === 1
+              ? `/paciente/${patient.id}/sesion/${todaySessions[0].id}`
+              : `/paciente/${patient.id}/sesion-combinada-hoy`;
+          return (
+            <Link
+              href={href}
+              className="block rounded-2xl p-5 mb-5 transition-transform active:scale-[0.98]"
+              style={{
+                background: "linear-gradient(135deg, #7C3AED 0%, #5B21B6 100%)",
+                color: "#FAFAFA",
+              }}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-[10px] font-bold tracking-wider uppercase opacity-80 mb-1">
+                    Sesión de hoy
+                  </div>
+                  <div className="text-2xl font-bold flex items-center gap-2" style={{ letterSpacing: "-0.025em" }}>
+                    🎯 {allDone ? "¡Completada!" : "A entrenar"}
+                  </div>
+                  <div className="text-xs mt-1.5 font-medium opacity-80">
+                    {allDone
+                      ? "Pulsa para revisar tus respuestas"
+                      : "Pulsa para empezar"}
+                  </div>
+                </div>
+                <div className="text-2xl font-bold flex-shrink-0">→</div>
+              </div>
+            </Link>
+          );
+        })()}
+
         {/* Grid de accesos */}
         <div className="grid grid-cols-2 gap-3 mb-6">
           <ActionCard
@@ -378,7 +419,11 @@ export function PatientHomeDark({
           )}
         </div>
 
-        {/* Plan de hoy / próxima sesión - card destacada */}
+        {/* Plan de hoy / próxima sesión - card destacada.
+             Cuando SÍ hay sesión hoy, el banner morado de arriba ya la
+             muestra prominente — aquí solo hacemos el fallback "hoy
+             descansas + próxima sesión" para no duplicar. */}
+        {todaySessions.length === 0 && (
         <div
           id="plan-de-hoy"
           className="rounded-2xl p-4 mb-6 scroll-mt-4"
@@ -531,6 +576,7 @@ export function PatientHomeDark({
             );
           })()}
         </div>
+        )}
 
         {/* Cumplimiento */}
         {adherence && (
