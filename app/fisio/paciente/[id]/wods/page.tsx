@@ -92,9 +92,10 @@ export default async function PatientWodsTab({ params }: { params: { id: string 
           </p>
         ) : (
           (() => {
-            // Agrupamos por semana ISO (lunes UTC). Iteramos las sesiones
-            // ya ordenadas por completedAt desc, así el orden interno también
-            // queda de más reciente a más antiguo.
+            // Agrupamos por semana ISO (lunes UTC). Dentro de cada semana
+            // ordenamos las sesiones ASCendente (L → D) para leer la semana
+            // como un timeline vertical. Las semanas entre sí van de más
+            // reciente a más antigua.
             const groups = new Map<string, { monday: Date; items: typeof sessionsWithNotes }>();
             for (const s of sessionsWithNotes) {
               const base = s.completedAt ?? s.scheduledDate;
@@ -102,6 +103,14 @@ export default async function PatientWodsTab({ params }: { params: { id: string 
               const key = monday.toISOString();
               if (!groups.has(key)) groups.set(key, { monday, items: [] });
               groups.get(key)!.items.push(s);
+            }
+            // Sort interno L→D dentro de cada semana.
+            for (const g of groups.values()) {
+              g.items.sort((a, b) => {
+                const ta = new Date(a.scheduledDate ?? a.completedAt ?? 0).getTime();
+                const tb = new Date(b.scheduledDate ?? b.completedAt ?? 0).getTime();
+                return ta - tb;
+              });
             }
             const orderedWeeks = Array.from(groups.values()).sort(
               (a, b) => b.monday.getTime() - a.monday.getTime()
@@ -128,13 +137,21 @@ export default async function PatientWodsTab({ params }: { params: { id: string 
                       <div className="mt-3 border-t border-neutral-100 pt-3 space-y-3">
                         {items.map((s) => {
                           const workoutText = extractWorkoutText(s.tasksSnapshot);
+                          const when = new Date(s.scheduledDate ?? s.completedAt ?? Date.now());
+                          const dayName = when.toLocaleDateString("es-ES", { weekday: "long" });
+                          const dayDate = when.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
                           return (
                             <div key={s.id} className="rounded-lg border border-neutral-200 p-3 space-y-2">
                               <div className="flex justify-between items-baseline gap-2">
-                                <div className="font-medium text-sm">
-                                  {s.completedAt ? fDateTime(s.completedAt) : "—"}
+                                <div>
+                                  <div className="font-semibold text-sm capitalize">
+                                    {dayName} <span className="text-neutral-500 font-normal">· {dayDate}</span>
+                                  </div>
+                                  <div className="text-[11px] text-neutral-400 mt-0.5">
+                                    Completada {s.completedAt ? fDateTime(s.completedAt) : "—"}
+                                  </div>
                                 </div>
-                                <div className="text-xs text-neutral-500">
+                                <div className="text-xs text-neutral-500 text-right">
                                   {s.assignment.program.name}
                                 </div>
                               </div>
