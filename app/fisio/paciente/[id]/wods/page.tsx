@@ -8,6 +8,46 @@ function fDateTime(d: Date): string {
     " · " + new Date(d).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
 }
 
+/** Lunes UTC midnight de la semana que contiene la fecha dada. */
+function weekStartUtc(d: Date): Date {
+  const day = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const dow = day.getUTCDay(); // 0=Dom .. 6=Sab
+  const offset = dow === 0 ? -6 : 1 - dow;
+  day.setUTCDate(day.getUTCDate() + offset);
+  return day;
+}
+
+/** "L 12 – D 18 may 2026" o similar. Añade "· semana actual" si aplica. */
+function weekRangeLabel(mondayUtc: Date): string {
+  const sunday = new Date(mondayUtc);
+  sunday.setUTCDate(mondayUtc.getUTCDate() + 6);
+  const opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" };
+  const monStr = mondayUtc.toLocaleDateString("es-ES", opts);
+  const sunStr = sunday.toLocaleDateString("es-ES", { ...opts, year: "numeric" });
+  return `Semana del ${monStr} al ${sunStr}`;
+}
+
+/** Extrae de un tasksSnapshot (JSON string) el texto plano de los entrenos:
+ *  cada bloque WORKOUT/VIDEO como "Título\nbody...\n\nOtro título...". */
+function extractWorkoutText(snapshot: string | null): string {
+  if (!snapshot) return "";
+  try {
+    const tasks = JSON.parse(snapshot) as any[];
+    if (!Array.isArray(tasks)) return "";
+    const chunks: string[] = [];
+    for (const t of tasks) {
+      if (t?.type === "FORM" || t?.type === "EVOLUTION") continue;
+      const title = String(t?.title ?? "").trim();
+      const body = String(t?.bodyText ?? t?.description ?? "").trim();
+      const bit = [title, body].filter(Boolean).join("\n");
+      if (bit) chunks.push(bit);
+    }
+    return chunks.join("\n\n");
+  } catch {
+    return "";
+  }
+}
+
 export default async function PatientWodsTab({ params }: { params: { id: string } }) {
   const patient = await prisma.patient.findUnique({ where: { id: params.id }, select: { id: true } });
   if (!patient) notFound();
@@ -35,7 +75,7 @@ export default async function PatientWodsTab({ params }: { params: { id: string 
 
   return (
     <div>
-      {/* ── Registro de sesiones + sensaciones ── */}
+      {/* ── Registro de sesiones + sensaciones, AGRUPADO POR SEMANA ── */}
       <section className="mb-6">
         <header className="mb-3">
           <h2 className="font-medium">Registro de sensaciones tras sesión</h2>
@@ -51,27 +91,79 @@ export default async function PatientWodsTab({ params }: { params: { id: string 
             Al terminar cada sesión el paciente escribe cómo se ha sentido — aparecerá aquí en cuanto lo haga.
           </p>
         ) : (
-          <div className="space-y-2">
-            {sessionsWithNotes.map((s) => (
-              <details key={s.id} className="card group">
-                <summary className="flex justify-between items-center gap-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-                  <div className="min-w-0">
-                    <div className="font-medium text-sm">{s.completedAt ? fDateTime(s.completedAt) : "—"}</div>
-                    <div className="text-xs text-neutral-500 truncate mt-0.5">
-                      {s.assignment.program.name}
-                    </div>
-                  </div>
-                  <span className="text-neutral-400 text-xs group-open:rotate-180 transition-transform">▼</span>
-                </summary>
-                <div className="mt-3 border-t border-neutral-100 pt-3">
-                  <div className="text-[11px] uppercase tracking-wide text-neutral-500 font-medium mb-1">
-                    Sensaciones del paciente
-                  </div>
-                  <p className="text-sm text-neutral-800 whitespace-pre-wrap">{s.patientNotes}</p>
-                </div>
-              </details>
-            ))}
-          </div>
+          (() => {
+            // Agrupamos por semana ISO (lunes UTC). Iteramos las sesiones
+            // ya ordenadas por completedAt desc, así el orden interno también
+            // queda de más reciente a más antiguo.
+            const groups = new Map<string, { monday: Date; items: typeof sessionsWithNotes }>();
+            for (const s of sessionsWithNotes) {
+              const base = s.completedAt ?? s.scheduledDate;
+              const monday = weekStartUtc(new Date(base));
+              const key = monday.toISOString();
+              if (!groups.has(key)) groups.set(key, { monday, items: [] });
+              groups.get(key)!.items.push(s);
+            }
+            const orderedWeeks = Array.from(groups.values()).sort(
+              (a, b) => b.monday.getTime() - a.monday.getTime()
+            );
+            const currentWeekKey = weekStartUtc(new Date()).toISOString();
+            return (
+              <div className="space-y-2">
+                {orderedWeeks.map(({ monday, items }) => {
+                  const isCurrent = monday.toISOString() === currentWeekKey;
+                  return (
+                    <details key={monday.toISOString()} className="card group" open={isCurrent}>
+                      <summary className="flex justify-between items-center gap-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                        <div className="min-w-0">
+                          <div className="font-medium text-sm">
+                            {weekRangeLabel(monday)}
+                            {isCurrent && <span className="ml-2 text-[10px] font-bold uppercase text-emerald-700">semana actual</span>}
+                          </div>
+                          <div className="text-xs text-neutral-500 mt-0.5">
+                            {items.length} {items.length === 1 ? "sesión con feedback" : "sesiones con feedback"}
+                          </div>
+                        </div>
+                        <span className="text-neutral-400 text-xs group-open:rotate-180 transition-transform">▼</span>
+                      </summary>
+                      <div className="mt-3 border-t border-neutral-100 pt-3 space-y-3">
+                        {items.map((s) => {
+                          const workoutText = extractWorkoutText(s.tasksSnapshot);
+                          return (
+                            <div key={s.id} className="rounded-lg border border-neutral-200 p-3 space-y-2">
+                              <div className="flex justify-between items-baseline gap-2">
+                                <div className="font-medium text-sm">
+                                  {s.completedAt ? fDateTime(s.completedAt) : "—"}
+                                </div>
+                                <div className="text-xs text-neutral-500">
+                                  {s.assignment.program.name}
+                                </div>
+                              </div>
+                              {workoutText && (
+                                <div>
+                                  <div className="text-[11px] uppercase tracking-wide text-neutral-500 font-medium mb-1">
+                                    Entreno de la sesión
+                                  </div>
+                                  <pre className="text-xs text-neutral-800 whitespace-pre-wrap font-mono bg-neutral-50 rounded-lg p-3">
+                                    {workoutText}
+                                  </pre>
+                                </div>
+                              )}
+                              <div>
+                                <div className="text-[11px] uppercase tracking-wide text-neutral-500 font-medium mb-1">
+                                  Sensaciones del paciente
+                                </div>
+                                <p className="text-sm text-neutral-800 whitespace-pre-wrap">{s.patientNotes}</p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </details>
+                  );
+                })}
+              </div>
+            );
+          })()
         )}
       </section>
 
