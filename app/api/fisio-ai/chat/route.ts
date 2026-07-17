@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
+import { buildPatientBrief } from "@/lib/patient-brief";
 
 const MODEL = "claude-sonnet-4-6";
 const MAX_TOKENS = 2048;
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "ANTHROPIC_API_KEY no configurado en el server" }, { status: 500 });
   }
 
-  const { messages, agentSlug } = await req.json().catch(() => ({}));
+  const { messages, agentSlug, patientId } = await req.json().catch(() => ({}));
   if (!Array.isArray(messages) || messages.length === 0) {
     return NextResponse.json({ error: "messages requerido" }, { status: 400 });
   }
@@ -43,8 +44,18 @@ export async function POST(req: NextRequest) {
   }
 
   const agent = await (prisma as any).fisioAiAgent.findUnique({ where: { slug: agentSlug } });
-  const systemPrompt = (agent?.brief ?? "").trim() ||
+  let systemPrompt = (agent?.brief ?? "").trim() ||
     "Eres Fisio IA, asistente para el equipo de FisioFit. Responde en español, breve y directo, con foco práctico.";
+
+  // Si el agente admite contexto de paciente y el cliente envió patientId,
+  // añadimos la ficha completa al final del system prompt. Así el agente
+  // puede referirse a datos concretos (adaptaciones, PRs, últimos WODs).
+  if (agent?.usesPatientContext && typeof patientId === "string" && patientId) {
+    const brief = await buildPatientBrief(patientId).catch(() => null);
+    if (brief) {
+      systemPrompt += `\n\n---\n\n**Contexto del paciente activo** (el fisio te está preguntando sobre este paciente concreto — usa estos datos siempre que sean relevantes):\n\n${brief}`;
+    }
+  }
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",

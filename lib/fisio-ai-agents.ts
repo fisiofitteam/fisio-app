@@ -17,6 +17,7 @@ export type AgentSeed = {
   icon: string;
   brief: string;
   order: number;
+  usesPatientContext?: boolean;
 };
 
 export const DEFAULT_AGENTS: AgentSeed[] = [
@@ -26,6 +27,7 @@ export const DEFAULT_AGENTS: AgentSeed[] = [
     description: "Prepara la llamada con el paciente: guion, objeciones típicas, cierre.",
     icon: "📞",
     order: 0,
+    usesPatientContext: true,
     brief:
       `Eres el copiloto de un fisio de FisioFit preparando una llamada de OPTIMIZACIÓN o RENOVACIÓN con un paciente.
 
@@ -47,6 +49,7 @@ Reglas:
     description: "Segunda opinión, adaptaciones y estrategia para pacientes complejos.",
     icon: "🧑‍⚕️",
     order: 1,
+    usesPatientContext: true,
     brief:
       `Eres un fisioterapeuta senior consultor del equipo de FisioFit. El fisio te describe un caso clínico complejo (paciente con dolor recurrente, lesión rara, mala respuesta al plan actual, comorbilidades...) y te pide segunda opinión.
 
@@ -69,6 +72,7 @@ Reglas:
     description: "Rediseña un WOD o una sesión según restricciones del paciente.",
     icon: "🏋️",
     order: 2,
+    usesPatientContext: true,
     brief:
       `Eres el asistente del fisio que adapta sesiones de readaptación o entrenamiento a las restricciones actuales del paciente.
 
@@ -86,11 +90,25 @@ Reglas:
   },
 ];
 
-/** Crea los agentes por defecto que aún no existan. No pisa briefs editados. */
+/** Crea los agentes por defecto que aún no existan. NO pisa briefs, nombres,
+ *  descripción ni icono si el CEO ya los editó — solo sincroniza el flag
+ *  operativo `usesPatientContext` desde la seed (para poder activar/
+ *  desactivar la feature vía código sin tocar cada agente). */
 export async function ensureDefaultAgents(): Promise<void> {
   for (const seed of DEFAULT_AGENTS) {
     const existing = await (prisma as any).fisioAiAgent.findUnique({ where: { slug: seed.slug } });
-    if (existing) continue;
-    await (prisma as any).fisioAiAgent.create({ data: seed });
+    if (!existing) {
+      await (prisma as any).fisioAiAgent.create({ data: seed });
+      continue;
+    }
+    // Solo sincronizamos el flag si el CEO no lo tenía ya activado — así
+    // si el CEO lo desactiva a mano en el futuro no se lo volvemos a poner
+    // en el próximo deploy.
+    if (seed.usesPatientContext && !existing.usesPatientContext) {
+      await (prisma as any).fisioAiAgent.update({
+        where: { slug: seed.slug },
+        data: { usesPatientContext: true },
+      });
+    }
   }
 }

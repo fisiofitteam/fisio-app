@@ -2960,16 +2960,17 @@ model FisioAiBrief {
 }
 
 model FisioAiAgent {
-  id          String   @id @default(cuid())
-  slug        String   @unique
-  name        String
-  description String
-  icon        String
-  brief       String
-  order       Int      @default(0)
-  updatedById String?
-  updatedAt   DateTime @updatedAt
-  createdAt   DateTime @default(now())
+  id                 String   @id @default(cuid())
+  slug               String   @unique
+  name               String
+  description        String
+  icon               String
+  brief              String
+  order              Int      @default(0)
+  usesPatientContext Boolean  @default(false)
+  updatedById        String?
+  updatedAt          DateTime @updatedAt
+  createdAt          DateTime @default(now())
 
   @@index([order])
 }

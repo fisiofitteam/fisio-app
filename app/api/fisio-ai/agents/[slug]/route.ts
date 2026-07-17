@@ -34,6 +34,7 @@ export async function PUT(req: NextRequest, { params }: { params: { slug: string
   if (typeof b?.description === "string") data.description = b.description.trim();
   if (typeof b?.icon === "string" && b.icon.trim()) data.icon = b.icon.trim();
   if (typeof b?.brief === "string") data.brief = b.brief;
+  if (typeof b?.usesPatientContext === "boolean") data.usesPatientContext = b.usesPatientContext;
 
   const updated = await (prisma as any).fisioAiAgent.update({
     where: { slug: params.slug },

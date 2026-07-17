@@ -36,6 +36,7 @@ export default async function FisioIaAgentPage({ params }: { params: { slug: str
         initialName={agent.name}
         initialDescription={agent.description}
         initialIcon={agent.icon}
+        usesPatientContext={!!agent.usesPatientContext}
       />
     </main>
   );

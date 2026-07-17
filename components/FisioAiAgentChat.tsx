@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Send, Save, Trash2, Settings2, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { FisioAiPatientPicker, type PickedPatient } from "@/components/FisioAiPatientPicker";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
 
@@ -20,12 +21,14 @@ export function FisioAiAgentChat({
   initialName,
   initialDescription,
   initialIcon,
+  usesPatientContext,
 }: {
   slug: string;
   initialBrief: string;
   initialName: string;
   initialDescription: string;
   initialIcon: string;
+  usesPatientContext: boolean;
 }) {
   const [brief, setBrief] = useState(initialBrief);
   const [briefSaved, setBriefSaved] = useState(initialBrief);
@@ -35,6 +38,9 @@ export function FisioAiAgentChat({
   const [editorOpen, setEditorOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+
+  const [patient, setPatient] = useState<PickedPatient | null>(null);
+  const [usesPatient, setUsesPatient] = useState(usesPatientContext);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -53,7 +59,7 @@ export function FisioAiAgentChat({
       const res = await fetch(`/api/fisio-ai/agents/${slug}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ brief, name, description, icon }),
+        body: JSON.stringify({ brief, name, description, icon, usesPatientContext: usesPatient }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Error");
       setBriefSaved(brief);
@@ -77,7 +83,11 @@ export function FisioAiAgentChat({
       const res = await fetch("/api/fisio-ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agentSlug: slug, messages: next }),
+        body: JSON.stringify({
+          agentSlug: slug,
+          messages: next,
+          patientId: usesPatient ? (patient?.id ?? null) : null,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Error");
@@ -95,7 +105,7 @@ export function FisioAiAgentChat({
     setChatError(null);
   }
 
-  const briefDirty = brief !== briefSaved || name !== initialName || description !== initialDescription || icon !== initialIcon;
+  const briefDirty = brief !== briefSaved || name !== initialName || description !== initialDescription || icon !== initialIcon || usesPatient !== usesPatientContext;
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
@@ -147,6 +157,18 @@ export function FisioAiAgentChat({
                 placeholder="Frase que se ve debajo del nombre en la tarjeta"
               />
             </div>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={usesPatient}
+                onChange={(e) => setUsesPatient(e.target.checked)}
+                className="w-4 h-4 accent-neutral-900"
+              />
+              <span>Este agente puede leer la ficha completa de un paciente</span>
+            </label>
+            <p className="text-[11px] text-neutral-500 -mt-2">
+              Al activar, el chat mostrará un buscador con lupa. Al elegir un paciente, se adjuntará su ficha (anamnesis, adaptaciones, PRs, últimas sesiones y métricas) al brief.
+            </p>
             <div>
               <label className="text-xs text-neutral-500 block mb-1">
                 Brief (system prompt del agente)
@@ -186,6 +208,19 @@ export function FisioAiAgentChat({
             </button>
           )}
         </div>
+
+        {/* Selector de paciente — solo si el agente lo admite. Al elegir,
+            su ficha completa se adjunta al system prompt en cada request. */}
+        {usesPatient && (
+          <div className="mb-3">
+            <FisioAiPatientPicker selected={patient} onChange={setPatient} />
+            {patient && (
+              <p className="text-[11px] text-neutral-500 mt-1.5">
+                💡 Estoy leyendo la ficha completa (anamnesis, adaptaciones, PRs, últimas sesiones y métricas) para responder con contexto real de este paciente.
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
           {messages.length === 0 && !sending && (
