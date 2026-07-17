@@ -35,22 +35,43 @@ export default async function PatientFormsTab({ params }: { params: { id: string
     orderBy: { completedAt: "desc" },
   });
 
-  // Solo sesiones con FORM completado
+  // Parseo defensivo de questions: los snapshots modernos guardan el
+  // campo ya como array (SessionRunner también lo maneja así). Los
+  // snapshots antiguos lo guardaban como string JSON. Si viene otra cosa
+  // devolvemos array vacío en lugar de crashear la página entera.
+  function parseQuestions(raw: unknown): any[] {
+    if (Array.isArray(raw)) return raw;
+    if (typeof raw === "string" && raw.trim()) {
+      try {
+        const arr = JSON.parse(raw);
+        return Array.isArray(arr) ? arr : [];
+      } catch { return []; }
+    }
+    return [];
+  }
+
+  // Solo sesiones con FORM completado. Envolvemos todo en try por sesión —
+  // un snapshot corrupto no debe romper la pestaña entera.
   const formSessions = sessions
     .map((s) => {
-      const tasks = JSON.parse(s.tasksSnapshot) as any[];
-      const responses = s.responses ? JSON.parse(s.responses) : {};
-      const formTask = tasks.find((t) => t.type === "FORM" && responses[t.id]);
-      if (!formTask) return null;
-      return {
-        sessionId: s.id,
-        completedAt: s.completedAt,
-        formReviewedAt: s.formReviewedAt,
-        programName: s.assignment.program.name,
-        formTitle: formTask.title,
-        questions: formTask.questions ? JSON.parse(formTask.questions) : [],
-        responses: responses[formTask.id],
-      };
+      try {
+        const tasks = JSON.parse(s.tasksSnapshot) as any[];
+        const responses = s.responses ? JSON.parse(s.responses) : {};
+        const formTask = tasks.find((t) => t.type === "FORM" && responses[t.id]);
+        if (!formTask) return null;
+        return {
+          sessionId: s.id,
+          completedAt: s.completedAt,
+          formReviewedAt: s.formReviewedAt,
+          programName: s.assignment.program.name,
+          formTitle: formTask.title,
+          questions: parseQuestions(formTask.questions),
+          responses: responses[formTask.id],
+        };
+      } catch (e) {
+        console.error("[formularios] snapshot corrupto sesion", s.id, e);
+        return null;
+      }
     })
     .filter(Boolean) as any[];
 
