@@ -29,7 +29,7 @@ export async function buildPatientBrief(patientId: string): Promise<string | nul
   });
   if (!patient) return null;
 
-  const [adaptations, wodLogs, metrics, activeAssignments, prs, clinicalCase, sessions] = await Promise.all([
+  const [adaptations, wodLogs, metrics, activeAssignments, prs, clinicalCase, sessions, sessionsWithNotes] = await Promise.all([
     prisma.patientAdaptation.findMany({
       where: { patientId, state: { not: "OK" } },
       include: { movement: { include: { category: true } } },
@@ -59,6 +59,17 @@ export async function buildPatientBrief(patientId: string): Promise<string | nul
       orderBy: { scheduledDate: "desc" },
       take: 6,
     }),
+    // Sesiones con sensaciones del paciente — feedback subjetivo tras
+    // completar (nuevo flujo obligatorio en RECUPERA/CONSOLIDA).
+    prisma.programSession.findMany({
+      where: {
+        assignment: { patientId },
+        patientNotes: { not: null },
+        completedAt: { not: null },
+      },
+      orderBy: { completedAt: "desc" },
+      take: 8,
+    }).catch(() => [] as any[]),
   ]);
 
   const lines: string[] = [];
@@ -133,6 +144,15 @@ export async function buildPatientBrief(patientId: string): Promise<string | nul
     for (const w of wodLogs) {
       const raw = truncate(w.rawText ?? "", 120);
       lines.push(`- ${fDate(w.submittedAt)}: ${raw}`);
+    }
+  }
+
+  if (sessionsWithNotes && sessionsWithNotes.length > 0) {
+    lines.push("");
+    lines.push("## Sensaciones tras sesión (últimas)");
+    for (const s of sessionsWithNotes as any[]) {
+      const when = fDate(s.completedAt);
+      lines.push(`- ${when}: ${truncate(s.patientNotes ?? "", 300)}`);
     }
   }
 

@@ -42,9 +42,9 @@ const SECTIONS = [
   },
   {
     id: "wods",
-    label: "WODs",
+    label: "Readaptación y WODs",
     icon: "⚡",
-    desc: "Últimos WODs registrados",
+    desc: "Sensaciones tras sesión y WODs registrados",
   },
 ];
 

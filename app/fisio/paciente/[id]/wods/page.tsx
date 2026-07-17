@@ -12,14 +12,69 @@ export default async function PatientWodsTab({ params }: { params: { id: string 
   const patient = await prisma.patient.findUnique({ where: { id: params.id }, select: { id: true } });
   if (!patient) notFound();
 
-  const logs = await prisma.wodLog.findMany({
-    where: { patientId: params.id },
-    orderBy: { submittedAt: "desc" },
-    take: 50,
-  });
+  const [logs, sessionsWithNotes] = await Promise.all([
+    prisma.wodLog.findMany({
+      where: { patientId: params.id },
+      orderBy: { submittedAt: "desc" },
+      take: 50,
+    }),
+    // Sesiones completadas de RECUPERA/CONSOLIDA con sensaciones del paciente.
+    // Se rellena con el textarea obligatorio del nuevo botón "Marcar como
+    // completada con mis sensaciones" en el runner de sesión.
+    prisma.programSession.findMany({
+      where: {
+        assignment: { patientId: params.id },
+        patientNotes: { not: null },
+        completedAt: { not: null },
+      },
+      orderBy: { completedAt: "desc" },
+      take: 40,
+      include: { assignment: { include: { program: { select: { name: true } } } } },
+    }),
+  ]);
 
   return (
     <div>
+      {/* ── Registro de sesiones + sensaciones ── */}
+      <section className="mb-6">
+        <header className="mb-3">
+          <h2 className="font-medium">Registro de sensaciones tras sesión</h2>
+          <p className="text-xs text-neutral-500 mt-0.5">
+            {sessionsWithNotes.length === 0
+              ? "Todavía no hay sensaciones registradas."
+              : `${sessionsWithNotes.length} ${sessionsWithNotes.length === 1 ? "sesión con feedback" : "sesiones con feedback"}`}
+          </p>
+        </header>
+
+        {sessionsWithNotes.length === 0 ? (
+          <p className="text-sm text-neutral-500 text-center py-6 card">
+            Al terminar cada sesión el paciente escribe cómo se ha sentido — aparecerá aquí en cuanto lo haga.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {sessionsWithNotes.map((s) => (
+              <details key={s.id} className="card group">
+                <summary className="flex justify-between items-center gap-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                  <div className="min-w-0">
+                    <div className="font-medium text-sm">{s.completedAt ? fDateTime(s.completedAt) : "—"}</div>
+                    <div className="text-xs text-neutral-500 truncate mt-0.5">
+                      {s.assignment.program.name}
+                    </div>
+                  </div>
+                  <span className="text-neutral-400 text-xs group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <div className="mt-3 border-t border-neutral-100 pt-3">
+                  <div className="text-[11px] uppercase tracking-wide text-neutral-500 font-medium mb-1">
+                    Sensaciones del paciente
+                  </div>
+                  <p className="text-sm text-neutral-800 whitespace-pre-wrap">{s.patientNotes}</p>
+                </div>
+              </details>
+            ))}
+          </div>
+        )}
+      </section>
+
       <header className="mb-4">
         <h2 className="font-medium">WODs registrados</h2>
         <p className="text-xs text-neutral-500 mt-0.5">

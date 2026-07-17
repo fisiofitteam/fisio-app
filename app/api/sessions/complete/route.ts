@@ -3,13 +3,19 @@ import { prisma } from "@/lib/prisma";
 import { materializePatientMetrics } from "@/lib/metric-definitions";
 
 export async function POST(req: NextRequest) {
-  const { sessionId, responses } = await req.json();
+  const { sessionId, responses, patientNotes } = await req.json();
+
+  // Sensaciones del paciente al terminar la sesión (nuevo flujo para
+  // RECUPERA/CONSOLIDA). Trimeamos y descartamos si viene vacío/muy corto.
+  const notes = typeof patientNotes === "string" ? patientNotes.trim() : "";
+  const notesToSave = notes.length > 0 ? notes : null;
 
   const session = await prisma.programSession.update({
     where: { id: sessionId },
     data: {
       completedAt: new Date(),
       responses: JSON.stringify(responses ?? {}),
+      patientNotes: notesToSave,
     },
     include: { assignment: true },
   });

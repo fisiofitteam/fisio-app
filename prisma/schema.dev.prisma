@@ -773,6 +773,7 @@ model ProgramSession {
   // Estado completado por el paciente: JSON con respuestas por tarea
   completedAt   DateTime?
   responses     String?                              // JSON: {taskId: {...respuestas}}
+  patientNotes  String?                              // Sensaciones del paciente tras completar
 
   // Revisión por el fisio (solo aplica si la sesión tenía formularios completados)
   formReviewedAt DateTime?

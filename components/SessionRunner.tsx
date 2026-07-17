@@ -85,18 +85,19 @@ export function SessionRunner({
     return false;
   }
 
+  // Sensaciones del paciente al terminar la sesión (nuevo flujo). Se
+  // guarda como programSession.patientNotes y sustituye al antiguo
+  // redirect al grupo de WhatsApp. Obligatorio ≥20 caracteres.
+  const [patientNotes, setPatientNotes] = useState("");
+  const NOTES_MIN = 20;
+
   async function complete() {
     setSaving(true);
     await fetch("/api/sessions/complete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId, responses }),
+      body: JSON.stringify({ sessionId, responses, patientNotes: patientNotes.trim() }),
     });
-    // Tras completar, llevar al grupo de seguimiento para dar feedback.
-    if (whatsappUrl) {
-      window.location.href = whatsappUrl;
-      return;
-    }
     router.push(`/paciente/${patientId}`);
     router.refresh();
   }
@@ -249,26 +250,37 @@ export function SessionRunner({
       ))}
 
       {!completed && (
-        <button
-          onClick={complete}
-          disabled={saving}
-          className="w-full font-semibold rounded-lg py-3 text-sm disabled:opacity-60"
-          style={{ background: "var(--p-accent)", color: "var(--p-accent-ink)" }}
+        <div
+          className="rounded-2xl p-4 space-y-2"
+          style={{ background: "var(--p-surface)", border: "1px solid var(--p-border)" }}
         >
-          {saving ? "Guardando…" : whatsappUrl ? "✓ Marcar como completada y dar feedback" : "✓ Marcar como completada"}
-        </button>
-      )}
-
-      {completed && whatsappUrl && (
-        <a
-          href={whatsappUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="w-full font-semibold rounded-lg py-3 text-sm flex items-center justify-center gap-2"
-          style={{ background: "#25D366", color: "#FFFFFF" }}
-        >
-          Ir a mi grupo de seguimiento
-        </a>
+          <div>
+            <label className="text-sm font-semibold block" style={{ color: "var(--p-text)" }}>
+              ¿Cómo te has sentido en esta sesión?
+            </label>
+            <p className="text-xs mt-0.5" style={{ color: "var(--p-text-dim)" }}>
+              Detalla las sensaciones que has tenido durante esta sesión — a tu fisio le sirve para ajustar tu plan.
+            </p>
+          </div>
+          <textarea
+            className="input text-sm"
+            rows={4}
+            placeholder="Ej: he notado cierta molestia en el hombro derecho durante los press, el resto sin dolor…"
+            value={patientNotes}
+            onChange={(e) => setPatientNotes(e.target.value)}
+          />
+          <div className="text-[11px] text-right" style={{ color: patientNotes.trim().length >= NOTES_MIN ? "var(--p-text-dim)" : "var(--p-text-faint)" }}>
+            {patientNotes.trim().length}/{NOTES_MIN} mínimo
+          </div>
+          <button
+            onClick={complete}
+            disabled={saving || patientNotes.trim().length < NOTES_MIN}
+            className="w-full font-semibold rounded-lg py-3 text-sm disabled:opacity-60"
+            style={{ background: "var(--p-accent)", color: "var(--p-accent-ink)" }}
+          >
+            {saving ? "Guardando…" : "✓ Marcar como completada con mis sensaciones"}
+          </button>
+        </div>
       )}
     </div>
   );
