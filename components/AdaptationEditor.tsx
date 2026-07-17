@@ -61,7 +61,12 @@ export function AdaptationEditor({
   );
   const [editingMov, setEditingMov] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set());
+  // Por defecto TODAS las categorías arrancan colapsadas — el fisio abre
+  // solo la que quiere editar. Antes venían desplegadas y era un tocho
+  // para encontrar un movimiento concreto.
+  const [collapsedCats, setCollapsedCats] = useState<Set<string>>(
+    () => new Set(categories.map((c) => c.id))
+  );
   const [applying, setApplying] = useState(false);
 
   // Selector de perfil/nivel
