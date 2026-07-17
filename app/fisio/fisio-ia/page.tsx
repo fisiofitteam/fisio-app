@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 import { ensureDefaultAgents } from "@/lib/fisio-ai-agents";
+import { FisioAiLanding } from "@/components/FisioAiLanding";
 
 export const dynamic = "force-dynamic";
 
@@ -30,23 +30,16 @@ export default async function FisioIaLandingPage() {
         </p>
       </header>
 
-      <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-3">
-        {agents.map((a: any) => (
-          <Link
-            key={a.id}
-            href={`/fisio/fisio-ia/${a.slug}`}
-            className="group card hover:border-neutral-900 hover:shadow-md transition-all p-5 flex items-start gap-4"
-          >
-            <div className="text-4xl flex-shrink-0">{a.icon}</div>
-            <div className="flex-1 min-w-0">
-              <h2 className="font-semibold text-base group-hover:underline">{a.name}</h2>
-              <p className="text-sm text-neutral-500 mt-1 leading-snug">{a.description}</p>
-              <div className="text-xs text-neutral-400 mt-3 inline-flex items-center gap-1">
-                Abrir chat →
-              </div>
-            </div>
-          </Link>
-        ))}
+      <div className="max-w-4xl mx-auto">
+        <FisioAiLanding
+          initialAgents={agents.map((a: any) => ({
+            id: a.id,
+            slug: a.slug,
+            name: a.name,
+            description: a.description,
+            icon: a.icon,
+          }))}
+        />
       </div>
     </main>
   );
