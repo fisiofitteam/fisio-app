@@ -2743,3 +2743,11 @@ model ContentStoryTemplate {
   @@index([createdById, updatedAt])
 }
 
+model FisioAiBrief {
+  id          String   @id @default(cuid())
+  content     String
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+}
+

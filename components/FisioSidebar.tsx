@@ -27,6 +27,7 @@ import {
   Zap,
   MessageSquare,
   Megaphone,
+  Brain,
   LucideIcon,
 } from "lucide-react";
 
@@ -58,11 +59,12 @@ const RECURSOS: Item = { id: "recursos", label: "Recursos", Icon: Package, href:
 const FINANZAS: Item = { id: "finanzas", label: "Cuadro de mandos", Icon: Gauge, href: "/fisio/finanzas/metricas-negocio", match: (p) => p.startsWith("/fisio/finanzas") };
 const EQUIPO: Item = { id: "equipo", label: "Equipo", Icon: UserCog, href: "/fisio/equipo", match: (p) => p.startsWith("/fisio/equipo") };
 const CHAT: Item = { id: "chat", label: "Chat", Icon: MessageSquare, href: "/fisio/chat", match: (p) => p.startsWith("/fisio/chat") };
+const FISIO_IA: Item = { id: "fisio-ia", label: "Fisio IA", Icon: Brain, href: "/fisio/fisio-ia", match: (p) => p.startsWith("/fisio/fisio-ia") };
 const AJUSTES: Item = { id: "ajustes", label: "Ajustes", Icon: Settings, href: "/fisio/ajustes", match: (p) => p.startsWith("/fisio/ajustes") };
 
 function itemsForRole(role: string): Item[] {
   if (role === "ceo") {
-    return [PANEL, PACIENTES, ADVANCE, LLAMADAS_VENTA, CONTENIDO, ANUNCIOS, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, RECURSOS, FINANZAS, EQUIPO, CHAT, AJUSTES];
+    return [PANEL, PACIENTES, ADVANCE, LLAMADAS_VENTA, CONTENIDO, ANUNCIOS, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, RECURSOS, FINANZAS, EQUIPO, CHAT, FISIO_IA, AJUSTES];
   }
   if (role === "head_success") {
     return [PANEL, PACIENTES, ADVANCE, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, CHAT, AJUSTES];
