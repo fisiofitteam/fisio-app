@@ -1518,11 +1518,14 @@ model Session {
 // Códigos de un solo uso para login del paciente (6 dígitos numéricos)
 model LoginCode {
   id        String   @id @default(cuid())
-  email     String                                    // a quién va dirigido
-  codeHash  String                                    // hash del código (nunca guardamos el plano)
+  email     String
+  codeHash  String
   expiresAt DateTime
   consumed  Boolean  @default(false)
-  attempts  Int      @default(0)                      // intentos fallidos antes de invalidar
+  attempts  Int      @default(0)
+  sentOk    Boolean?
+  sentError String?
+  sentTo    String?
   createdAt DateTime @default(now())
 
   @@index([email, expiresAt])

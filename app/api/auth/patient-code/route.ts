@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
   const code = generateNumericCode(6);
   const expires = new Date(Date.now() + CODE_EXPIRY_MINUTES * 60 * 1000);
 
-  await prisma.loginCode.create({
+  const login = await prisma.loginCode.create({
     data: {
       email: normalized,
       codeHash: hashCode(code),
@@ -66,8 +66,21 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  const emailRes: any = await emailLoginCode({ to: patient.email!, code, fullName: patient.fullName });
-  console.log("[patient-code] sendCode →", patient.email, "ok:", emailRes?.ok, "err:", emailRes?.error ?? "-");
+  const to = patient.email!;
+  const emailRes: any = await emailLoginCode({ to, code, fullName: patient.fullName });
+  console.log("[patient-code] sendCode →", to, "ok:", emailRes?.ok, "err:", emailRes?.error ?? "-");
+
+  // Guardamos el resultado del envío para poder auditar cuando el paciente
+  // reporta "no me llega el código". Fire-and-forget; si falla el update
+  // no queremos romper el login.
+  await prisma.loginCode.update({
+    where: { id: login.id },
+    data: {
+      sentTo: to,
+      sentOk: !!emailRes?.ok,
+      sentError: emailRes?.error ?? null,
+    },
+  }).catch(() => {});
 
   // Si el debug=1 se pide explícitamente, devolvemos el resultado real para
   // que el CEO pueda ver el motivo del fallo. En flujo normal nunca lo pasa el
