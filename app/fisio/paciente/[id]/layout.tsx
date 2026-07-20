@@ -12,6 +12,7 @@ import { PatientAccessLinkButton } from "@/components/PatientAccessLinkButton";
 import { SendLoginCodeButton } from "@/components/SendLoginCodeButton";
 import { MarkAsLegacyButton } from "@/components/MarkAsLegacyButton";
 import { PatientAgendaButton } from "@/components/PatientAgendaButton";
+import { PatientAlertsCard } from "@/components/PatientAlertsCard";
 import { calculateAdherence } from "@/lib/adherence";
 import { getActiveProfessional } from "@/lib/session";
 import { parseTargetRoles, templateVisibleFor, type ResourceRole } from "@/lib/resource-roles";
@@ -162,7 +163,10 @@ export default async function PatientLayout({
             </Link>
           </div>
         </div>
-        <main className="flex-1 min-w-0">{children}</main>
+        <main className="flex-1 min-w-0">
+          <PatientAlertsCard patientId={patient.id} />
+          {children}
+        </main>
       </div>
     </div>
   );

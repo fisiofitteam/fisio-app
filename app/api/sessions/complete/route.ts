@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { materializePatientMetrics } from "@/lib/metric-definitions";
+import { classifyPatientNote } from "@/lib/ai-classify-patient-notes";
+import { createPatientAlert } from "@/lib/patient-alerts";
 
 export async function POST(req: NextRequest) {
   const { sessionId, responses, patientNotes } = await req.json();
@@ -19,6 +21,33 @@ export async function POST(req: NextRequest) {
     },
     include: { assignment: true },
   });
+
+  // Detector IA de sensaciones — clasifica la nota y, si es warn+, crea
+  // una PatientAlert para que el fisio la vea en su buzón. Va aqui despues
+  // del save del session, envuelto en try/catch: fallo IA nunca rompe el
+  // completar-sesion del paciente.
+  if (notesToSave) {
+    try {
+      const classification = await classifyPatientNote(notesToSave);
+      if (classification && (classification.severity === "warn" || classification.severity === "high")) {
+        await createPatientAlert({
+          patientId: session.assignment.patientId,
+          kind: "notes_ai",
+          severity: classification.severity,
+          summary: classification.summary,
+          triggerData: {
+            note: notesToSave,
+            sentiment: classification.sentiment,
+            topics: classification.topics,
+          },
+          sourceType: "session",
+          sourceId: session.id,
+        });
+      }
+    } catch {
+      // Nunca bloqueamos el flujo del paciente por fallo del clasificador.
+    }
+  }
 
   const tasksSnapshot = JSON.parse(session.tasksSnapshot) as any[];
   const patientId = session.assignment.patientId;

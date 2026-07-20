@@ -28,6 +28,7 @@ import {
   MessageSquare,
   Megaphone,
   Brain,
+  AlertTriangle,
   LucideIcon,
 } from "lucide-react";
 
@@ -60,14 +61,15 @@ const FINANZAS: Item = { id: "finanzas", label: "Cuadro de mandos", Icon: Gauge,
 const EQUIPO: Item = { id: "equipo", label: "Equipo", Icon: UserCog, href: "/fisio/equipo", match: (p) => p.startsWith("/fisio/equipo") };
 const CHAT: Item = { id: "chat", label: "Chat", Icon: MessageSquare, href: "/fisio/chat", match: (p) => p.startsWith("/fisio/chat") };
 const FISIO_IA: Item = { id: "fisio-ia", label: "Fisio IA", Icon: Brain, href: "/fisio/fisio-ia", match: (p) => p.startsWith("/fisio/fisio-ia") };
+const ALERTAS: Item = { id: "alertas", label: "Alertas", Icon: AlertTriangle, href: "/fisio/alertas", match: (p) => p.startsWith("/fisio/alertas") };
 const AJUSTES: Item = { id: "ajustes", label: "Ajustes", Icon: Settings, href: "/fisio/ajustes", match: (p) => p.startsWith("/fisio/ajustes") };
 
 function itemsForRole(role: string): Item[] {
   if (role === "ceo") {
-    return [PANEL, PACIENTES, ADVANCE, LLAMADAS_VENTA, CONTENIDO, ANUNCIOS, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, RECURSOS, FINANZAS, EQUIPO, CHAT, FISIO_IA, AJUSTES];
+    return [PANEL, PACIENTES, ALERTAS, ADVANCE, LLAMADAS_VENTA, CONTENIDO, ANUNCIOS, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, RECURSOS, FINANZAS, EQUIPO, CHAT, FISIO_IA, AJUSTES];
   }
   if (role === "head_success") {
-    return [PANEL, PACIENTES, ADVANCE, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, CHAT, AJUSTES];
+    return [PANEL, PACIENTES, ALERTAS, ADVANCE, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, CHAT, AJUSTES];
   }
   if (role === "setter") {
     return [PANEL, LEADS, PACIENTES, REGALOS, CONTENIDO, COMUNIDAD, REUNIONES, CALENDARIO, EQUIPO, CHAT, AJUSTES];
@@ -76,7 +78,7 @@ function itemsForRole(role: string): Item[] {
     return [PANEL, LLAMADAS_VENTA, FOLLOWUP, COMUNIDAD, REUNIONES, CALENDARIO, EQUIPO, CHAT, AJUSTES];
   }
   // fisio normal
-  return [PANEL, PACIENTES, ROLLING_LECTURA, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, CHAT, AJUSTES];
+  return [PANEL, PACIENTES, ALERTAS, ROLLING_LECTURA, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, CHAT, AJUSTES];
 }
 
 const ROLE_LABEL: Record<string, string> = {
@@ -101,6 +103,7 @@ export function FisioSidebar({
   const pathname = usePathname() ?? "";
   const [notifCount, setNotifCount] = useState(0);
   const [communityUnread, setCommunityUnread] = useState(0);
+  const [alertsUnseen, setAlertsUnseen] = useState(0);
 
   // Polling notificaciones para mostrar badge en sidebar
   useEffect(() => {
@@ -135,6 +138,24 @@ export function FisioSidebar({
     return () => clearInterval(id);
   }, [user, pathname]);
 
+  // Polling contador de alertas sin ver del clinico. La API devuelve el
+  // scope adecuado por rol (fisio → suyas, manager → globales).
+  useEffect(() => {
+    if (!user) return;
+    if (user.role !== "fisio" && user.role !== "head_success" && user.role !== "ceo") return;
+    async function fetchAlerts() {
+      try {
+        const res = await fetch("/api/alerts?count=1", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        setAlertsUnseen(data.unseen || 0);
+      } catch {}
+    }
+    fetchAlerts();
+    const id = setInterval(fetchAlerts, 30_000);
+    return () => clearInterval(id);
+  }, [user, pathname]);
+
   if (pathname.startsWith("/fisio/paciente/")) return null;
 
   const items = user ? itemsForRole(user.role) : [PANEL, PACIENTES, BIBLIOTECA, TAREAS, LLAMADAS, RECURSOS];
@@ -145,6 +166,7 @@ export function FisioSidebar({
   // - Closers / CEO con franjas: ven el badge en LLAMADAS_VENTA
   function badgeFor(itemId: string): number | null {
     if (!user) return null;
+    if (itemId === "alertas" && alertsUnseen > 0) return alertsUnseen;
     if (itemId === "comunidad" && communityUnread > 0) return communityUnread;
     if (notifCount === 0) return null;
     if (user.role === "setter" && itemId === "leads") return notifCount;
