@@ -77,10 +77,12 @@ export function SessionRunner({
     setSavingForm(null);
   }
 
-  /** True si este FORM está vacío en las respuestas guardadas. Solo entonces
-   *  desbloqueamos edición sobre una sesión completada. */
-  function isFormEmpty(taskId: string): boolean {
-    const r = responses[taskId];
+  /** True si este FORM estaba vacío en las respuestas PERSISTIDAS al cargar
+   *  la página. Usamos el estado inicial, no el actual — si mirásemos
+   *  `responses`, en cuanto el paciente marca la primera casilla el form
+   *  se auto-cerraría (dejaría de estar "empty pending") y bloquearía todo. */
+  function wasFormInitiallyEmpty(taskId: string): boolean {
+    const r = initialResponses[taskId];
     if (r === undefined || r === null) return true;
     if (typeof r === "object" && Object.keys(r).length === 0) return true;
     return false;
@@ -212,10 +214,10 @@ export function SessionRunner({
 
           {task.type === "FORM" && (() => {
             // Si la sesión ya está completada pero este formulario quedó
-            // sin rellenar, lo desbloqueamos: el paciente puede editar y
-            // guardar SOLO este FORM sin tocar el resto (evita el
-            // "atrapamiento" del banner del home).
-            const emptyPending = completed && isFormEmpty(task.id);
+            // sin rellenar cuando cargamos la página, lo desbloqueamos: el
+            // paciente puede editar y guardar SOLO este FORM sin tocar el
+            // resto (evita el "atrapamiento" del banner del home).
+            const emptyPending = completed && wasFormInitiallyEmpty(task.id);
             const readOnly = completed && !emptyPending;
             return (
               <>
