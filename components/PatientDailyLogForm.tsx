@@ -14,10 +14,18 @@ const FIELDS: Array<{ key: "fatigue" | "rpe" | "sleep"; label: string; emoji: st
 export function PatientDailyLogForm({
   initial,
   variant = "page",
+  recordedDate,
+  onSaved,
 }: {
   initial: Entry;
   /** "page" usa fondo de tarjeta; "embed" se ajusta a un contenedor ya estilizado (p.ej. dentro de Sesión de hoy). */
   variant?: "page" | "embed";
+  /** ISO YYYY-MM-DD. Si viene, el registro se guarda con esa fecha —
+   *  se usa en el backfill de días olvidados. Sin él, el server usa
+   *  "hoy" en la TZ del paciente. */
+  recordedDate?: string;
+  /** Callback opcional cuando termina un guardado con éxito. */
+  onSaved?: () => void;
 }) {
   const router = useRouter();
   const [fatigue, setFatigue] = useState<number>(initial?.fatigue ?? 5);
@@ -35,12 +43,13 @@ export function PatientDailyLogForm({
     const res = await fetch("/api/patient/daily-log", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fatigue, rpe, sleep }),
+      body: JSON.stringify({ fatigue, rpe, sleep, ...(recordedDate ? { recordedDate } : {}) }),
     });
     setSaving(false);
     if (res.ok) {
       setSavedOk(true);
       router.refresh();
+      onSaved?.();
       setTimeout(() => setSavedOk(false), 2500);
     }
   }

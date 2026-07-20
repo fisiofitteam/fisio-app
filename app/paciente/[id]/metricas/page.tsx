@@ -3,22 +3,23 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PatientNav } from "@/components/PatientNav";
 import { PatientDailyLogToggle } from "@/components/PatientDailyLogToggle";
+import { PatientDailyLogBackfill } from "@/components/PatientDailyLogBackfill";
 import { PatientMetricChart } from "@/components/PatientMetricChart";
-import { todayMadridUtc } from "@/lib/program-pauses";
+import { todayForPatient } from "@/lib/patient-dates";
 
 export const dynamic = "force-dynamic";
 
 export default async function PatientMetricsPage({ params }: { params: { id: string } }) {
   const patient = await prisma.patient.findUnique({
     where: { id: params.id },
-    select: { id: true, programType: true },
+    select: { id: true, programType: true, timezone: true },
   });
   if (!patient) notFound();
 
   const isPrevention = patient.programType === "PREVENTION";
   const navVariant = isPrevention ? "prevention" : "advance";
 
-  const today = todayMadridUtc();
+  const today = todayForPatient(patient.timezone);
 
   // Últimos 30 días para las gráficas
   const start30 = new Date(today);
@@ -35,6 +36,22 @@ export default async function PatientMetricsPage({ params }: { params: { id: str
     take: 30,
   });
   const todayEntry = entriesAll.find((e) => e.recordedDate.getTime() === today.getTime()) ?? null;
+
+  // Días recientes (últimos 7) sin registro: banner de backfill. Excluimos
+  // hoy porque para hoy ya está el propio toggle "Registrar métricas".
+  const registeredSet = new Set(entries30.map((e) => e.recordedDate.toISOString().slice(0, 10)));
+  const missingDays: Array<{ iso: string; label: string }> = [];
+  for (let i = 1; i <= 7; i++) {
+    const d = new Date(today);
+    d.setUTCDate(today.getUTCDate() - i);
+    const iso = d.toISOString().slice(0, 10);
+    if (registeredSet.has(iso)) continue;
+    // Etiqueta amigable: "Ayer" / "Hace N días · miércoles 12 may".
+    const label = i === 1
+      ? "Ayer"
+      : `Hace ${i} días · ${d.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "short" })}`;
+    missingDays.push({ iso, label });
+  }
 
   return (
     <main className="min-h-screen" style={{ color: "var(--p-text)" }}>
@@ -69,6 +86,9 @@ export default async function PatientMetricsPage({ params }: { params: { id: str
             </p>
           </div>
         )}
+
+        {/* Banner de backfill — solo si hay días pendientes en los últimos 7. */}
+        <PatientDailyLogBackfill missing={missingDays} />
 
         {/* Registro rápido — colapsado por defecto porque normalmente se hace
             desde la propia sesión de entrenamiento */}

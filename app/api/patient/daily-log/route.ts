@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActivePatient } from "@/lib/session";
-import { todayForPatient } from "@/lib/patient-dates";
+import { todayForPatient, startOfDayForPatient } from "@/lib/patient-dates";
 
 // POST /api/patient/daily-log — upsert del log de HOY del paciente activo.
 // body: { fatigue, rpe, sleep } — cada uno entero 0..10.
@@ -20,11 +20,32 @@ export async function POST(req: NextRequest) {
   // "Hoy" según la TZ del paciente — un atleta en Colombia que registra
   // a las 23:30 hora local (04:30 UTC del día siguiente) guarda con la
   // fecha calendario de Colombia, no la de Madrid.
+  //
+  // El cliente puede pasar `recordedDate: "YYYY-MM-DD"` para rellenar el
+  // log de un día pasado (backfill). Solo aceptamos fechas dentro de los
+  // últimos 14 días y NUNCA futuras — así el histórico no queda expuesto
+  // a manipulación arbitraria.
   const full = await prisma.patient.findUnique({
     where: { id: patient.id },
     select: { timezone: true },
   });
-  const recordedDate = todayForPatient(full?.timezone ?? null);
+  const today = todayForPatient(full?.timezone ?? null);
+  let recordedDate = today;
+  const rawRec = typeof b?.recordedDate === "string" ? b.recordedDate.trim() : "";
+  if (rawRec) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(rawRec)) {
+      return NextResponse.json({ error: "recordedDate inválido (YYYY-MM-DD)" }, { status: 400 });
+    }
+    const parsed = startOfDayForPatient(full?.timezone ?? null, new Date(rawRec + "T12:00:00.000Z"));
+    const diffDays = Math.round((today.getTime() - parsed.getTime()) / 86400000);
+    if (diffDays < 0) {
+      return NextResponse.json({ error: "No puedes registrar fechas futuras" }, { status: 400 });
+    }
+    if (diffDays > 14) {
+      return NextResponse.json({ error: "Solo puedes rellenar los últimos 14 días" }, { status: 400 });
+    }
+    recordedDate = parsed;
+  }
   const saved = await prisma.patientDailyLog.upsert({
     where: { patientId_recordedDate: { patientId: patient.id, recordedDate } },
     create: { patientId: patient.id, recordedDate, fatigue, rpe, sleep },
