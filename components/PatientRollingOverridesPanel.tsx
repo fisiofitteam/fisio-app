@@ -10,7 +10,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { Pencil, EyeOff, RotateCcw, X, Save } from "lucide-react";
+import { Pencil, EyeOff, RotateCcw, X, Save, Video } from "lucide-react";
 
 type RollingTask = {
   id: string;
@@ -42,6 +42,23 @@ type Override = {
   videoId: string | null;
 };
 
+type LibraryVideo = {
+  id: string;
+  title: string;
+  youtubeUrl: string;
+  category: string;
+};
+
+// FORM/EVOLUTION no llevan vídeo, así que solo mostramos el selector en
+// WORKOUT y VIDEO. Es el mismo criterio que aplica RollingProgramDetail.
+function taskAcceptsVideo(type: string): boolean {
+  return type === "WORKOUT" || type === "VIDEO";
+}
+
+// Sentinel para "quitar vídeo aunque el master tenga uno". Debe coincidir
+// con OVERRIDE_VIDEO_CLEARED en lib/apply-rolling-overrides.ts.
+const VIDEO_CLEARED = "__NONE__";
+
 const DAY_NAMES = ["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
 
 const TYPE_ICONS: Record<string, string> = {
@@ -67,6 +84,7 @@ export function PatientRollingOverridesPanel({
   const [acc, setAcc] = useState<ProgramWeeks | null>(null);
   const [trn, setTrn] = useState<ProgramWeeks | null>(null);
   const [overrides, setOverrides] = useState<Record<string, Override>>({});
+  const [videos, setVideos] = useState<LibraryVideo[]>([]);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
@@ -79,7 +97,8 @@ export function PatientRollingOverridesPanel({
     Promise.all([
       fetch(`/api/rolling-two-weeks?${params.toString()}`).then((r) => r.json()).catch(() => null),
       fetch(`/api/patient-rolling-overrides?patientId=${patientId}`).then((r) => r.json()).catch(() => null),
-    ]).then(([twData, ovData]) => {
+      fetch(`/api/library/videos`).then((r) => r.json()).catch(() => []),
+    ]).then(([twData, ovData, vidData]) => {
       if (twData?.ok) {
         setAcc(twData.accessories ?? null);
         setTrn(twData.training ?? null);
@@ -89,6 +108,7 @@ export function PatientRollingOverridesPanel({
         for (const o of ovData.overrides ?? []) map[o.taskId] = o;
         setOverrides(map);
       }
+      if (Array.isArray(vidData)) setVideos(vidData);
       setLoading(false);
     });
   }, [expanded, patientId, accessoriesId, trainingId]);
@@ -159,6 +179,7 @@ export function PatientRollingOverridesPanel({
                 color="#3B82F6"
                 data={acc}
                 overrides={overrides}
+                videos={videos}
                 editingTaskId={editingTaskId}
                 setEditingTaskId={setEditingTaskId}
                 saveOverride={saveOverride}
@@ -171,6 +192,7 @@ export function PatientRollingOverridesPanel({
                 color="#F59E0B"
                 data={trn}
                 overrides={overrides}
+                videos={videos}
                 editingTaskId={editingTaskId}
                 setEditingTaskId={setEditingTaskId}
                 saveOverride={saveOverride}
@@ -187,12 +209,13 @@ export function PatientRollingOverridesPanel({
 // ────────────────────────── Vista tipo RollingReadOnlyList ──────────────────────────
 
 function ProgramReadOnly({
-  label, color, data, overrides, editingTaskId, setEditingTaskId, saveOverride, removeOverride,
+  label, color, data, overrides, videos, editingTaskId, setEditingTaskId, saveOverride, removeOverride,
 }: {
   label: string;
   color: string;
   data: ProgramWeeks;
   overrides: Record<string, Override>;
+  videos: LibraryVideo[];
   editingTaskId: string | null;
   setEditingTaskId: (id: string | null) => void;
   saveOverride: (taskId: string, patch: Partial<Override>) => Promise<void>;
@@ -245,6 +268,7 @@ function ProgramReadOnly({
                               key={t.id}
                               task={t}
                               override={overrides[t.id]}
+                              videos={videos}
                               editing={editingTaskId === t.id}
                               onEdit={() => setEditingTaskId(t.id)}
                               onCancelEdit={() => setEditingTaskId(null)}
@@ -268,10 +292,11 @@ function ProgramReadOnly({
 }
 
 function TaskEditableRow({
-  task, override, editing, onEdit, onCancelEdit, onSave, onHide, onRestore,
+  task, override, videos, editing, onEdit, onCancelEdit, onSave, onHide, onRestore,
 }: {
   task: RollingTask;
   override?: Override;
+  videos: LibraryVideo[];
   editing: boolean;
   onEdit: () => void;
   onCancelEdit: () => void;
@@ -279,16 +304,32 @@ function TaskEditableRow({
   onHide: () => void;
   onRestore: () => void;
 }) {
+  // Estado local del selector de vídeo dentro del editor:
+  //   ""  = sin vídeo asignado (que a nivel efectivo signifique "sin vídeo"
+  //         para el atleta, ya sea porque tampoco lo tenía el master o porque
+  //         el fisio lo va a quitar → traducimos al sentinel al guardar).
+  //   "<id>" = un vídeo concreto de la Biblioteca.
+  function effectiveInitial(): string {
+    if (override?.videoId === VIDEO_CLEARED) return "";
+    return override?.videoId ?? task.videoId ?? "";
+  }
   const [title, setTitle] = useState(override?.title ?? task.title);
   const [body, setBody] = useState(override?.bodyText ?? task.bodyText ?? "");
+  const [videoId, setVideoId] = useState(effectiveInitial());
 
   useEffect(() => {
     setTitle(override?.title ?? task.title);
     setBody(override?.bodyText ?? task.bodyText ?? "");
+    setVideoId(effectiveInitial());
   }, [override, task]);
 
   const isHidden = !!override?.hidden;
+  const videoCleared = override?.videoId === VIDEO_CLEARED;
+  const videoChanged = !!override?.videoId && !videoCleared && override.videoId !== task.videoId;
   const isModified = !isHidden && !!override && (override.title !== null || override.bodyText !== null || override.videoId !== null);
+  const acceptsVideo = taskAcceptsVideo(task.type);
+  const originalVideo = task.videoId ? videos.find((v) => v.id === task.videoId) : null;
+  const overrideVideoInfo = videoChanged ? videos.find((v) => v.id === override!.videoId!) : null;
 
   // Estado edición: fondo azul, inputs, save/cancel
   if (editing) {
@@ -311,12 +352,60 @@ function TaskEditableRow({
           onChange={(e) => setBody(e.target.value)}
           placeholder="Cuerpo (opcional)"
         />
+
+        {acceptsVideo && (
+          <div className="mt-2">
+            <label className="text-[10px] font-semibold text-neutral-600 uppercase tracking-wider flex items-center gap-1 mb-1">
+              <Video size={11} /> Vídeo para este atleta
+            </label>
+            {videos.length === 0 ? (
+              <div className="text-[11px] text-neutral-500 italic bg-white border border-neutral-200 rounded px-2 py-1.5">
+                No hay vídeos en la Biblioteca todavía.
+              </div>
+            ) : (
+              <select
+                className="w-full text-xs bg-white border border-neutral-300 rounded px-2 py-1.5 outline-none focus:border-blue-500"
+                value={videoId}
+                onChange={(e) => setVideoId(e.target.value)}
+              >
+                <option value="">— Sin vídeo —</option>
+                {videos.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    [{v.category}] {v.title}
+                  </option>
+                ))}
+              </select>
+            )}
+            {task.videoId && task.videoId !== videoId && (
+              <div className="text-[10px] text-neutral-500 mt-1">
+                Original: {originalVideo ? `[${originalVideo.category}] ${originalVideo.title}` : `ID ${task.videoId}`}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="flex justify-end gap-1 mt-2">
           <button onClick={onCancelEdit} className="text-[11px] px-2 py-1 rounded hover:bg-neutral-200 text-neutral-600 flex items-center gap-1">
             <X size={12} /> Cancelar
           </button>
           <button
-            onClick={() => onSave({ title: title.trim() || null, bodyText: body.trim() || null, hidden: false })}
+            onClick={() => {
+              // Traducimos el "" del selector al sentinel VIDEO_CLEARED
+              // solo si el master TENÍA un vídeo — así el applier sabe que
+              // hay que quitarlo. Si el master ya no tenía nada, guardamos
+              // null y punto (nada que quitar).
+              let videoToSave: string | null = null;
+              if (acceptsVideo) {
+                if (videoId) videoToSave = videoId;
+                else if (task.videoId) videoToSave = VIDEO_CLEARED;
+              }
+              onSave({
+                title: title.trim() || null,
+                bodyText: body.trim() || null,
+                videoId: videoToSave,
+                hidden: false,
+              });
+            }}
             className="text-[11px] font-semibold px-2.5 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-1"
           >
             <Save size={12} /> Guardar para este atleta
@@ -353,6 +442,14 @@ function TaskEditableRow({
           {displayBody && !isHidden && (
             <div className="text-xs text-neutral-600 mt-1 whitespace-pre-wrap">
               {displayBody}
+            </div>
+          )}
+          {acceptsVideo && !isHidden && (videoChanged || videoCleared) && (
+            <div className="text-[11px] text-amber-800 mt-1 flex items-center gap-1">
+              <Video size={11} />
+              {videoCleared
+                ? <span>Sin vídeo (original: {originalVideo ? `[${originalVideo.category}] ${originalVideo.title}` : task.videoId})</span>
+                : <span>Vídeo cambiado a: {overrideVideoInfo ? `[${overrideVideoInfo.category}] ${overrideVideoInfo.title}` : override!.videoId}</span>}
             </div>
           )}
         </div>

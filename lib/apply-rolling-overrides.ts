@@ -3,9 +3,13 @@
  * RollingTasks del programa maestro. Devuelve las tareas ya "personalizadas":
  *   - Si el override.hidden = true → se filtra (no aparece al atleta).
  *   - Si el override tiene title/bodyText/videoId no null → sobreescribe.
+ *   - Sentinel VIDEO_CLEARED en videoId significa "quitar el vídeo aunque
+ *     el master tenga uno" (el fisio pidió expresamente eliminarlo).
  * Los overrides que no aplican a ninguna tarea se ignoran.
  */
 import { prisma } from "@/lib/prisma";
+
+export const OVERRIDE_VIDEO_CLEARED = "__NONE__";
 
 type MinimalTask = {
   id: string;
@@ -34,11 +38,15 @@ export function applyRollingOverridesToTasks<T extends MinimalTask>(
     const o = byTaskId.get(t.id);
     if (!o) return [t];
     if (o.hidden) return [] as T[];
+    const resolvedVideo =
+      o.videoId === OVERRIDE_VIDEO_CLEARED
+        ? null
+        : (o.videoId ?? t.videoId);
     return [{
       ...t,
       title: o.title ?? t.title,
       bodyText: o.bodyText ?? t.bodyText,
-      videoId: o.videoId ?? t.videoId,
+      videoId: resolvedVideo,
     }];
   });
 }
