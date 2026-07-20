@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { DragSlider } from "@/components/DragSlider";
 
 type Entry = { fatigue: number; rpe: number; sleep: number } | null;
 
@@ -109,16 +110,7 @@ function Slider({
           {value}
         </span>
       </div>
-      <input
-        type="range"
-        min={0}
-        max={10}
-        step={1}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full accent-yellow-400"
-        style={{ accentColor: "var(--p-accent)" }}
-      />
+      <DragSlider value={value} onChange={onChange} min={0} max={10} step={1} />
       <div className="text-[10px] mt-0.5" style={{ color: "var(--p-text-faint)" }}>{help}</div>
     </div>
   );

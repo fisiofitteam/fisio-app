@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { youtubeEmbedUrl } from "@/lib/youtube";
 import { TaskTimerButton } from "@/components/TaskTimerButton";
+import { DragSlider } from "@/components/DragSlider";
 
 export type Exercise = { id: string; name: string; category: string; youtubeUrl: string | null; description: string | null };
 
@@ -363,17 +364,16 @@ export function FormResponder({ task, completed, response, onChange }: any) {
             )}
             {q.type === "scale" && (
               <div>
-                <input
-                  type="range"
+                <DragSlider
+                  value={typeof val === "number" ? val : (q.min ?? 0)}
+                  onChange={(n) => onChange({ ...safeResponse, [q.id]: n })}
                   min={q.min ?? 0}
                   max={q.max ?? 10}
+                  step={1}
                   disabled={completed}
-                  value={val ?? q.min ?? 0}
-                  onChange={(e) => onChange({ ...safeResponse, [q.id]: Number(e.target.value) })}
-                  className="w-full"
                 />
-                <div className="text-xs text-center" style={{ color: "var(--p-text-faint)" }}>
-                  {val ?? q.min ?? 0} / {q.max ?? 10}
+                <div className="text-xs text-center mt-1" style={{ color: "var(--p-text-faint)" }}>
+                  {typeof val === "number" ? val : (q.min ?? 0)} / {q.max ?? 10}
                 </div>
               </div>
             )}
@@ -527,17 +527,17 @@ export function EvolutionResponder({ task, completed, response, onChange }: any)
 }
 
 export function ScaleField({ label, value, completed, onChange }: any) {
+  const v = typeof value === "number" ? value : 0;
   return (
     <div>
-      <label className="text-sm font-medium block mb-1">{label}: {value ?? 0}/10</label>
-      <input
-        type="range"
+      <label className="text-sm font-medium block mb-1.5">{label}: {v}/10</label>
+      <DragSlider
+        value={v}
+        onChange={(n: number) => onChange(n)}
         min={0}
         max={10}
+        step={1}
         disabled={completed}
-        value={value ?? 0}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full"
       />
     </div>
   );
