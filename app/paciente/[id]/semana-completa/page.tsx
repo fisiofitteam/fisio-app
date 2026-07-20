@@ -19,8 +19,10 @@ import { RollingWeekView } from "@/components/RollingWeekView";
  */
 export default async function PatientSemanaCompletaPage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams: { view?: string };
 }) {
   const patient = await prisma.patient.findUnique({
     where: { id: params.id },
@@ -34,6 +36,9 @@ export default async function PatientSemanaCompletaPage({
     },
   });
   if (!patient) notFound();
+
+  // Vista: "current" (esta semana) por defecto, "next" (semana siguiente).
+  const view: "current" | "next" = searchParams.view === "next" ? "next" : "current";
 
   const isPrevention = patient.programType === "PREVENTION";
   // Prevention es single-rolling y usa el campo legacy rollingProgramId.
@@ -51,10 +56,20 @@ export default async function PatientSemanaCompletaPage({
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const dow = today.getDay() === 0 ? 7 : today.getDay(); // 1..7 (L=1)
   const thisMonday = weekStartDate(today);
+  // Base para la vista "next": mismo dia (lunes) + 7. resolveVisibleRollingWeek
+  // buscará la semana que empieza en esa fecha.
+  const nextMonday = new Date(thisMonday.getTime() + 7 * 86400000);
+  const targetMonday = view === "next" ? nextMonday : thisMonday;
+  // Regla pedida: la semana siguiente NO se muestra hasta el VIERNES.
+  // Antes de eso (dow < 5), incluso si el coach ya publicó, la vista de
+  // "próxima" queda como "preparando la semana" para no adelantar spoilers
+  // ni desviar la atención de la semana actual.
+  const nextWeekLocked = view === "next" && dow < 5;
 
   const fetchWeek = (programId: string | null) =>
-    resolveVisibleRollingWeek<any>(programId, thisMonday, {
+    resolveVisibleRollingWeek<any>(programId, targetMonday, {
       days: {
         include: {
           tasks: {
@@ -194,11 +209,40 @@ export default async function PatientSemanaCompletaPage({
           </h1>
         </header>
 
+        {/* Selector Esta semana / Semana siguiente — siempre visible.
+             La siguiente solo revela contenido a partir del viernes; antes
+             muestra "tu coach está preparando la semana" (incluso si el
+             coach ya la publicó). */}
+        <div className="flex rounded-lg p-0.5 mb-5" style={{ background: "var(--p-surface-2)" }}>
+          <Link
+            href={`/paciente/${patient.id}/semana-completa`}
+            className="flex-1 px-3 py-1.5 text-xs rounded-md text-center transition-colors font-medium"
+            style={
+              view === "current"
+                ? { background: "var(--p-accent)", color: "var(--p-accent-ink)" }
+                : { color: "var(--p-text-dim)" }
+            }
+          >
+            Esta semana
+          </Link>
+          <Link
+            href={`/paciente/${patient.id}/semana-completa?view=next`}
+            className="flex-1 px-3 py-1.5 text-xs rounded-md text-center transition-colors font-medium"
+            style={
+              view === "next"
+                ? { background: "var(--p-accent)", color: "var(--p-accent-ink)" }
+                : { color: "var(--p-text-dim)" }
+            }
+          >
+            Semana siguiente →
+          </Link>
+        </div>
+
         <RollingWeekView
-          mode={anyPublished ? "ready" : "pending"}
-          weekStartIso={visibleWeekStart.toISOString()}
-          title={headerTitle}
-          days={flatDays}
+          mode={nextWeekLocked ? "pending" : (anyPublished ? "ready" : "pending")}
+          weekStartIso={(view === "next" ? nextMonday : visibleWeekStart).toISOString()}
+          title={nextWeekLocked ? null : headerTitle}
+          days={nextWeekLocked ? [] : flatDays}
         />
       </div>
       <PatientNav patientId={patient.id} active="semana" variant={isPrevention ? "prevention" : "advance"} />
