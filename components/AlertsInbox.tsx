@@ -74,19 +74,26 @@ export function AlertsInbox({ managerDefault }: { managerDefault: boolean }) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2 text-xs">
-        <button
-          onClick={() => setScope("mine")}
-          className={`px-3 py-1.5 rounded-lg font-medium ${scope === "mine" ? "bg-neutral-900 text-white" : "bg-white border border-neutral-200 text-neutral-700"}`}
-        >
-          Mis pacientes
-        </button>
-        <button
-          onClick={() => setScope("all")}
-          className={`px-3 py-1.5 rounded-lg font-medium ${scope === "all" ? "bg-neutral-900 text-white" : "bg-white border border-neutral-200 text-neutral-700"}`}
-        >
-          Todos
-        </button>
-        <div className="w-px h-5 bg-neutral-200 mx-1" />
+        {/* El selector mine/all solo aparece si el usuario es manager
+            (CEO/head_success). Los fisios normales ven forzosamente
+            "Mis pacientes" — el backend tambien lo fuerza por seguridad. */}
+        {managerDefault && (
+          <>
+            <button
+              onClick={() => setScope("mine")}
+              className={`px-3 py-1.5 rounded-lg font-medium ${scope === "mine" ? "bg-neutral-900 text-white" : "bg-white border border-neutral-200 text-neutral-700"}`}
+            >
+              Mis pacientes
+            </button>
+            <button
+              onClick={() => setScope("all")}
+              className={`px-3 py-1.5 rounded-lg font-medium ${scope === "all" ? "bg-neutral-900 text-white" : "bg-white border border-neutral-200 text-neutral-700"}`}
+            >
+              Todos
+            </button>
+            <div className="w-px h-5 bg-neutral-200 mx-1" />
+          </>
+        )}
         <label className="flex items-center gap-1.5 text-neutral-600 cursor-pointer">
           <input type="checkbox" checked={includeSeen} onChange={(e) => setIncludeSeen(e.target.checked)} />
           Incluir vistas

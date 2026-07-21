@@ -26,11 +26,14 @@ export async function GET(req: NextRequest) {
 
   const sp = req.nextUrl.searchParams;
   const isManager = user.role === "ceo" || user.role === "head_success";
+  // Los fisios normales no ven resumenes de pacientes de otros: aunque
+  // manden ?scope=all se ignora. Solo CEO/head_success ven "all".
   const scopeParam = sp.get("scope");
-  const scope: "mine" | "all" =
-    scopeParam === "all" ? "all"
-    : scopeParam === "mine" ? "mine"
-    : isManager ? "all" : "mine";
+  const scope: "mine" | "all" = !isManager
+    ? "mine"
+    : scopeParam === "mine"
+      ? "mine"
+      : "all";
 
   // Semana solicitada o la anterior a la actual (la que estamos resumiendo).
   const weekParam = sp.get("week");

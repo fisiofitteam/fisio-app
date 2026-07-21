@@ -27,12 +27,15 @@ export async function GET(req: NextRequest) {
 
   const sp = req.nextUrl.searchParams;
   const isManager = user.role === "ceo" || user.role === "head_success";
-  // Por defecto, un fisio ve solo las suyas y un manager ve todas.
+  // Por defecto, un fisio ve solo las suyas y un manager ve todas. Los
+  // fisios normales NO PUEDEN ver alertas de otros pacientes aunque
+  // manden ?scope=all — se ignora y se fuerza "mine" (privacidad clinica).
   const scopeParam = sp.get("scope");
-  const scope: "mine" | "all" =
-    scopeParam === "all" ? "all"
-    : scopeParam === "mine" ? "mine"
-    : isManager ? "all" : "mine";
+  const scope: "mine" | "all" = !isManager
+    ? "mine"
+    : scopeParam === "mine"
+      ? "mine"
+      : "all";
 
   if (sp.get("count") === "1") {
     // Contador barato: solo suena para lo que el usuario ve en su vista por
