@@ -169,45 +169,50 @@ export default async function PatientWodsTab({ params }: { params: { id: string 
                             />
                           ) : null;
                         })()}
-                        {items.map((s) => {
-                          const workoutText = extractWorkoutText(s.tasksSnapshot);
-                          const when = new Date(s.scheduledDate ?? s.completedAt ?? Date.now());
-                          const dayName = when.toLocaleDateString("es-ES", { weekday: "long" });
-                          const dayDate = when.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
-                          return (
-                            <div key={s.id} className="rounded-lg border border-neutral-200 p-3 space-y-2">
-                              <div className="flex justify-between items-baseline gap-2">
-                                <div>
-                                  <div className="font-semibold text-sm capitalize">
-                                    {dayName} <span className="text-neutral-500 font-normal">· {dayDate}</span>
+                        {/* Sesiones en grid horizontal — hasta 5 columnas en
+                            desktop (una por dia L-V). En moviles cae a 1 col.
+                            Antes se apilaban verticales y era largo de leer. */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 items-start">
+                          {items.map((s) => {
+                            const workoutText = extractWorkoutText(s.tasksSnapshot);
+                            const when = new Date(s.scheduledDate ?? s.completedAt ?? Date.now());
+                            const dayName = when.toLocaleDateString("es-ES", { weekday: "short" });
+                            const dayDate = when.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+                            return (
+                              <div key={s.id} className="rounded-lg border border-neutral-200 p-3 space-y-2 min-w-0">
+                                <div className="flex justify-between items-baseline gap-2">
+                                  <div className="min-w-0">
+                                    <div className="font-semibold text-sm capitalize">
+                                      {dayName} <span className="text-neutral-500 font-normal">· {dayDate}</span>
+                                    </div>
+                                    <div className="text-[11px] text-neutral-400 mt-0.5 truncate">
+                                      {s.completedAt ? fDateTime(s.completedAt) : "—"}
+                                    </div>
                                   </div>
-                                  <div className="text-[11px] text-neutral-400 mt-0.5">
-                                    Completada {s.completedAt ? fDateTime(s.completedAt) : "—"}
+                                  <div className="text-[10px] text-neutral-500 text-right truncate max-w-[45%]" title={s.assignment.program.name}>
+                                    {s.assignment.program.name}
                                   </div>
                                 </div>
-                                <div className="text-xs text-neutral-500 text-right">
-                                  {s.assignment.program.name}
+                                {workoutText && (
+                                  <div>
+                                    <div className="text-[10px] uppercase tracking-wide text-neutral-500 font-medium mb-1">
+                                      Entreno
+                                    </div>
+                                    <pre className="text-[11px] leading-snug text-neutral-800 whitespace-pre-wrap font-mono bg-neutral-50 rounded-lg p-2 break-words">
+                                      {workoutText}
+                                    </pre>
+                                  </div>
+                                )}
+                                <div>
+                                  <div className="text-[10px] uppercase tracking-wide text-neutral-500 font-medium mb-1">
+                                    Sensaciones
+                                  </div>
+                                  <p className="text-xs text-neutral-800 whitespace-pre-wrap break-words">{s.patientNotes}</p>
                                 </div>
                               </div>
-                              {workoutText && (
-                                <div>
-                                  <div className="text-[11px] uppercase tracking-wide text-neutral-500 font-medium mb-1">
-                                    Entreno de la sesión
-                                  </div>
-                                  <pre className="text-xs text-neutral-800 whitespace-pre-wrap font-mono bg-neutral-50 rounded-lg p-3">
-                                    {workoutText}
-                                  </pre>
-                                </div>
-                              )}
-                              <div>
-                                <div className="text-[11px] uppercase tracking-wide text-neutral-500 font-medium mb-1">
-                                  Sensaciones del paciente
-                                </div>
-                                <p className="text-sm text-neutral-800 whitespace-pre-wrap">{s.patientNotes}</p>
-                              </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                        </div>
                       </div>
                     </details>
                   );
