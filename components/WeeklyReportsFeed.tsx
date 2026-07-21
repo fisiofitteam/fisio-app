@@ -51,25 +51,29 @@ const METRIC_EMOJI: Record<Metric["key"], string> = {
 };
 
 /**
- * Feed de resumenes semanales que aparece arriba de /fisio SOLO los lunes.
+ * Feed de resumenes semanales. Se usa en la pagina /fisio/resumenes.
  * Cards gordos con toda la info (metricas + adherencia + sensaciones +
  * findings + recomendaciones). El fisio puede colapsar cada card con
  * "visto" — deja de aparecer aqui pero sigue accesible en la ficha.
+ *
+ * Muestra por defecto la semana pasada (la que se acaba de resumir).
+ * El picker permite navegar semanas anteriores.
  */
-export function WeeklyReportsFeed({ managerDefault }: { managerDefault: boolean }) {
+export function WeeklyReportsFeed({ managerDefault, initialWeekIso }: { managerDefault: boolean; initialWeekIso?: string }) {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [scope, setScope] = useState<"mine" | "all">(managerDefault ? "all" : "mine");
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [showAllScopes, setShowAllScopes] = useState(managerDefault);
-
-  const isMonday = new Date().getDay() === 1;
+  const [week, setWeek] = useState<string | null>(initialWeekIso ?? null);
+  const showAllScopes = managerDefault;
 
   useEffect(() => {
-    if (!isMonday) { setLoading(false); return; }
     let cancelled = false;
     setLoading(true);
-    fetch(`/api/weekly-reports?scope=${scope}`, { cache: "no-store" })
+    const params = new URLSearchParams();
+    params.set("scope", scope);
+    if (week) params.set("week", week);
+    fetch(`/api/weekly-reports?${params.toString()}`, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : { reports: [] }))
       .then((data) => {
         if (cancelled) return;
@@ -78,11 +82,7 @@ export function WeeklyReportsFeed({ managerDefault }: { managerDefault: boolean 
       })
       .catch(() => setLoading(false));
     return () => { cancelled = true; };
-  }, [scope, isMonday]);
-
-  if (!isMonday) return null;
-  if (loading) return null;
-  if (reports.length === 0) return null;
+  }, [scope, week]);
 
   async function dismiss(id: string) {
     setBusyId(id);
@@ -101,14 +101,6 @@ export function WeeklyReportsFeed({ managerDefault }: { managerDefault: boolean 
   return (
     <section className="mb-6">
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-        <div>
-          <h2 className="font-semibold text-base flex items-center gap-2">
-            🌅 Resúmenes de la semana pasada
-          </h2>
-          <p className="text-xs text-neutral-500 mt-0.5">
-            Generados anoche por IA. Marcar como visto para retirarlos del feed.
-          </p>
-        </div>
         {showAllScopes && (
           <div className="flex items-center gap-1 text-xs">
             <button
@@ -127,11 +119,22 @@ export function WeeklyReportsFeed({ managerDefault }: { managerDefault: boolean 
         )}
       </div>
 
-      <div className="space-y-3">
-        {reports.map((r) => (
-          <WeeklyReportCard key={r.id} report={r} onDismiss={() => dismiss(r.id)} busy={busyId === r.id} />
-        ))}
-      </div>
+      {loading ? (
+        <div className="text-sm text-neutral-500 italic">Cargando…</div>
+      ) : reports.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-neutral-200 bg-white p-10 text-center">
+          <div className="text-3xl mb-2">🌅</div>
+          <div className="text-sm text-neutral-500">
+            No hay resúmenes de esta semana. Cada domingo por la noche la IA los genera automáticamente.
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {reports.map((r) => (
+            <WeeklyReportCard key={r.id} report={r} onDismiss={() => dismiss(r.id)} busy={busyId === r.id} />
+          ))}
+        </div>
+      )}
     </section>
   );
 }

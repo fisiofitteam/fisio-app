@@ -252,15 +252,25 @@ async function saveReport(patientId: string, monday: Date, summary: string, high
   });
 }
 
-async function notifyFisio(patient: Patient, monday: Date, summary: string) {
-  if (!patient.assignedProfessionalId) return;
-  await notifyProfessional({
-    professionalId: patient.assignedProfessionalId,
-    type: "weekly_report_ready",
-    title: `Resumen semanal de ${patient.fullName}`,
-    body: summary.slice(0, 180),
-    actionUrl: `/fisio?week=${monday.toISOString().slice(0, 10)}`,
-  }).catch(() => {});
+/**
+ * Notifica UNA sola vez por fisio con el conteo de resumenes generados
+ * esta ronda. Antes mandabamos uno por paciente y saturaba la campanita.
+ */
+async function notifyFisiosAggregated(counts: Map<string, number>, monday: Date) {
+  const weekLabel = monday.toLocaleDateString("es-ES", { day: "numeric", month: "long" });
+  await Promise.all(
+    Array.from(counts.entries()).map(([professionalId, n]) =>
+      notifyProfessional({
+        professionalId,
+        type: "weekly_report_ready",
+        title: n === 1 ? "Nuevo resumen semanal" : `Nuevos resumenes semanales (${n})`,
+        body: n === 1
+          ? `Ya tienes listo el resumen de la semana del ${weekLabel} de un paciente. Pulsa para verlo.`
+          : `Ya tienes listos los resumenes de la semana del ${weekLabel} de tus pacientes. Pulsa para verlos.`,
+        actionUrl: `/fisio/resumenes?week=${monday.toISOString().slice(0, 10)}`,
+      }).catch(() => {})
+    )
+  );
 }
 
 // ────────────────────────── Orquestador ──────────────────────────
@@ -309,6 +319,9 @@ export async function runWeeklyReportsForWeek(monday: Date): Promise<WeeklyRepor
   let generated = 0;
   let skipped = 0;
   let errors = 0;
+  // Acumulamos generados por fisio-asignado para mandar UNA sola
+  // notificacion al final por profesional en vez de spamear la campanita.
+  const perFisio = new Map<string, number>();
   for (const patient of byPatient.values()) {
     try {
       const base = await collectPatientWeekData(patient, monday);
@@ -322,11 +335,17 @@ export async function runWeeklyReportsForWeek(monday: Date): Promise<WeeklyRepor
         recommendations: ai?.recommendations ?? [],
       };
       await saveReport(patient.id, monday, summary, highlights);
-      await notifyFisio(patient, monday, summary);
+      if (patient.assignedProfessionalId) {
+        perFisio.set(patient.assignedProfessionalId, (perFisio.get(patient.assignedProfessionalId) ?? 0) + 1);
+      }
       generated++;
     } catch {
       errors++;
     }
+  }
+
+  if (perFisio.size > 0) {
+    await notifyFisiosAggregated(perFisio, monday);
   }
 
   return {

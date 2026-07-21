@@ -51,6 +51,13 @@ export async function GET(req: NextRequest) {
   if (!includeDismissed) where.dismissedAt = null;
   if (scope === "mine") where.patient = { assignedProfessionalId: user.id };
 
+  // Modo contador: solo pintar el badge de la sidebar sin traer todos los
+  // datos. Filtra por scope+dismissed igual que la lista.
+  if (sp.get("count") === "1") {
+    const count = await (prisma as any).patientWeeklyReport.count({ where });
+    return NextResponse.json({ week: monday.toISOString(), count });
+  }
+
   const reports = await (prisma as any).patientWeeklyReport.findMany({
     where,
     orderBy: [{ generatedAt: "desc" }],

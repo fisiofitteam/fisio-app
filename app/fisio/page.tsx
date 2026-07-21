@@ -18,7 +18,6 @@ import { AdHocTasksCard } from "@/components/AdHocTasksCard";
 import { buildAdHocActiveForProfessional } from "@/lib/team-tasks-adhoc";
 import { calculatePreventionMetrics } from "@/lib/prevention-metrics";
 import { PreventionMetricsBlock } from "@/components/PreventionMetricsBlock";
-import { WeeklyReportsFeed } from "@/components/WeeklyReportsFeed";
 
 const TYPE_LABELS: Record<string, string> = {
   optimizacion: "Optimización",
@@ -299,7 +298,6 @@ export default async function FisioPanelPage({
     return (
       <main>
         {headerContent}
-        <WeeklyReportsFeed managerDefault={true} />
         {kpis}
         <CEOPanelTabs
           teamBlock={teamBlock}
@@ -440,7 +438,6 @@ export default async function FisioPanelPage({
   return (
     <main>
       {headerContent}
-      <WeeklyReportsFeed managerDefault={isManager} />
       {kpis}
       <FisioPanelTabs
         tareasContent={tareasContent}

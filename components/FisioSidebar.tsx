@@ -29,6 +29,7 @@ import {
   Megaphone,
   Brain,
   AlertTriangle,
+  Sunrise,
   LucideIcon,
 } from "lucide-react";
 
@@ -62,14 +63,16 @@ const EQUIPO: Item = { id: "equipo", label: "Equipo", Icon: UserCog, href: "/fis
 const CHAT: Item = { id: "chat", label: "Chat", Icon: MessageSquare, href: "/fisio/chat", match: (p) => p.startsWith("/fisio/chat") };
 const FISIO_IA: Item = { id: "fisio-ia", label: "Fisio IA", Icon: Brain, href: "/fisio/fisio-ia", match: (p) => p.startsWith("/fisio/fisio-ia") };
 const ALERTAS: Item = { id: "alertas", label: "Alertas", Icon: AlertTriangle, href: "/fisio/alertas", match: (p) => p.startsWith("/fisio/alertas") };
+const RESUMENES: Item = { id: "resumenes", label: "Resúmenes", Icon: Sunrise, href: "/fisio/resumenes", match: (p) => p.startsWith("/fisio/resumenes") };
 const AJUSTES: Item = { id: "ajustes", label: "Ajustes", Icon: Settings, href: "/fisio/ajustes", match: (p) => p.startsWith("/fisio/ajustes") };
 
-function itemsForRole(role: string): Item[] {
+function itemsForRole(role: string, opts: { withResumenes: boolean }): Item[] {
+  const R = opts.withResumenes ? [RESUMENES] : [];
   if (role === "ceo") {
-    return [PANEL, PACIENTES, ALERTAS, ADVANCE, LLAMADAS_VENTA, CONTENIDO, ANUNCIOS, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, RECURSOS, FINANZAS, EQUIPO, CHAT, FISIO_IA, AJUSTES];
+    return [PANEL, PACIENTES, ALERTAS, ...R, ADVANCE, LLAMADAS_VENTA, CONTENIDO, ANUNCIOS, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, RECURSOS, FINANZAS, EQUIPO, CHAT, FISIO_IA, AJUSTES];
   }
   if (role === "head_success") {
-    return [PANEL, PACIENTES, ALERTAS, ADVANCE, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, CHAT, AJUSTES];
+    return [PANEL, PACIENTES, ALERTAS, ...R, ADVANCE, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, CHAT, AJUSTES];
   }
   if (role === "setter") {
     return [PANEL, LEADS, PACIENTES, REGALOS, CONTENIDO, COMUNIDAD, REUNIONES, CALENDARIO, EQUIPO, CHAT, AJUSTES];
@@ -78,7 +81,7 @@ function itemsForRole(role: string): Item[] {
     return [PANEL, LLAMADAS_VENTA, FOLLOWUP, COMUNIDAD, REUNIONES, CALENDARIO, EQUIPO, CHAT, AJUSTES];
   }
   // fisio normal
-  return [PANEL, PACIENTES, ALERTAS, ROLLING_LECTURA, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, CHAT, AJUSTES];
+  return [PANEL, PACIENTES, ALERTAS, ...R, ROLLING_LECTURA, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, CHAT, AJUSTES];
 }
 
 const ROLE_LABEL: Record<string, string> = {
@@ -104,6 +107,7 @@ export function FisioSidebar({
   const [notifCount, setNotifCount] = useState(0);
   const [communityUnread, setCommunityUnread] = useState(0);
   const [alertsUnseen, setAlertsUnseen] = useState(0);
+  const [reportsCount, setReportsCount] = useState(0);
 
   // Polling notificaciones para mostrar badge en sidebar
   useEffect(() => {
@@ -156,9 +160,30 @@ export function FisioSidebar({
     return () => clearInterval(id);
   }, [user, pathname]);
 
+  // Polling contador de resumenes semanales sin descartar. Solo aparece
+  // el item "Resumenes" en la sidebar cuando hay >= 1 (el sistema los
+  // genera cada domingo noche y el fisio los va marcando como vistos).
+  useEffect(() => {
+    if (!user) return;
+    if (user.role !== "fisio" && user.role !== "head_success" && user.role !== "ceo") return;
+    async function fetchReports() {
+      try {
+        const res = await fetch("/api/weekly-reports?count=1", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        setReportsCount(data.count || 0);
+      } catch {}
+    }
+    fetchReports();
+    const id = setInterval(fetchReports, 60_000);
+    return () => clearInterval(id);
+  }, [user, pathname]);
+
   if (pathname.startsWith("/fisio/paciente/")) return null;
 
-  const items = user ? itemsForRole(user.role) : [PANEL, PACIENTES, BIBLIOTECA, TAREAS, LLAMADAS, RECURSOS];
+  const items = user
+    ? itemsForRole(user.role, { withResumenes: reportsCount > 0 })
+    : [PANEL, PACIENTES, BIBLIOTECA, TAREAS, LLAMADAS, RECURSOS];
   const initials = user ? getInitials(user.fullName) : "??";
 
   // ¿Qué items deben mostrar el badge de notificaciones?
@@ -166,6 +191,7 @@ export function FisioSidebar({
   // - Closers / CEO con franjas: ven el badge en LLAMADAS_VENTA
   function badgeFor(itemId: string): number | null {
     if (!user) return null;
+    if (itemId === "resumenes" && reportsCount > 0) return reportsCount;
     if (itemId === "alertas" && alertsUnseen > 0) return alertsUnseen;
     if (itemId === "comunidad" && communityUnread > 0) return communityUnread;
     if (notifCount === 0) return null;
