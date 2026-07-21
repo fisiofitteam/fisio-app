@@ -16,13 +16,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { materializePatientMetrics } from "@/lib/metric-definitions";
+import { classifyPatientNote } from "@/lib/ai-classify-patient-notes";
+import { createPatientAlert } from "@/lib/patient-alerts";
 
 export async function POST(req: NextRequest) {
-  const { sessionIds, responses } = await req.json();
+  const { sessionIds, responses, patientNotes } = await req.json();
   if (!Array.isArray(sessionIds) || sessionIds.length === 0) {
     return NextResponse.json({ error: "sessionIds requerido" }, { status: 400 });
   }
   const responsesObj: Record<string, any> = responses && typeof responses === "object" ? responses : {};
+
+  // Sensaciones del paciente al terminar la sesion combinada. Se replica
+  // en TODAS las ProgramSession del combo para que aparezcan en el registro
+  // del fisio (tab "Readaptacion y wods") independientemente de por que
+  // sesion filtre. Si viene vacio (compat con clientes antiguos), null.
+  const notes = typeof patientNotes === "string" ? patientNotes.trim() : "";
+  const notesToSave = notes.length > 0 ? notes : null;
 
   // Cargar todas las sesiones
   const sessions = await prisma.programSession.findMany({
@@ -96,6 +105,7 @@ export async function POST(req: NextRequest) {
       data: {
         completedAt: now,
         responses: JSON.stringify(sessionResponses),
+        patientNotes: notesToSave,
       },
     });
 
@@ -115,6 +125,31 @@ export async function POST(req: NextRequest) {
         }
       }
     }
+  }
+
+  // Clasificador IA de sensaciones — 1 sola pasada aunque haya N sesiones
+  // combinadas (misma nota). Si detecta warn/high, crea UNA alerta
+  // anclada a la primera sesion del combo. Silencioso ante fallos.
+  if (notesToSave) {
+    try {
+      const classification = await classifyPatientNote(notesToSave);
+      if (classification && (classification.severity === "warn" || classification.severity === "high")) {
+        await createPatientAlert({
+          patientId,
+          kind: "notes_ai",
+          severity: classification.severity,
+          summary: classification.summary,
+          triggerData: {
+            note: notesToSave,
+            sentiment: classification.sentiment,
+            topics: classification.topics,
+            combinedSessionIds: sessions.map((s) => s.id),
+          },
+          sourceType: "session",
+          sourceId: sessions[0].id,
+        });
+      }
+    } catch { /* no bloquear el flujo */ }
   }
 
   return NextResponse.json({ ok: true, completed: sessions.length });

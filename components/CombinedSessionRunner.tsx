@@ -19,6 +19,7 @@ import {
   FormResponder,
   EvolutionResponder,
 } from "@/components/SessionRunner";
+import { TaskTimerButton } from "@/components/TaskTimerButton";
 import { youtubeEmbedUrl } from "@/lib/youtube";
 
 export type CombinedGroup = {
@@ -41,6 +42,12 @@ export function CombinedSessionRunner({
   const [saving, setSaving] = useState(false);
   const [expandedExercise, setExpandedExercise] = useState<string | null>(null);
 
+  // Sensaciones del paciente al terminar (igual que SessionRunner). Antes
+  // faltaba aqui y el fisio no recibia feedback subjetivo cuando el atleta
+  // hacia >=2 sesiones el mismo dia.
+  const [patientNotes, setPatientNotes] = useState("");
+  const NOTES_MIN = 20;
+
   function setTaskResponse(taskId: string, data: any) {
     setResponses((prev) => ({ ...prev, [taskId]: data }));
   }
@@ -62,7 +69,7 @@ export function CombinedSessionRunner({
     await fetch("/api/sessions/complete-combined", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionIds, responses }),
+      body: JSON.stringify({ sessionIds, responses, patientNotes: patientNotes.trim() }),
     });
     if (whatsappUrl) {
       window.location.href = whatsappUrl;
@@ -104,14 +111,37 @@ export function CombinedSessionRunner({
         </div>
       )}
 
-      <button
-        onClick={complete}
-        disabled={saving}
-        className="w-full font-semibold rounded-lg py-3 text-sm disabled:opacity-60 mt-3"
-        style={{ background: "var(--p-accent)", color: "var(--p-accent-ink)" }}
+      <div
+        className="rounded-2xl p-4 space-y-2"
+        style={{ background: "var(--p-surface)", border: "1px solid var(--p-border)" }}
       >
-        {saving ? "Guardando…" : whatsappUrl ? "✓ Completar sesión y dar feedback" : "✓ Completar sesión"}
-      </button>
+        <div>
+          <label className="text-sm font-semibold block" style={{ color: "var(--p-text)" }}>
+            ¿Cómo te has sentido en esta sesión?
+          </label>
+          <p className="text-xs mt-0.5" style={{ color: "var(--p-text-dim)" }}>
+            Detalla las sensaciones que has tenido durante esta sesión — a tu fisio le sirve para ajustar tu plan.
+          </p>
+        </div>
+        <textarea
+          className="input text-sm"
+          rows={4}
+          placeholder="Ej: he notado cierta molestia en el hombro derecho durante los press, el resto sin dolor…"
+          value={patientNotes}
+          onChange={(e) => setPatientNotes(e.target.value)}
+        />
+        <div className="text-[11px] text-right" style={{ color: patientNotes.trim().length >= NOTES_MIN ? "var(--p-text-dim)" : "var(--p-text-faint)" }}>
+          {patientNotes.trim().length}/{NOTES_MIN} mínimo
+        </div>
+        <button
+          onClick={complete}
+          disabled={saving || patientNotes.trim().length < NOTES_MIN}
+          className="w-full font-semibold rounded-lg py-3 text-sm disabled:opacity-60"
+          style={{ background: "var(--p-accent)", color: "var(--p-accent-ink)" }}
+        >
+          {saving ? "Guardando…" : whatsappUrl ? "✓ Completar sesión y dar feedback" : "✓ Completar sesión"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -143,6 +173,7 @@ function TaskBlock({
                 {task.bodyText}
               </pre>
             )}
+            <TaskTimerButton taskTitle={task.title} taskBody={task.bodyText} />
             {ex.length > 0 && (
               <div className="mt-3">
                 <div className="text-xs text-neutral-500 mb-2">Vídeos de referencia</div>
@@ -207,6 +238,9 @@ function TaskBlock({
           })()}
           {task.description && (
             <p className="text-sm text-neutral-700 mt-2">{task.description}</p>
+          )}
+          {(task.description || task.title) && (
+            <TaskTimerButton taskTitle={task.title} taskBody={task.description ?? ""} />
           )}
         </div>
       )}
