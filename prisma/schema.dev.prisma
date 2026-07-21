@@ -162,6 +162,7 @@ model Patient {
   challengeResults MonthlyChallengeResult[]
   dailyLogs       PatientDailyLog[]
   alerts          PatientAlert[]
+  weeklyReports   PatientWeeklyReport[]
   leadsConverted  Lead[]
   sessions        Session[]
   programPauses   ProgramPause[]
@@ -2829,4 +2830,30 @@ model MetricAlertTemplate {
   config      String   // JSON stringificado con el mismo shape que Patient.metricAlertConfig
   updatedAt   DateTime @updatedAt
   updatedById String?
+}
+
+// Resumen semanal generado por IA (Sonnet) cada domingo noche para
+// pacientes RECUPERA/CONSOLIDA con ≥2 sesiones esa semana. El fisio los
+// consume en el feed lunes de /fisio y en la tab wods del paciente.
+// Se guarda uno por (patientId, weekStartDate). dismissedAt marca que
+// el fisio lo colapso del feed lunes; sigue accesible desde la ficha.
+model PatientWeeklyReport {
+  id             String   @id @default(cuid())
+  patient        Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patientId      String
+  // Lunes UTC 00:00 de la semana resumida.
+  weekStartDate  DateTime
+  // Texto principal del resumen (200-500 chars) que sale de Sonnet.
+  summary        String
+  // JSON con datos estructurados (metricas medias, adherencia, deltas vs
+  // semana anterior, sensaciones destacadas). Nulo si no hay bastantes datos.
+  highlights     String?
+  generatedAt    DateTime @default(now())
+  // Marcado por el fisio para colapsar del feed lunes. La ficha sigue mostrandolo.
+  dismissedAt    DateTime?
+  dismissedById  String?
+
+  @@unique([patientId, weekStartDate])
+  @@index([weekStartDate])
+  @@index([patientId, weekStartDate])
 }

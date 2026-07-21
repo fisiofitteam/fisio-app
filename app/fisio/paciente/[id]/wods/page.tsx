@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { WeeklyReportCard } from "@/components/WeeklyReportsFeed";
 
 export const dynamic = "force-dynamic";
 
@@ -52,7 +53,7 @@ export default async function PatientWodsTab({ params }: { params: { id: string 
   const patient = await prisma.patient.findUnique({ where: { id: params.id }, select: { id: true } });
   if (!patient) notFound();
 
-  const [logs, sessionsWithNotes] = await Promise.all([
+  const [logs, sessionsWithNotes, weeklyReports] = await Promise.all([
     prisma.wodLog.findMany({
       where: { patientId: params.id },
       orderBy: { submittedAt: "desc" },
@@ -71,7 +72,26 @@ export default async function PatientWodsTab({ params }: { params: { id: string 
       take: 40,
       include: { assignment: { include: { program: { select: { name: true } } } } },
     }),
+    // Resumenes semanales generados por el cron. Los indexamos por
+    // weekStartDate para pintar el card dentro del <details> de cada semana.
+    (prisma as any).patientWeeklyReport.findMany({
+      where: { patientId: params.id },
+      include: {
+        patient: {
+          select: {
+            id: true, fullName: true, programType: true, photoUrl: true,
+            assignedProfessional: { select: { id: true, fullName: true } },
+          },
+        },
+      },
+      orderBy: { weekStartDate: "desc" },
+      take: 26,
+    }),
   ]);
+  const reportsByWeek = new Map<string, any>();
+  for (const r of weeklyReports) {
+    reportsByWeek.set(new Date(r.weekStartDate).toISOString(), r);
+  }
 
   return (
     <div>
@@ -135,6 +155,20 @@ export default async function PatientWodsTab({ params }: { params: { id: string 
                         <span className="text-neutral-400 text-xs group-open:rotate-180 transition-transform">▼</span>
                       </summary>
                       <div className="mt-3 border-t border-neutral-100 pt-3 space-y-3">
+                        {(() => {
+                          const report = reportsByWeek.get(monday.toISOString());
+                          return report ? (
+                            <WeeklyReportCard
+                              report={{
+                                ...report,
+                                weekStartDate: new Date(report.weekStartDate).toISOString(),
+                                generatedAt: new Date(report.generatedAt).toISOString(),
+                                dismissedAt: report.dismissedAt ? new Date(report.dismissedAt).toISOString() : null,
+                              }}
+                              compact
+                            />
+                          ) : null;
+                        })()}
                         {items.map((s) => {
                           const workoutText = extractWorkoutText(s.tasksSnapshot);
                           const when = new Date(s.scheduledDate ?? s.completedAt ?? Date.now());
