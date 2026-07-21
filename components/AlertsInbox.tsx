@@ -20,7 +20,7 @@ type Alert = {
     fullName: string;
     photoUrl: string | null;
     programType: string | null;
-    assignedProfessional: { id: string; name: string } | null;
+    assignedProfessional: { id: string; fullName: string } | null;
   };
 };
 
@@ -149,7 +149,7 @@ function AlertRow({ alert, onAct, busy }: { alert: Alert; onAct: (id: string, ac
           </span>
           {alert.patient.assignedProfessional && (
             <span className="text-[11px] flex items-center gap-1" style={{ color: style.ink, opacity: 0.6 }}>
-              <User size={11} /> {alert.patient.assignedProfessional.name}
+              <User size={11} /> {alert.patient.assignedProfessional.fullName}
             </span>
           )}
         </div>

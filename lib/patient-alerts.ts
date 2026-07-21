@@ -89,7 +89,7 @@ export async function listAlerts(f: AlertListFilters) {
           fullName: true,
           photoUrl: true,
           programType: true,
-          assignedProfessional: { select: { id: true, name: true } },
+          assignedProfessional: { select: { id: true, fullName: true } },
         },
       },
     },
