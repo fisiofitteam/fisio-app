@@ -53,6 +53,11 @@ model Patient {
   // Zona horaria IANA del paciente (ej. "America/Bogota", "Europe/Madrid").
   timezone                 String?
 
+  // Config de alertas por metricas del daily-log (override por paciente).
+  // JSON stringificado: { [metricKey]: { enabled, direction, thresholdPct, windowDays } }.
+  // Null = usar la plantilla global (MetricAlertTemplate.global).
+  metricAlertConfig        String?
+
   // Tipo de programa contratado y dificultad percibida (etiquetas visibles)
   programType String?                                   // "RECUPERA" | "CONSOLIDA" | "ADVANCE"
   difficulty  String?                                   // "FACIL" | "MEDIO" | "DIFICIL"
@@ -2814,4 +2819,14 @@ model PatientAlert {
   @@index([patientId, createdAt])
   @@index([seenAt])
   @@index([kind, severity])
+}
+
+// Plantilla global de config de alertas por metrica. Fila unica (id = "global").
+// Los pacientes con metricAlertConfig=null usan esta plantilla al leer; los
+// que tienen override usan su propio JSON. Editable por CEO/head_success.
+model MetricAlertTemplate {
+  id          String   @id
+  config      String   // JSON stringificado con el mismo shape que Patient.metricAlertConfig
+  updatedAt   DateTime @updatedAt
+  updatedById String?
 }

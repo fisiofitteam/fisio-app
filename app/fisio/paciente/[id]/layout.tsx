@@ -13,6 +13,7 @@ import { SendLoginCodeButton } from "@/components/SendLoginCodeButton";
 import { MarkAsLegacyButton } from "@/components/MarkAsLegacyButton";
 import { PatientAgendaButton } from "@/components/PatientAgendaButton";
 import { PatientAlertsCard } from "@/components/PatientAlertsCard";
+import { MetricAlertsPatientButton } from "@/components/MetricAlertsPatientButton";
 import { calculateAdherence } from "@/lib/adherence";
 import { getActiveProfessional } from "@/lib/session";
 import { parseTargetRoles, templateVisibleFor, type ResourceRole } from "@/lib/resource-roles";
@@ -154,6 +155,7 @@ export default async function PatientLayout({
                   }
                 />
               )}
+            <MetricAlertsPatientButton patientId={patient.id} />
             <Link
               href={`/fisio/paciente/${patient.id}/exportar`}
               className="btn btn-ghost text-xs justify-start"

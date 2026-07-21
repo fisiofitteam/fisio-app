@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActivePatient } from "@/lib/session";
 import { todayForPatient, startOfDayForPatient } from "@/lib/patient-dates";
+import { runMetricAlertDetector } from "@/lib/metric-alerts";
 
 // POST /api/patient/daily-log — upsert del log de HOY del paciente activo.
 // body: { fatigue, rpe, sleep } — cada uno entero 0..10.
@@ -51,6 +52,18 @@ export async function POST(req: NextRequest) {
     create: { patientId: patient.id, recordedDate, fatigue, rpe, sleep },
     update: { fatigue, rpe, sleep },
   });
+
+  // Detector de alertas por metricas — corre sync pero silencioso: si por
+  // lo que sea peta, no rompe el guardado del paciente. Devuelve void.
+  await runMetricAlertDetector({
+    id: saved.id,
+    patientId: patient.id,
+    fatigue: saved.fatigue,
+    rpe: saved.rpe,
+    sleep: saved.sleep,
+    recordedDate: saved.recordedDate,
+  });
+
   return NextResponse.json(saved);
 }
 
