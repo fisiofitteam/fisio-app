@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
 
   const sp = req.nextUrl.searchParams;
   const isManager = user.role === "ceo" || user.role === "head_success";
+  const isCeo = user.role === "ceo";
   // Los fisios normales no ven resumenes de pacientes de otros: aunque
   // manden ?scope=all se ignora. Solo CEO/head_success ven "all".
   const scopeParam = sp.get("scope");
@@ -65,9 +66,17 @@ export async function GET(req: NextRequest) {
   // Modo contador: solo pintar el badge de la sidebar sin traer todos los
   // datos. Filtra por scope+dismissed igual que la lista.
   if (sp.get("count") === "1") {
+    // CEO solo cuenta el card global ADVANCE (los individuales le generan
+    // ruido: los lleva head_success y los fisios).
+    if (isCeo) {
+      const advanceGlobal = await (prisma as any).advanceWeeklySummary.count({
+        where: { weekStartDate: monday, dismissedAt: null },
+      });
+      return NextResponse.json({ week: monday.toISOString(), count: advanceGlobal });
+    }
     const [reportsCount, advanceGlobal] = await Promise.all([
       (prisma as any).patientWeeklyReport.count({ where }),
-      // El card global ADVANCE cuenta como 1 para el badge, solo para managers.
+      // Para head_success tambien contamos el card global.
       isManager
         ? (prisma as any).advanceWeeklySummary.count({
             where: { weekStartDate: monday, dismissedAt: null },
@@ -75,6 +84,12 @@ export async function GET(req: NextRequest) {
         : Promise.resolve(0),
     ]);
     return NextResponse.json({ week: monday.toISOString(), count: reportsCount + advanceGlobal });
+  }
+
+  // CEO no ve la lista de individuales — solo el card global (que se
+  // consume desde /api/weekly-reports/advance-global).
+  if (isCeo && !patientId) {
+    return NextResponse.json({ week: monday.toISOString(), reports: [] });
   }
 
   const reports = await (prisma as any).patientWeeklyReport.findMany({

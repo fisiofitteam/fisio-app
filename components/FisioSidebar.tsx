@@ -69,7 +69,9 @@ const AJUSTES: Item = { id: "ajustes", label: "Ajustes", Icon: Settings, href: "
 function itemsForRole(role: string, opts: { withResumenes: boolean }): Item[] {
   const R = opts.withResumenes ? [RESUMENES] : [];
   if (role === "ceo") {
-    return [PANEL, PACIENTES, ALERTAS, ...R, ADVANCE, LLAMADAS_VENTA, CONTENIDO, ANUNCIOS, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, RECURSOS, FINANZAS, EQUIPO, CHAT, FISIO_IA, AJUSTES];
+    // CEO no ve el buzon de Alertas (lo gestionan head_success y fisios).
+    // Solo ve Resumenes cuando hay contenido para el (card global ADVANCE).
+    return [PANEL, PACIENTES, ...R, ADVANCE, LLAMADAS_VENTA, CONTENIDO, ANUNCIOS, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, RECURSOS, FINANZAS, EQUIPO, CHAT, FISIO_IA, AJUSTES];
   }
   if (role === "head_success") {
     return [PANEL, PACIENTES, ALERTAS, ...R, ADVANCE, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, CHAT, AJUSTES];
@@ -143,10 +145,11 @@ export function FisioSidebar({
   }, [user, pathname]);
 
   // Polling contador de alertas sin ver del clinico. La API devuelve el
-  // scope adecuado por rol (fisio → suyas, manager → globales).
+  // scope adecuado por rol (fisio → suyas, head_success → globales).
+  // CEO no ve el buzon de alertas — es cosa del head y de los fisios.
   useEffect(() => {
     if (!user) return;
-    if (user.role !== "fisio" && user.role !== "head_success" && user.role !== "ceo") return;
+    if (user.role !== "fisio" && user.role !== "head_success") return;
     async function fetchAlerts() {
       try {
         const res = await fetch("/api/alerts?count=1", { cache: "no-store" });

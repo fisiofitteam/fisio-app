@@ -360,18 +360,27 @@ async function saveReport(patientId: string, monday: Date, summary: string, high
  */
 async function notifyFisiosAggregated(counts: Map<string, number>, monday: Date) {
   const weekLabel = monday.toLocaleDateString("es-ES", { day: "numeric", month: "long" });
+  // No notificamos a profesionales con rol="ceo" — el CEO no quiere ruido
+  // de resumenes individuales, solo el ejecutivo global ADVANCE.
+  const professionals = await prisma.professional.findMany({
+    where: { id: { in: Array.from(counts.keys()) }, role: { not: "ceo" } },
+    select: { id: true },
+  });
+  const allowed = new Set(professionals.map((p) => p.id));
   await Promise.all(
-    Array.from(counts.entries()).map(([professionalId, n]) =>
-      notifyProfessional({
-        professionalId,
-        type: "weekly_report_ready",
-        title: n === 1 ? "Nuevo resumen semanal" : `Nuevos resumenes semanales (${n})`,
-        body: n === 1
-          ? `Ya tienes listo el resumen de la semana del ${weekLabel} de un paciente. Pulsa para verlo.`
-          : `Ya tienes listos los resumenes de la semana del ${weekLabel} de tus pacientes. Pulsa para verlos.`,
-        actionUrl: `/fisio/resumenes?week=${monday.toISOString().slice(0, 10)}`,
-      }).catch(() => {})
-    )
+    Array.from(counts.entries())
+      .filter(([professionalId]) => allowed.has(professionalId))
+      .map(([professionalId, n]) =>
+        notifyProfessional({
+          professionalId,
+          type: "weekly_report_ready",
+          title: n === 1 ? "Nuevo resumen semanal" : `Nuevos resumenes semanales (${n})`,
+          body: n === 1
+            ? `Ya tienes listo el resumen de la semana del ${weekLabel} de un paciente. Pulsa para verlo.`
+            : `Ya tienes listos los resumenes de la semana del ${weekLabel} de tus pacientes. Pulsa para verlos.`,
+          actionUrl: `/fisio/resumenes?week=${monday.toISOString().slice(0, 10)}`,
+        }).catch(() => {})
+      )
   );
 }
 

@@ -16,7 +16,8 @@ import { countUnseenAlerts, listAlerts } from "@/lib/patient-alerts";
 export const dynamic = "force-dynamic";
 
 function canAccess(role: string): boolean {
-  return role === "fisio" || role === "head_success" || role === "ceo";
+  // CEO no consume el buzon de alertas (gestionado por head_success/fisios).
+  return role === "fisio" || role === "head_success";
 }
 
 export async function GET(req: NextRequest) {
