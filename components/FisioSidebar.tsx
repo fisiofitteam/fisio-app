@@ -103,7 +103,7 @@ function getInitials(fullName: string): string {
 export function FisioSidebar({
   user,
 }: {
-  user: { id: string; fullName: string; role: string } | null;
+  user: { id: string; fullName: string; role: string; photoUrl?: string | null } | null;
 }) {
   const pathname = usePathname() ?? "";
   const [notifCount, setNotifCount] = useState(0);
@@ -258,18 +258,27 @@ export function FisioSidebar({
         {user && (
           <div className="mx-3 mb-3 px-3 py-2.5 bg-white border border-neutral-200 rounded-xl">
             <div className="flex items-center gap-2.5">
-              <div
-                className="flex items-center justify-center font-semibold flex-shrink-0"
-                style={{
-                  width: 36, height: 36, borderRadius: 9,
-                  background: "linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)",
-                  color: "#0A0A0A",
-                  fontSize: 13,
-                  letterSpacing: "-0.02em",
-                }}
-              >
-                {initials}
-              </div>
+              {user.photoUrl ? (
+                <img
+                  src={user.photoUrl}
+                  alt={user.fullName}
+                  className="flex-shrink-0 object-cover"
+                  style={{ width: 36, height: 36, borderRadius: 9 }}
+                />
+              ) : (
+                <div
+                  className="flex items-center justify-center font-semibold flex-shrink-0"
+                  style={{
+                    width: 36, height: 36, borderRadius: 9,
+                    background: "linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)",
+                    color: "#0A0A0A",
+                    fontSize: 13,
+                    letterSpacing: "-0.02em",
+                  }}
+                >
+                  {initials}
+                </div>
+              )}
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium truncate" style={{ letterSpacing: "-0.015em" }}>
                   {user.fullName}

@@ -8,6 +8,7 @@ export type ActiveProfessional = {
   id: string;
   fullName: string;
   email: string | null;
+  photoUrl: string | null;
   role: Role;
   isManager: boolean;
   canSeeLeads: boolean;
@@ -215,13 +216,14 @@ export async function getRealSessionUser(): Promise<SessionUser | null> {
   return null;
 }
 
-function toActivePro(pro: { id: string; fullName: string; email: string | null; role: string }): ActiveProfessional {
+function toActivePro(pro: { id: string; fullName: string; email: string | null; role: string; photoUrl?: string | null }): ActiveProfessional {
   const role = pro.role as Role;
   const isManager = role === "ceo" || role === "head_success";
   return {
     id: pro.id,
     fullName: pro.fullName,
     email: pro.email,
+    photoUrl: pro.photoUrl ?? null,
     role,
     isManager,
     canSeeLeads: isManager || role === "setter" || role === "closer",
