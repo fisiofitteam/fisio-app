@@ -3080,6 +3080,10 @@ model AdvanceSessionLog {
   // Dia natural UTC en el que el paciente marco la sesion completada.
   sessionDate    DateTime
   patientNotes   String?
+  // Snapshot de las tareas del rolling ese dia (JSON string) para que el
+  // historico del paciente refleje lo que HIZO, independiente de cambios
+  // posteriores en el rolling. Null para logs previos al despliegue.
+  tasksSnapshot  String?
   completedAt    DateTime @default(now())
 
   @@unique([patientId, sessionDate])

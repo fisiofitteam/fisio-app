@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
-import { ArrowLeft, Trophy, BarChart3, BookOpen, Users, Target, CalendarDays, Settings, Sparkles, Timer } from "lucide-react";
+import { ArrowLeft, Trophy, BarChart3, BookOpen, Users, Target, CalendarDays, Settings, Sparkles, Timer, History } from "lucide-react";
 import { PatientSessionMenu, patientLogout } from "@/components/PatientSessionMenu";
 import { PatientNav } from "@/components/PatientNav";
 import { PatientShirtSizePicker } from "@/components/PatientShirtSizePicker";
@@ -355,12 +355,24 @@ export function PatientHomeRolling({
               sublabel={challenge.title}
             />
           )}
-          <RollingActionCard
-            href={`/paciente/${patientId}/biblioteca`}
-            Icon={BookOpen}
-            label="Biblioteca"
-            sublabel="Recursos y vídeos"
-          />
+          {/* ADVANCE: sustituimos Biblioteca (vacia) por Historico —
+              registro de entrenos + sensaciones dia a dia. Para PREVENTION
+              mantenemos Biblioteca (aun no tiene historico propio). */}
+          {programType === "ADVANCE" ? (
+            <RollingActionCard
+              href={`/paciente/${patientId}/historico`}
+              Icon={History}
+              label="Histórico"
+              sublabel="Tus entrenos y sensaciones"
+            />
+          ) : (
+            <RollingActionCard
+              href={`/paciente/${patientId}/biblioteca`}
+              Icon={BookOpen}
+              label="Biblioteca"
+              sublabel="Recursos y vídeos"
+            />
+          )}
           <RollingActionCard
             href={`/paciente/${patientId}/timer`}
             Icon={Timer}
