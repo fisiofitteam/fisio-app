@@ -9,6 +9,8 @@ import { applyRollingOverridesToTasks, fetchOverridesForPatient } from "@/lib/ap
 import { PatientDailyLogForm } from "@/components/PatientDailyLogForm";
 import { RollingExerciseVideos, type RollingExercise } from "@/components/RollingExerciseVideos";
 import { TaskTimerButton } from "@/components/TaskTimerButton";
+import { AdvanceSessionCompleteButton } from "@/components/AdvanceSessionCompleteButton";
+import { todayForPatient } from "@/lib/patient-dates";
 
 const DAY_NAMES = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
@@ -139,6 +141,17 @@ export default async function SesionHoyPage({ params }: { params: { id: string }
     where: { patientId_recordedDate: { patientId: patient.id, recordedDate: todayUtc } },
   }).catch(() => null);
 
+  // Registro de "sesion completada" del ADVANCE — solo aplica si el
+  // paciente es ADVANCE. Lo usamos para saber si ya pulso "he terminado"
+  // hoy y pre-rellenar sus sensaciones.
+  const isAdvance = patient.programType === "ADVANCE";
+  const todayForP = todayForPatient(patient.timezone ?? null);
+  const advanceLog = isAdvance
+    ? await (prisma as any).advanceSessionLog.findUnique({
+        where: { patientId_sessionDate: { patientId: patient.id, sessionDate: todayForP } },
+      }).catch(() => null)
+    : null;
+
   return (
     <main className="min-h-screen" style={{ color: "var(--p-text)" }}>
       <div className="relative max-w-md mx-auto px-5 py-7 pb-16">
@@ -176,6 +189,18 @@ export default async function SesionHoyPage({ params }: { params: { id: string }
               <SectionBlock label="Entrenamiento" color="#F59E0B" tasks={trnTasks} />
             )}
           </>
+        )}
+
+        {hasAny && isAdvance && (
+          <section className="mt-6">
+            <div className="text-[10px] font-bold tracking-wider uppercase mb-2" style={{ color: "var(--p-text-faint)" }}>
+              🏁 Al terminar
+            </div>
+            <AdvanceSessionCompleteButton
+              initialCompleted={!!advanceLog}
+              initialNotes={advanceLog?.patientNotes ?? null}
+            />
+          </section>
         )}
 
         {hasAny && (

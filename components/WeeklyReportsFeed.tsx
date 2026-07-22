@@ -64,8 +64,19 @@ const METRIC_EMOJI_BY_KEY: Record<string, string> = {
  * Muestra por defecto la semana pasada (la que se acaba de resumir).
  * El picker permite navegar semanas anteriores.
  */
+type AdvanceGlobalSummary = {
+  id: string;
+  weekStartDate: string;
+  summary: string;
+  highlights: string | null;
+  patientsCount: number;
+  generatedAt: string;
+  dismissedAt: string | null;
+};
+
 export function WeeklyReportsFeed({ managerDefault, initialWeekIso }: { managerDefault: boolean; initialWeekIso?: string }) {
   const [reports, setReports] = useState<Report[]>([]);
+  const [globalAdvance, setGlobalAdvance] = useState<AdvanceGlobalSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [scope, setScope] = useState<"mine" | "all">(managerDefault ? "all" : "mine");
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -78,16 +89,28 @@ export function WeeklyReportsFeed({ managerDefault, initialWeekIso }: { managerD
     const params = new URLSearchParams();
     params.set("scope", scope);
     if (week) params.set("week", week);
-    fetch(`/api/weekly-reports?${params.toString()}`, { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : { reports: [] }))
-      .then((data) => {
-        if (cancelled) return;
-        setReports(data.reports ?? []);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+    const promises: Promise<any>[] = [
+      fetch(`/api/weekly-reports?${params.toString()}`, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : { reports: [] }))
+        .catch(() => ({ reports: [] })),
+    ];
+    if (managerDefault) {
+      const g = new URLSearchParams();
+      if (week) g.set("week", week);
+      promises.push(
+        fetch(`/api/weekly-reports/advance-global${g.toString() ? "?" + g.toString() : ""}`, { cache: "no-store" })
+          .then((r) => (r.ok ? r.json() : { summary: null }))
+          .catch(() => ({ summary: null }))
+      );
+    }
+    Promise.all(promises).then(([reportsData, globalData]) => {
+      if (cancelled) return;
+      setReports(reportsData.reports ?? []);
+      setGlobalAdvance(globalData?.summary ?? null);
+      setLoading(false);
+    });
     return () => { cancelled = true; };
-  }, [scope, week]);
+  }, [scope, week, managerDefault]);
 
   async function dismiss(id: string) {
     setBusyId(id);
@@ -102,6 +125,22 @@ export function WeeklyReportsFeed({ managerDefault, initialWeekIso }: { managerD
       setBusyId(null);
     }
   }
+
+  async function dismissGlobal(id: string) {
+    setBusyId(id);
+    try {
+      await fetch(`/api/weekly-reports/advance-global/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "dismiss" }),
+      });
+      setGlobalAdvance(null);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const nothing = !loading && reports.length === 0 && !globalAdvance;
 
   return (
     <section className="mb-6">
@@ -126,7 +165,7 @@ export function WeeklyReportsFeed({ managerDefault, initialWeekIso }: { managerD
 
       {loading ? (
         <div className="text-sm text-neutral-500 italic">Cargando…</div>
-      ) : reports.length === 0 ? (
+      ) : nothing ? (
         <div className="rounded-2xl border border-dashed border-neutral-200 bg-white p-10 text-center">
           <div className="text-3xl mb-2">🌅</div>
           <div className="text-sm text-neutral-500">
@@ -135,12 +174,99 @@ export function WeeklyReportsFeed({ managerDefault, initialWeekIso }: { managerD
         </div>
       ) : (
         <div className="space-y-3">
+          {globalAdvance && (
+            <AdvanceGlobalCard summary={globalAdvance} onDismiss={() => dismissGlobal(globalAdvance.id)} busy={busyId === globalAdvance.id} />
+          )}
           {reports.map((r) => (
             <WeeklyReportCard key={r.id} report={r} onDismiss={() => dismiss(r.id)} busy={busyId === r.id} />
           ))}
         </div>
       )}
     </section>
+  );
+}
+
+function AdvanceGlobalCard({ summary, onDismiss, busy }: { summary: AdvanceGlobalSummary; onDismiss: () => void; busy: boolean }) {
+  let h: any = null;
+  try { h = summary.highlights ? JSON.parse(summary.highlights) : null; } catch { h = null; }
+  const attentionCases: string[] = Array.isArray(h?.attentionCases) ? h.attentionCases : [];
+  const wins: string[] = Array.isArray(h?.wins) ? h.wins : [];
+  const recommendations: string[] = Array.isArray(h?.recommendations) ? h.recommendations : [];
+  const athletes: Array<{ id: string; name: string; adherencePct: number; sessionsCompleted: number }> = Array.isArray(h?.athletes) ? h.athletes : [];
+
+  return (
+    <article
+      className="rounded-2xl border p-4 shadow-sm"
+      style={{ background: "linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%)", borderColor: "#F59E0B" }}
+    >
+      <header className="flex items-start justify-between gap-3 mb-2">
+        <div className="flex-1 min-w-0">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-amber-800 mb-1">
+            Ejecutivo semanal ADVANCE
+          </div>
+          <h3 className="font-bold text-base text-amber-950" style={{ letterSpacing: "-0.02em" }}>
+            ⚡ {summary.patientsCount} atletas · media {h?.adherenceAvg ?? "?"}% adherencia
+          </h3>
+        </div>
+        <button
+          onClick={onDismiss}
+          disabled={busy}
+          className="text-[11px] font-medium px-2.5 py-1 rounded-lg border border-amber-300 bg-white/70 hover:bg-white flex items-center gap-1 disabled:opacity-50"
+          title="Marcar como visto"
+        >
+          Visto
+        </button>
+      </header>
+
+      <p className="text-sm text-amber-950 leading-relaxed whitespace-pre-wrap">{summary.summary}</p>
+
+      {(attentionCases.length > 0 || wins.length > 0 || recommendations.length > 0) && (
+        <div className="mt-3 space-y-3">
+          {attentionCases.length > 0 && (
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-red-800 mb-1">🚨 Requieren atención</div>
+              <ul className="text-sm text-amber-950 space-y-1 list-disc pl-4">
+                {attentionCases.map((s, i) => <li key={i}>{s}</li>)}
+              </ul>
+            </div>
+          )}
+          {wins.length > 0 && (
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 mb-1">🏆 Wins</div>
+              <ul className="text-sm text-amber-950 space-y-1 list-disc pl-4">
+                {wins.map((s, i) => <li key={i}>{s}</li>)}
+              </ul>
+            </div>
+          )}
+          {recommendations.length > 0 && (
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-amber-800 mb-1">Recomendaciones</div>
+              <ul className="text-sm text-amber-950 space-y-1 list-disc pl-4">
+                {recommendations.map((s, i) => <li key={i}>{s}</li>)}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      {athletes.length > 0 && (
+        <details className="mt-3">
+          <summary className="text-[11px] font-medium text-amber-800 cursor-pointer hover:underline">
+            Ver los {athletes.length} atletas
+          </summary>
+          <ul className="mt-2 space-y-1">
+            {athletes.map((a) => (
+              <li key={a.id} className="text-xs flex items-center justify-between bg-white/60 rounded-md px-2 py-1">
+                <a href={`/fisio/paciente/${a.id}/wods`} className="font-medium text-amber-950 hover:underline">
+                  {a.name}
+                </a>
+                <span className="text-amber-800">{a.sessionsCompleted}/5 · {a.adherencePct}%</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </article>
   );
 }
 

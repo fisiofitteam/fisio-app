@@ -48,17 +48,33 @@ export async function GET(req: NextRequest) {
 
   const patientId = sp.get("patientId");
   const includeDismissed = sp.get("includeDismissed") === "1";
+  // Cuando el consumidor consulta un paciente concreto (por ejemplo la
+  // ficha wods), NO filtramos ADVANCE — se muestran todos sus reports.
+  // Solo excluimos ADVANCE en las vistas de feed general (donde los
+  // fisios no deben ver individuales y los managers ven el card global).
+  const isFeedView = !patientId;
 
   const where: any = { weekStartDate: monday };
   if (patientId) where.patientId = patientId;
   if (!includeDismissed) where.dismissedAt = null;
   if (scope === "mine") where.patient = { assignedProfessionalId: user.id };
+  if (isFeedView) {
+    where.patient = { ...(where.patient ?? {}), NOT: { programType: "ADVANCE" } };
+  }
 
   // Modo contador: solo pintar el badge de la sidebar sin traer todos los
   // datos. Filtra por scope+dismissed igual que la lista.
   if (sp.get("count") === "1") {
-    const count = await (prisma as any).patientWeeklyReport.count({ where });
-    return NextResponse.json({ week: monday.toISOString(), count });
+    const [reportsCount, advanceGlobal] = await Promise.all([
+      (prisma as any).patientWeeklyReport.count({ where }),
+      // El card global ADVANCE cuenta como 1 para el badge, solo para managers.
+      isManager
+        ? (prisma as any).advanceWeeklySummary.count({
+            where: { weekStartDate: monday, dismissedAt: null },
+          })
+        : Promise.resolve(0),
+    ]);
+    return NextResponse.json({ week: monday.toISOString(), count: reportsCount + advanceGlobal });
   }
 
   const reports = await (prisma as any).patientWeeklyReport.findMany({

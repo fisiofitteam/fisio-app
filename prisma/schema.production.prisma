@@ -181,6 +181,7 @@ model Patient {
   dailyLogs       PatientDailyLog[]
   alerts          PatientAlert[]
   weeklyReports   PatientWeeklyReport[]
+  advanceSessionLogs AdvanceSessionLog[]
   leadsConverted  Lead[]
   sessions        Session[]
   programPauses   ProgramPause[]
@@ -3064,5 +3065,45 @@ model PatientWeeklyReport {
   @@unique([patientId, weekStartDate])
   @@index([weekStartDate])
   @@index([patientId, weekStartDate])
+}
+
+// Registro de "sesion completada" de pacientes ADVANCE (que no tienen
+// ProgramSession porque usan rolling). Cada dia que el atleta pulsa "he
+// terminado" en /sesion-hoy se crea/actualiza una fila con sus
+// sensaciones. Sirve para: (a) que el resumen semanal del ADVANCE
+// tenga notas subjetivas y (b) que el clasificador IA de sensaciones
+// pueda leer estas notas igual que hace con ProgramSession.patientNotes.
+model AdvanceSessionLog {
+  id             String   @id @default(cuid())
+  patient        Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patientId      String
+  // Dia natural UTC en el que el paciente marco la sesion completada.
+  sessionDate    DateTime
+  patientNotes   String?
+  completedAt    DateTime @default(now())
+
+  @@unique([patientId, sessionDate])
+  @@index([sessionDate])
+  @@index([patientId, sessionDate])
+}
+
+// Card ejecutivo semanal para los pacientes ADVANCE (todos juntos). Los
+// ADVANCE los lleva casi todo el CEO — no queremos spamear a los fisios
+// con 40 reports individuales. En su lugar se genera este resumen global
+// cada domingo noche y aparece como un card unico en /fisio/resumenes
+// para CEO/head_success. Los reports individuales siguen guardandose en
+// PatientWeeklyReport (para consulta en la ficha) pero no se listan en
+// el feed.
+model AdvanceWeeklySummary {
+  id             String   @id @default(cuid())
+  weekStartDate  DateTime @unique
+  summary        String
+  highlights     String?
+  patientsCount  Int      @default(0)
+  generatedAt    DateTime @default(now())
+  dismissedAt    DateTime?
+  dismissedById  String?
+
+  @@index([weekStartDate])
 }
 

@@ -46,7 +46,8 @@ export async function createPatientAlert(input: CreateAlertInput) {
 /**
  * Cuenta alertas visibles (warn+) aun sin ver. Es lo que pinta el badge de
  * la sidebar. Si assignedProfessionalId se pasa, filtra a los pacientes
- * de ese fisio; si no, cuenta globales (para roles CEO/head_success).
+ * de ese fisio Y excluye ADVANCE (el CEO gestiona ADVANCE, no los fisios).
+ * Si es null, cuenta globales (para roles CEO/head_success).
  */
 export async function countUnseenAlerts(assignedProfessionalId?: string | null): Promise<number> {
   const where: any = {
@@ -55,7 +56,11 @@ export async function countUnseenAlerts(assignedProfessionalId?: string | null):
     severity: { in: VISIBLE_SEVERITIES },
   };
   if (assignedProfessionalId) {
-    where.patient = { assignedProfessionalId };
+    where.patient = {
+      assignedProfessionalId,
+      // Los fisios normales no ven pacientes ADVANCE (los lleva el CEO).
+      NOT: { programType: "ADVANCE" },
+    };
   }
   return await (prisma as any).patientAlert.count({ where });
 }
@@ -75,7 +80,10 @@ export async function listAlerts(f: AlertListFilters) {
   where.dismissedAt = null;
   where.severity = { in: f.includeInfo ? ["info", "warn", "high"] : VISIBLE_SEVERITIES };
   if (f.scope === "mine" && f.professionalId) {
-    where.patient = { assignedProfessionalId: f.professionalId };
+    where.patient = {
+      assignedProfessionalId: f.professionalId,
+      NOT: { programType: "ADVANCE" },
+    };
   }
   if (f.patientId) where.patientId = f.patientId;
   return await (prisma as any).patientAlert.findMany({
