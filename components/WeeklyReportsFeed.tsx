@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { X, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Minus, Activity, ExternalLink } from "lucide-react";
 
 type Metric = {
-  key: "fatigue" | "rpe" | "sleep";
+  key: string; // dinamico: pain, stiffness, morningPain, etc. (biblioteca clinica)
   label: string;
   avg: number | null;
   prevAvg: number | null;
@@ -44,9 +44,14 @@ type Report = {
   };
 };
 
-const METRIC_EMOJI: Record<Metric["key"], string> = {
-  fatigue: "🪫",
+// Emoji por defecto para metricas clinicas (biblioteca). Si en el futuro
+// añadimos emojis por metrica en la biblioteca, se puede leer de ahi.
+const METRIC_DEFAULT_EMOJI = "🩹";
+const METRIC_EMOJI_BY_KEY: Record<string, string> = {
+  pain: "🩹",
+  stiffness: "🦴",
   rpe: "🔥",
+  fatigue: "🪫",
   sleep: "😴",
 };
 
@@ -268,7 +273,7 @@ function MetricPill({ m }: { m: Metric }) {
   const arrow = delta === null || Math.abs(delta) < 5 ? <Minus size={11} /> : delta > 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />;
   return (
     <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 py-1.5 flex items-center gap-2 text-xs">
-      <span className="text-base leading-none">{METRIC_EMOJI[m.key]}</span>
+      <span className="text-base leading-none">{METRIC_EMOJI_BY_KEY[m.key] ?? METRIC_DEFAULT_EMOJI}</span>
       <div className="leading-tight">
         <div className="font-semibold text-neutral-800">{m.label} <span className="font-normal text-neutral-500">{m.avg.toFixed(1)}</span></div>
         <div className={`text-[10px] flex items-center gap-0.5 ${iconColor}`}>

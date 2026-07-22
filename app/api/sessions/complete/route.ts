@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { materializePatientMetrics } from "@/lib/metric-definitions";
 import { classifyPatientNote } from "@/lib/ai-classify-patient-notes";
 import { createPatientAlert } from "@/lib/patient-alerts";
+import { runMetricAlertDetectorForEntry } from "@/lib/metric-alerts";
 
 export async function POST(req: NextRequest) {
   const { sessionId, responses, patientNotes } = await req.json();
@@ -86,6 +87,17 @@ export async function POST(req: NextRequest) {
       if (!byKey[key]) continue;
       await prisma.metricEntry.create({
         data: { metricId: byKey[key], value, recordedAt: now, source: "session", sessionId },
+      });
+      // Detector de alertas por metricas (RECUPERA/CONSOLIDA): al registrar
+      // un valor de biblioteca (dolor, rigidez…), comparamos con la media
+      // reciente segun la config del paciente. Silencioso si falla.
+      await runMetricAlertDetectorForEntry({
+        patientId,
+        metricKey: key,
+        currentValue: value,
+        recordedAt: now,
+        sourceType: "session",
+        sourceId: session.id,
       });
     }
   }

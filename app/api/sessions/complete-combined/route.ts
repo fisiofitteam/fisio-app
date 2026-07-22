@@ -18,6 +18,7 @@ import { prisma } from "@/lib/prisma";
 import { materializePatientMetrics } from "@/lib/metric-definitions";
 import { classifyPatientNote } from "@/lib/ai-classify-patient-notes";
 import { createPatientAlert } from "@/lib/patient-alerts";
+import { runMetricAlertDetectorForEntry } from "@/lib/metric-alerts";
 
 export async function POST(req: NextRequest) {
   const { sessionIds, responses, patientNotes } = await req.json();
@@ -121,6 +122,15 @@ export async function POST(req: NextRequest) {
           if (!byKey[key]) continue;
           await prisma.metricEntry.create({
             data: { metricId: byKey[key], value: v, recordedAt: now, source: "session", sessionId: s.id },
+          });
+          // Detector de alertas por metricas (biblioteca RECUPERA/CONSOLIDA).
+          await runMetricAlertDetectorForEntry({
+            patientId,
+            metricKey: key,
+            currentValue: v,
+            recordedAt: now,
+            sourceType: "session",
+            sourceId: s.id,
           });
         }
       }

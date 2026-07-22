@@ -13,6 +13,7 @@ export function MetricAlertsPatientButton({ patientId }: { patientId: string }) 
   const [open, setOpen] = useState(false);
   const [config, setConfig] = useState<any | null>(null);
   const [override, setOverride] = useState(false);
+  const [metrics, setMetrics] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
   async function openAndLoad() {
@@ -24,6 +25,7 @@ export function MetricAlertsPatientButton({ patientId }: { patientId: string }) 
         const data = await r.json();
         setConfig(data.config);
         setOverride(!!data.override);
+        setMetrics(data.metrics ?? []);
       }
     } finally {
       setLoading(false);
@@ -69,6 +71,7 @@ export function MetricAlertsPatientButton({ patientId }: { patientId: string }) 
                 initial={config}
                 initialOverride={override}
                 scope="patient"
+                metrics={metrics}
                 onSave={async (cfg) => {
                   const r = await fetch(`/api/metric-alerts/patient/${patientId}`, {
                     method: "PUT",

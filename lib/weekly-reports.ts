@@ -45,7 +45,7 @@ export type WeeklyHighlights = {
   sessionsScheduled: number;
   adherencePct: number; // 0-100
   metrics: Array<{
-    key: "fatigue" | "rpe" | "sleep";
+    key: string;             // clinica: pain, stiffness… (auto de biblioteca)
     label: string;
     avg: number | null;      // media semana actual
     prevAvg: number | null;  // media semana anterior
@@ -76,7 +76,10 @@ async function collectPatientWeekData(patient: Patient, monday: Date) {
   prevStart.setUTCDate(prevStart.getUTCDate() - 7);
   const prevEnd = new Date(start);
 
-  const [scheduled, completed, dailyLogs, prevDailyLogs] = await Promise.all([
+  // Cargamos definiciones de metricas auto de la biblioteca (dolor,
+  // rigidez, etc). Solo estas son relevantes para RECUPERA/CONSOLIDA,
+  // que son los unicos pacientes que reciben resumen semanal.
+  const [scheduled, completed, metricDefs] = await Promise.all([
     prisma.programSession.count({
       where: {
         assignment: { patientId: patient.id, isActive: true },
@@ -91,23 +94,40 @@ async function collectPatientWeekData(patient: Patient, monday: Date) {
       include: { assignment: { include: { program: { select: { name: true } } } } },
       orderBy: { completedAt: "asc" },
     }),
-    prisma.patientDailyLog.findMany({
-      where: { patientId: patient.id, recordedDate: { gte: start, lt: end } },
-      orderBy: { recordedDate: "asc" },
-    }),
-    prisma.patientDailyLog.findMany({
-      where: { patientId: patient.id, recordedDate: { gte: prevStart, lt: prevEnd } },
-      orderBy: { recordedDate: "asc" },
+    prisma.metricDefinition.findMany({
+      where: { auto: true, active: true },
+      orderBy: { order: "asc" },
+      select: { key: true, name: true },
     }),
   ]);
 
   const adherencePct = scheduled > 0 ? Math.round((completed.length / scheduled) * 100) : 0;
 
-  function avg(key: "fatigue" | "rpe" | "sleep", rows: typeof dailyLogs): { avg: number | null; samples: number } {
-    const values = rows.map((r) => (r as any)[key] as number).filter((v) => typeof v === "number");
-    if (values.length === 0) return { avg: null, samples: 0 };
-    const a = values.reduce((s, v) => s + v, 0) / values.length;
-    return { avg: Number(a.toFixed(2)), samples: values.length };
+  // Buscamos las MetricEntry de esta semana y de la anterior para cada
+  // metricKey. Necesitamos el PatientMetric.id de cada key primero.
+  const patientMetrics = await prisma.patientMetric.findMany({
+    where: { patientId: patient.id, key: { in: metricDefs.map((d) => d.key) } },
+    select: { id: true, key: true, name: true },
+  });
+  const metricIds = patientMetrics.map((m) => m.id);
+  const entries = metricIds.length > 0
+    ? await prisma.metricEntry.findMany({
+        where: {
+          metricId: { in: metricIds },
+          recordedAt: { gte: prevStart, lt: end },
+        },
+        select: { metricId: true, value: true, recordedAt: true },
+      })
+    : [];
+
+  function avgFor(metricId: string, from: Date, to: Date): { avg: number | null; samples: number } {
+    const vals = entries
+      .filter((e) => e.metricId === metricId && e.recordedAt >= from && e.recordedAt < to)
+      .map((e) => e.value)
+      .filter((v) => typeof v === "number");
+    if (vals.length === 0) return { avg: null, samples: 0 };
+    const a = vals.reduce((s, v) => s + v, 0) / vals.length;
+    return { avg: Number(a.toFixed(2)), samples: vals.length };
   }
 
   function delta(cur: number | null, prev: number | null): number | null {
@@ -115,23 +135,18 @@ async function collectPatientWeekData(patient: Patient, monday: Date) {
     return Number((((cur - prev) / prev) * 100).toFixed(1));
   }
 
-  const metricDefs: Array<{ key: "fatigue" | "rpe" | "sleep"; label: string }> = [
-    { key: "fatigue", label: "Fatiga" },
-    { key: "rpe", label: "RPE" },
-    { key: "sleep", label: "Sueño" },
-  ];
-  const metrics = metricDefs.map((m) => {
-    const cur = avg(m.key, dailyLogs);
-    const prev = avg(m.key, prevDailyLogs);
+  const metrics = patientMetrics.map((pm) => {
+    const cur = avgFor(pm.id, start, end);
+    const prev = avgFor(pm.id, prevStart, prevEnd);
     return {
-      key: m.key,
-      label: m.label,
+      key: pm.key,
+      label: pm.name,
       avg: cur.avg,
       prevAvg: prev.avg,
       deltaPct: delta(cur.avg, prev.avg),
       samples: cur.samples,
     };
-  });
+  }).filter((m) => m.samples > 0 || m.prevAvg !== null); // solo pintamos las que tienen datos
 
   const sensations = completed
     .filter((s) => s.patientNotes && s.patientNotes.trim().length > 0)
@@ -161,7 +176,7 @@ async function collectPatientWeekData(patient: Patient, monday: Date) {
 const SYSTEM_PROMPT = `Eres un fisioterapeuta senior redactando el resumen semanal de un paciente para el fisio que le lleva.
 
 Recibiras un JSON con:
-- Datos objetivos de la semana (numero de sesiones, adherencia, medias de fatiga/RPE/sueño, deltas vs semana anterior).
+- Datos objetivos de la semana (numero de sesiones, adherencia, medias de las metricas clinicas del paciente — pueden ser dolor, rigidez, dolor al inicio del dia, etc segun lo que el CEO haya configurado; los labels vienen en el JSON — y deltas vs semana anterior).
 - Sensaciones que escribio el paciente al terminar cada sesion.
 - Metadatos del paciente (nombre, programa RECUPERA o CONSOLIDA).
 

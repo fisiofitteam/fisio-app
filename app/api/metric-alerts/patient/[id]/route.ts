@@ -16,6 +16,7 @@ import {
   hasOverride,
   setPatientOverride,
   normalizeConfig,
+  loadMetricsForScope,
 } from "@/lib/metric-alerts";
 
 export const dynamic = "force-dynamic";
@@ -37,11 +38,16 @@ async function assertAccess(user: any, patientId: string) {
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const user = await getActiveProfessional();
   if (!(await assertAccess(user, params.id))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const [config, override] = await Promise.all([
+  const p = await prisma.patient.findUnique({
+    where: { id: params.id },
+    select: { programType: true },
+  });
+  const [config, override, metrics] = await Promise.all([
     getEffectiveConfig(params.id),
     hasOverride(params.id),
+    loadMetricsForScope({ kind: "patient", programType: p?.programType ?? null }),
   ]);
-  return NextResponse.json({ config, override });
+  return NextResponse.json({ config, override, metrics });
 }
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
