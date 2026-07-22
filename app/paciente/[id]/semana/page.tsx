@@ -115,91 +115,95 @@ export default async function PatientWeekPage({
     }
   }
 
+  const activeTabStyle = { background: "var(--p-surface)", color: "var(--p-text)" } as const;
+  const inactiveTabStyle = { color: "var(--p-text-dim)" } as const;
+
   return (
-    <main className="max-w-md mx-auto px-4 py-6 pb-24">
-      <header className="mb-4">
-        <Link href={`/paciente/${patient.id}`} className="text-xs text-neutral-500">← Hoy</Link>
-        <h1 className="text-xl font-semibold mt-1">Mi semana</h1>
-        <p className="text-xs text-neutral-500">
-          {view === "prev"
-            ? "Semana anterior · lunes a domingo"
-            : view === "next"
-            ? "Semana siguiente · lunes a domingo"
-            : showNextWeek
-            ? "Esta semana + próxima"
-            : "Esta semana · lunes a domingo"}
-        </p>
-      </header>
-
-      {/* Selector de semana. "Siguiente" solo aparece desde el viernes,
-          antes no tiene mucho sentido programación. */}
-      <div className="flex bg-neutral-100 rounded-lg p-0.5 mb-4">
-        <Link
-          href={`/paciente/${patient.id}/semana?view=prev`}
-          className={`flex-1 px-3 py-1.5 text-xs rounded-md text-center transition-colors ${
-            view === "prev" ? "bg-white shadow-sm font-medium text-neutral-900" : "text-neutral-600"
-          }`}
-        >
-          ← Anterior
-        </Link>
-        <Link
-          href={`/paciente/${patient.id}/semana`}
-          className={`flex-1 px-3 py-1.5 text-xs rounded-md text-center transition-colors ${
-            view === "current" ? "bg-white shadow-sm font-medium text-neutral-900" : "text-neutral-600"
-          }`}
-        >
-          Esta semana
-        </Link>
-        {canGoNext && (
-          <Link
-            href={`/paciente/${patient.id}/semana?view=next`}
-            className={`flex-1 px-3 py-1.5 text-xs rounded-md text-center transition-colors ${
-              view === "next" ? "bg-white shadow-sm font-medium text-neutral-900" : "text-neutral-600"
-            }`}
-          >
-            Siguiente →
+    <main className="min-h-screen" style={{ color: "var(--p-text)" }}>
+      <div className="max-w-md mx-auto px-4 py-6 pb-24">
+        <header className="mb-4">
+          <Link href={`/paciente/${patient.id}`} className="text-xs" style={{ color: "var(--p-text-faint)" }}>
+            ← Hoy
           </Link>
-        )}
-      </div>
-
-      {view === "prev" && (
-        <p className="text-[11px] text-neutral-500 italic mb-3 text-center">
-          Si te perdiste alguna sesión, aquí puedes revisarla.
-        </p>
-      )}
-      {view === "next" && (
-        <p className="text-[11px] text-neutral-500 italic mb-3 text-center">
-          Adelantamos tu próxima semana para que la vayas viendo venir.
-        </p>
-      )}
-
-      <div className="space-y-3">
-        {days.map((d) => (
-          <DayCard key={d.key} patientId={patient.id} day={d} assignmentIndex={assignmentIndex} todayKey={today.toISOString().slice(0, 10)} />
-        ))}
-      </div>
-
-      {nextDays.length > 0 && (
-        <>
-          <div className="mt-6 mb-3 flex items-center gap-2">
-            <div className="h-px flex-1 bg-neutral-200" />
-            <span className="text-[10px] uppercase tracking-wider font-bold text-neutral-500">
-              Próxima semana
-            </span>
-            <div className="h-px flex-1 bg-neutral-200" />
-          </div>
-          <p className="text-[11px] text-neutral-500 italic mb-3 text-center">
-            Adelantamos tu siguiente semana para que la vayas viendo venir.
+          <h1 className="text-xl font-semibold mt-1">Mi semana</h1>
+          <p className="text-xs" style={{ color: "var(--p-text-dim)" }}>
+            {view === "prev"
+              ? "Semana anterior · lunes a domingo"
+              : view === "next"
+              ? "Semana siguiente · lunes a domingo"
+              : showNextWeek
+              ? "Esta semana + próxima"
+              : "Esta semana · lunes a domingo"}
           </p>
-          <div className="space-y-3">
-            {nextDays.map((d) => (
-              <DayCard key={d.key} patientId={patient.id} day={d} assignmentIndex={assignmentIndex} todayKey={today.toISOString().slice(0, 10)} />
-            ))}
-          </div>
-        </>
-      )}
+        </header>
 
-      <PatientNav patientId={patient.id} active="semana" />
+        {/* Selector de semana. "Siguiente" solo aparece desde el viernes,
+            antes no tiene mucho sentido programación. */}
+        <div className="flex rounded-lg p-0.5 mb-4" style={{ background: "var(--p-surface-2)" }}>
+          <Link
+            href={`/paciente/${patient.id}/semana?view=prev`}
+            className="flex-1 px-3 py-1.5 text-xs rounded-md text-center transition-colors font-medium"
+            style={view === "prev" ? activeTabStyle : inactiveTabStyle}
+          >
+            ← Anterior
+          </Link>
+          <Link
+            href={`/paciente/${patient.id}/semana`}
+            className="flex-1 px-3 py-1.5 text-xs rounded-md text-center transition-colors font-medium"
+            style={view === "current" ? activeTabStyle : inactiveTabStyle}
+          >
+            Esta semana
+          </Link>
+          {canGoNext && (
+            <Link
+              href={`/paciente/${patient.id}/semana?view=next`}
+              className="flex-1 px-3 py-1.5 text-xs rounded-md text-center transition-colors font-medium"
+              style={view === "next" ? activeTabStyle : inactiveTabStyle}
+            >
+              Siguiente →
+            </Link>
+          )}
+        </div>
+
+        {view === "prev" && (
+          <p className="text-[11px] italic mb-3 text-center" style={{ color: "var(--p-text-faint)" }}>
+            Si te perdiste alguna sesión, aquí puedes revisarla.
+          </p>
+        )}
+        {view === "next" && (
+          <p className="text-[11px] italic mb-3 text-center" style={{ color: "var(--p-text-faint)" }}>
+            Adelantamos tu próxima semana para que la vayas viendo venir.
+          </p>
+        )}
+
+        <div className="space-y-3">
+          {days.map((d) => (
+            <DayCard key={d.key} patientId={patient.id} day={d} assignmentIndex={assignmentIndex} todayKey={today.toISOString().slice(0, 10)} />
+          ))}
+        </div>
+
+        {nextDays.length > 0 && (
+          <>
+            <div className="mt-6 mb-3 flex items-center gap-2">
+              <div className="h-px flex-1" style={{ background: "var(--p-border)" }} />
+              <span className="text-[10px] uppercase tracking-wider font-bold" style={{ color: "var(--p-text-faint)" }}>
+                Próxima semana
+              </span>
+              <div className="h-px flex-1" style={{ background: "var(--p-border)" }} />
+            </div>
+            <p className="text-[11px] italic mb-3 text-center" style={{ color: "var(--p-text-faint)" }}>
+              Adelantamos tu siguiente semana para que la vayas viendo venir.
+            </p>
+            <div className="space-y-3">
+              {nextDays.map((d) => (
+                <DayCard key={d.key} patientId={patient.id} day={d} assignmentIndex={assignmentIndex} todayKey={today.toISOString().slice(0, 10)} />
+              ))}
+            </div>
+          </>
+        )}
+
+        <PatientNav patientId={patient.id} active="semana" />
+      </div>
     </main>
   );
 }
@@ -226,19 +230,25 @@ function DayCard({
   const dow = date.getUTCDay() === 0 ? 7 : date.getUTCDay();
   const isToday = day.key === todayKey;
   return (
-    <div className={`card ${isToday ? "border-neutral-900" : ""}`}>
+    <div
+      className="rounded-2xl p-4"
+      style={{
+        background: "var(--p-surface)",
+        border: `1px solid ${isToday ? "var(--p-accent)" : "var(--p-border)"}`,
+      }}
+    >
       <div className="flex justify-between items-baseline mb-2">
-        <div className="font-medium text-sm">
+        <div className="font-medium text-sm" style={{ color: "var(--p-text)" }}>
           {DAY_NAMES[dow]}
-          {isToday && <span className="text-xs text-neutral-500 ml-1">· hoy</span>}
+          {isToday && <span className="text-xs ml-1" style={{ color: "var(--p-text-dim)" }}>· hoy</span>}
         </div>
-        <div className="text-xs text-neutral-500">
+        <div className="text-xs" style={{ color: "var(--p-text-dim)" }}>
           {date.toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
         </div>
       </div>
 
       {daySessions.length === 0 ? (
-        <p className="text-xs text-neutral-400 italic">Día de descanso</p>
+        <p className="text-xs italic" style={{ color: "var(--p-text-faint)" }}>Día de descanso</p>
       ) : (
         <div className="space-y-2">
           {daySessions.map((s) => {
