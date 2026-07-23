@@ -2916,3 +2916,48 @@ model AdvanceWeeklySummary {
 
   @@index([weekStartDate])
 }
+
+// Tarifa de renovacion por programa y duracion. Editable solo por CEO
+// desde /fisio/recursos/tarifas. El resto del equipo la consulta.
+model RenewalRate {
+  id           String   @id @default(cuid())
+  // "RECUPERA" | "CONSOLIDA" | "ADVANCE" | "PREVENTION"
+  programType  String
+  // Duracion contratada en meses (2, 4, 6...). Unico junto con programType.
+  periodMonths Int
+  // Precio en la moneda base (euros por defecto).
+  amount       Float
+  currency     String   @default("EUR")
+  // Notas internas (descuento aplicado, condicion especial...). Opcional.
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  updatedById  String?
+
+  @@unique([programType, periodMonths])
+  @@index([programType])
+}
+
+// Documentos internos del equipo (protocolos, papers, plantillas legales,
+// checklists...). Suben desde /fisio/recursos/documentos. Todos los
+// profesionales pueden subir; targetRoles CSV define qué roles los ven.
+model ResourceDocument {
+  id           String   @id @default(cuid())
+  title        String
+  description  String?
+  // URL en Vercel Blob (para PDFs, docx, imagenes...) o link externo.
+  url          String
+  // "pdf" | "image" | "doc" | "sheet" | "link" | "other"
+  fileType     String   @default("pdf")
+  fileSize     Int?     // bytes, null para links
+  // Categoria libre para agrupar en la UI (Legal, Onboarding, Marketing...).
+  category     String   @default("General")
+  // CSV de roles a los que aplica (ej "ceo,head_success,fisio"). "all"
+  // significa todos los roles.
+  targetRoles  String   @default("all")
+  uploadedById String?
+  createdAt    DateTime @default(now())
+
+  @@index([category])
+  @@index([createdAt])
+}

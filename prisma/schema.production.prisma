@@ -3123,3 +3123,38 @@ model AdvanceWeeklySummary {
   @@index([weekStartDate])
 }
 
+// Tarifa de renovacion por programa y duracion. Editable solo por CEO
+// desde /fisio/recursos/tarifas.
+model RenewalRate {
+  id           String   @id @default(cuid())
+  programType  String
+  periodMonths Int
+  amount       Float
+  currency     String   @default("EUR")
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  updatedById  String?
+
+  @@unique([programType, periodMonths])
+  @@index([programType])
+}
+
+// Documentos internos del equipo (protocolos, papers, plantillas legales,
+// checklists...). Todos los profesionales pueden subir.
+model ResourceDocument {
+  id           String   @id @default(cuid())
+  title        String
+  description  String?
+  url          String
+  fileType     String   @default("pdf")
+  fileSize     Int?
+  category     String   @default("General")
+  targetRoles  String   @default("all")
+  uploadedById String?
+  createdAt    DateTime @default(now())
+
+  @@index([category])
+  @@index([createdAt])
+}
+
