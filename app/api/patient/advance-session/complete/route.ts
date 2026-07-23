@@ -1,26 +1,28 @@
 /**
  * POST /api/patient/advance-session/complete
  *
- * "He terminado la sesion" para pacientes ADVANCE (rolling). No hay
- * ProgramSession, asi que guardamos un AdvanceSessionLog por dia
- * (patientId + sessionDate unicos). Incluye las sensaciones que ha
- * escrito el atleta.
+ * "He terminado la sesion" para pacientes ADVANCE. La semana del atleta
+ * es una lista ordenada de sesiones 1..N (ver lib/advance-week.ts). Este
+ * endpoint recibe el sessionIndex de la sesion que se acaba de marcar,
+ * VALIDA que sea la siguiente pendiente (orden estricto) y persiste un
+ * AdvanceSessionLog para (patient, weekStart, sessionIndex).
  *
- * Al guardar, dispara el clasificador IA de notas: si detecta warn/high,
- * crea una PatientAlert (kind="notes_ai"). Las alertas de pacientes
- * ADVANCE las gestiona el CEO — no llegan al buzon de los fisios normales
- * (filtro aplicado en /api/alerts).
+ * Body:
+ *   { sessionIndex: number, patientNotes?: string }
+ *
+ * Al guardar dispara el clasificador IA de notas: si detecta warn/high,
+ * crea una PatientAlert (kind="notes_ai"). Las alertas de ADVANCE las
+ * gestiona el CEO — no llegan al buzon de los fisios (filtrado en /api/alerts).
  *
  * Auth: paciente activo. Solo funciona con programType="ADVANCE".
  */
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActivePatient } from "@/lib/session";
-import { todayForPatient, dowForPatient, weekStartForPatient } from "@/lib/patient-dates";
+import { todayForPatient } from "@/lib/patient-dates";
 import { classifyPatientNote } from "@/lib/ai-classify-patient-notes";
 import { createPatientAlert } from "@/lib/patient-alerts";
-import { resolveVisibleRollingWeek } from "@/lib/rolling-visible-week";
-import { applyRollingOverridesToTasks, fetchOverridesForPatient } from "@/lib/apply-rolling-overrides";
+import { buildAdvanceWeekView, buildAdvanceSessionSnapshot } from "@/lib/advance-week";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -45,16 +47,54 @@ export async function POST(req: NextRequest) {
   const rawNotes = typeof body?.patientNotes === "string" ? body.patientNotes.trim() : "";
   const notes = rawNotes.length > 0 ? rawNotes : null;
 
-  const sessionDate = todayForPatient(full.timezone);
+  const rawIndex = typeof body?.sessionIndex === "number" ? body.sessionIndex : Number(body?.sessionIndex);
+  const sessionIndex = Number.isFinite(rawIndex) ? Math.round(rawIndex) : NaN;
+  if (!Number.isFinite(sessionIndex) || sessionIndex < 1) {
+    return NextResponse.json({ error: "sessionIndex requerido" }, { status: 400 });
+  }
 
-  // Snapshot de tareas del rolling ese dia — para que el historico del
-  // paciente refleje lo que hizo aunque el rolling cambie despues.
-  const tasksSnapshot = await buildTasksSnapshot(full);
+  // Cargamos la vista de la semana para validar orden estricto y capturar
+  // el snapshot de tareas del atleta.
+  const week = await buildAdvanceWeekView(full);
+  const target = week.sessions.find((s) => s.sessionIndex === sessionIndex);
+  if (!target) {
+    return NextResponse.json({ error: "Esa sesión no existe en tu semana" }, { status: 400 });
+  }
+  // Solo se permite marcar la actual (nextIndex). Reeditando (target ya
+  // completed) se acepta también — el atleta puede corregir sus notas.
+  if (!target.completed && week.nextIndex !== null && sessionIndex !== week.nextIndex) {
+    return NextResponse.json({
+      error: `Antes debes completar la sesión ${week.nextIndex}.`,
+    }, { status: 400 });
+  }
+
+  const sessionDate = todayForPatient(full.timezone);
+  const tasksSnapshot = target.completed
+    ? null // ya guardado la primera vez, no lo re-capturamos
+    : await buildAdvanceSessionSnapshot(full, sessionIndex);
 
   const log = await (prisma as any).advanceSessionLog.upsert({
-    where: { patientId_sessionDate: { patientId: full.id, sessionDate } },
-    create: { patientId: full.id, sessionDate, patientNotes: notes, tasksSnapshot },
-    update: { patientNotes: notes, tasksSnapshot, completedAt: new Date() },
+    where: {
+      patientId_weekStart_sessionIndex: {
+        patientId: full.id,
+        weekStart: week.weekStart,
+        sessionIndex,
+      },
+    },
+    create: {
+      patientId: full.id,
+      sessionDate,
+      weekStart: week.weekStart,
+      sessionIndex,
+      patientNotes: notes,
+      tasksSnapshot,
+    },
+    update: {
+      // Al re-editar sensaciones respetamos el snapshot y sessionDate
+      // originales; solo actualizamos notes + completedAt.
+      patientNotes: notes,
+      completedAt: new Date(),
+    },
   });
 
   // Clasificador IA — silencioso ante fallos.
@@ -71,6 +111,8 @@ export async function POST(req: NextRequest) {
             note: notes,
             sentiment: classification.sentiment,
             topics: classification.topics,
+            sessionIndex,
+            weekStart: week.weekStart.toISOString(),
           },
           sourceType: "session",
           sourceId: log.id,
@@ -80,74 +122,4 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ ok: true, log });
-}
-
-/**
- * Construye el snapshot JSON de las tareas efectivas del atleta ese dia
- * (dia = hoy en su TZ). Junta los dos bloques (Accesorios + Entrenamiento)
- * y aplica overrides por-paciente. Devuelve string JSON o null si no hay
- * nada programado. Silencioso ante fallos — el snapshot es un extra.
- */
-async function buildTasksSnapshot(patient: {
-  id: string;
-  timezone: string | null;
-  rollingAccessoriesId: string | null;
-  rollingTrainingId: string | null;
-  rollingProgramId: string | null;
-}): Promise<string | null> {
-  try {
-    const today = new Date();
-    const dowMondayBased = dowForPatient(patient.timezone, today);
-    const todayDow = dowMondayBased % 7;
-    const thisMonday = weekStartForPatient(patient.timezone, today);
-    const accId = patient.rollingAccessoriesId;
-    const trnId = patient.rollingTrainingId || patient.rollingProgramId;
-
-    async function tasksFor(programId: string | null) {
-      if (!programId) return [] as any[];
-      const week: any = await resolveVisibleRollingWeek(programId, thisMonday, {
-        days: {
-          where: { dayOfWeek: todayDow },
-          include: { tasks: { orderBy: { order: "asc" } } },
-        },
-      });
-      if (!week) return [];
-      return week.days.flatMap((d: any) => d.tasks);
-    }
-
-    const [accRaw, trnRaw, overrides] = await Promise.all([
-      tasksFor(accId),
-      tasksFor(trnId),
-      fetchOverridesForPatient(patient.id),
-    ]);
-    const acc = applyRollingOverridesToTasks(accRaw as any, overrides as any);
-    const trn = applyRollingOverridesToTasks(trnRaw as any, overrides as any);
-
-    // Resolvemos vídeos referenciados para poder mostrarlos luego en el
-    // histórico sin volver a consultar.
-    const videoIds = new Set<string>();
-    for (const t of [...acc, ...trn]) {
-      if ((t.type === "VIDEO" || t.type === "WORKOUT") && t.videoId) videoIds.add(t.videoId);
-    }
-    const videos = videoIds.size > 0
-      ? await prisma.videoLibrary.findMany({ where: { id: { in: Array.from(videoIds) } } })
-      : [];
-    const videosById: Record<string, { youtubeUrl: string; title: string }> = {};
-    for (const v of videos) videosById[v.id] = { youtubeUrl: v.youtubeUrl, title: v.title };
-
-    const shape = (t: any, block: "Accesorios" | "Entrenamiento") => ({
-      id: t.id,
-      type: t.type,
-      title: t.title,
-      bodyText: t.bodyText ?? null,
-      videoId: t.videoId ?? null,
-      youtubeUrl: t.videoId ? (videosById[t.videoId]?.youtubeUrl ?? null) : null,
-      block,
-    });
-    const snapshot = [...acc.map((t) => shape(t, "Accesorios")), ...trn.map((t) => shape(t, "Entrenamiento"))];
-    if (snapshot.length === 0) return null;
-    return JSON.stringify(snapshot);
-  } catch {
-    return null;
-  }
 }

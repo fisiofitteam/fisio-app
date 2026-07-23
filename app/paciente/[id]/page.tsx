@@ -13,6 +13,7 @@ import { resolveVisibleRollingWeek } from "@/lib/rolling-visible-week";
 import { applyRollingOverridesToTasks, fetchOverridesForPatient } from "@/lib/apply-rolling-overrides";
 import { getPendingFormsForPatient } from "@/lib/pending-forms";
 import { todayForPatient, weekStartForPatient } from "@/lib/patient-dates";
+import { buildAdvanceWeekView } from "@/lib/advance-week";
 
 export default async function PatientHome({ params }: { params: { id: string } }) {
   const patient = await prisma.patient.findUnique({
@@ -362,6 +363,18 @@ export default async function PatientHome({ params }: { params: { id: string } }
     ]);
     const rollingUnread = rolledNewPosts + rolledNewComments + rolledNewReactions;
 
+    // Vista "Sesión N" para ADVANCE — el header decide qué mostrar
+    // basándose en el next pendiente.
+    const advanceWeekData = patient.programType === "ADVANCE"
+      ? await buildAdvanceWeekView({
+          id: patient.id,
+          timezone: patient.timezone,
+          rollingAccessoriesId: patient.rollingAccessoriesId,
+          rollingTrainingId: patient.rollingTrainingId,
+          rollingProgramId: patient.rollingProgramId,
+        }).catch(() => null)
+      : null;
+
     return (
       <PatientHomeRolling
         firstName={firstName}
@@ -394,6 +407,14 @@ export default async function PatientHome({ params }: { params: { id: string } }
         } : null}
         hasIndividualWork={hasIndividualWork}
         pendingForms={pendingForms}
+        advanceWeek={advanceWeekData
+          ? {
+              nextIndex: advanceWeekData.nextIndex,
+              allCompleted: advanceWeekData.allCompleted,
+              completedCount: advanceWeekData.completedCount,
+              totalCount: advanceWeekData.totalCount,
+            }
+          : null}
       />
     );
   }

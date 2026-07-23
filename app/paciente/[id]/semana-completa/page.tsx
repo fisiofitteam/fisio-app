@@ -1,12 +1,19 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Lock, PlayCircle } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { weekStartDate } from "@/lib/program-pauses";
 import { resolveVisibleRollingWeek } from "@/lib/rolling-visible-week";
 import { applyRollingOverridesToTasks, fetchOverridesForPatient } from "@/lib/apply-rolling-overrides";
 import { PatientNav } from "@/components/PatientNav";
 import { RollingWeekView } from "@/components/RollingWeekView";
+import { buildAdvanceWeekView } from "@/lib/advance-week";
+
+function summarizeTasks(tasks: Array<{ type: string; title: string }>): string {
+  if (tasks.length === 0) return "";
+  const titles = tasks.slice(0, 3).map((t) => t.title);
+  return titles.join(" · ");
+}
 
 /**
  * Vista "Semana completa" del paciente ADVANCE. Muestra los 5 días L-V con
@@ -52,6 +59,127 @@ export default async function PatientSemanaCompletaPage({
   // Si el paciente no está en rolling, no tiene sentido esta vista → home.
   if (patient.programMode !== "rolling" || !hasAnyRolling) {
     redirect(`/paciente/${patient.id}`);
+  }
+
+  // ─── ADVANCE: vista "Sesión 1..N" (auto-avance, sin días naturales) ───
+  if (patient.programType === "ADVANCE") {
+    const week = await buildAdvanceWeekView({
+      id: patient.id,
+      timezone: null, // usamos ahora sin TZ específica (buildAdvanceWeekView tolera null)
+      rollingAccessoriesId: patient.rollingAccessoriesId,
+      rollingTrainingId: patient.rollingTrainingId,
+      rollingProgramId: patient.rollingProgramId,
+    }).catch(() => null);
+
+    return (
+      <main className="min-h-screen" style={{ color: "var(--p-text)" }}>
+        <div className="relative max-w-md mx-auto px-5 py-7 pb-28">
+          <header className="mb-5">
+            <Link
+              href={`/paciente/${patient.id}`}
+              className="inline-flex items-center gap-1 text-xs mb-4"
+              style={{ color: "var(--p-text-faint)" }}
+            >
+              <ArrowLeft size={12} /> Volver
+            </Link>
+            <div className="text-[10px] font-bold tracking-wider uppercase mb-1" style={{ color: "var(--p-text-faint)" }}>
+              Mi semana
+            </div>
+            <h1 className="text-2xl font-bold" style={{ letterSpacing: "-0.03em" }}>
+              {week?.allCompleted
+                ? "🎉 ¡Semana completada!"
+                : `${week?.completedCount ?? 0}/${week?.totalCount ?? 0} sesiones`}
+            </h1>
+            <p className="text-xs mt-1" style={{ color: "var(--p-text-dim)" }}>
+              Se completan en orden. Cuando termines la sesión, avanza a la siguiente.
+            </p>
+          </header>
+
+          {!week || week.sessions.length === 0 ? (
+            <section
+              className="rounded-2xl p-5 text-center py-10"
+              style={{ background: "var(--p-surface-2)", border: "1px solid var(--p-border)" }}
+            >
+              <div className="text-3xl mb-2">📭</div>
+              <p className="text-sm" style={{ color: "var(--p-text-dim)" }}>
+                Tu coach aún no ha programado sesiones para esta semana.
+              </p>
+            </section>
+          ) : (
+            <div className="space-y-3">
+              {week.sessions.map((s) => {
+                const isCurrent = week.nextIndex === s.sessionIndex && !s.completed;
+                const isLocked = !s.completed && !isCurrent;
+                const summary = summarizeTasks(s.tasks);
+                const bg = s.completed
+                  ? "var(--p-green-bg)"
+                  : isCurrent
+                    ? "linear-gradient(135deg, var(--p-accent) 0%, #F59E0B 100%)"
+                    : "var(--p-surface)";
+                const color = s.completed
+                  ? "var(--p-green-text)"
+                  : isCurrent
+                    ? "var(--p-accent-ink)"
+                    : "var(--p-text-dim)";
+                const border = s.completed
+                  ? "1px solid var(--p-green-border)"
+                  : isCurrent
+                    ? "1px solid transparent"
+                    : "1px solid var(--p-border)";
+                const inner = (
+                  <div className="flex items-center gap-3">
+                    <div className="text-2xl">
+                      {s.completed ? <CheckCircle2 size={26} /> : isCurrent ? <PlayCircle size={26} /> : <Lock size={22} />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[10px] font-bold tracking-wider uppercase opacity-80">
+                        Sesión {s.sessionIndex}
+                      </div>
+                      <div className="text-base font-semibold" style={{ letterSpacing: "-0.02em" }}>
+                        {s.completed
+                          ? "Completada"
+                          : isCurrent
+                            ? "Hazla cuando puedas"
+                            : "Aún no toca"}
+                      </div>
+                      {summary && (
+                        <div className="text-[11px] mt-0.5 opacity-80 line-clamp-1">
+                          {summary}
+                        </div>
+                      )}
+                    </div>
+                    {!isLocked && <div className="text-xl opacity-70">→</div>}
+                  </div>
+                );
+                if (isLocked) {
+                  return (
+                    <div
+                      key={s.sessionIndex}
+                      className="rounded-2xl p-4"
+                      style={{ background: bg, color, border, opacity: 0.55 }}
+                    >
+                      {inner}
+                    </div>
+                  );
+                }
+                return (
+                  <Link
+                    key={s.sessionIndex}
+                    href={`/paciente/${patient.id}/sesion-hoy`}
+                    className="block rounded-2xl p-4 transition-transform active:scale-[0.98]"
+                    style={{ background: bg, color, border }}
+                  >
+                    {inner}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+
+          <PatientNav patientId={patient.id} active="semana" variant="advance" />
+        </div>
+      </main>
+    );
   }
 
   const today = new Date();

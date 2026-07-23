@@ -2869,19 +2869,30 @@ model AdvanceSessionLog {
   id             String   @id @default(cuid())
   patient        Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
   patientId      String
-  // Dia natural UTC en el que el paciente marco la sesion completada.
+  // Dia natural en el que el atleta MARCO la sesion. Se guarda como
+  // trazabilidad "cuando la marco realmente" pero ya no es la clave de
+  // identidad (podria hacer la Sesion 1 del lunes en jueves).
   sessionDate    DateTime
+  // Lunes UTC 00:00 de la semana a la que corresponde la sesion en el
+  // rolling del atleta.
+  weekStart      DateTime?
+  // Indice de sesion (1..N) dentro de esa semana, ordenado por dayOfWeek
+  // asc en el rolling. Es la clave real: al reordenar el rolling, el
+  // atleta ve las sesiones etiquetadas como "Sesion 1", "Sesion 2", etc.
+  sessionIndex   Int?
   patientNotes   String?
-  // Snapshot de las tareas del rolling ese dia (JSON string) para que el
-  // historico del paciente refleje lo que HIZO, independiente de cambios
-  // posteriores en el rolling. Null para logs previos al despliegue del
-  // snapshot; en esos solo hay sensaciones.
+  // Snapshot de las tareas de esa sesion (JSON string) capturado en el
+  // momento de marcarla. El historico refleja lo que hizo aunque el
+  // rolling maestro cambie.
   tasksSnapshot  String?
   completedAt    DateTime @default(now())
 
-  @@unique([patientId, sessionDate])
+  // Clave de identidad: una fila por (paciente, semana, indice). Los logs
+  // legacy (pre-migracion) tienen weekStart/sessionIndex null y viven bajo
+  // el indice antiguo por sessionDate.
+  @@unique([patientId, weekStart, sessionIndex])
   @@index([sessionDate])
-  @@index([patientId, sessionDate])
+  @@index([patientId, weekStart])
 }
 
 // Card ejecutivo semanal para los pacientes ADVANCE (todos juntos). Los

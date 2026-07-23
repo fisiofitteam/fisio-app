@@ -78,6 +78,7 @@ export function PatientHomeRolling({
   hasIndividualWork,
   pendingForms = [],
   programType,
+  advanceWeek,
 }: {
   firstName: string;
   patientId: string;
@@ -109,6 +110,16 @@ export function PatientHomeRolling({
    *  Se usa para mostrar la tarjeta "Trabajo específico" en el grid. */
   hasIndividualWork?: boolean;
   pendingForms?: import("@/lib/pending-forms").PendingForm[];
+  /**
+   * Vista de la semana ADVANCE en modelo "Sesión N": next pendiente,
+   * cuenta de completadas, total. Solo se pasa si programType==="ADVANCE".
+   */
+  advanceWeek?: {
+    nextIndex: number | null;
+    allCompleted: boolean;
+    completedCount: number;
+    totalCount: number;
+  } | null;
   /** Se cachea en localStorage para que el WorkoutTimer sepa si el atleta
    *  es ADVANCE sin plumbing extra. */
   programType?: string | null;
@@ -243,9 +254,45 @@ export function PatientHomeRolling({
 
         {needsShirtSize && <PatientShirtSizePicker />}
 
-        {/* 💪 Sesión de hoy — CTA en amarillo (solo si hay tareas hoy). Lleva a
-            la página con el detalle: Accesorios primero, Entrenamiento después. */}
-        {mode === "ready" && (daysByDow[todayDow] ?? []).length > 0 && (
+        {/* 💪 Sesión de hoy — CTA en amarillo.
+            - ADVANCE: modelo "Sesión N", auto-avanza al completar. No
+              depende del día natural. Muestra el nº de sesión pendiente
+              o el mensaje de semana completada.
+            - PREVENTION: mantiene lógica del día natural. */}
+        {mode === "ready" && programType === "ADVANCE" && advanceWeek && advanceWeek.totalCount > 0 && (
+          <Link
+            href={`/paciente/${patientId}/sesion-hoy`}
+            className="block rounded-2xl p-5 mb-5 transition-transform active:scale-[0.98]"
+            style={{
+              background: advanceWeek.allCompleted
+                ? "linear-gradient(135deg, #10B981 0%, #047857 100%)"
+                : "linear-gradient(135deg, var(--p-accent) 0%, #F59E0B 100%)",
+              color: "var(--p-accent-ink)",
+            }}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[10px] font-bold tracking-wider uppercase opacity-80 mb-1">
+                  Semana {advanceWeek.completedCount}/{advanceWeek.totalCount}
+                </div>
+                <div className="text-2xl font-bold flex items-center gap-2" style={{ letterSpacing: "-0.025em" }}>
+                  {advanceWeek.allCompleted
+                    ? <>🎉 Semana completada</>
+                    : advanceWeek.nextIndex
+                      ? <>💪 Sesión {advanceWeek.nextIndex}</>
+                      : <>💪 Sin sesiones</>}
+                </div>
+                <div className="text-xs mt-1.5 font-medium opacity-80">
+                  {advanceWeek.allCompleted
+                    ? "El lunes tienes nuevas sesiones."
+                    : "Cuando puedas, no hace falta que sea hoy."}
+                </div>
+              </div>
+              <div className="text-2xl font-bold flex-shrink-0">→</div>
+            </div>
+          </Link>
+        )}
+        {mode === "ready" && programType !== "ADVANCE" && (daysByDow[todayDow] ?? []).length > 0 && (
           <Link
             href={`/paciente/${patientId}/sesion-hoy`}
             className="block rounded-2xl p-5 mb-5 transition-transform active:scale-[0.98]"

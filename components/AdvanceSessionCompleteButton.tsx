@@ -6,23 +6,40 @@ import { CheckCircle2 } from "lucide-react";
 
 const NOTES_MIN = 20;
 
-export function AdvanceSessionCompleteButton({ initialCompleted, initialNotes }: { initialCompleted: boolean; initialNotes: string | null }) {
+export function AdvanceSessionCompleteButton({
+  initialCompleted,
+  initialNotes,
+  sessionIndex,
+  totalSessions,
+}: {
+  initialCompleted: boolean;
+  initialNotes: string | null;
+  /** Índice de la sesión que estás marcando (1..N de la semana). */
+  sessionIndex: number;
+  /** Total de sesiones programadas esa semana — solo para copy de cierre. */
+  totalSessions?: number;
+}) {
   const router = useRouter();
   const [notes, setNotes] = useState<string>(initialNotes ?? "");
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(initialCompleted);
+  const [error, setError] = useState<string | null>(null);
 
   async function submit() {
     setSaving(true);
+    setError(null);
     try {
       const r = await fetch("/api/patient/advance-session/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ patientNotes: notes.trim() }),
+        body: JSON.stringify({ sessionIndex, patientNotes: notes.trim() }),
       });
       if (r.ok) {
         setDone(true);
         router.refresh();
+      } else {
+        const data = await r.json().catch(() => ({}));
+        setError(data?.error ?? "No se pudo guardar");
       }
     } finally {
       setSaving(false);
@@ -37,7 +54,9 @@ export function AdvanceSessionCompleteButton({ initialCompleted, initialNotes }:
       >
         <CheckCircle2 size={18} className="flex-shrink-0 mt-0.5" />
         <div className="flex-1">
-          <div className="font-semibold">✓ Sesión de hoy completada</div>
+          <div className="font-semibold">
+            ✓ Sesión {sessionIndex}{totalSessions ? `/${totalSessions}` : ""} completada
+          </div>
           {notes.trim().length > 0 && (
             <p className="mt-1 text-xs whitespace-pre-wrap opacity-80">{notes.trim()}</p>
           )}
@@ -83,8 +102,15 @@ export function AdvanceSessionCompleteButton({ initialCompleted, initialNotes }:
         className="w-full font-semibold rounded-lg py-3 text-sm disabled:opacity-60"
         style={{ background: "var(--p-accent)", color: "var(--p-accent-ink)" }}
       >
-        {saving ? "Guardando…" : "✓ Marcar sesión como completada"}
+        {saving
+          ? "Guardando…"
+          : `✓ Marcar sesión ${sessionIndex}${totalSessions ? `/${totalSessions}` : ""} como completada`}
       </button>
+      {error && (
+        <div className="text-xs mt-1" style={{ color: "#EF4444" }}>
+          {error}
+        </div>
+      )}
     </div>
   );
 }

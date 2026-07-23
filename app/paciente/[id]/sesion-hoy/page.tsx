@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, CheckCircle2 } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { weekStartDate, todayMadridUtc } from "@/lib/program-pauses";
 import { dowForPatient, weekStartForPatient } from "@/lib/patient-dates";
@@ -10,7 +10,7 @@ import { PatientDailyLogForm } from "@/components/PatientDailyLogForm";
 import { RollingExerciseVideos, type RollingExercise } from "@/components/RollingExerciseVideos";
 import { TaskTimerButton } from "@/components/TaskTimerButton";
 import { AdvanceSessionCompleteButton } from "@/components/AdvanceSessionCompleteButton";
-import { todayForPatient } from "@/lib/patient-dates";
+import { buildAdvanceWeekView } from "@/lib/advance-week";
 
 const DAY_NAMES = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
@@ -51,27 +51,162 @@ export default async function SesionHoyPage({ params }: { params: { id: string }
   });
   if (!patient) notFound();
 
+  const isAdvance = patient.programType === "ADVANCE";
+  const isPrevention = patient.programType === "PREVENTION";
   const today = new Date();
-  // Día de la semana y lunes calculados EN LA ZONA HORARIA DEL PACIENTE —
-  // para atletas en América "hoy" no es lo mismo que aquí en Madrid.
-  // Fallback a Madrid si el paciente aún no ha sincronizado su TZ.
-  const dowMondayBased = dowForPatient(patient.timezone, today); // 1..7 (lunes=1)
-  const todayDow = dowMondayBased % 7; // 0..6 (0=dom) para compat con la lógica siguiente
+
+  // ─── ADVANCE: modelo "Sesión N" (siguiente pendiente, orden estricto) ───
+  if (isAdvance) {
+    const week = await buildAdvanceWeekView(patient, today);
+    const targetIndex = week.nextIndex ?? week.sessions[week.sessions.length - 1]?.sessionIndex ?? null;
+    const target = targetIndex ? week.sessions.find((s) => s.sessionIndex === targetIndex) ?? null : null;
+
+    // Log diario de hoy (para precargar el formulario si ya registró) —
+    // se mantiene como está, es información distinta de la sesión.
+    const todayUtc = todayMadridUtc();
+    const todayLog = await prisma.patientDailyLog.findUnique({
+      where: { patientId_recordedDate: { patientId: patient.id, recordedDate: todayUtc } },
+    }).catch(() => null);
+
+    // Resolver vídeos de las tareas de la sesión objetivo.
+    const videoIds = new Set<string>();
+    for (const t of target?.tasks ?? []) if (t.videoId) videoIds.add(t.videoId);
+    const videosById: Record<string, { youtubeUrl: string }> = {};
+    if (videoIds.size > 0) {
+      const vids = await prisma.videoLibrary.findMany({ where: { id: { in: Array.from(videoIds) } } });
+      for (const v of vids) videosById[v.id] = { youtubeUrl: v.youtubeUrl };
+    }
+    // Mapea a shape ResolvedTask.
+    function toResolved(bkTasks: NonNullable<typeof target>["tasks"]): ResolvedTask[] {
+      return bkTasks.map((t) => ({
+        id: t.id,
+        type: t.type,
+        title: t.title,
+        bodyText: t.bodyText,
+        youtubeUrl: t.videoId ? videosById[t.videoId]?.youtubeUrl ?? null : null,
+        exercises: [],
+      }));
+    }
+    const accTasks = target ? toResolved(target.tasks.filter((t) => t.block === "Accesorios")) : [];
+    const trnTasks = target ? toResolved(target.tasks.filter((t) => t.block === "Entrenamiento")) : [];
+    const hasAny = accTasks.length > 0 || trnTasks.length > 0;
+
+    return (
+      <main className="min-h-screen" style={{ color: "var(--p-text)" }}>
+        <div className="relative max-w-md mx-auto px-5 py-7 pb-16">
+          <Link
+            href={`/paciente/${patient.id}`}
+            className="inline-flex items-center gap-1 text-xs mb-6"
+            style={{ color: "var(--p-text-faint)" }}
+          >
+            <ArrowLeft size={12} /> Volver
+          </Link>
+
+          <header className="mb-6">
+            <div className="text-[10px] font-bold tracking-wider uppercase mb-1" style={{ color: "var(--p-text-faint)" }}>
+              Semana {week.completedCount}/{week.totalCount} completada
+            </div>
+            <h1 className="text-3xl font-bold flex items-center gap-2" style={{ letterSpacing: "-0.03em" }}>
+              {week.allCompleted
+                ? <>🎉 ¡Semana completada!</>
+                : target
+                  ? <>💪 Sesión {target.sessionIndex}</>
+                  : <>💪 Aún no hay sesiones programadas</>}
+            </h1>
+            {!week.allCompleted && target && (
+              <p className="text-xs mt-1" style={{ color: "var(--p-text-dim)" }}>
+                {target.completed
+                  ? "Ya la marcaste como completada — puedes editar tus sensaciones."
+                  : "Hazla cuando puedas, no hace falta que sea hoy."}
+              </p>
+            )}
+          </header>
+
+          {week.allCompleted && (
+            <section
+              className="rounded-2xl p-5 text-center py-8"
+              style={{
+                background: "var(--p-green-bg)",
+                border: "1px solid var(--p-green-border)",
+                color: "var(--p-green-text)",
+              }}
+            >
+              <CheckCircle2 size={32} className="mx-auto mb-2" />
+              <p className="text-sm">
+                Has completado las {week.totalCount} sesiones de esta semana. El lunes tendrás nuevas.
+              </p>
+            </section>
+          )}
+
+          {!week.allCompleted && target && (
+            <>
+              {accTasks.length > 0 && (
+                <SectionBlock label="Accesorios" color="#3B82F6" tasks={accTasks} />
+              )}
+              {trnTasks.length > 0 && (
+                <SectionBlock label="Entrenamiento" color="#F59E0B" tasks={trnTasks} />
+              )}
+            </>
+          )}
+
+          {hasAny && !week.allCompleted && target && (
+            <section className="mt-6">
+              <div className="text-[10px] font-bold tracking-wider uppercase mb-2" style={{ color: "var(--p-text-faint)" }}>
+                🏁 Al terminar
+              </div>
+              <AdvanceSessionCompleteButton
+                initialCompleted={target.completed}
+                initialNotes={target.patientNotes ?? null}
+                sessionIndex={target.sessionIndex}
+                totalSessions={week.totalCount}
+              />
+            </section>
+          )}
+
+          {(hasAny || week.allCompleted) && (
+            <section className="mt-6">
+              <div className="text-[10px] font-bold tracking-wider uppercase mb-2" style={{ color: "var(--p-text-faint)" }}>
+                ✍️ ¿Cómo te ha ido?
+              </div>
+              <PatientDailyLogForm
+                initial={todayLog ? { fatigue: todayLog.fatigue, rpe: todayLog.rpe, sleep: todayLog.sleep } : null}
+              />
+              <div className="text-center mt-3">
+                <Link href={`/paciente/${patient.id}/metricas`} className="text-xs underline" style={{ color: "var(--p-text-faint)" }}>
+                  Ver histórico de métricas →
+                </Link>
+              </div>
+            </section>
+          )}
+
+          {!hasAny && !week.allCompleted && (
+            <section
+              className="rounded-2xl p-5 text-center py-10"
+              style={{ background: "var(--p-surface-2)", border: "1px solid var(--p-border)" }}
+            >
+              <div className="text-3xl mb-2">📭</div>
+              <p className="text-sm" style={{ color: "var(--p-text-dim)" }}>
+                Tu coach aún no ha programado sesiones para esta semana.
+              </p>
+            </section>
+          )}
+        </div>
+      </main>
+    );
+  }
+
+  // ─── PREVENTION / OTROS: modelo día natural (sin cambios) ───
+
+  const dowMondayBased = dowForPatient(patient.timezone, today);
+  const todayDow = dowMondayBased % 7;
   const thisMonday = weekStartForPatient(patient.timezone, today);
 
-  const isPrevention = patient.programType === "PREVENTION";
-  // Prevention: single-rolling en el campo legacy rollingProgramId.
   const accId = isPrevention ? null : patient.rollingAccessoriesId;
   const trnId = isPrevention
     ? patient.rollingProgramId
     : (patient.rollingTrainingId || patient.rollingProgramId);
 
   async function fetchDayTasks(programId: string | null) {
-    // Semana visible: la actual si está publicada, si no la próxima
-    // publicada. `days` se filtra al día de hoy en ambos casos — si el
-    // atleta ve la semana futura, sigue viendo el mismo dow (ej. si es
-    // sábado y solo hay la semana que viene, ve el sábado de la semana
-    // que viene, que no existirá en tareas L→V y quedará vacío).
     const week: any = await resolveVisibleRollingWeek(programId, thisMonday, {
       days: {
         where: { dayOfWeek: todayDow },
@@ -97,12 +232,9 @@ export default async function SesionHoyPage({ params }: { params: { id: string }
     fetchDayTasks(trnId),
     fetchOverridesForPatient(patient.id),
   ]);
-  // Aplica overrides individuales del atleta (fisio puede haber ocultado /
-  // modificado tareas para él). Los IDs de RollingTask son estables.
   const accTasksOv = applyRollingOverridesToTasks(accTasksRaw as any, overrides as any);
   const trnTasksOv = applyRollingOverridesToTasks(trnTasksRaw as any, overrides as any);
 
-  // Resolver vídeos referenciados
   const videoIds = new Set<string>();
   for (const t of [...accTasksOv, ...trnTasksOv]) {
     if ((t.type === "VIDEO" || t.type === "WORKOUT") && t.videoId) videoIds.add(t.videoId);
@@ -135,22 +267,10 @@ export default async function SesionHoyPage({ params }: { params: { id: string }
   const trnTasks = resolve(trnTasksOv as any);
   const hasAny = accTasks.length > 0 || trnTasks.length > 0;
 
-  // Log diario de hoy (para precargar el formulario si ya registró)
   const todayUtc = todayMadridUtc();
   const todayLog = await prisma.patientDailyLog.findUnique({
     where: { patientId_recordedDate: { patientId: patient.id, recordedDate: todayUtc } },
   }).catch(() => null);
-
-  // Registro de "sesion completada" del ADVANCE — solo aplica si el
-  // paciente es ADVANCE. Lo usamos para saber si ya pulso "he terminado"
-  // hoy y pre-rellenar sus sensaciones.
-  const isAdvance = patient.programType === "ADVANCE";
-  const todayForP = todayForPatient(patient.timezone ?? null);
-  const advanceLog = isAdvance
-    ? await (prisma as any).advanceSessionLog.findUnique({
-        where: { patientId_sessionDate: { patientId: patient.id, sessionDate: todayForP } },
-      }).catch(() => null)
-    : null;
 
   return (
     <main className="min-h-screen" style={{ color: "var(--p-text)" }}>
@@ -173,7 +293,6 @@ export default async function SesionHoyPage({ params }: { params: { id: string }
         </header>
 
         {isPrevention ? (
-          // Prevention: un único tramo, sin etiqueta de bloque
           trnTasks.length > 0 && (
             <div className="space-y-2">
               {trnTasks.map((t) => <TaskCard key={t.id} task={t} />)}
@@ -184,23 +303,10 @@ export default async function SesionHoyPage({ params }: { params: { id: string }
             {accTasks.length > 0 && (
               <SectionBlock label="Accesorios" color="#3B82F6" tasks={accTasks} />
             )}
-
             {trnTasks.length > 0 && (
               <SectionBlock label="Entrenamiento" color="#F59E0B" tasks={trnTasks} />
             )}
           </>
-        )}
-
-        {hasAny && isAdvance && (
-          <section className="mt-6">
-            <div className="text-[10px] font-bold tracking-wider uppercase mb-2" style={{ color: "var(--p-text-faint)" }}>
-              🏁 Al terminar
-            </div>
-            <AdvanceSessionCompleteButton
-              initialCompleted={!!advanceLog}
-              initialNotes={advanceLog?.patientNotes ?? null}
-            />
-          </section>
         )}
 
         {hasAny && (
@@ -293,9 +399,6 @@ function TaskCard({ task }: { task: ResolvedTask }) {
       {task.type === "WORKOUT" && (
         <TaskTimerButton taskTitle={task.title} taskBody={task.bodyText} />
       )}
-      {/* En VIDEO también ofrecemos timer: el fisio a veces mete el enunciado
-          del trabajo en la descripción del vídeo demostrativo (patrón
-          típico de RECUPERA/CONSOLIDA/PREVENTION). */}
       {task.type === "VIDEO" && (
         <TaskTimerButton taskTitle={task.title} taskBody={task.bodyText} />
       )}

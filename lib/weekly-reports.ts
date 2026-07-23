@@ -201,10 +201,24 @@ async function collectAdvanceWeekData(patient: Patient, monday: Date) {
     }),
   ]);
 
-  // Programado = 5 sesiones L-V para ADVANCE.
-  const sessionsScheduled = 5;
+  // Programado = número de sesiones planificadas en el rolling de esta
+  // semana (puede ser 3, 4 o 5 según lo que meta el CEO). Cargamos la
+  // vista canónica de la semana para ser coherente con lo que ve el atleta.
+  const fullPatient = await prisma.patient.findUnique({
+    where: { id: patient.id },
+    select: {
+      timezone: true, rollingAccessoriesId: true, rollingTrainingId: true, rollingProgramId: true,
+    },
+  });
+  const advWeekView = fullPatient
+    ? await (await import("./advance-week")).buildAdvanceWeekView(
+        { id: patient.id, ...fullPatient },
+        monday,
+      ).catch(() => null)
+    : null;
+  const sessionsScheduled = advWeekView?.totalCount ?? sessionLogs.length ?? 0;
   const sessionsCompleted = sessionLogs.length;
-  const adherencePct = Math.round((sessionsCompleted / sessionsScheduled) * 100);
+  const adherencePct = sessionsScheduled > 0 ? Math.round((sessionsCompleted / sessionsScheduled) * 100) : 0;
 
   function avgOf(rows: typeof dailyLogs, key: "fatigue" | "rpe" | "sleep"): { avg: number | null; samples: number } {
     const vals = rows.map((r) => (r as any)[key] as number).filter((v) => typeof v === "number");
