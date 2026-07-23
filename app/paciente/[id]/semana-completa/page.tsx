@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Lock, PlayCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, PlayCircle } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { weekStartDate } from "@/lib/program-pauses";
 import { resolveVisibleRollingWeek } from "@/lib/rolling-visible-week";
@@ -91,7 +91,7 @@ export default async function PatientSemanaCompletaPage({
                 : `${week?.completedCount ?? 0}/${week?.totalCount ?? 0} sesiones`}
             </h1>
             <p className="text-xs mt-1" style={{ color: "var(--p-text-dim)" }}>
-              Se completan en orden. Cuando termines la sesión, avanza a la siguiente.
+              Marca cada sesión al terminarla. Puedes hacerlas en el orden que prefieras.
             </p>
           </header>
 
@@ -108,8 +108,10 @@ export default async function PatientSemanaCompletaPage({
           ) : (
             <div className="space-y-3">
               {week.sessions.map((s) => {
+                // Sin sesiones bloqueadas: cualquiera pendiente se puede
+                // hacer en cualquier orden. La "actual" (nextIndex) se
+                // marca solo como sugerencia visual.
                 const isCurrent = week.nextIndex === s.sessionIndex && !s.completed;
-                const isLocked = !s.completed && !isCurrent;
                 const summary = summarizeTasks(s.tasks);
                 const bg = s.completed
                   ? "var(--p-green-bg)"
@@ -120,56 +122,38 @@ export default async function PatientSemanaCompletaPage({
                   ? "var(--p-green-text)"
                   : isCurrent
                     ? "var(--p-accent-ink)"
-                    : "var(--p-text-dim)";
+                    : "var(--p-text)";
                 const border = s.completed
                   ? "1px solid var(--p-green-border)"
                   : isCurrent
                     ? "1px solid transparent"
                     : "1px solid var(--p-border)";
-                const inner = (
-                  <div className="flex items-center gap-3">
-                    <div className="text-2xl">
-                      {s.completed ? <CheckCircle2 size={26} /> : isCurrent ? <PlayCircle size={26} /> : <Lock size={22} />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[10px] font-bold tracking-wider uppercase opacity-80">
-                        Sesión {s.sessionIndex}
-                      </div>
-                      <div className="text-base font-semibold" style={{ letterSpacing: "-0.02em" }}>
-                        {s.completed
-                          ? "Completada"
-                          : isCurrent
-                            ? "Hazla cuando puedas"
-                            : "Aún no toca"}
-                      </div>
-                      {summary && (
-                        <div className="text-[11px] mt-0.5 opacity-80 line-clamp-1">
-                          {summary}
-                        </div>
-                      )}
-                    </div>
-                    {!isLocked && <div className="text-xl opacity-70">→</div>}
-                  </div>
-                );
-                if (isLocked) {
-                  return (
-                    <div
-                      key={s.sessionIndex}
-                      className="rounded-2xl p-4"
-                      style={{ background: bg, color, border, opacity: 0.55 }}
-                    >
-                      {inner}
-                    </div>
-                  );
-                }
                 return (
                   <Link
                     key={s.sessionIndex}
-                    href={`/paciente/${patient.id}/sesion-hoy`}
+                    href={`/paciente/${patient.id}/sesion-hoy?session=${s.sessionIndex}`}
                     className="block rounded-2xl p-4 transition-transform active:scale-[0.98]"
                     style={{ background: bg, color, border }}
                   >
-                    {inner}
+                    <div className="flex items-center gap-3">
+                      <div className="text-2xl">
+                        {s.completed ? <CheckCircle2 size={26} /> : <PlayCircle size={26} />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[10px] font-bold tracking-wider uppercase opacity-80">
+                          Sesión {s.sessionIndex}
+                        </div>
+                        <div className="text-base font-semibold" style={{ letterSpacing: "-0.02em" }}>
+                          {s.completed ? "Completada" : "Pendiente"}
+                        </div>
+                        {summary && (
+                          <div className="text-[11px] mt-0.5 opacity-80 line-clamp-1">
+                            {summary}
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-xl opacity-70">→</div>
+                    </div>
                   </Link>
                 );
               })}

@@ -53,19 +53,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "sessionIndex requerido" }, { status: 400 });
   }
 
-  // Cargamos la vista de la semana para validar orden estricto y capturar
-  // el snapshot de tareas del atleta.
+  // Cargamos la vista de la semana para capturar el snapshot de tareas.
+  // NO validamos orden estricto: el atleta puede completar cualquier sesion
+  // pendiente en cualquier orden (por si necesita reorganizarse por logistica).
   const week = await buildAdvanceWeekView(full);
   const target = week.sessions.find((s) => s.sessionIndex === sessionIndex);
   if (!target) {
     return NextResponse.json({ error: "Esa sesión no existe en tu semana" }, { status: 400 });
-  }
-  // Solo se permite marcar la actual (nextIndex). Reeditando (target ya
-  // completed) se acepta también — el atleta puede corregir sus notas.
-  if (!target.completed && week.nextIndex !== null && sessionIndex !== week.nextIndex) {
-    return NextResponse.json({
-      error: `Antes debes completar la sesión ${week.nextIndex}.`,
-    }, { status: 400 });
   }
 
   const sessionDate = todayForPatient(full.timezone);

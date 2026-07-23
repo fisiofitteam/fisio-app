@@ -282,11 +282,11 @@ export function PatientHomeRolling({
                       ? <>💪 Sesión {advanceWeek.nextIndex}</>
                       : <>💪 Sin sesiones</>}
                 </div>
-                <div className="text-xs mt-1.5 font-medium opacity-80">
-                  {advanceWeek.allCompleted
-                    ? "El lunes tienes nuevas sesiones."
-                    : "Cuando puedas, no hace falta que sea hoy."}
-                </div>
+                {advanceWeek.allCompleted && (
+                  <div className="text-xs mt-1.5 font-medium opacity-80">
+                    El lunes tienes nuevas sesiones.
+                  </div>
+                )}
               </div>
               <div className="text-2xl font-bold flex-shrink-0">→</div>
             </div>

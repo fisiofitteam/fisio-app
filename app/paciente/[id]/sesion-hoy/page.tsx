@@ -36,7 +36,7 @@ type ResolvedTask = {
   exercises: RollingExercise[];
 };
 
-export default async function SesionHoyPage({ params }: { params: { id: string } }) {
+export default async function SesionHoyPage({ params, searchParams }: { params: { id: string }; searchParams: { session?: string } }) {
   const patient = await prisma.patient.findUnique({
     where: { id: params.id },
     select: {
@@ -55,10 +55,21 @@ export default async function SesionHoyPage({ params }: { params: { id: string }
   const isPrevention = patient.programType === "PREVENTION";
   const today = new Date();
 
-  // ─── ADVANCE: modelo "Sesión N" (siguiente pendiente, orden estricto) ───
+  // ─── ADVANCE: modelo "Sesión N" (cualquier orden permitido) ───
   if (isAdvance) {
     const week = await buildAdvanceWeekView(patient, today);
-    const targetIndex = week.nextIndex ?? week.sessions[week.sessions.length - 1]?.sessionIndex ?? null;
+    // Si el atleta viene con ?session=N (desde la vista semana-completa)
+    // respetamos su elección. Si no, mostramos la siguiente pendiente
+    // (nextIndex) como sugerencia por defecto.
+    const requestedIndex = Number(searchParams?.session);
+    const validRequested = Number.isFinite(requestedIndex)
+      && week.sessions.some((s) => s.sessionIndex === requestedIndex)
+      ? requestedIndex
+      : null;
+    const targetIndex = validRequested
+      ?? week.nextIndex
+      ?? week.sessions[week.sessions.length - 1]?.sessionIndex
+      ?? null;
     const target = targetIndex ? week.sessions.find((s) => s.sessionIndex === targetIndex) ?? null : null;
 
     // Log diario de hoy (para precargar el formulario si ya registró) —
@@ -113,11 +124,9 @@ export default async function SesionHoyPage({ params }: { params: { id: string }
                   ? <>💪 Sesión {target.sessionIndex}</>
                   : <>💪 Aún no hay sesiones programadas</>}
             </h1>
-            {!week.allCompleted && target && (
+            {!week.allCompleted && target?.completed && (
               <p className="text-xs mt-1" style={{ color: "var(--p-text-dim)" }}>
-                {target.completed
-                  ? "Ya la marcaste como completada — puedes editar tus sensaciones."
-                  : "Hazla cuando puedas, no hace falta que sea hoy."}
+                Ya la marcaste como completada — puedes editar tus sensaciones.
               </p>
             )}
           </header>
