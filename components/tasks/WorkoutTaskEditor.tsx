@@ -42,8 +42,11 @@ export function WorkoutTaskEditor({ task, onClose, onSave }: { task: any; onClos
   const [saving, setSaving] = useState(false);
   // Plantillas de workout de la biblioteca
   const [templates, setTemplates] = useState<Template[]>([]);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [saveAsTemplate, setSaveAsTemplate] = useState(false);
+  // Buscador de plantillas: input libre + dropdown filtrado. Con 20+
+  // plantillas el select nativo era imposible de escanear.
+  const [templateSearch, setTemplateSearch] = useState("");
+  const [templateOpen, setTemplateOpen] = useState(false);
 
   useEffect(() => {
     fetch("/api/library").then((r) => r.json()).then(setLibrary);
@@ -60,8 +63,14 @@ export function WorkoutTaskEditor({ task, onClose, onSave }: { task: any; onClos
     // Recuperar ejercicios vinculados desde la library en memoria
     const exs = library.filter((e: any) => t.exerciseIds.includes(e.id));
     setLinkedExercises(exs);
-    setSelectedTemplateId("");
+    setTemplateSearch("");
+    setTemplateOpen(false);
   }
+
+  const filteredTemplates = templates.filter((t) => {
+    if (!templateSearch) return true;
+    return t.title.toLowerCase().includes(templateSearch.toLowerCase());
+  });
 
   const filteredLibrary = library.filter((ex) => {
     if (linkedExercises.some((le) => le.id === ex.id)) return false;
@@ -161,18 +170,65 @@ export function WorkoutTaskEditor({ task, onClose, onSave }: { task: any; onClos
         🏋️ Workout · escribe el bloque tal cual se lo entregarías al paciente
       </div>
 
-      {/* Selector para cargar una plantilla de la biblioteca */}
+      {/* Buscador de plantillas de la biblioteca. Substituye al select
+          nativo: con 20+ plantillas era casi imposible escanear. */}
       {templates.length > 0 && (
-        <div>
-          <label className="text-xs text-neutral-500 block mb-1">Cargar de plantilla (opcional)</label>
-          <select
-            className="input text-sm"
-            value={selectedTemplateId}
-            onChange={(e) => { setSelectedTemplateId(e.target.value); if (e.target.value) loadTemplate(e.target.value); }}
-          >
-            <option value="">— Empezar en blanco —</option>
-            {templates.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
-          </select>
+        <div className="relative">
+          <label className="text-xs text-neutral-500 block mb-1">
+            Cargar de plantilla (opcional) · <span className="text-neutral-400">{templates.length} disponibles</span>
+          </label>
+          <div className="relative">
+            <input
+              className="input text-sm pr-8"
+              placeholder="🔍 Buscar plantilla por nombre..."
+              value={templateSearch}
+              onChange={(e) => { setTemplateSearch(e.target.value); setTemplateOpen(true); }}
+              onFocus={() => setTemplateOpen(true)}
+              onBlur={() => setTimeout(() => setTemplateOpen(false), 150)}
+            />
+            {templateSearch && (
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => { setTemplateSearch(""); setTemplateOpen(true); }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700 text-sm leading-none px-1"
+                aria-label="Limpiar búsqueda"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+          {templateOpen && (
+            <div className="absolute left-0 right-0 top-full mt-1 z-20 bg-white border border-neutral-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+              {filteredTemplates.length === 0 ? (
+                <div className="px-3 py-3 text-xs text-neutral-500 italic text-center">
+                  Sin resultados para "{templateSearch}"
+                </div>
+              ) : (
+                filteredTemplates.slice(0, 30).map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => loadTemplate(t.id)}
+                    className="w-full text-left px-3 py-2 hover:bg-neutral-50 border-b border-neutral-100 last:border-b-0"
+                  >
+                    <div className="text-sm font-medium truncate">{t.title}</div>
+                    {t.bodyText && (
+                      <div className="text-[11px] text-neutral-500 truncate mt-0.5">
+                        {t.bodyText.split("\n")[0]}
+                      </div>
+                    )}
+                  </button>
+                ))
+              )}
+              {filteredTemplates.length > 30 && (
+                <div className="px-3 py-2 text-[11px] text-neutral-400 italic border-t border-neutral-100 text-center">
+                  Mostrando 30 de {filteredTemplates.length} · refina la búsqueda
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
