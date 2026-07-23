@@ -75,7 +75,17 @@ TIPOGRAFÍAS (elige la que encaja):
 - "Inter" → cuerpos neutros.
 
 REGLAS DE DISEÑO (críticas):
-1. JERARQUÍA: cada slide tiene UN elemento hero (grande, impacto) + 1-3 elementos de apoyo. No amontones textos del mismo tamaño.
+
+0. MINIMALISMO ESTRICTO (regla principal, prevalece sobre todo lo demás):
+   - MÁXIMO 2 elementos de tipo "text" por slide. Nunca 3 ni más.
+   - Preferible 1 solo elemento por slide cuando sea posible (portadas, cierres, momentos de silencio visual).
+   - PROHIBIDO combinar tag + hero + subtítulo. Elige DOS de esos, nunca los tres.
+   - PROHIBIDO usar elementos "line" (líneas decorativas) salvo casos excepcionales.
+   - PROHIBIDO comillas gigantes decorativas en citas — el italic ya destaca lo suficiente.
+   - PROHIBIDO subtítulos que "explican" el hero — si el hero necesita explicación, reescribe el hero.
+   - El espacio negativo es tu principal recurso de diseño. Menos siempre gana.
+
+1. JERARQUÍA: cada slide tiene UN elemento hero (grande, impacto) + como MÁXIMO 1 elemento de apoyo (subtítulo O tag, no ambos).
 2. TAMAÑOS de referencia sobre canvas 1080×1920:
    - Hero Antonio/Bebas uppercase: 120–200 px (2–4 palabras máx).
    - Título mediano Antonio: 70–100 px.
@@ -84,48 +94,61 @@ REGLAS DE DISEÑO (críticas):
    - Tag/etiqueta Manrope uppercase con letterSpacing 0.15-0.2: 22–30 px.
    - Números gigantes (Antonio): 300–400 px.
 3. CONTRASTE cromático: amarillo hero + blanco apoyo, o blanco hero + amarillo apoyo. Nunca dos amarillos igual de grandes.
-4. RESPIRACIÓN: no pegues elementos a los bordes. y=8-12 arriba, y=88-92 abajo.
-5. VARIEDAD por slide en un mismo carrusel:
-   - Slide 1 = HOOK (hero enorme centrado, poca decoración).
-   - Slides intermedios = contenido (número gigante, cita larga, lista de puntos, etc).
-   - Slide final = CTA o pregunta abierta.
-6. Si usas caja de fondo en un texto (bgColor no transparent), pon un color fuerte (amarillo o naranja) y color de texto negro o blanco.
+4. RESPIRACIÓN: no pegues elementos a los bordes. y=8-12 arriba, y=88-92 abajo. Deja siempre grandes zonas vacías.
+5. VARIEDAD por slide en un mismo carrusel (mantén la restricción de 2 elementos siempre):
+   - Slide 1 = HOOK (hero enorme centrado, 1 elemento a poder ser).
+   - Slides intermedios = contenido (número gigante + concepto corto, o cita italic sola, o titular + apoyo mínimo).
+   - Slide final = CTA o pregunta abierta, idealmente 1 elemento.
+6. Si usas caja de fondo en un texto (bgColor no transparent), pon un color fuerte (amarillo o naranja) y color de texto negro o blanco. Y entonces evita el segundo elemento.
 7. Los "gradientes" solo si aportan: usa "bottom-dark" cuando quieres apoyar legibilidad de texto en la parte inferior.
 
-EJEMPLOS DE COMPOSICIÓN (referencia, no copies literalmente):
+EJEMPLOS DE COMPOSICIÓN (referencia — nota que TODOS tienen 1 o 2 elementos, nunca más):
 
-Portada:
+Portada (1 solo elemento — máximo impacto):
 {
   "bgColor": "#0A0A0A",
   "bgGradient": "none",
   "elements": [
-    { "type": "text", "x": 50, "y": 12, "width": 60, "content": "SERIE · DOLOR DE HOMBRO", "font": "Manrope", "size": 26, "weight": 800, "color": "#FCD34D", "bgColor": "transparent", "align": "center", "shadow": false, "uppercase": true, "letterSpacing": 0.18 },
+    { "type": "text", "x": 50, "y": 50, "width": 85, "content": "NO ES EL PRESS", "font": "Antonio", "size": 200, "weight": 900, "color": "#FCD34D", "bgColor": "transparent", "align": "center", "shadow": false, "uppercase": true }
+  ]
+}
+
+Portada con subtítulo (2 elementos, límite):
+{
+  "bgColor": "#0A0A0A",
+  "bgGradient": "none",
+  "elements": [
     { "type": "text", "x": 50, "y": 42, "width": 85, "content": "NO ES EL PRESS", "font": "Antonio", "size": 180, "weight": 900, "color": "#FCD34D", "bgColor": "transparent", "align": "center", "shadow": false, "uppercase": true },
-    { "type": "text", "x": 50, "y": 58, "width": 80, "content": "Es que ni siquiera has activado el manguito antes.", "font": "Manrope", "size": 42, "weight": 500, "color": "#FAFAFA", "bgColor": "transparent", "align": "center", "shadow": false }
+    { "type": "text", "x": 50, "y": 58, "width": 80, "content": "Es que ni siquiera activas el manguito antes.", "font": "Manrope", "size": 42, "weight": 500, "color": "#FAFAFA", "bgColor": "transparent", "align": "center", "shadow": false }
   ]
 }
 
-Cita:
+Cita (2 elementos — cita + firma, sin comillas decorativas ni líneas):
 {
   "bgColor": "#0A0A0A",
   "bgGradient": "none",
   "elements": [
-    { "type": "text", "x": 15, "y": 22, "width": 20, "content": "\\"", "font": "Cormorant Garamond", "size": 280, "weight": 700, "italic": false, "color": "#FCD34D", "bgColor": "transparent", "align": "left", "shadow": false },
-    { "type": "text", "x": 50, "y": 48, "width": 78, "content": "Volví a hacer overhead squat sin miedo después de 8 meses parado.", "font": "Cormorant Garamond", "size": 92, "weight": 500, "italic": true, "color": "#FAFAFA", "bgColor": "transparent", "align": "center", "shadow": false },
-    { "type": "line", "x": 50, "y": 76, "width": 12, "height": 4, "color": "#FCD34D" },
-    { "type": "text", "x": 50, "y": 82, "width": 70, "content": "PABLO · CROSSFIT SANTS", "font": "Manrope", "size": 26, "weight": 700, "color": "#FCD34D", "bgColor": "transparent", "align": "center", "shadow": false, "uppercase": true, "letterSpacing": 0.15 }
+    { "type": "text", "x": 50, "y": 45, "width": 82, "content": "Volví a hacer overhead squat sin miedo después de 8 meses parado.", "font": "Cormorant Garamond", "size": 96, "weight": 500, "italic": true, "color": "#FAFAFA", "bgColor": "transparent", "align": "center", "shadow": false },
+    { "type": "text", "x": 50, "y": 78, "width": 70, "content": "PABLO · CROSSFIT SANTS", "font": "Manrope", "size": 28, "weight": 700, "color": "#FCD34D", "bgColor": "transparent", "align": "center", "shadow": false, "uppercase": true, "letterSpacing": 0.18 }
   ]
 }
 
-Lista numerada:
+Número gigante + concepto (2 elementos):
 {
   "bgColor": "#0A0A0A",
   "bgGradient": "none",
   "elements": [
-    { "type": "text", "x": 50, "y": 10, "width": 60, "content": "CAUSAS", "font": "Manrope", "size": 26, "weight": 800, "color": "#FCD34D", "bgColor": "transparent", "align": "center", "shadow": false, "uppercase": true, "letterSpacing": 0.2 },
-    { "type": "text", "x": 50, "y": 34, "width": 90, "content": "1", "font": "Antonio", "size": 380, "weight": 900, "color": "#FCD34D", "bgColor": "transparent", "align": "center", "shadow": false },
-    { "type": "text", "x": 50, "y": 66, "width": 80, "content": "FALTA DE MOVILIDAD TORÁCICA", "font": "Antonio", "size": 78, "weight": 900, "color": "#FAFAFA", "bgColor": "transparent", "align": "center", "shadow": false, "uppercase": true },
-    { "type": "text", "x": 50, "y": 84, "width": 78, "content": "Si tu columna dorsal no rota, el hombro compensa. Y paga.", "font": "Manrope", "size": 36, "weight": 500, "color": "#D4D4D4", "bgColor": "transparent", "align": "center", "shadow": false }
+    { "type": "text", "x": 50, "y": 38, "width": 90, "content": "1", "font": "Antonio", "size": 400, "weight": 900, "color": "#FCD34D", "bgColor": "transparent", "align": "center", "shadow": false },
+    { "type": "text", "x": 50, "y": 72, "width": 78, "content": "FALTA DE MOVILIDAD TORÁCICA", "font": "Antonio", "size": 82, "weight": 900, "color": "#FAFAFA", "bgColor": "transparent", "align": "center", "shadow": false, "uppercase": true }
+  ]
+}
+
+Pregunta CTA (1 elemento):
+{
+  "bgColor": "#0A0A0A",
+  "bgGradient": "none",
+  "elements": [
+    { "type": "text", "x": 50, "y": 50, "width": 80, "content": "¿Y tú cuántos meses llevas evitándolo?", "font": "Cormorant Garamond", "size": 96, "weight": 500, "italic": true, "color": "#FCD34D", "bgColor": "transparent", "align": "center", "shadow": false }
   ]
 }
 `;
@@ -141,6 +164,8 @@ TU TRABAJO:
 Diseña ${count} slides únicos que funcionen como un CARRUSEL con narrativa (arranque con impacto → desarrollo con estructura → cierre con CTA o pregunta).
 Cada slide debe ser visualmente distinto del anterior (varía composición, tipografía dominante, uso del color).
 El contenido es tuyo — escribe frases concretas, no genéricas.
+
+MENOS ES MÁS: aplica el minimalismo estricto de la Regla 0 a rajatabla. Máximo 2 elementos "text" por slide. Cero elementos "line". Cero decoración redundante. Prefiere el silencio visual a llenar espacio. Si dudas entre añadir un tercer elemento o dejar respirar, deja respirar SIEMPRE.
 
 RESPUESTA: JSON válido con esta forma exacta (SIN markdown, SIN fences \`\`\`, SIN explicaciones):
 {
