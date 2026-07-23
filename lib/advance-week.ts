@@ -20,6 +20,14 @@ import { resolveVisibleRollingWeek } from "@/lib/rolling-visible-week";
 import { applyRollingOverridesToTasks, fetchOverridesForPatient } from "@/lib/apply-rolling-overrides";
 import { weekStartForPatient } from "@/lib/patient-dates";
 
+export type AdvanceExerciseRef = {
+  id: string;
+  name: string;
+  category: string;
+  youtubeUrl: string | null;
+  description: string | null;
+};
+
 export type AdvanceTask = {
   id: string;
   type: string;
@@ -27,6 +35,10 @@ export type AdvanceTask = {
   bodyText: string | null;
   videoId: string | null;
   block: "Accesorios" | "Entrenamiento";
+  // Ejercicios (con vídeo) vinculados desde la biblioteca a la tarea. En
+  // ADVANCE los usa el paciente para ver la técnica sobre todo en los
+  // Accesorios; sin esto no aparecen los vídeos en la vista de sesión.
+  exercises: AdvanceExerciseRef[];
 };
 
 export type AdvanceSession = {
@@ -63,10 +75,22 @@ export async function buildAdvanceWeekView(patient: PatientLite, at: Date = new 
   const trnId = patient.rollingTrainingId || patient.rollingProgramId;
 
   // Trae la semana rolling con TODOS los dias L-V (dayOfWeek 1..5).
+  // Incluye tambien los `exercises` (RollingTaskExercise) con su exercise
+  // anidado — asi la vista de sesion puede pintar los videos vinculados.
   const includeAllDays = {
     days: {
       where: { dayOfWeek: { gte: 1, lte: 5 } },
-      include: { tasks: { orderBy: { order: "asc" } } },
+      include: {
+        tasks: {
+          orderBy: { order: "asc" },
+          include: {
+            exercises: {
+              orderBy: { order: "asc" },
+              include: { exercise: { select: { id: true, name: true, category: true, youtubeUrl: true, description: true } } },
+            },
+          },
+        },
+      },
     },
   };
   const [accWeek, trnWeek, overrides, videosPrefetch, logsThisWeek] = await Promise.all([
@@ -90,6 +114,17 @@ export async function buildAdvanceWeekView(patient: PatientLite, at: Date = new 
       if (applied.length === 0) continue;
       const bucket = tasksByDow.get(d.dayOfWeek) ?? [];
       for (const t of applied) {
+        const rawExercises: any[] = Array.isArray((t as any).exercises) ? (t as any).exercises : [];
+        const exercises: AdvanceExerciseRef[] = rawExercises
+          .map((we: any) => we?.exercise)
+          .filter((ex: any) => ex && typeof ex.id === "string")
+          .map((ex: any) => ({
+            id: ex.id,
+            name: ex.name,
+            category: ex.category,
+            youtubeUrl: ex.youtubeUrl ?? null,
+            description: ex.description ?? null,
+          }));
         bucket.push({
           id: t.id,
           type: t.type,
@@ -97,6 +132,7 @@ export async function buildAdvanceWeekView(patient: PatientLite, at: Date = new 
           bodyText: t.bodyText ?? null,
           videoId: (t as any).videoId ?? null,
           block,
+          exercises,
         });
       }
       tasksByDow.set(d.dayOfWeek, bucket);

@@ -87,7 +87,9 @@ export default async function SesionHoyPage({ params, searchParams }: { params: 
       const vids = await prisma.videoLibrary.findMany({ where: { id: { in: Array.from(videoIds) } } });
       for (const v of vids) videosById[v.id] = { youtubeUrl: v.youtubeUrl };
     }
-    // Mapea a shape ResolvedTask.
+    // Mapea a shape ResolvedTask. Preserva los ejercicios vinculados con
+    // su vídeo — para que RollingExerciseVideos los pinte igual que antes
+    // en la vista de sesión (accesorios llevan referencias de técnica).
     function toResolved(bkTasks: NonNullable<typeof target>["tasks"]): ResolvedTask[] {
       return bkTasks.map((t) => ({
         id: t.id,
@@ -95,7 +97,13 @@ export default async function SesionHoyPage({ params, searchParams }: { params: 
         title: t.title,
         bodyText: t.bodyText,
         youtubeUrl: t.videoId ? videosById[t.videoId]?.youtubeUrl ?? null : null,
-        exercises: [],
+        exercises: t.exercises.map((e) => ({
+          id: e.id,
+          name: e.name,
+          category: e.category,
+          youtubeUrl: e.youtubeUrl,
+          description: e.description,
+        })),
       }));
     }
     const accTasks = target ? toResolved(target.tasks.filter((t) => t.block === "Accesorios")) : [];
