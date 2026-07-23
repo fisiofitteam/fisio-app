@@ -482,18 +482,25 @@ export function StoryMakerEditor({
             </button>
           </div>
         </div>
-        <div className="flex-1 flex items-center justify-center overflow-auto p-6">
-          <SlideCanvas
-            slide={currentSlide}
-            scale={0.32}
-            selectedElementId={selectedElementId}
-            onSelectElement={setSelectedElementId}
-            onUpdateElement={updateElement}
-            interactive
-            editingElementId={editingElementId}
-            onStartEditing={setEditingElementId}
-            onFinishEditing={finishEditingText}
-          />
+        {/* Wrapper con overflow. El inner min-h-full permite centrar
+            verticalmente cuando el canvas CABE, pero deja crecer y
+            scrollear cuando NO cabe — sin cortar la parte superior.
+            El bug antiguo (items-center + overflow-auto directo) dejaba
+            la cabecera del slide inaccesible en Mac con ventana estandar. */}
+        <div className="flex-1 overflow-auto">
+          <div className="min-h-full flex items-center justify-center p-4">
+            <SlideCanvas
+              slide={currentSlide}
+              scale={0.32}
+              selectedElementId={selectedElementId}
+              onSelectElement={setSelectedElementId}
+              onUpdateElement={updateElement}
+              interactive
+              editingElementId={editingElementId}
+              onStartEditing={setEditingElementId}
+              onFinishEditing={finishEditingText}
+            />
+          </div>
         </div>
 
         {/* Contenedor oculto para export a scale=1 */}
