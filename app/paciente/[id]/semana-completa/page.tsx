@@ -61,15 +61,28 @@ export default async function PatientSemanaCompletaPage({
     redirect(`/paciente/${patient.id}`);
   }
 
-  // ─── ADVANCE: vista "Sesión 1..N" (auto-avance, sin días naturales) ───
+  // ─── ADVANCE: vista "Sesión 1..N" (sin días naturales, con selector de semana) ───
   if (patient.programType === "ADVANCE") {
-    const week = await buildAdvanceWeekView({
-      id: patient.id,
-      timezone: null, // usamos ahora sin TZ específica (buildAdvanceWeekView tolera null)
-      rollingAccessoriesId: patient.rollingAccessoriesId,
-      rollingTrainingId: patient.rollingTrainingId,
-      rollingProgramId: patient.rollingProgramId,
-    }).catch(() => null);
+    const nowAdv = new Date();
+    // dow 1..7 (lunes=1) en la TZ del server (para el gate del viernes).
+    const dowAdv = nowAdv.getDay() === 0 ? 7 : nowAdv.getDay();
+    // La semana siguiente solo se muestra a partir del VIERNES. Antes de eso
+    // el botón sigue visible pero pinta "Tu coach está preparando la semana".
+    const nextLocked = view === "next" && dowAdv < 5;
+    // Fecha objetivo para buildAdvanceWeekView (dentro de la semana elegida).
+    const targetAt = view === "next"
+      ? new Date(nowAdv.getTime() + 7 * 86400_000)
+      : nowAdv;
+
+    const week = nextLocked
+      ? null
+      : await buildAdvanceWeekView({
+          id: patient.id,
+          timezone: null, // usamos ahora sin TZ específica (buildAdvanceWeekView tolera null)
+          rollingAccessoriesId: patient.rollingAccessoriesId,
+          rollingTrainingId: patient.rollingTrainingId,
+          rollingProgramId: patient.rollingProgramId,
+        }, targetAt).catch(() => null);
 
     return (
       <main className="min-h-screen" style={{ color: "var(--p-text)" }}>
@@ -83,26 +96,68 @@ export default async function PatientSemanaCompletaPage({
               <ArrowLeft size={12} /> Volver
             </Link>
             <div className="text-[10px] font-bold tracking-wider uppercase mb-1" style={{ color: "var(--p-text-faint)" }}>
-              Mi semana
+              {view === "next" ? "Próxima semana" : "Mi semana"}
             </div>
             <h1 className="text-2xl font-bold" style={{ letterSpacing: "-0.03em" }}>
-              {week?.allCompleted
-                ? "🎉 ¡Semana completada!"
-                : `${week?.completedCount ?? 0}/${week?.totalCount ?? 0} sesiones`}
+              {view === "next"
+                ? "Semana siguiente"
+                : week?.allCompleted
+                  ? "🎉 ¡Semana completada!"
+                  : `${week?.completedCount ?? 0}/${week?.totalCount ?? 0} sesiones`}
             </h1>
             <p className="text-xs mt-1" style={{ color: "var(--p-text-dim)" }}>
-              Marca cada sesión al terminarla. Puedes hacerlas en el orden que prefieras.
+              {view === "next"
+                ? "Aquí podrás ver lo que te toca la próxima semana."
+                : "Marca cada sesión al terminarla. Intenta respetar el orden de las sesiones!"}
             </p>
           </header>
 
-          {!week || week.sessions.length === 0 ? (
+          {/* Selector "Esta semana / Semana siguiente" — el botón de siguiente
+              siempre visible; antes del viernes muestra el gate. */}
+          <div className="flex rounded-lg p-0.5 mb-4" style={{ background: "var(--p-surface-2)" }}>
+            <Link
+              href={`/paciente/${patient.id}/semana-completa`}
+              className="flex-1 px-3 py-1.5 text-xs rounded-md text-center transition-colors font-medium"
+              style={view === "current"
+                ? { background: "var(--p-surface)", color: "var(--p-text)" }
+                : { color: "var(--p-text-dim)" }}
+            >
+              Esta semana
+            </Link>
+            <Link
+              href={`/paciente/${patient.id}/semana-completa?view=next`}
+              className="flex-1 px-3 py-1.5 text-xs rounded-md text-center transition-colors font-medium"
+              style={view === "next"
+                ? { background: "var(--p-surface)", color: "var(--p-text)" }
+                : { color: "var(--p-text-dim)" }}
+            >
+              Semana siguiente
+            </Link>
+          </div>
+
+          {nextLocked ? (
+            <section
+              className="rounded-2xl p-5 text-center py-10"
+              style={{ background: "var(--p-surface-2)", border: "1px solid var(--p-border)" }}
+            >
+              <div className="text-3xl mb-2">🛠️</div>
+              <p className="text-sm" style={{ color: "var(--p-text-dim)" }}>
+                Tu coach está preparando la semana.
+              </p>
+              <p className="text-[11px] mt-1" style={{ color: "var(--p-text-faint)" }}>
+                A partir del viernes podrás verla.
+              </p>
+            </section>
+          ) : !week || week.sessions.length === 0 ? (
             <section
               className="rounded-2xl p-5 text-center py-10"
               style={{ background: "var(--p-surface-2)", border: "1px solid var(--p-border)" }}
             >
               <div className="text-3xl mb-2">📭</div>
               <p className="text-sm" style={{ color: "var(--p-text-dim)" }}>
-                Tu coach aún no ha programado sesiones para esta semana.
+                {view === "next"
+                  ? "Aún no hay sesiones publicadas para la próxima semana."
+                  : "Tu coach aún no ha programado sesiones para esta semana."}
               </p>
             </section>
           ) : (
@@ -128,6 +183,41 @@ export default async function PatientSemanaCompletaPage({
                   : isCurrent
                     ? "1px solid transparent"
                     : "1px solid var(--p-border)";
+                // En la vista "next" las cards son sólo preview, no llevan
+                // a /sesion-hoy — el atleta solo puede completar la semana
+                // actual.
+                const inner = (
+                  <div className="flex items-center gap-3">
+                    <div className="text-2xl">
+                      {s.completed ? <CheckCircle2 size={26} /> : <PlayCircle size={26} />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[10px] font-bold tracking-wider uppercase opacity-80">
+                        Sesión {s.sessionIndex}
+                      </div>
+                      <div className="text-base font-semibold" style={{ letterSpacing: "-0.02em" }}>
+                        {s.completed ? "Completada" : "Pendiente"}
+                      </div>
+                      {summary && (
+                        <div className="text-[11px] mt-0.5 opacity-80 line-clamp-1">
+                          {summary}
+                        </div>
+                      )}
+                    </div>
+                    {view === "current" && <div className="text-xl opacity-70">→</div>}
+                  </div>
+                );
+                if (view === "next") {
+                  return (
+                    <div
+                      key={s.sessionIndex}
+                      className="rounded-2xl p-4"
+                      style={{ background: bg, color, border }}
+                    >
+                      {inner}
+                    </div>
+                  );
+                }
                 return (
                   <Link
                     key={s.sessionIndex}
@@ -135,25 +225,7 @@ export default async function PatientSemanaCompletaPage({
                     className="block rounded-2xl p-4 transition-transform active:scale-[0.98]"
                     style={{ background: bg, color, border }}
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="text-2xl">
-                        {s.completed ? <CheckCircle2 size={26} /> : <PlayCircle size={26} />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[10px] font-bold tracking-wider uppercase opacity-80">
-                          Sesión {s.sessionIndex}
-                        </div>
-                        <div className="text-base font-semibold" style={{ letterSpacing: "-0.02em" }}>
-                          {s.completed ? "Completada" : "Pendiente"}
-                        </div>
-                        {summary && (
-                          <div className="text-[11px] mt-0.5 opacity-80 line-clamp-1">
-                            {summary}
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-xl opacity-70">→</div>
-                    </div>
+                    {inner}
                   </Link>
                 );
               })}
