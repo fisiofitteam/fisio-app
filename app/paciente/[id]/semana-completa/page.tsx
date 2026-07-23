@@ -144,9 +144,6 @@ export default async function PatientSemanaCompletaPage({
               <p className="text-sm" style={{ color: "var(--p-text-dim)" }}>
                 Tu coach está preparando la semana.
               </p>
-              <p className="text-[11px] mt-1" style={{ color: "var(--p-text-faint)" }}>
-                A partir del viernes podrás verla.
-              </p>
             </section>
           ) : !week || week.sessions.length === 0 ? (
             <section
