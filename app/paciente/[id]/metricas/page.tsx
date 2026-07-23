@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { PatientNav } from "@/components/PatientNav";
 import { PatientDailyLogToggle } from "@/components/PatientDailyLogToggle";
 import { PatientDailyLogBackfill } from "@/components/PatientDailyLogBackfill";
+import { PatientDailyLogHistoryList } from "@/components/PatientDailyLogHistoryList";
 import { PatientMetricChart } from "@/components/PatientMetricChart";
 import { todayForPatient } from "@/lib/patient-dates";
 
@@ -129,26 +130,17 @@ export default async function PatientMetricsPage({ params }: { params: { id: str
         {entriesAll.length > 0 && (
           <details className="mt-6 rounded-2xl px-4 py-3" style={{ background: "var(--p-surface)", border: "1px solid var(--p-border)" }}>
             <summary className="cursor-pointer text-xs font-medium" style={{ color: "var(--p-text-dim)" }}>
-              Ver histórico ({entriesAll.length} registros)
+              Ver histórico ({entriesAll.length} registros) · toca un día de las últimas 2 semanas para corregirlo
             </summary>
-            <ul className="mt-3 space-y-1">
-              {entriesAll.map((e) => (
-                <li
-                  key={e.id}
-                  className="rounded-xl px-3 py-2 flex items-center justify-between gap-3 text-sm"
-                  style={{ background: "var(--p-surface-2)", border: "1px solid var(--p-border)" }}
-                >
-                  <span className="text-xs" style={{ color: "var(--p-text-dim)" }}>
-                    {new Date(e.recordedDate).toLocaleDateString("es-ES", { day: "numeric", month: "short", weekday: "short" })}
-                  </span>
-                  <div className="flex items-center gap-3 tabular-nums text-xs">
-                    <span title="Fatiga">🪫 {e.fatigue}</span>
-                    <span title="RPE">🔥 {e.rpe}</span>
-                    <span title="Sueño">😴 {e.sleep}</span>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <PatientDailyLogHistoryList
+              entries={entriesAll.map((e) => ({
+                id: e.id,
+                recordedDate: e.recordedDate.toISOString(),
+                fatigue: e.fatigue,
+                rpe: e.rpe,
+                sleep: e.sleep,
+              }))}
+            />
           </details>
         )}
       </div>
