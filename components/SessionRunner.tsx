@@ -41,6 +41,7 @@ export function SessionRunner({
   tasks,
   completed,
   existingResponses,
+  existingPatientNotes = null,
   whatsappUrl = null,
 }: {
   sessionId: string;
@@ -48,6 +49,9 @@ export function SessionRunner({
   tasks: Task[];
   completed: boolean;
   existingResponses: string | null;
+  /** Notas ya guardadas por el paciente (si la sesión ya está completada).
+   *  Se precargan en el textarea de sensaciones para permitir edición. */
+  existingPatientNotes?: string | null;
   whatsappUrl?: string | null;
 }) {
   const router = useRouter();
@@ -91,8 +95,14 @@ export function SessionRunner({
   // Sensaciones del paciente al terminar la sesión (nuevo flujo). Se
   // guarda como programSession.patientNotes y sustituye al antiguo
   // redirect al grupo de WhatsApp. Obligatorio ≥20 caracteres.
-  const [patientNotes, setPatientNotes] = useState("");
+  const [patientNotes, setPatientNotes] = useState(existingPatientNotes ?? "");
   const NOTES_MIN = 20;
+  // Estado de edición de sensaciones cuando la sesión ya está completada.
+  // El paciente ve un resumen de sus notas y pulsa "Editar sensaciones"
+  // para pasar al textarea + botón "Actualizar".
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [savingNotes, setSavingNotes] = useState(false);
+  const [notesSavedOk, setNotesSavedOk] = useState(false);
 
   async function complete() {
     setSaving(true);
@@ -103,6 +113,25 @@ export function SessionRunner({
     });
     router.push(`/paciente/${patientId}`);
     router.refresh();
+  }
+
+  async function updateNotes() {
+    setSavingNotes(true);
+    setNotesSavedOk(false);
+    try {
+      const r = await fetch("/api/sessions/update-notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, patientNotes: patientNotes.trim() }),
+      });
+      if (r.ok) {
+        setEditingNotes(false);
+        setNotesSavedOk(true);
+        router.refresh();
+      }
+    } finally {
+      setSavingNotes(false);
+    }
   }
 
   return (
@@ -283,6 +312,84 @@ export function SessionRunner({
           >
             {saving ? "Guardando…" : "✓ Marcar como completada con mis sensaciones"}
           </button>
+        </div>
+      )}
+
+      {/* Sesion completada: dejamos editar las sensaciones sin volver a
+          marcarla completada. Vista compacta con las notas guardadas +
+          boton "Editar sensaciones"; al pulsar, textarea + "Actualizar". */}
+      {completed && (
+        <div
+          className="rounded-2xl p-4 space-y-2"
+          style={{ background: "var(--p-surface)", border: "1px solid var(--p-border)" }}
+        >
+          <div>
+            <label className="text-sm font-semibold block" style={{ color: "var(--p-text)" }}>
+              ✍️ Tus sensaciones
+            </label>
+            <p className="text-xs mt-0.5" style={{ color: "var(--p-text-dim)" }}>
+              Puedes actualizarlas si te has olvidado de algo o quieres reformularlas.
+            </p>
+          </div>
+          {!editingNotes ? (
+            <>
+              <div
+                className="rounded-lg px-3 py-2 text-sm whitespace-pre-wrap"
+                style={{ background: "var(--p-surface-2)", color: "var(--p-text)" }}
+              >
+                {existingPatientNotes && existingPatientNotes.trim().length > 0
+                  ? existingPatientNotes
+                  : <span style={{ color: "var(--p-text-faint)" }}>Aún no anotaste ninguna sensación en esta sesión.</span>}
+              </div>
+              {notesSavedOk && (
+                <div className="text-[11px]" style={{ color: "var(--p-green-text)" }}>
+                  ✓ Sensaciones actualizadas
+                </div>
+              )}
+              <button
+                onClick={() => { setEditingNotes(true); setNotesSavedOk(false); }}
+                className="w-full font-semibold rounded-lg py-2.5 text-sm"
+                style={{ background: "var(--p-surface-2)", color: "var(--p-text)", border: "1px solid var(--p-border)" }}
+              >
+                ✎ Editar sensaciones
+              </button>
+            </>
+          ) : (
+            <>
+              <textarea
+                className="input text-sm"
+                rows={4}
+                placeholder="Ej: he notado cierta molestia en el hombro derecho durante los press, el resto sin dolor…"
+                value={patientNotes}
+                onChange={(e) => setPatientNotes(e.target.value)}
+                autoFocus
+              />
+              <div
+                className="text-[11px] text-right"
+                style={{ color: patientNotes.trim().length >= NOTES_MIN ? "var(--p-text-dim)" : "var(--p-text-faint)" }}
+              >
+                {patientNotes.trim().length}/{NOTES_MIN} mínimo
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setEditingNotes(false); setPatientNotes(existingPatientNotes ?? ""); }}
+                  disabled={savingNotes}
+                  className="flex-1 font-medium rounded-lg py-2.5 text-sm disabled:opacity-60"
+                  style={{ background: "var(--p-surface-2)", color: "var(--p-text)", border: "1px solid var(--p-border)" }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={updateNotes}
+                  disabled={savingNotes || patientNotes.trim().length < NOTES_MIN}
+                  className="flex-1 font-semibold rounded-lg py-2.5 text-sm disabled:opacity-60"
+                  style={{ background: "var(--p-accent)", color: "var(--p-accent-ink)" }}
+                >
+                  {savingNotes ? "Guardando…" : "✓ Actualizar"}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

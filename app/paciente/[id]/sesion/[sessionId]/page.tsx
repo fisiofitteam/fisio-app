@@ -49,6 +49,7 @@ export default async function PatientSessionPage({
           tasks={tasks}
           completed={!!session.completedAt}
           existingResponses={session.responses}
+          existingPatientNotes={session.patientNotes ?? null}
           whatsappUrl={session.assignment.patient.whatsappGroupUrl}
         />
 
