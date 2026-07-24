@@ -145,13 +145,19 @@ export default async function FisioPanelPage({
     },
     include: { assignment: { include: { patient: true, program: true } } },
     orderBy: { completedAt: "desc" },
-    take: 5,
+    // Traemos un pool amplio y filtramos en memoria (predicado no
+    // expresable en Prisma). Si ponemos take: 5 aqui y las 5 mas recientes
+    // no tienen respuestas guardadas, el recuadro sale vacio aunque haya
+    // muchos mas rellenados por debajo — que era exactamente lo que veian
+    // los fisios. 200 cubre de sobra un mes de actividad.
+    take: 200,
   });
   // Solo dejamos los que el paciente REALMENTE rellenó (no vacíos, no
   // sentinels de "skipped"). El filtro anterior contaba cualquier sesion
   // con task FORM aunque nadie la hubiese contestado — por eso a los
   // fisios no les aparecian pacientes con forms recien rellenados.
-  const pendingForms = pendingFormSessions.filter(hasPendingFormReview);
+  // Recortamos a 5 tras filtrar para el recuadro compacto.
+  const pendingForms = pendingFormSessions.filter(hasPendingFormReview).slice(0, 5);
 
   const withRenewal = patients
     .map((p) => ({ patient: p, days: daysUntilRenewal(p.subscriptionStartDate, p.subscriptionPeriodMonths) }))
