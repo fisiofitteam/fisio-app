@@ -27,6 +27,7 @@ type StoredState = {
   adapted: AdaptedLine[] | null;
   rpe: number | null;
   pain: number;
+  notes?: string;
   savedAt: string;
 };
 
@@ -62,6 +63,7 @@ export function WodAdapter({ patientId }: { patientId: string }) {
   const [showLog, setShowLog] = useState(false);
   const [rpe, setRpe] = useState<number | null>(null);
   const [pain, setPain] = useState<number>(0);
+  const [notes, setNotes] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [restoredAt, setRestoredAt] = useState<string | null>(null);
@@ -79,6 +81,7 @@ export function WodAdapter({ patientId }: { patientId: string }) {
       if (s.adapted) setAdapted(s.adapted);
       if (s.rpe !== null && s.rpe !== undefined) setRpe(s.rpe);
       if (typeof s.pain === "number") setPain(s.pain);
+      if (typeof s.notes === "string") setNotes(s.notes);
       if (s.savedAt) setRestoredAt(s.savedAt);
     }
     setHydrated(true);
@@ -90,15 +93,16 @@ export function WodAdapter({ patientId }: { patientId: string }) {
   useEffect(() => {
     if (!hydrated) return;
     // Si todo está vacío no persistimos (dejamos que "Limpiar" borre).
-    if (!rawText.trim() && !adapted && rpe === null && pain === 0) return;
-    saveToStorage(patientId, { rawText, adapted, rpe, pain });
-  }, [hydrated, patientId, rawText, adapted, rpe, pain]);
+    if (!rawText.trim() && !adapted && rpe === null && pain === 0 && !notes.trim()) return;
+    saveToStorage(patientId, { rawText, adapted, rpe, pain, notes });
+  }, [hydrated, patientId, rawText, adapted, rpe, pain, notes]);
 
   function resetLocal() {
     setRawText("");
     setAdapted(null);
     setRpe(null);
     setPain(0);
+    setNotes("");
     setShowLog(false);
     setImgError(null);
     setRestoredAt(null);
@@ -158,7 +162,7 @@ export function WodAdapter({ patientId }: { patientId: string }) {
     await fetch("/api/wod/log", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ patientId, rawText, adaptedText, rpe, painScore: pain, notes: "" }),
+      body: JSON.stringify({ patientId, rawText, adaptedText, rpe, painScore: pain, notes: notes.trim() || null }),
     });
     setSaving(false);
     resetLocal();
@@ -346,6 +350,21 @@ export function WodAdapter({ patientId }: { patientId: string }) {
                   onChange={(e) => setPain(Number(e.target.value))}
                   className="w-full"
                 />
+              </div>
+              <div>
+                <label className="text-xs text-neutral-500 block mb-1">
+                  Comentarios (opcional)
+                </label>
+                <textarea
+                  className="input text-sm w-full"
+                  rows={3}
+                  placeholder="Ej: press hombro con 40kg (subí 2.5), thruster con miedo al final, sentí molestia lumbar leve…"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
+                <p className="text-[10px] text-neutral-400 mt-1">
+                  Pesos que usaste, sensaciones, si algo te costó — cualquier detalle ayuda a tu fisio.
+                </p>
               </div>
               <button onClick={logSession} disabled={saving} className="btn btn-primary w-full">
                 {saving ? "Guardando..." : "Enviar a mi fisio"}
