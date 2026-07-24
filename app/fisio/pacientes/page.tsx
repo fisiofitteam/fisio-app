@@ -149,9 +149,10 @@ export default async function PatientsListPage({
     byPro: {},
   };
   if (user.isManager) {
-    // Contamos SIN los Prevention — coherente con `where` que también los excluye.
+    // Contamos SIN los Prevention ni pacientes fantasma (isTest) — coherente
+    // con lo que ven las metricas del panel y con la exclusion de KPIs.
     const all = await prisma.patient.findMany({
-      where: { programType: { not: "PREVENTION" } },
+      where: { programType: { not: "PREVENTION" }, isTest: false },
       select: { id: true, assignedProfessionalId: true },
     });
     counts.all = all.length;
@@ -170,9 +171,10 @@ export default async function PatientsListPage({
     );
     counts.finished = all.filter((p) => !vigentes.has(p.id)).length;
   } else {
-    // Fisios normales: contar solo sus terminados para el badge (sin Prevention).
+    // Fisios normales: contar solo sus terminados para el badge (sin
+    // Prevention ni fantasma).
     const mine = await prisma.patient.findMany({
-      where: { assignedProfessionalId: user.id, programType: { not: "PREVENTION" } },
+      where: { assignedProfessionalId: user.id, programType: { not: "PREVENTION" }, isTest: false },
       select: { id: true },
     });
     const active = await prisma.subscriptionRenewal.findMany({
