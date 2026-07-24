@@ -12,13 +12,9 @@ import {
   parseAttendeeIds,
   type MeetingCategory,
 } from "@/lib/team-meetings";
+import { getSubscriptionProgressBatch } from "@/lib/subscription-progress";
 
 export const dynamic = "force-dynamic";
-
-function monthsConsumed(start: Date | null): number {
-  if (!start) return 0;
-  return Math.max(0, (Date.now() - new Date(start).getTime()) / (1000 * 60 * 60 * 24 * 30.44));
-}
 
 export default async function ReunionesPage() {
   const user = await getActiveProfessional();
@@ -95,6 +91,14 @@ export default async function ReunionesPage() {
       }),
     ]);
     const adherences = await Promise.all(cases.map((c) => calculateAdherence(c.patientId)));
+    const progressBySubCase = await getSubscriptionProgressBatch(
+      cases.map((c: any) => ({
+        id: c.patientId,
+        subscriptionStartDate: c.patient.subscriptionStartDate ?? null,
+        subscriptionPeriodMonths: c.patient.subscriptionPeriodMonths ?? c.patient.subscriptionTotalMonths ?? 4,
+        subscriptionTotalMonths: c.patient.subscriptionTotalMonths ?? 4,
+      }))
+    );
 
     clinicalContent = (
       <ClinicalSessionsView
@@ -110,8 +114,10 @@ export default async function ReunionesPage() {
           programType: c.patient.programType,
           appliedLevelName: c.patient.appliedLevel ? `${c.patient.appliedLevel.profile.name} · ${c.patient.appliedLevel.name}` : null,
           hasSubscription: c.patient.subscriptionStartDate != null,
-          subConsumed: monthsConsumed(c.patient.subscriptionStartDate),
-          subTotal: c.patient.subscriptionTotalMonths || 4,
+          subConsumed: progressBySubCase[c.patientId]?.consumedMonths ?? 0,
+          subTotal: progressBySubCase[c.patientId]?.totalMonths ?? (c.patient.subscriptionTotalMonths || 4),
+          currentWeek: progressBySubCase[c.patientId]?.currentWeek ?? null,
+          isPausedNow: !!progressBySubCase[c.patientId]?.isPaused,
           adhCompleted: adherences[i].completed,
           adhTotal: adherences[i].total,
           status: c.status, situation: c.situation,

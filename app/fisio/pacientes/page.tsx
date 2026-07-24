@@ -3,13 +3,7 @@ import { calculateAdherence } from "@/lib/adherence";
 import { getActiveProfessional } from "@/lib/session";
 import { PatientsList } from "@/components/PatientsList";
 import { SetterPatientsView } from "@/components/SetterPatientsView";
-
-function monthsConsumed(startDate: Date | null): number {
-  if (!startDate) return 0;
-  const now = new Date();
-  const diffMs = now.getTime() - new Date(startDate).getTime();
-  return Math.max(0, diffMs / (1000 * 60 * 60 * 24 * 30.44));
-}
+import { getSubscriptionProgressBatch } from "@/lib/subscription-progress";
 
 export default async function PatientsListPage({
   searchParams,
@@ -188,6 +182,15 @@ export default async function PatientsListPage({
   }
 
   const adherences = await Promise.all(patients.map((p) => calculateAdherence(p.id)));
+  // Progreso corregido por pausas + semana actual (batch, sin N+1).
+  const progressByPatient = await getSubscriptionProgressBatch(
+    patients.map((p) => ({
+      id: p.id,
+      subscriptionStartDate: p.subscriptionStartDate,
+      subscriptionPeriodMonths: p.subscriptionPeriodMonths,
+      subscriptionTotalMonths: p.subscriptionTotalMonths,
+    }))
+  );
 
   // Fin del periodo activo por paciente. Es la fuente de verdad porque
   // /api/program-pauses actualiza SubscriptionRenewal.endDate cuando el
@@ -277,7 +280,11 @@ export default async function PatientsListPage({
       stage,
       isFinished,
       finishedAt: finishedAt?.toISOString() ?? null,
-      consumedMonths: monthsConsumed(p.subscriptionStartDate),
+      // Progreso corregido por pausas (antes: monthsConsumed sin descontar).
+      consumedMonths: progressByPatient[p.id]?.consumedMonths ?? 0,
+      totalMonths: progressByPatient[p.id]?.totalMonths ?? p.subscriptionTotalMonths,
+      currentWeek: progressByPatient[p.id]?.currentWeek ?? null,
+      isPausedNow: !!progressByPatient[p.id]?.isPaused,
       adherenceCompleted: adherences[idx].completed,
       adherenceTotal: adherences[idx].total,
       adaptationsCount: p._count.adaptations,

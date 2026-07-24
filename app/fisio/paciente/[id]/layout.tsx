@@ -18,13 +18,7 @@ import { PatientTestModeToggle } from "@/components/PatientTestModeToggle";
 import { calculateAdherence } from "@/lib/adherence";
 import { getActiveProfessional } from "@/lib/session";
 import { parseTargetRoles, templateVisibleFor, type ResourceRole } from "@/lib/resource-roles";
-
-function monthsConsumed(startDate: Date | null): number {
-  if (!startDate) return 0;
-  const now = new Date();
-  const diffMs = now.getTime() - new Date(startDate).getTime();
-  return Math.max(0, diffMs / (1000 * 60 * 60 * 24 * 30.44));
-}
+import { getSubscriptionProgress } from "@/lib/subscription-progress";
 
 export default async function PatientLayout({
   children,
@@ -47,8 +41,15 @@ export default async function PatientLayout({
     redirect("/fisio/pacientes");
   }
 
-  const consumed = monthsConsumed(patient.subscriptionStartDate);
-  const total = patient.subscriptionTotalMonths || 4;
+  // Progreso teniendo en cuenta pausas + semana actual del atleta.
+  const subProgress = await getSubscriptionProgress({
+    id: patient.id,
+    subscriptionStartDate: patient.subscriptionStartDate,
+    subscriptionPeriodMonths: patient.subscriptionPeriodMonths,
+    subscriptionTotalMonths: patient.subscriptionTotalMonths,
+  });
+  const consumed = subProgress.consumedMonths;
+  const total = subProgress.totalMonths || patient.subscriptionTotalMonths || 4;
   const adherence = await calculateAdherence(patient.id);
   const clinicalCase = await prisma.clinicalSessionCase.findUnique({
     where: { patientId: patient.id },
@@ -133,8 +134,18 @@ export default async function PatientLayout({
             />
             <WhatsAppButton url={patient.whatsappGroupUrl} size="md" />
             {patient.subscriptionStartDate && (
-              <div className="bg-neutral-50 rounded-xl px-3 py-2">
+              <div className="bg-neutral-50 rounded-xl px-3 py-2 flex flex-col items-center gap-0.5">
                 <ProgressRing value={consumed} max={total} label="suscripción" mode="subscription" />
+                {subProgress.currentWeek !== null && (
+                  <div
+                    className="text-[10px] font-semibold tracking-wider uppercase"
+                    style={{ color: subProgress.isPaused ? "#B45309" : "#525252" }}
+                    title={subProgress.isPaused ? "Congelado por pausa activa" : "Semana actual del programa"}
+                  >
+                    Semana {subProgress.currentWeek}
+                    {subProgress.isPaused && " · ⏸"}
+                  </div>
+                )}
               </div>
             )}
             <div className="bg-neutral-50 rounded-xl px-3 py-2">

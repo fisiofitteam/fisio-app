@@ -28,6 +28,9 @@ type Patient = {
    *  "Terminó el X" y para el filtro "últimos 30 días". */
   finishedAt: string | null;
   consumedMonths: number;
+  totalMonths?: number;
+  currentWeek?: number | null;
+  isPausedNow?: boolean;
   adherenceCompleted: number;
   adherenceTotal: number;
   adaptationsCount: number;
@@ -365,12 +368,22 @@ function PatientRow({
             <div className="flex flex-col items-center gap-1">
               <ProgressRing
                 value={patient.consumedMonths}
-                max={patient.subscriptionTotalMonths || 4}
+                max={patient.totalMonths || patient.subscriptionTotalMonths || 4}
                 size={44}
                 stroke={4}
                 mode="subscription"
               />
-              <span className="text-[10px] text-neutral-500">Suscripción</span>
+              {patient.currentWeek != null ? (
+                <span
+                  className="text-[10px] font-semibold"
+                  style={{ color: patient.isPausedNow ? "#B45309" : "#525252" }}
+                  title={patient.isPausedNow ? "Congelado por pausa" : "Semana actual"}
+                >
+                  Sem {patient.currentWeek}{patient.isPausedNow && " ⏸"}
+                </span>
+              ) : (
+                <span className="text-[10px] text-neutral-500">Suscripción</span>
+              )}
             </div>
           )}
           <div className="flex flex-col items-center gap-1">

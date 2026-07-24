@@ -15,6 +15,8 @@ type Case = {
   hasSubscription: boolean;
   subConsumed: number;
   subTotal: number;
+  currentWeek?: number | null;
+  isPausedNow?: boolean;
   adhCompleted: number;
   adhTotal: number;
   status: string;
@@ -136,7 +138,18 @@ export function ClinicalSessionsView({
                     {/* Círculos a la izquierda (en horizontal) */}
                     <div className="flex items-center gap-3 flex-shrink-0">
                       {c.hasSubscription && (
-                        <ProgressRing value={c.subConsumed} max={c.subTotal} size={40} stroke={4} label="suscripción" mode="subscription" />
+                        <div className="flex flex-col items-center gap-0.5">
+                          <ProgressRing value={c.subConsumed} max={c.subTotal} size={40} stroke={4} label="suscripción" mode="subscription" />
+                          {c.currentWeek != null && (
+                            <span
+                              className="text-[9px] font-semibold"
+                              style={{ color: c.isPausedNow ? "#B45309" : "#525252" }}
+                              title={c.isPausedNow ? "Congelado por pausa" : "Semana actual"}
+                            >
+                              Sem {c.currentWeek}{c.isPausedNow && " ⏸"}
+                            </span>
+                          )}
+                        </div>
                       )}
                       <ProgressRing value={c.adhCompleted} max={c.adhTotal} size={40} stroke={4} label="cumplimiento" mode="adherence" />
                     </div>
