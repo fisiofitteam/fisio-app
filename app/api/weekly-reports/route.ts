@@ -60,7 +60,10 @@ export async function GET(req: NextRequest) {
   if (!includeDismissed) where.dismissedAt = null;
   if (scope === "mine") where.patient = { assignedProfessionalId: user.id };
   if (isFeedView) {
-    where.patient = { ...(where.patient ?? {}), NOT: { programType: "ADVANCE" } };
+    // En el feed general excluimos ADVANCE (managers ven card global) y
+    // pacientes fantasma (test). Consulta por patientId concreto (ficha)
+    // NO filtra fantasma — el CEO puede ver sus reports para debug.
+    where.patient = { ...(where.patient ?? {}), isTest: false, NOT: { programType: "ADVANCE" } };
   }
 
   // Modo contador: solo pintar el badge de la sidebar sin traer todos los

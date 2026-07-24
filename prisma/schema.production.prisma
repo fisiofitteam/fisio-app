@@ -64,6 +64,11 @@ model Patient {
   // Null = usar la plantilla global (MetricAlertTemplate.global).
   metricAlertConfig        String?
 
+  // "Modo fantasma": pacientes de prueba creados por el CEO. NO cuentan
+  // en KPIs, ventas, alertas, resumenes semanales ni crons. Visibles en
+  // el listado con badge. Solo CEO puede marcar/desmarcar.
+  isTest                   Boolean  @default(false)
+
   // Tipo de programa contratado y dificultad percibida (etiquetas visibles)
   programType String?                                   // "RECUPERA" | "CONSOLIDA" | "ADVANCE"
   difficulty  String?                                   // "FACIL" | "MEDIO" | "DIFICIL"

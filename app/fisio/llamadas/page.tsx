@@ -2,11 +2,14 @@ import { prisma } from "@/lib/prisma";
 import { CallsList } from "@/components/CallsList";
 
 export default async function CallsPage() {
+  // Fuera los pacientes fantasma tanto en el listado de llamadas como
+  // en el selector para agendar una nueva.
   const calls = await prisma.scheduledCall.findMany({
+    where: { patient: { isTest: false } },
     include: { patient: true },
     orderBy: [{ completedAt: "asc" }, { scheduledAt: "asc" }],
   });
-  const patients = await prisma.patient.findMany({ orderBy: { fullName: "asc" } });
+  const patients = await prisma.patient.findMany({ where: { isTest: false }, orderBy: { fullName: "asc" } });
 
   return (
     <main>

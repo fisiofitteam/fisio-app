@@ -34,6 +34,7 @@ type Patient = {
   programsCount: number;
   programType: string | null;
   difficulty: string | null;
+  isTest?: boolean;
   assignedProfessional: { id: string; fullName: string; role: string } | null;
 };
 
@@ -323,6 +324,15 @@ function PatientRow({
           <Link href={`/fisio/paciente/${patient.id}`} className="font-medium hover:underline">
             {patient.fullName}
           </Link>
+          {patient.isTest && (
+            <span
+              className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full"
+              style={{ background: "#F3E8FF", color: "#6B21A8" }}
+              title="Paciente fantasma — no cuenta en KPIs, alertas ni resúmenes"
+            >
+              👻 Fantasma
+            </span>
+          )}
           {/* Botón temporal para enviar magic link por WhatsApp (grupo de seguimiento o chat directo).
               Se eliminará la semana del 2026-07-14 según indicación del CEO. */}
           <SendMagicLinkButton

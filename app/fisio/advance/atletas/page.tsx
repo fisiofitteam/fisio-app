@@ -13,6 +13,7 @@ export default async function AdvanceAthletesPage() {
 
   const athletes = await prisma.patient.findMany({
     where: {
+      isTest: false,
       programMode: "rolling",
       OR: [
         { rollingAccessoriesId: { not: null } },

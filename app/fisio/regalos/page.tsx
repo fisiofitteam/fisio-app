@@ -20,6 +20,7 @@ export default async function RegalosParchesPage({
   const patients = await prisma.patient.findMany({
     where: {
       ...countryFilter,
+      isTest: false,
       // Excluimos migrados — ya recibieron sus regalos fuera de la plataforma.
       giftsAlreadySent: false,
       patchSent: view === "sent",
@@ -47,8 +48,8 @@ export default async function RegalosParchesPage({
   });
 
   const counts = await Promise.all([
-    prisma.patient.count({ where: { ...countryFilter, patchSent: false, giftsAlreadySent: false } }),
-    prisma.patient.count({ where: { ...countryFilter, patchSent: true, giftsAlreadySent: false, ...sentWindow } }),
+    prisma.patient.count({ where: { ...countryFilter, isTest: false, patchSent: false, giftsAlreadySent: false } }),
+    prisma.patient.count({ where: { ...countryFilter, isTest: false, patchSent: true, giftsAlreadySent: false, ...sentWindow } }),
   ]);
 
   return (

@@ -14,6 +14,7 @@ import { MarkAsLegacyButton } from "@/components/MarkAsLegacyButton";
 import { PatientAgendaButton } from "@/components/PatientAgendaButton";
 import { PatientAlertsCard } from "@/components/PatientAlertsCard";
 import { MetricAlertsPatientButton } from "@/components/MetricAlertsPatientButton";
+import { PatientTestModeToggle } from "@/components/PatientTestModeToggle";
 import { calculateAdherence } from "@/lib/adherence";
 import { getActiveProfessional } from "@/lib/session";
 import { parseTargetRoles, templateVisibleFor, type ResourceRole } from "@/lib/resource-roles";
@@ -89,6 +90,15 @@ export default async function PatientLayout({
           <div className="flex-1 min-w-0">
             <div className="flex items-baseline gap-3 flex-wrap">
               <h1 className="text-xl font-semibold">{patient.fullName}</h1>
+              {(patient as any).isTest && (
+                <span
+                  className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+                  style={{ background: "#F3E8FF", color: "#6B21A8" }}
+                  title="Paciente fantasma — no cuenta en KPIs, alertas ni resúmenes"
+                >
+                  👻 Fantasma
+                </span>
+              )}
               <PatientPill value={patient.programType} kind="program" />
               {user.isManager && <PatientPill value={patient.difficulty} kind="difficulty" />}
               <span className="text-sm text-neutral-500">{patient.diagnosis}</span>
@@ -156,6 +166,13 @@ export default async function PatientLayout({
                 />
               )}
             <MetricAlertsPatientButton patientId={patient.id} />
+            {user.role === "ceo" && (
+              <PatientTestModeToggle
+                patientId={patient.id}
+                initial={!!(patient as any).isTest}
+                patientName={patient.fullName}
+              />
+            )}
             <Link
               href={`/fisio/paciente/${patient.id}/exportar`}
               className="btn btn-ghost text-xs justify-start"

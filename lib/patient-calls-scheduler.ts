@@ -49,6 +49,7 @@ export async function schedulePatientCalls(now: Date = new Date()): Promise<Sche
   const patients = await prisma.patient.findMany({
     where: {
       onboardingStatus: "active",
+      isTest: false, // pacientes fantasma quedan fuera del scheduler
       subscriptionStartDate: { not: null },
       programType: { in: [...new Set([...OPT_PROGRAM_TYPES, ...REN_PROGRAM_TYPES])] },
     },

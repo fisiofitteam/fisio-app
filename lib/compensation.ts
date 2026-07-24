@@ -80,9 +80,10 @@ export async function computeMonthlySalary(
   const config = await getCompensation(professionalId);
   const { start, end } = monthRangeUTC(year, month);
 
-  // Pacientes activos asignados (snapshot actual)
+  // Pacientes activos asignados (snapshot actual). Los pacientes fantasma
+  // (isTest) no cuentan para compensación.
   const activePatients = await prisma.patient.count({
-    where: { assignedProfessionalId: professionalId, onboardingStatus: "active" },
+    where: { assignedProfessionalId: professionalId, onboardingStatus: "active", isTest: false },
   });
 
   // Renovaciones del mes: propias vs resto del equipo

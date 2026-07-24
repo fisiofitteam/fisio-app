@@ -36,7 +36,7 @@ export async function getProgramEndingsForProfessional(professionalId: string): 
   const assignments = await prisma.programAssignment.findMany({
     where: {
       isActive: true,
-      patient: { assignedProfessionalId: professionalId },
+      patient: { assignedProfessionalId: professionalId, isTest: false },
       program: { isStandalone: false }, // ← solo programas enteros, no sesiones sueltas
     },
     include: {

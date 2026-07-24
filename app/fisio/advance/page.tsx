@@ -23,6 +23,7 @@ export default async function AdvancePulsoPage() {
     }).catch(() => [] as any[]),
     prisma.patient.count({
       where: {
+        isTest: false,
         programMode: "rolling",
         OR: [
           { rollingAccessoriesId: { not: null } },

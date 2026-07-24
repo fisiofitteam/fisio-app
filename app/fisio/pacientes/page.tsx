@@ -282,6 +282,7 @@ export default async function PatientsListPage({
       programsCount: p._count.programAssignments,
       programType: p.programType,
       difficulty: p.difficulty,
+      isTest: !!(p as any).isTest,
       assignedProfessional: p.assignedProfessional
         ? { id: p.assignedProfessional.id, fullName: p.assignedProfessional.fullName, role: p.assignedProfessional.role }
         : null,

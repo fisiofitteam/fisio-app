@@ -35,7 +35,8 @@ export async function getLoadReviewsForProfessional(
   opts?: { all?: boolean },
 ): Promise<LoadReviewItem[]> {
   const all = opts?.all ?? false;
-  const where: any = {};
+  // Los pacientes fantasma (isTest) no generan revisiones de carga.
+  const where: any = { isTest: false };
   if (!all && professionalId) {
     where.assignedProfessionalId = professionalId;
   }

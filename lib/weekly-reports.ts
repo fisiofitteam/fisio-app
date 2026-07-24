@@ -421,7 +421,8 @@ export async function runWeeklyReportsForWeek(monday: Date): Promise<WeeklyRepor
       completedAt: { gte: start, lt: end },
       assignment: {
         isActive: true,
-        patient: { programType: { in: ["RECUPERA", "CONSOLIDA"] } },
+        // Excluimos pacientes fantasma (test) del generador semanal.
+        patient: { programType: { in: ["RECUPERA", "CONSOLIDA"] }, isTest: false },
       },
     },
     _count: { _all: true },
@@ -450,7 +451,7 @@ export async function runWeeklyReportsForWeek(monday: Date): Promise<WeeklyRepor
   const advanceByPatient = new Map<string, Patient>();
   if (advancePatientIds.length > 0) {
     const advPatients = await prisma.patient.findMany({
-      where: { id: { in: advancePatientIds }, programType: "ADVANCE" },
+      where: { id: { in: advancePatientIds }, programType: "ADVANCE", isTest: false },
       select: { id: true, fullName: true, programType: true, assignedProfessionalId: true },
     });
     for (const p of advPatients) advanceByPatient.set(p.id, p as Patient);

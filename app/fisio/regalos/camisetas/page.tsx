@@ -22,7 +22,9 @@ export default async function RegalosCamisetasPage({
 
   // Excluimos pacientes migrados (giftsAlreadySent=true): ya recibieron su
   // camiseta fuera de la plataforma, no entran al pipeline de envíos.
+  // Y pacientes fantasma (isTest) no reciben regalos reales.
   const baseWhere = {
+    isTest: false,
     programType: "ADVANCE",
     shirtSent: view === "sent",
     giftsAlreadySent: false,
@@ -55,8 +57,8 @@ export default async function RegalosCamisetasPage({
   });
 
   const counts = await Promise.all([
-    prisma.patient.count({ where: { programType: "ADVANCE", shirtSent: false, giftsAlreadySent: false, ...countryFilter } }),
-    prisma.patient.count({ where: { programType: "ADVANCE", shirtSent: true, giftsAlreadySent: false, ...countryFilter, ...sentWindow } }),
+    prisma.patient.count({ where: { isTest: false, programType: "ADVANCE", shirtSent: false, giftsAlreadySent: false, ...countryFilter } }),
+    prisma.patient.count({ where: { isTest: false, programType: "ADVANCE", shirtSent: true, giftsAlreadySent: false, ...countryFilter, ...sentWindow } }),
   ]);
 
   return (

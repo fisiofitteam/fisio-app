@@ -90,14 +90,29 @@ export default async function FisioPanelPage({
     periodStart = r.start; periodEnd = r.end; periodLabel = r.label;
   }
 
-  const patientWhere = isManager ? {} : { assignedProfessionalId: user.id };
+  // KPIs excluyen pacientes fantasma (isTest=true) — el listado
+  // /fisio/pacientes sigue mostrandolos con badge, aqui no cuentan.
+  const patientWhere: any = isManager ? { isTest: false } : { isTest: false, assignedProfessionalId: user.id };
   const patients = await prisma.patient.findMany({ where: patientWhere, orderBy: { fullName: "asc" } });
 
-  const taskWhere: any = { completedAt: null };
+  // Tareas: excluimos las asociadas a pacientes fantasma (isTest). Las
+  // tareas sin paciente (sueltas) o con lead siguen apareciendo.
+  const taskWhere: any = {
+    completedAt: null,
+    OR: [
+      { patientId: null },
+      { patient: { isTest: false } },
+    ],
+  };
   if (!isManager) {
-    taskWhere.OR = [
-      { assignedToProfessionalId: user.id },
-      { source: "own", assignedToProfessionalId: null },
+    // Combinamos con el filtro de asignacion sin cargarse el OR anterior.
+    taskWhere.AND = [
+      {
+        OR: [
+          { assignedToProfessionalId: user.id },
+          { source: "own", assignedToProfessionalId: null },
+        ],
+      },
     ];
   }
   const tasks = await prisma.fisioTask.findMany({
@@ -107,9 +122,10 @@ export default async function FisioPanelPage({
     take: 5,
   });
 
-  const callWhere = isManager
-    ? { completedAt: null, scheduledAt: { gte: new Date() } }
-    : { completedAt: null, scheduledAt: { gte: new Date() }, patient: { assignedProfessionalId: user.id } };
+  // Excluimos ScheduledCall de pacientes fantasma tambien.
+  const callWhere: any = isManager
+    ? { completedAt: null, scheduledAt: { gte: new Date() }, patient: { isTest: false } }
+    : { completedAt: null, scheduledAt: { gte: new Date() }, patient: { isTest: false, assignedProfessionalId: user.id } };
   const calls = await prisma.scheduledCall.findMany({
     where: callWhere,
     include: { patient: true },
@@ -121,7 +137,10 @@ export default async function FisioPanelPage({
     where: {
       completedAt: { not: null },
       formReviewedAt: null,
-      ...(isManager ? {} : { assignment: { patient: { assignedProfessionalId: user.id } } }),
+      // Fuera formularios de pacientes fantasma (isTest).
+      assignment: isManager
+        ? { patient: { isTest: false } }
+        : { patient: { isTest: false, assignedProfessionalId: user.id } },
     },
     include: { assignment: { include: { patient: true, program: true } } },
     orderBy: { completedAt: "desc" },
@@ -183,7 +202,7 @@ export default async function FisioPanelPage({
     perFisio = await Promise.all(
       fisios.map(async (f) => {
         const myPatients = await prisma.patient.findMany({
-          where: { assignedProfessionalId: f.id },
+          where: { assignedProfessionalId: f.id, isTest: false },
           select: { id: true },
         });
         const myPatientIds = myPatients.map((p) => p.id);

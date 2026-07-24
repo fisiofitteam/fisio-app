@@ -54,9 +54,12 @@ export async function countUnseenAlerts(assignedProfessionalId?: string | null):
     seenAt: null,
     dismissedAt: null,
     severity: { in: VISIBLE_SEVERITIES },
+    // Excluimos siempre pacientes fantasma (test) de los conteos y listas.
+    patient: { isTest: false },
   };
   if (assignedProfessionalId) {
     where.patient = {
+      ...where.patient,
       assignedProfessionalId,
       // Los fisios normales no ven pacientes ADVANCE (los lleva el CEO).
       NOT: { programType: "ADVANCE" },
@@ -79,13 +82,21 @@ export async function listAlerts(f: AlertListFilters) {
   if (!f.includeSeen) where.seenAt = null;
   where.dismissedAt = null;
   where.severity = { in: f.includeInfo ? ["info", "warn", "high"] : VISIBLE_SEVERITIES };
-  if (f.scope === "mine" && f.professionalId) {
-    where.patient = {
-      assignedProfessionalId: f.professionalId,
-      NOT: { programType: "ADVANCE" },
-    };
+  // Excluir pacientes fantasma en la lista, siempre. Si se consulta por
+  // un patientId concreto (card de la ficha del paciente), no imponemos
+  // filtro isTest — el CEO puede ver sus alertas para depurar.
+  if (!f.patientId) {
+    where.patient = { isTest: false };
+    if (f.scope === "mine" && f.professionalId) {
+      where.patient = {
+        ...where.patient,
+        assignedProfessionalId: f.professionalId,
+        NOT: { programType: "ADVANCE" },
+      };
+    }
+  } else {
+    where.patientId = f.patientId;
   }
-  if (f.patientId) where.patientId = f.patientId;
   return await (prisma as any).patientAlert.findMany({
     where,
     orderBy: [{ createdAt: "desc" }],
