@@ -1,22 +1,31 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { getActiveProfessional } from "@/lib/session";
+import { hasPendingFormReview, parseFormQuestions } from "@/lib/pending-form-review";
+
+export const dynamic = "force-dynamic";
 
 export default async function PendingFormsPage() {
+  const user = (await getActiveProfessional())!;
+  const isManager = user.isManager;
+
+  // Excluimos pacientes fantasma (isTest). Los fisios normales solo ven
+  // formularios de sus atletas asignados.
   const sessions = await prisma.programSession.findMany({
     where: {
       completedAt: { not: null },
       formReviewedAt: null,
+      assignment: isManager
+        ? { patient: { isTest: false } }
+        : { patient: { isTest: false, assignedProfessionalId: user.id } },
     },
     include: { assignment: { include: { patient: true, program: true } } },
     orderBy: { completedAt: "desc" },
   });
 
-  // Filtrar las que realmente tienen FORM completado
-  const pending = sessions.filter((s) => {
-    const tasks = JSON.parse(s.tasksSnapshot) as any[];
-    const responses = s.responses ? JSON.parse(s.responses) : {};
-    return tasks.some((t) => t.type === "FORM" && responses[t.id]);
-  });
+  // Solo quedan las sesiones donde el paciente REALMENTE ha rellenado el
+  // formulario (respuesta no vacia + sin sentinel de skipped).
+  const pending = sessions.filter(hasPendingFormReview);
 
   return (
     <main>
@@ -33,11 +42,17 @@ export default async function PendingFormsPage() {
       ) : (
         <div className="space-y-2">
           {pending.map((s) => {
-            const tasks = JSON.parse(s.tasksSnapshot) as any[];
-            const formTask = tasks.find((t) => t.type === "FORM");
-            const responses = s.responses ? JSON.parse(s.responses) : {};
+            let tasks: any[] = [];
+            try { tasks = JSON.parse(s.tasksSnapshot); } catch { tasks = []; }
+            const formTask = tasks.find((t) => t?.type === "FORM");
+            let responses: Record<string, any> = {};
+            if (s.responses) {
+              try { responses = JSON.parse(s.responses); } catch { responses = {}; }
+            }
             const formResponse = formTask ? responses[formTask.id] : null;
-            const questions = formTask?.questions ? JSON.parse(formTask.questions) : [];
+            // Snapshots modernos guardan questions ya como array; los
+            // antiguos como string JSON. parseFormQuestions cubre ambos.
+            const questions = parseFormQuestions(formTask?.questions);
 
             return (
               <article key={s.id} className="card">
@@ -53,7 +68,7 @@ export default async function PendingFormsPage() {
                   </div>
                 </div>
 
-                {formResponse && questions.length > 0 && (
+                {formResponse && typeof formResponse === "object" && questions.length > 0 && (
                   <div className="mt-2 border-t border-neutral-100 pt-2 space-y-1.5">
                     {questions.map((q: any) => {
                       const value = formResponse[q.id];

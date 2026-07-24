@@ -18,6 +18,7 @@ import { AdHocTasksCard } from "@/components/AdHocTasksCard";
 import { buildAdHocActiveForProfessional } from "@/lib/team-tasks-adhoc";
 import { calculatePreventionMetrics } from "@/lib/prevention-metrics";
 import { PreventionMetricsBlock } from "@/components/PreventionMetricsBlock";
+import { hasPendingFormReview } from "@/lib/pending-form-review";
 
 const TYPE_LABELS: Record<string, string> = {
   optimizacion: "Optimización",
@@ -146,10 +147,11 @@ export default async function FisioPanelPage({
     orderBy: { completedAt: "desc" },
     take: 5,
   });
-  const pendingForms = pendingFormSessions.filter((s) => {
-    const tasks = JSON.parse(s.tasksSnapshot) as any[];
-    return tasks.some((t) => t.type === "FORM");
-  });
+  // Solo dejamos los que el paciente REALMENTE rellenó (no vacíos, no
+  // sentinels de "skipped"). El filtro anterior contaba cualquier sesion
+  // con task FORM aunque nadie la hubiese contestado — por eso a los
+  // fisios no les aparecian pacientes con forms recien rellenados.
+  const pendingForms = pendingFormSessions.filter(hasPendingFormReview);
 
   const withRenewal = patients
     .map((p) => ({ patient: p, days: daysUntilRenewal(p.subscriptionStartDate, p.subscriptionPeriodMonths) }))
