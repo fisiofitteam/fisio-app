@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 import { hasPendingFormReview, parseFormQuestions } from "@/lib/pending-form-review";
+import { markFormReviewed } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -101,22 +102,9 @@ export default async function PendingFormsPage() {
   );
 }
 
-// Server action via form submit
 function ReviewButton({ sessionId }: { sessionId: string }) {
   return (
-    <form
-      action={async () => {
-        "use server";
-        const { prisma } = await import("@/lib/prisma");
-        const { revalidatePath } = await import("next/cache");
-        await prisma.programSession.update({
-          where: { id: sessionId },
-          data: { formReviewedAt: new Date() },
-        });
-        revalidatePath("/fisio/formularios-pendientes");
-        revalidatePath("/fisio");
-      }}
-    >
+    <form action={markFormReviewed.bind(null, sessionId)}>
       <button type="submit" className="btn btn-primary text-xs">
         ✓ Marcar como revisado
       </button>

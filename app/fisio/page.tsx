@@ -19,6 +19,7 @@ import { buildAdHocActiveForProfessional } from "@/lib/team-tasks-adhoc";
 import { calculatePreventionMetrics } from "@/lib/prevention-metrics";
 import { PreventionMetricsBlock } from "@/components/PreventionMetricsBlock";
 import { hasPendingFormReview } from "@/lib/pending-form-review";
+import { markFormReviewed } from "./formularios-pendientes/actions";
 
 const TYPE_LABELS: Record<string, string> = {
   optimizacion: "Optimización",
@@ -413,16 +414,26 @@ export default async function FisioPanelPage({
                 const tasks = JSON.parse(s.tasksSnapshot) as any[];
                 const formTitle = tasks.find((t) => t.type === "FORM")?.title ?? "Formulario";
                 return (
-                  <Link
-                    key={s.id}
-                    href={`/fisio/paciente/${s.assignment.patientId}/calendario`}
-                    className="block py-2 text-sm hover:bg-neutral-50 -mx-2 px-2 rounded"
-                  >
-                    <div className="font-medium">{s.assignment.patient.fullName}</div>
-                    <div className="text-xs text-neutral-500 mt-0.5">
-                      {formTitle} · {s.completedAt && formatDateRelative(s.completedAt)}
-                    </div>
-                  </Link>
+                  <div key={s.id} className="py-2 flex items-center justify-between gap-2 -mx-2 px-2 rounded hover:bg-neutral-50">
+                    <Link
+                      href={`/fisio/paciente/${s.assignment.patientId}/formularios`}
+                      className="flex-1 min-w-0 text-sm"
+                    >
+                      <div className="font-medium truncate">{s.assignment.patient.fullName}</div>
+                      <div className="text-xs text-neutral-500 mt-0.5 truncate">
+                        {formTitle} · {s.completedAt && formatDateRelative(s.completedAt)}
+                      </div>
+                    </Link>
+                    <form action={markFormReviewed.bind(null, s.id)} className="flex-shrink-0">
+                      <button
+                        type="submit"
+                        className="text-[11px] font-medium px-2 py-1 rounded border border-neutral-300 bg-white hover:bg-neutral-100"
+                        title="Marcar como revisado"
+                      >
+                        ✓ Revisado
+                      </button>
+                    </form>
+                  </div>
                 );
               })}
             </div>
