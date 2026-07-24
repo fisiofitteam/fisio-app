@@ -182,37 +182,11 @@ export function PatientHomeDark({
           </div>
         )}
 
-        {typeof programEndsInDays === "number" && programEndsInDays <= 14 && programEndsInDays >= 0 && (
-          <a
-            href="https://prevention.fisiofitteam.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mb-5 rounded-2xl p-4 flex items-center gap-3 transition-transform active:scale-[0.99]"
-            style={{
-              background: "linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)",
-              color: "#FFFFFF",
-              boxShadow: "0 8px 24px -8px rgba(245, 158, 11, 0.55)",
-            }}
-          >
-            <div className="text-2xl flex-shrink-0">🛡</div>
-            <div className="flex-1 min-w-0">
-              <div className="text-[10px] font-bold tracking-wider uppercase opacity-80 mb-0.5">
-                {programEndsInDays === 0
-                  ? "Tu programa termina hoy"
-                  : programEndsInDays === 1
-                  ? "Te queda 1 día de programa"
-                  : `Te quedan ${programEndsInDays} días de programa`}
-              </div>
-              <div className="text-sm font-semibold leading-tight mb-0.5">
-                Sigue cuidándote con Prevention
-              </div>
-              <div className="text-[11px] opacity-85">
-                Desde 17 €/mes · 4 días de prueba gratis
-              </div>
-            </div>
-            <div className="text-lg opacity-80 flex-shrink-0">→</div>
-          </a>
-        )}
+        {/* Banner de upsell a Prevention retirado: la oferta se hace ahora
+            en la llamada de renovacion cuando el equipo lo considera
+            oportuno, no automatizado en la app para RECUPERA/CONSOLIDA/
+            ADVANCE. La prop `programEndsInDays` se sigue calculando por
+            si otro componente la necesita. */}
 
         {!patient.photoUrl && (
           <Link
