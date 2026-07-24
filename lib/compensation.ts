@@ -86,21 +86,56 @@ export async function computeMonthlySalary(
     where: { assignedProfessionalId: professionalId, onboardingStatus: "active", isTest: false },
   });
 
-  // Renovaciones del mes: propias vs resto del equipo
+  // Renovaciones del mes: propias vs resto del equipo.
+  //
+  // Ojo: el modelo SubscriptionRenewal representa "periodo de suscripcion"
+  // — incluye el ALTA INICIAL, no solo renovaciones. Para compensacion
+  // solo cuentan las verdaderas renovaciones: aquellas donde ya existia
+  // otro periodo previo para el mismo paciente antes de este.
+  //
+  // Estrategia: traemos los periodos del mes con la fecha (decidedAt) y,
+  // por paciente, comprobamos si el atleta tiene periodos anteriores a
+  // ese decidedAt. Si no, es el alta inicial y no computa como renovacion.
   const monthRenewals = await prisma.subscriptionRenewal.findMany({
     where: { decidedAt: { gte: start, lt: end } },
-    select: { amountPaid: true, patient: { select: { assignedProfessionalId: true } } },
+    select: {
+      id: true,
+      patientId: true,
+      amountPaid: true,
+      decidedAt: true,
+      patient: { select: { assignedProfessionalId: true } },
+    },
   });
   let renewalOwnCount = 0;
   let renewalOwnRevenue = 0;
   let renewalOthersRevenue = 0;
-  for (const r of monthRenewals) {
-    const amt = r.amountPaid || 0;
-    if (r.patient?.assignedProfessionalId === professionalId) {
-      renewalOwnCount++;
-      renewalOwnRevenue += amt;
-    } else {
-      renewalOthersRevenue += amt;
+  if (monthRenewals.length > 0) {
+    // Contamos, para cada paciente involucrado, cuantos periodos previos
+    // (anteriores a la fecha del periodo actual) tiene. Solo con ≥1
+    // consideramos que es renovacion real.
+    const patientIds = Array.from(new Set(monthRenewals.map((r) => r.patientId)));
+    const earlierByPatient: Record<string, number> = {};
+    // Una unica query traedo todo el historial de esos pacientes.
+    const history = await prisma.subscriptionRenewal.findMany({
+      where: { patientId: { in: patientIds } },
+      select: { patientId: true, decidedAt: true, id: true },
+    });
+    for (const r of monthRenewals) {
+      const priorCount = history.filter((h) =>
+        h.patientId === r.patientId && h.id !== r.id && h.decidedAt < r.decidedAt
+      ).length;
+      earlierByPatient[r.id] = priorCount;
+    }
+    for (const r of monthRenewals) {
+      const isRealRenewal = (earlierByPatient[r.id] ?? 0) > 0;
+      if (!isRealRenewal) continue; // alta inicial — no computa
+      const amt = r.amountPaid || 0;
+      if (r.patient?.assignedProfessionalId === professionalId) {
+        renewalOwnCount++;
+        renewalOwnRevenue += amt;
+      } else {
+        renewalOthersRevenue += amt;
+      }
     }
   }
 
