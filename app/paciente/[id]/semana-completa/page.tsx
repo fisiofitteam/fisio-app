@@ -84,6 +84,21 @@ export default async function PatientSemanaCompletaPage({
           rollingProgramId: patient.rollingProgramId,
         }, targetAt).catch(() => null);
 
+    // Resolvemos los videoId de todas las tareas de la semana para poder
+    // pintar link "Ver vídeo" en el detalle expandible de cada sesion.
+    // Un solo query en batch, sin N+1.
+    const videoIds = new Set<string>();
+    for (const s of week?.sessions ?? []) {
+      for (const t of s.tasks) if (t.videoId) videoIds.add(t.videoId);
+    }
+    const videosById: Record<string, { youtubeUrl: string; title: string }> = {};
+    if (videoIds.size > 0) {
+      const vids = await prisma.videoLibrary.findMany({
+        where: { id: { in: Array.from(videoIds) } },
+      });
+      for (const v of vids) videosById[v.id] = { youtubeUrl: v.youtubeUrl, title: v.title };
+    }
+
     return (
       <main className="min-h-screen" style={{ color: "var(--p-text)" }}>
         <div className="relative max-w-md mx-auto px-5 py-7 pb-28">
@@ -205,14 +220,34 @@ export default async function PatientSemanaCompletaPage({
                   </div>
                 );
                 if (view === "next") {
+                  // Semana siguiente: en vez de una card estatica, dejamos
+                  // que el atleta despliegue el detalle inline con las
+                  // tareas de esa sesion. Sigue sin poder MARCARLA como
+                  // completada — solo previsualizar contenido.
                   return (
-                    <div
+                    <details
                       key={s.sessionIndex}
-                      className="rounded-2xl p-4"
+                      className="rounded-2xl group"
                       style={{ background: bg, color, border }}
                     >
-                      {inner}
-                    </div>
+                      <summary
+                        className="p-4 cursor-pointer list-none [&::-webkit-details-marker]:hidden flex items-center gap-3"
+                      >
+                        <div className="flex-1 min-w-0">{inner}</div>
+                        <span
+                          className="text-xs group-open:rotate-180 transition-transform flex-shrink-0"
+                          style={{ opacity: 0.7 }}
+                        >
+                          ▼
+                        </span>
+                      </summary>
+                      <div
+                        className="px-4 pb-4 pt-2 space-y-3"
+                        style={{ borderTop: "1px solid var(--p-border)" }}
+                      >
+                        <NextSessionDetail tasks={s.tasks} videosById={videosById} />
+                      </div>
+                    </details>
                   );
                 }
                 return (
@@ -428,5 +463,104 @@ export default async function PatientSemanaCompletaPage({
       </div>
       <PatientNav patientId={patient.id} active="semana" variant={isPrevention ? "prevention" : "advance"} />
     </main>
+  );
+}
+
+/**
+ * Detalle desplegable de una sesion de la SEMANA SIGUIENTE. Solo lectura:
+ * ver bloque (Accesorios / Entrenamiento), titulo y cuerpo de cada tarea,
+ * link a video si aplica. No hay boton de completar — esas tareas se
+ * completan cuando llega la semana real.
+ */
+function NextSessionDetail({
+  tasks,
+  videosById,
+}: {
+  tasks: Array<{
+    id: string;
+    type: string;
+    title: string;
+    bodyText: string | null;
+    videoId: string | null;
+    block: "Accesorios" | "Entrenamiento";
+  }>;
+  videosById: Record<string, { youtubeUrl: string; title: string }>;
+}) {
+  if (tasks.length === 0) {
+    return (
+      <p className="text-xs italic" style={{ color: "var(--p-text-faint)" }}>
+        Sin tareas programadas para este día.
+      </p>
+    );
+  }
+  const accesorios = tasks.filter((t) => t.block === "Accesorios");
+  const entrenamiento = tasks.filter((t) => t.block === "Entrenamiento");
+  return (
+    <>
+      {accesorios.length > 0 && (
+        <NextSessionBlock label="Accesorios" color="#3B82F6" tasks={accesorios} videosById={videosById} />
+      )}
+      {entrenamiento.length > 0 && (
+        <NextSessionBlock label="Entrenamiento" color="#F59E0B" tasks={entrenamiento} videosById={videosById} />
+      )}
+    </>
+  );
+}
+
+function NextSessionBlock({
+  label,
+  color,
+  tasks,
+  videosById,
+}: {
+  label: string;
+  color: string;
+  tasks: Array<{ id: string; type: string; title: string; bodyText: string | null; videoId: string | null }>;
+  videosById: Record<string, { youtubeUrl: string; title: string }>;
+}) {
+  return (
+    <div>
+      <div
+        className="inline-flex items-center text-[10px] font-bold tracking-wider px-2 py-0.5 rounded mb-2"
+        style={{ background: `${color}22`, color }}
+      >
+        {label.toUpperCase()}
+      </div>
+      <div className="space-y-2">
+        {tasks.map((t) => {
+          const videoUrl = t.videoId ? videosById[t.videoId]?.youtubeUrl : null;
+          return (
+            <div
+              key={t.id}
+              className="rounded-lg p-3"
+              style={{ background: "var(--p-surface-2)", border: "1px solid var(--p-border)" }}
+            >
+              <div className="font-semibold text-sm" style={{ color: "var(--p-text)" }}>
+                {t.title}
+              </div>
+              {t.bodyText && (
+                <div
+                  className="text-xs mt-1 whitespace-pre-wrap"
+                  style={{ color: "var(--p-text-dim)" }}
+                >
+                  {t.bodyText}
+                </div>
+              )}
+              {videoUrl && (
+                <a
+                  href={videoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs font-medium mt-2 hover:underline"
+                  style={{ color: "var(--p-accent)" }}
+                >
+                  🎥 Ver vídeo →
+                </a>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
