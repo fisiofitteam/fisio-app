@@ -1,10 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
-import { COMMUNITY_CATEGORY_VALUES } from "@/lib/community";
+import { COMMUNITY_CATEGORY_VALUES, parseCategories } from "@/lib/community";
+import { notifyProfessional } from "@/lib/notifications";
 
 function canCommunity(role: string): boolean {
   return role === "ceo" || role === "head_success" || role === "fisio";
+}
+
+// El cliente espera `categories` como array (parseado). Prisma lo guarda como
+// string JSON en el campo. Sin esta normalización el frontend intenta .map()
+// sobre un string y crashea.
+function serializePost(p: any) {
+  return {
+    id: p.id,
+    date: p.date instanceof Date ? p.date.toISOString() : p.date,
+    category: p.category,
+    categories: parseCategories(p.categories ?? "[]"),
+    assignedToId: p.assignedToId,
+    text: p.text,
+    note: p.note ?? null,
+    done: p.done,
+  };
 }
 
 // Parsea "YYYY-MM-DD" a Date en UTC midnight.
@@ -25,7 +42,7 @@ export async function GET(req: NextRequest) {
   if (from && to) where.date = { gte: from, lt: to };
 
   const posts = await prisma.communityPost.findMany({ where, orderBy: { date: "asc" } });
-  return NextResponse.json(posts);
+  return NextResponse.json(posts.map(serializePost));
 }
 
 /** Normaliza el body {category, categories} a un array validado.
@@ -81,7 +98,15 @@ export async function POST(req: NextRequest) {
     return post;
   });
 
-  return NextResponse.json(created);
+  await notifyAssignedIfNeeded({
+    assignedToId: created.assignedToId,
+    previousAssignedToId: null,
+    actorId: user.id,
+    postId: created.id,
+    dateISO: created.date.toISOString(),
+  });
+
+  return NextResponse.json(serializePost(created));
 }
 
 // PATCH /api/community/posts — body: { id, category?, categories?, assignedToId?, text?, note?, done? }
@@ -105,8 +130,25 @@ export async function PATCH(req: NextRequest) {
   if (b.note !== undefined) data.note = b.note?.trim() || null;
   if (b.done !== undefined) data.done = !!b.done;
 
+  // Necesitamos el previous assignedToId para saber si el cambio de asignación
+  // implica notificar a alguien nuevo.
+  const previous = await prisma.communityPost.findUnique({
+    where: { id: b.id },
+    select: { assignedToId: true },
+  });
   const updated = await prisma.communityPost.update({ where: { id: b.id }, data });
-  return NextResponse.json(updated);
+
+  if (b.assignedToId !== undefined) {
+    await notifyAssignedIfNeeded({
+      assignedToId: updated.assignedToId,
+      previousAssignedToId: previous?.assignedToId ?? null,
+      actorId: user.id,
+      postId: updated.id,
+      dateISO: updated.date.toISOString(),
+    });
+  }
+
+  return NextResponse.json(serializePost(updated));
 }
 
 // DELETE /api/community/posts?id=xxx
@@ -118,4 +160,37 @@ export async function DELETE(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "id requerido" }, { status: 400 });
   await prisma.communityPost.delete({ where: { id } });
   return NextResponse.json({ ok: true });
+}
+
+/**
+ * Avisa en la campanita al fisio recién asignado a un post. Se salta el aviso
+ * cuando el usuario se asigna un post a sí mismo (habitualmente el fisio
+ * arrastra la idea del banco y se la queda: ahí no queremos ruido).
+ */
+async function notifyAssignedIfNeeded(params: {
+  assignedToId: string | null;
+  previousAssignedToId: string | null;
+  actorId: string;
+  postId: string;
+  dateISO: string;
+}) {
+  const { assignedToId, previousAssignedToId, actorId, postId, dateISO } = params;
+  if (!assignedToId) return;
+  if (assignedToId === previousAssignedToId) return;
+  if (assignedToId === actorId) return;
+  const day = new Date(dateISO).toLocaleDateString("es-ES", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  });
+  await notifyProfessional({
+    professionalId: assignedToId,
+    type: "community_post_assigned",
+    title: "Te han asignado un post",
+    body: `Post de comunidad para el ${day}.`,
+    actionUrl: `/fisio/comunidad/plan?post=${postId}`,
+  }).catch((err) => {
+    console.error("[community/posts] notifyProfessional failed", err);
+  });
 }
