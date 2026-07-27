@@ -18,7 +18,12 @@ import { runWeeklyReportsForWeek, weekStartUtc } from "@/lib/weekly-reports";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-export const maxDuration = 300;
+// Vercel Pro permite hasta 800s. Necesitamos margen porque cuando el CEO
+// dispara ?week=… procesa RECUPERA/CONSOLIDA + ADVANCE + card global,
+// que son muchas llamadas a Sonnet. La paralelizacion en batches de 5
+// baja el tiempo real a ~1min con 40 pacientes, pero 800s nos deja
+// tranquilos frente a rate limits o llamadas lentas.
+export const maxDuration = 800;
 
 async function handler(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
