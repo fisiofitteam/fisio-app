@@ -1,11 +1,11 @@
 /**
- * Cron diario que avisa al profesional que tiene un CommunityPost asignado
- * para HOY (calendario Madrid). Crea una fila TeamNotification dirigida
- * directamente al fisio con `actionUrl` apuntando al plan editorial.
+ * Cron diario que avisa a las 07:00 hora Madrid al profesional que tiene un
+ * CommunityPost asignado para HOY, y en paralelo al CEO para que también lo
+ * vea en su campanita.
  *
- * Se dispara desde Vercel Cron a las 06:00 UTC y 07:00 UTC (vercel.json)
- * — cubre 08:00 hora Madrid tanto en verano (UTC+2) como invierno (UTC+1)
- * con un solo handler que checkea la hora Madrid antes de disparar.
+ * Se dispara desde Vercel Cron a las 05:00 UTC y 06:00 UTC (vercel.json) —
+ * cubre 07:00 hora Madrid tanto en verano (UTC+2) como invierno (UTC+1) con
+ * un solo handler que checkea la hora Madrid antes de disparar.
  *
  * Idempotencia: cada CommunityPost se marca con `notifiedAt` al enviar la
  * notificación. Si el cron corre dos veces el mismo día, el segundo intento
@@ -60,9 +60,9 @@ async function handler(req: NextRequest) {
 
   const force = req.nextUrl.searchParams.get("force") === "1";
   const madridHour = getMadridHour();
-  // Corremos solo cuando la hora Madrid es exactamente 8. Con `force=1` se
+  // Corremos solo cuando la hora Madrid es exactamente 7. Con `force=1` se
   // salta la guarda para testing manual.
-  if (!force && madridHour !== 8) {
+  if (!force && madridHour !== 7) {
     return NextResponse.json({ ok: true, skipped: true, madridHour });
   }
 
@@ -86,6 +86,24 @@ async function handler(req: NextRequest) {
     },
   });
 
+  // CEOs activos: reciben una notificación paralela por cada post del día
+  // (el CEO quiere ver en su campanita quién publica hoy). Si un CEO está
+  // asignado él mismo al post, evitamos duplicarle.
+  const ceos = await prisma.professional.findMany({
+    where: { role: "ceo", active: true },
+    select: { id: true, fullName: true },
+  });
+
+  const assigneeCache = new Map<string, string>();
+  async function getAssigneeName(id: string): Promise<string> {
+    const cached = assigneeCache.get(id);
+    if (cached) return cached;
+    const pro = await prisma.professional.findUnique({ where: { id }, select: { fullName: true } });
+    const name = pro?.fullName ?? "un fisio";
+    assigneeCache.set(id, name);
+    return name;
+  }
+
   const results: Array<{ postId: string; ok: boolean; error?: string }> = [];
   for (const p of posts) {
     try {
@@ -103,6 +121,20 @@ async function handler(req: NextRequest) {
         body,
         actionUrl: "/fisio/comunidad/plan",
       });
+
+      const assigneeName = await getAssigneeName(p.assignedToId!);
+      const ceoBody = `Publica ${assigneeName}. Etiquetas: ${labels}.`;
+      for (const ceo of ceos) {
+        if (ceo.id === p.assignedToId) continue; // el CEO ya recibió el aviso como asignado
+        await notifyProfessional({
+          professionalId: ceo.id,
+          type: "community_post_today_ceo",
+          title: "📅 Post de comunidad de hoy",
+          body: ceoBody,
+          actionUrl: "/fisio/comunidad/plan",
+        });
+      }
+
       await prisma.communityPost.update({
         where: { id: p.id },
         data: { notifiedAt: new Date() },
