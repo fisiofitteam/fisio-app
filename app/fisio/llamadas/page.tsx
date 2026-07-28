@@ -7,7 +7,11 @@ export default async function CallsPage() {
   const calls = await prisma.scheduledCall.findMany({
     where: { patient: { isTest: false } },
     include: { patient: true },
-    orderBy: [{ completedAt: "asc" }, { scheduledAt: "asc" }],
+    orderBy: [
+      { completedAt: "asc" },
+      { scheduledAt: { sort: "asc", nulls: "first" } }, // pendientes de agendar arriba
+      { createdAt: "asc" },
+    ],
   });
   const patients = await prisma.patient.findMany({ where: { isTest: false }, orderBy: { fullName: "asc" } });
 
@@ -21,7 +25,7 @@ export default async function CallsPage() {
           id: c.id,
           patientId: c.patientId,
           patientName: c.patient.fullName,
-          scheduledAt: c.scheduledAt.toISOString(),
+          scheduledAt: c.scheduledAt?.toISOString() ?? null,
           type: c.type,
           notes: c.notes ?? "",
           completedAt: c.completedAt?.toISOString() ?? null,

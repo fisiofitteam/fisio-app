@@ -7,7 +7,7 @@ type Call = {
   id: string;
   patientId: string;
   patientName: string;
-  scheduledAt: string;
+  scheduledAt: string | null;
   type: string;
   notes: string;
   completedAt: string | null;
@@ -31,7 +31,16 @@ export function CallsList({
   const [editing, setEditing] = useState<Call | null>(null);
   const [completeFor, setCompleteFor] = useState<Call | null>(null);
 
-  const upcoming = calls.filter((c) => !c.completedAt).sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
+  // Pendientes: primero los que aún no tienen fecha (aviso reciente sin
+  // agendar), luego los agendados por scheduledAt ascendente.
+  const upcoming = calls
+    .filter((c) => !c.completedAt)
+    .sort((a, b) => {
+      if (!a.scheduledAt && !b.scheduledAt) return 0;
+      if (!a.scheduledAt) return -1;
+      if (!b.scheduledAt) return 1;
+      return a.scheduledAt.localeCompare(b.scheduledAt);
+    });
   const done = calls.filter((c) => c.completedAt).sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? ""));
 
   async function remove(id: string) {
@@ -96,14 +105,18 @@ export function CallsList({
 }
 
 function CallRow({ call, onClick, onMarkDone, onDelete }: { call: Call; onClick: () => void; onMarkDone: () => void; onDelete: () => void }) {
-  const date = new Date(call.scheduledAt);
-  const days = Math.round((date.getTime() - Date.now()) / 86400000);
-  const time = date.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
-  const dateLabel =
-    days === 0 ? `Hoy ${time}`
+  // Pendiente de agendar cuando el aviso llegó pero el fisio aún no ha
+  // fijado fecha con el paciente.
+  const noSchedule = !call.scheduledAt;
+  const date = call.scheduledAt ? new Date(call.scheduledAt) : null;
+  const days = date ? Math.round((date.getTime() - Date.now()) / 86400000) : 0;
+  const time = date ? date.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }) : "";
+  const dateLabel = noSchedule
+    ? "Pendiente de agendar"
+    : days === 0 ? `Hoy ${time}`
     : days === 1 ? `Mañana ${time}`
-    : days < 7 && days > 0 ? `${date.toLocaleDateString("es-ES", { weekday: "long" })} ${time}`
-    : date.toLocaleDateString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    : days < 7 && days > 0 ? `${date!.toLocaleDateString("es-ES", { weekday: "long" })} ${time}`
+    : date!.toLocaleDateString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
   return (
     <div className="card !p-3 cursor-pointer hover:border-neutral-300" onClick={onClick}>
@@ -117,7 +130,12 @@ function CallRow({ call, onClick, onMarkDone, onDelete }: { call: Call; onClick:
               {TYPE_LABELS[call.type] ?? call.type}
             </span>
           </div>
-          <div className={`text-xs mt-0.5 ${days < 0 && !call.completedAt ? "text-red-600" : days <= 1 && !call.completedAt ? "text-amber-700" : "text-neutral-500"}`}>
+          <div className={`text-xs mt-0.5 ${
+            noSchedule && !call.completedAt ? "text-amber-700 font-medium"
+            : days < 0 && !call.completedAt ? "text-red-600"
+            : days <= 1 && !call.completedAt ? "text-amber-700"
+            : "text-neutral-500"
+          }`}>
             {call.completedAt ? `Realizada el ${new Date(call.completedAt).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}` : dateLabel}
           </div>
           {call.notes && <div className="text-xs text-neutral-600 mt-1 italic">{call.notes}</div>}
@@ -146,8 +164,11 @@ function CallModal({
   onSaved: () => void;
 }) {
   const isEdit = !!call;
-  const initialDate = call ? call.scheduledAt.split("T")[0] : new Date().toISOString().split("T")[0];
-  const initialTime = call ? new Date(call.scheduledAt).toTimeString().slice(0, 5) : "10:00";
+  // Si la llamada aún no tiene fecha (aviso automático), el fisio la
+  // rellena aquí. Dejamos ambos inputs vacíos por defecto para no
+  // sugerir una fecha inventada.
+  const initialDate = call?.scheduledAt ? call.scheduledAt.split("T")[0] : "";
+  const initialTime = call?.scheduledAt ? new Date(call.scheduledAt).toTimeString().slice(0, 5) : "";
 
   const [patientId, setPatientId] = useState(call?.patientId ?? "");
   const [scheduledDate, setScheduledDate] = useState(initialDate);
@@ -159,7 +180,12 @@ function CallModal({
   async function save() {
     if (!patientId) return;
     setSaving(true);
-    const scheduledAt = `${scheduledDate}T${scheduledTime}:00`;
+    // Si fecha y hora están vacías, guardamos scheduledAt como null
+    // ("pendiente de agendar"). Si hay fecha pero no hora, ponemos 10:00
+    // por defecto para no romper el input.
+    const scheduledAt = scheduledDate
+      ? `${scheduledDate}T${scheduledTime || "10:00"}:00`
+      : null;
     const payload = {
       ...(isEdit && { id: call!.id }),
       patientId,
@@ -190,13 +216,21 @@ function CallModal({
               {patients.map((p) => <option key={p.id} value={p.id}>{p.fullName}</option>)}
             </select>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs text-neutral-500 block mb-1">Fecha</label>
-              <input type="date" className="input" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} />
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs text-neutral-500">Fecha y hora (opcional)</label>
+              {(scheduledDate || scheduledTime) && (
+                <button
+                  type="button"
+                  onClick={() => { setScheduledDate(""); setScheduledTime(""); }}
+                  className="text-[10px] text-neutral-500 underline"
+                >
+                  Dejar pendiente de agendar
+                </button>
+              )}
             </div>
-            <div>
-              <label className="text-xs text-neutral-500 block mb-1">Hora</label>
+            <div className="grid grid-cols-2 gap-2">
+              <input type="date" className="input" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} />
               <input type="time" className="input" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} />
             </div>
           </div>

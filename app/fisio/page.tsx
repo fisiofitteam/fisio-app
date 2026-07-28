@@ -125,13 +125,24 @@ export default async function FisioPanelPage({
   });
 
   // Excluimos ScheduledCall de pacientes fantasma tambien.
+  // Aceptamos scheduledAt null ("pendiente de agendar") y también fechas
+  // futuras. Ponemos los sin-fecha arriba para que salten a la vista.
+  const scheduleWhere = {
+    OR: [
+      { scheduledAt: null },
+      { scheduledAt: { gte: new Date() } },
+    ],
+  };
   const callWhere: any = isManager
-    ? { completedAt: null, scheduledAt: { gte: new Date() }, patient: { isTest: false } }
-    : { completedAt: null, scheduledAt: { gte: new Date() }, patient: { isTest: false, assignedProfessionalId: user.id } };
+    ? { completedAt: null, ...scheduleWhere, patient: { isTest: false } }
+    : { completedAt: null, ...scheduleWhere, patient: { isTest: false, assignedProfessionalId: user.id } };
   const calls = await prisma.scheduledCall.findMany({
     where: callWhere,
     include: { patient: true },
-    orderBy: { scheduledAt: "asc" },
+    orderBy: [
+      { scheduledAt: { sort: "asc", nulls: "first" } },
+      { createdAt: "asc" },
+    ],
     take: 5,
   });
 
@@ -536,7 +547,8 @@ function formatDateRelative(d: Date): string {
   return new Date(d).toLocaleDateString("es-ES", { day: "numeric", month: "short" });
 }
 
-function formatCallDate(d: Date): string {
+function formatCallDate(d: Date | null): string {
+  if (!d) return "Pendiente de agendar";
   const days = daysFromNow(d);
   const time = new Date(d).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
   if (days === 0) return `Hoy ${time}`;

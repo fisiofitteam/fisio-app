@@ -6,7 +6,8 @@ export async function POST(req: NextRequest) {
   const c = await prisma.scheduledCall.create({
     data: {
       patientId,
-      scheduledAt: new Date(scheduledAt),
+      // scheduledAt es opcional: null = "pendiente de agendar".
+      scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
       type: type || "optimizacion",
       notes: notes || null,
     },
@@ -22,7 +23,7 @@ export async function PATCH(req: NextRequest) {
       ...(completedAt !== undefined && { completedAt: completedAt ? new Date(completedAt) : null }),
       ...(outcome !== undefined && { outcome: outcome || null }),
       ...(notes !== undefined && { notes: notes || null }),
-      ...(scheduledAt !== undefined && { scheduledAt: new Date(scheduledAt) }),
+      ...(scheduledAt !== undefined && { scheduledAt: scheduledAt ? new Date(scheduledAt) : null }),
       ...(type !== undefined && { type }),
     },
   });

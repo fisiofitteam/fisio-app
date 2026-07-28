@@ -1010,7 +1010,7 @@ model ScheduledCall {
   patientId   String
   patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
-  scheduledAt DateTime                                // momento de la llamada agendada
+  scheduledAt DateTime?                               // null hasta que el fisio agenda la cita concreta
   type        String   @default("optimizacion")     // "optimizacion" | "renovacion"
   notes       String?
   completedAt DateTime?

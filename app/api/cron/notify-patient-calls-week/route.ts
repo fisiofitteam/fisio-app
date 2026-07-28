@@ -91,13 +91,13 @@ async function handler(req: NextRequest) {
   }
 
   const monday = mondayMadridUtc();
-  const nextMonday = new Date(monday);
-  nextMonday.setUTCDate(nextMonday.getUTCDate() + 7);
   const weekKey = monday.toISOString().slice(0, 10);
 
+  // Notificamos TODAS las llamadas pendientes (completedAt null). Nagging
+  // semanal: si el fisio no las completó ni las agendó, cada lunes le
+  // volvemos a recordar. La refKey por semana evita duplicar el mismo lunes.
   const calls = await prisma.scheduledCall.findMany({
     where: {
-      scheduledAt: { gte: monday, lt: nextMonday },
       completedAt: null,
       patient: { isTest: false },
     },
@@ -106,7 +106,10 @@ async function handler(req: NextRequest) {
         select: { id: true, fullName: true, assignedProfessionalId: true },
       },
     },
-    orderBy: { scheduledAt: "asc" },
+    orderBy: [
+      { scheduledAt: { sort: "asc", nulls: "first" } },
+      { createdAt: "asc" },
+    ],
   });
 
   // Agrupamos por fisio asignado del paciente. Si un paciente no tiene

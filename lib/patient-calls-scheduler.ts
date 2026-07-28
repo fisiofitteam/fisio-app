@@ -18,9 +18,10 @@
  * PREVENTION queda fuera de ambas (se maneja por su flujo de suscripción
  * Stripe). Los pacientes con `onboardingStatus != "active"` también.
  *
- * La `scheduledAt` de la call se pone al siguiente día laborable a las
- * 10:00 UTC (que es 11:00-12:00 hora Madrid según DST). El fisio la
- * reprograma cuando pueda desde /fisio/llamadas o su recuadro.
+ * La `scheduledAt` NO se rellena: el aviso es solo "toca hacer llamada".
+ * El fisio decide y agenda la fecha/hora concreta desde /fisio/llamadas
+ * cuando quede con el paciente. Hasta entonces se muestra como
+ * "Pendiente de agendar".
  */
 import { prisma } from "@/lib/prisma";
 
@@ -70,9 +71,6 @@ export async function schedulePatientCalls(now: Date = new Date()): Promise<Sche
   let renCreated = 0;
 
   const dedupeCutoff = new Date(now.getTime() - REN_DEDUPE_WINDOW_DAYS * 86400_000);
-  // Fecha por defecto para llamadas de renovación (14 días antes de fin
-  // de periodo). El fisio la reprograma si quiere.
-  const targetAt = nextBusinessDayAt10Utc(now, now);
 
   for (const p of patients) {
     if (!p.subscriptionStartDate) continue;
@@ -96,17 +94,10 @@ export async function schedulePatientCalls(now: Date = new Date()): Promise<Sche
         // no ha renovado nunca todavía. Coincide con "primer periodo".
         const isFirstPeriod = periodsCount <= 1;
         if (alreadyCall === 0 && isFirstPeriod) {
-          // scheduledAt cae en día laborable ≥ inicio de semana 5
-          // (día 28+ desde el alta). Si el cron detecta al paciente en
-          // día 21 (inicio semana 4), la llamada queda propuesta ~7 días
-          // más tarde. El fisio ve el aviso ya y tiene tiempo para
-          // reprogramar dentro de esa semana 5 si conviene.
-          const week5Start = new Date(p.subscriptionStartDate.getTime() + 28 * 86400_000);
           await prisma.scheduledCall.create({
             data: {
               patientId: p.id,
               type: "optimizacion",
-              scheduledAt: nextBusinessDayAt10Utc(week5Start, now),
               notes: "Llamada de optimización (semana 5) · aviso automático en semana 4",
             },
           });
@@ -131,7 +122,6 @@ export async function schedulePatientCalls(now: Date = new Date()): Promise<Sche
             data: {
               patientId: p.id,
               type: "renovacion",
-              scheduledAt: targetAt,
               notes: "2 semanas antes de renovar · llamada programada automáticamente",
             },
           });
@@ -159,24 +149,4 @@ function daysUntilRenewal(start: Date | null, periodMonths: number, now: Date): 
   const renewal = new Date(start);
   renewal.setMonth(renewal.getMonth() + (periodMonths || 4));
   return daysBetweenUtc(now, renewal);
-}
-
-/**
- * Devuelve el próximo día laborable (L-V) a las 10:00 UTC A PARTIR DE
- * la fecha dada. Si `from` cae fin de semana, salta al siguiente lunes.
- * Si cae en día laborable pero futuro respecto a `now` (uso: agendar en
- * semana 5), usa ese mismo día. Si es "hoy" o pasado, salta al día
- * siguiente laborable — así el fisio ve la llamada aparecer con margen.
- */
-function nextBusinessDayAt10Utc(from: Date, now: Date = new Date()): Date {
-  const nowMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  const d = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate(), 10, 0, 0, 0));
-  // Si from cae hoy o antes → avanzamos un día para no crear una call
-  // "para hoy mismo" cuando el cron ya ha corrido.
-  const fromMs = Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate());
-  if (fromMs <= nowMs) d.setUTCDate(d.getUTCDate() + 1);
-  while (d.getUTCDay() === 0 || d.getUTCDay() === 6) {
-    d.setUTCDate(d.getUTCDate() + 1);
-  }
-  return d;
 }
