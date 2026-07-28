@@ -1,11 +1,20 @@
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { getActiveProfessional } from "@/lib/session";
 import { CallsList } from "@/components/CallsList";
 
 export default async function CallsPage() {
-  // Fuera los pacientes fantasma tanto en el listado de llamadas como
-  // en el selector para agendar una nueva.
+  const user = await getActiveProfessional();
+  if (!user) redirect("/");
+
+  // Fuera los pacientes fantasma en llamadas y en el selector. Los fisios
+  // normales solo ven las llamadas de SUS pacientes asignados; CEO y
+  // head_success ven las de todo el equipo.
+  const patientFilter = user.isManager
+    ? { isTest: false }
+    : { isTest: false, assignedProfessionalId: user.id };
   const calls = await prisma.scheduledCall.findMany({
-    where: { patient: { isTest: false } },
+    where: { patient: patientFilter },
     include: { patient: true },
     orderBy: [
       { completedAt: "asc" },
@@ -13,7 +22,7 @@ export default async function CallsPage() {
       { createdAt: "asc" },
     ],
   });
-  const patients = await prisma.patient.findMany({ where: { isTest: false }, orderBy: { fullName: "asc" } });
+  const patients = await prisma.patient.findMany({ where: patientFilter, orderBy: { fullName: "asc" } });
 
   return (
     <main>
