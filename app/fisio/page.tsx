@@ -19,6 +19,7 @@ import { buildAdHocActiveForProfessional } from "@/lib/team-tasks-adhoc";
 import { calculatePreventionMetrics } from "@/lib/prevention-metrics";
 import { PreventionMetricsBlock } from "@/components/PreventionMetricsBlock";
 import { hasPendingFormReview } from "@/lib/pending-form-review";
+import { activePatientCondition } from "@/lib/patient-active";
 import { markFormReviewed } from "./formularios-pendientes/actions";
 
 const TYPE_LABELS: Record<string, string> = {
@@ -134,8 +135,8 @@ export default async function FisioPanelPage({
     ],
   };
   const callWhere: any = isManager
-    ? { completedAt: null, ...scheduleWhere, patient: { isTest: false } }
-    : { completedAt: null, ...scheduleWhere, patient: { isTest: false, assignedProfessionalId: user.id } };
+    ? { completedAt: null, ...scheduleWhere, patient: { isTest: false, ...activePatientCondition() } }
+    : { completedAt: null, ...scheduleWhere, patient: { isTest: false, assignedProfessionalId: user.id, ...activePatientCondition() } };
   const calls = await prisma.scheduledCall.findMany({
     where: callWhere,
     include: { patient: true },
@@ -150,10 +151,10 @@ export default async function FisioPanelPage({
     where: {
       completedAt: { not: null },
       formReviewedAt: null,
-      // Fuera formularios de pacientes fantasma (isTest).
+      // Fuera formularios de pacientes fantasma y terminados.
       assignment: isManager
-        ? { patient: { isTest: false } }
-        : { patient: { isTest: false, assignedProfessionalId: user.id } },
+        ? { patient: { isTest: false, ...activePatientCondition() } }
+        : { patient: { isTest: false, assignedProfessionalId: user.id, ...activePatientCondition() } },
     },
     include: { assignment: { include: { patient: true, program: true } } },
     orderBy: { completedAt: "desc" },

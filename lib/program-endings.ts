@@ -4,6 +4,7 @@
 // paciente, aunque tenga varios programas) y se muestra en su panel.
 // Dedup por refKey = "program_ending:<patientId>".
 import { prisma } from "@/lib/prisma";
+import { activePatientCondition } from "@/lib/patient-active";
 
 const DAY = 86400000;
 const NOTIFY_TYPE = "program_ending";
@@ -36,7 +37,14 @@ export async function getProgramEndingsForProfessional(professionalId: string): 
   const assignments = await prisma.programAssignment.findMany({
     where: {
       isActive: true,
-      patient: { assignedProfessionalId: professionalId, isTest: false },
+      // Excluimos pacientes fantasma y ya-terminados (sin renovación activa):
+      // el aviso "programa termina en N días" solo tiene sentido si el
+      // paciente sigue vigente.
+      patient: {
+        assignedProfessionalId: professionalId,
+        isTest: false,
+        ...activePatientCondition(),
+      },
       program: { isStandalone: false }, // ← solo programas enteros, no sesiones sueltas
     },
     include: {

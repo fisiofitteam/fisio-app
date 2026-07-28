@@ -10,6 +10,7 @@
  * preservar auditoria — "quien vio que y cuando".
  */
 import { prisma } from "@/lib/prisma";
+import { activePatientCondition } from "@/lib/patient-active";
 
 export type AlertKind = "notes_ai" | "metric_deviation";
 export type AlertSeverity = "info" | "warn" | "high";
@@ -54,8 +55,8 @@ export async function countUnseenAlerts(assignedProfessionalId?: string | null):
     seenAt: null,
     dismissedAt: null,
     severity: { in: VISIBLE_SEVERITIES },
-    // Excluimos siempre pacientes fantasma (test) de los conteos y listas.
-    patient: { isTest: false },
+    // Excluimos pacientes fantasma y terminados (sin renovación activa).
+    patient: { isTest: false, ...activePatientCondition() },
   };
   if (assignedProfessionalId) {
     where.patient = {
@@ -82,11 +83,12 @@ export async function listAlerts(f: AlertListFilters) {
   if (!f.includeSeen) where.seenAt = null;
   where.dismissedAt = null;
   where.severity = { in: f.includeInfo ? ["info", "warn", "high"] : VISIBLE_SEVERITIES };
-  // Excluir pacientes fantasma en la lista, siempre. Si se consulta por
-  // un patientId concreto (card de la ficha del paciente), no imponemos
-  // filtro isTest — el CEO puede ver sus alertas para depurar.
+  // Excluir pacientes fantasma y terminados en la lista, siempre. Si se
+  // consulta por un patientId concreto (card de la ficha del paciente),
+  // no imponemos ninguno de esos filtros — el CEO puede ver sus alertas
+  // para depurar aunque el paciente ya haya terminado.
   if (!f.patientId) {
-    where.patient = { isTest: false };
+    where.patient = { isTest: false, ...activePatientCondition() };
     if (f.scope === "mine" && f.professionalId) {
       where.patient = {
         ...where.patient,
