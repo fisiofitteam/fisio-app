@@ -25,6 +25,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { notifyProfessional } from "@/lib/notifications";
+import { getActiveProfessional } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -68,13 +69,23 @@ async function handler(req: NextRequest) {
   const auth = req.headers.get("authorization") ?? "";
   const isTest = req.nextUrl.searchParams.get("test") === "1";
   const isLocal = process.env.NODE_ENV !== "production";
-  if (cronSecret && auth !== `Bearer ${cronSecret}` && !(isTest && isLocal)) {
+  const isManual = req.nextUrl.searchParams.get("manual") === "1";
+
+  if (isManual) {
+    // Disparo manual desde el navegador (CEO/head_success). Cuando el
+    // fisio pega la URL en la barra de direcciones no envía Bearer.
+    const user = await getActiveProfessional();
+    if (!user || (user.role !== "ceo" && user.role !== "head_success")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+  } else if (cronSecret && auth !== `Bearer ${cronSecret}` && !(isTest && isLocal)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const force = req.nextUrl.searchParams.get("force") === "1";
+  // manual=1 implica force=1 (si un humano lo dispara es que quiere
+  // saltarse la guarda de día/hora).
+  const force = isManual || req.nextUrl.searchParams.get("force") === "1";
   const madrid = getMadridParts();
-  // Solo lunes 7am hora Madrid. force=1 salta la guarda.
   if (!force && (madrid.weekday !== "Mon" || madrid.hour !== 7)) {
     return NextResponse.json({ ok: true, skipped: true, madrid });
   }
