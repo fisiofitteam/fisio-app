@@ -52,11 +52,26 @@ export async function getLoadReviewsForProfessional(
     },
   });
 
+  // Excluimos pacientes terminados: sin ningún SubscriptionRenewal activo
+  // con endDate en el futuro. Mismo criterio que usa la pestaña
+  // "🏁 Terminados" de /fisio/pacientes.
+  const now = new Date();
+  const activeRenewals = await prisma.subscriptionRenewal.findMany({
+    where: {
+      patientId: { in: patients.map((p) => p.id) },
+      status: "active",
+      endDate: { gt: now },
+    },
+    select: { patientId: true },
+  });
+  const activePatientIds = new Set(activeRenewals.map((r) => r.patientId));
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   const items: LoadReviewItem[] = [];
   for (const p of patients) {
+    if (!activePatientIds.has(p.id)) continue; // paciente terminado
     const interval = p.loadReviewIntervalWeeks || 4;
     const ref = p.loadReviewLastAt ?? p.startedAt;
     if (!ref) continue;
