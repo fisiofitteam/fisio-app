@@ -35,6 +35,14 @@
     {
       "path": "/api/cron/patient-calls-scheduler",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/notify-patient-calls-week",
+      "schedule": "0 5 * * 1"
+    },
+    {
+      "path": "/api/cron/notify-patient-calls-week",
+      "schedule": "0 6 * * 1"
     }
   ]
 }

@@ -116,6 +116,7 @@ export async function notifyProfessional(params: {
   body: string;
   leadId?: string;
   actionUrl?: string;
+  refKey?: string;
 }): Promise<void> {
   await prisma.teamNotification.create({
     data: {
@@ -126,6 +127,7 @@ export async function notifyProfessional(params: {
       body: params.body,
       leadId: params.leadId,
       actionUrl: params.actionUrl,
+      refKey: params.refKey,
     },
   });
 }
