@@ -1,18 +1,21 @@
 /**
- * Cron diario que avisa a las 07:00 hora Madrid al profesional que tiene un
- * CommunityPost asignado para HOY, y en paralelo al CEO para que también lo
- * vea en su campanita.
+ * Cron diario que avisa por la mañana (hora Madrid) al profesional que tiene
+ * un CommunityPost asignado para HOY, y en paralelo al CEO para que también
+ * lo vea en su campanita.
  *
- * Se dispara desde Vercel Cron a las 05:00 UTC y 06:00 UTC (vercel.json) —
- * cubre 07:00 hora Madrid tanto en verano (UTC+2) como invierno (UTC+1) con
- * un solo handler que checkea la hora Madrid antes de disparar.
+ * Se dispara desde Vercel Cron a las 05:00, 06:00 y 07:00 UTC (vercel.json)
+ * — tres intentos redundantes porque Vercel Cron es best-effort y a veces
+ * se salta ejecuciones. Solo corre cuando la hora Madrid está entre 7 y 10;
+ * la idempotencia via `notifiedAt` garantiza que los intentos posteriores
+ * al primero exitoso no dupliquen notificaciones.
  *
- * Idempotencia: cada CommunityPost se marca con `notifiedAt` al enviar la
- * notificación. Si el cron corre dos veces el mismo día, el segundo intento
- * salta los posts ya notificados.
+ * Cobertura DST:
+ *   verano (UTC+2): 5 UTC=7am, 6 UTC=8am, 7 UTC=9am — todos entran
+ *   invierno (UTC+1): 5 UTC=6am (fuera), 6 UTC=7am, 7 UTC=8am — dos válidos
  *
  * Protección: `Authorization: Bearer ${CRON_SECRET}` (igual patrón que el
  * resto de crons del proyecto). ?test=1 permite dispararlo a mano en dev.
+ * ?manual=1 lo dispara desde el navegador logueado como CEO/head_success.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -72,7 +75,10 @@ async function handler(req: NextRequest) {
   // saltarse la guarda de hora).
   const force = isManual || req.nextUrl.searchParams.get("force") === "1";
   const madridHour = getMadridHour();
-  if (!force && madridHour !== 7) {
+  // Ventana de mañana Madrid: [7, 10). Cubre los 3 disparos del cron en
+  // ambos regímenes DST. Los intentos redundantes son idempotentes por
+  // notifiedAt, así que aunque los 3 se ejecuten solo el primero notifica.
+  if (!force && (madridHour < 7 || madridHour >= 10)) {
     return NextResponse.json({ ok: true, skipped: true, madridHour });
   }
 
