@@ -58,6 +58,10 @@ export async function PATCH(req: NextRequest) {
     catch { return NextResponse.json({ error: "slidesJson no es JSON válido." }, { status: 400 }); }
   }
   if (typeof b.captionText === "string") data.captionText = b.captionText;
+  if (typeof b.visualJson === "string") {
+    try { JSON.parse(b.visualJson); data.visualJson = b.visualJson; }
+    catch { return NextResponse.json({ error: "visualJson no es JSON válido." }, { status: 400 }); }
+  }
   if (typeof b.status === "string" && ["draft", "published", "archived"].includes(b.status)) {
     data.status = b.status;
   }

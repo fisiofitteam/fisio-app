@@ -39,11 +39,11 @@ export function LandingActions({ libraryCount }: { libraryCount: number }) {
           </p>
         </button>
 
-        <div className="card !p-4 opacity-60">
+        <div className="card !p-4 text-neutral-600">
           <div className="text-2xl mb-1">🎨</div>
           <div className="font-medium text-sm">Editor visual</div>
           <p className="text-xs text-neutral-500 mt-1">
-            Próximamente. Canvas 1080×1350 con plantilla FisioFit Cross.
+            Se abre desde cada draft. Canvas 1080×1350, plantilla FisioFit Cross, export ZIP.
           </p>
         </div>
       </section>

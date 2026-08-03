@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CAROUSEL_CATEGORIES, categoryLabel, type CarouselSlide } from "@/lib/carousel-maker/types";
 
@@ -147,6 +148,12 @@ export function DraftEditor({ initial }: { initial: Draft }) {
           </div>
         </div>
         <div className="flex gap-2 flex-shrink-0">
+          <Link
+            href={`/fisio/contenido/carrusel-maker/${draft.id}/visual`}
+            className="btn btn-ghost text-xs"
+          >
+            🎨 Editor visual →
+          </Link>
           <button onClick={() => copy(fullText, "all")} className="btn btn-ghost text-xs">
             {copiedKey === "all" ? "✓ Copiado" : "📋 Copiar todo"}
           </button>
