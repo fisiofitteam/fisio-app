@@ -257,8 +257,8 @@ export function VisualEditor({
     <div className="flex gap-4">
       <CarouselFontsLoader />
 
-      {/* Sidebar miniaturas */}
-      <div className="w-40 flex-shrink-0 space-y-2 max-h-[85vh] overflow-y-auto">
+      {/* Sidebar miniaturas — compacto para dejar sitio al canvas y al panel */}
+      <div className="w-32 flex-shrink-0 space-y-2 max-h-[85vh] overflow-y-auto">
         <div className="text-[10px] uppercase tracking-wider text-neutral-500 font-medium mb-1">Slides</div>
         {doc.slides.map((s, i) => (
           <button
@@ -268,12 +268,12 @@ export function VisualEditor({
               i === activeIdx ? "border-neutral-900" : "border-transparent hover:border-neutral-300"
             }`}
           >
-            <div style={{ width: 160, height: 200, background: s.bgColor, overflow: "hidden" }}>
+            <div style={{ width: 120, height: 150, background: s.bgColor, overflow: "hidden" }}>
               <SlideCanvas
                 doc={s}
                 slideIndex={i}
                 totalSlides={doc.slides.length}
-                displayScale={160 / CANVAS_W}
+                displayScale={120 / CANVAS_W}
               />
             </div>
             <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1.5 py-0.5 rounded">
@@ -313,25 +313,14 @@ export function VisualEditor({
           </div>
         </div>
 
-        <div
-          className="bg-neutral-200 rounded-2xl p-4 shadow-inner"
-          style={{ width: 560 + 32, height: 700 + 32 }}
-        >
-          <div
-            data-carousel-canvas
-            style={{ width: 560, height: 700, overflow: "hidden", background: activeSlide.bgColor, borderRadius: 12, position: "relative" }}
-          >
-            <SlideCanvas
-              doc={activeSlide}
-              slideIndex={activeIdx}
-              totalSlides={doc.slides.length}
-              displayScale={560 / CANVAS_W}
-              selectedElementId={selectedId}
-              onSelectElement={setSelectedId}
-              onStartDrag={handleStartDrag}
-            />
-          </div>
-        </div>
+<CanvasStage
+  doc={activeSlide}
+  slideIndex={activeIdx}
+  totalSlides={doc.slides.length}
+  selectedId={selectedId}
+  setSelectedId={setSelectedId}
+  onStartDrag={handleStartDrag}
+/>
 
         <p className="text-[10px] text-neutral-500">
           Click en un elemento para seleccionarlo · arrastra para mover · Supr para eliminar · edita en el panel de la derecha
@@ -339,7 +328,7 @@ export function VisualEditor({
       </div>
 
       {/* Panel derecho */}
-      <div className="w-80 flex-shrink-0 max-h-[85vh] overflow-y-auto">
+      <div className="w-72 flex-shrink-0 max-h-[85vh] overflow-y-auto">
         <PropertyPanel
           selected={selectedEl}
           slide={activeSlide}
@@ -366,6 +355,72 @@ export function VisualEditor({
             displayScale={1}
           />
         ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Escenario del canvas: mide su ancho contenedor con ResizeObserver y
+ * escala el slide para ocupar el sitio disponible sin desbordar el flex-1
+ * (que era lo que hacía que la esquina derecha del canvas invadiera el
+ * panel derecho). Mantiene el ratio 1080×1350 (4:5) intacto y cap a 640px
+ * de ancho para no crecer infinito en pantallas muy anchas.
+ */
+function CanvasStage({
+  doc,
+  slideIndex,
+  totalSlides,
+  selectedId,
+  setSelectedId,
+  onStartDrag,
+}: {
+  doc: SlideDoc;
+  slideIndex: number;
+  totalSlides: number;
+  selectedId: string | null;
+  setSelectedId: (id: string | null) => void;
+  onStartDrag: (id: string, e: React.PointerEvent<HTMLDivElement>) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [displayW, setDisplayW] = useState(560);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const cw = entries[0]?.contentRect?.width ?? el.clientWidth;
+      // 32px de padding interno + 32px de margen; cap 640.
+      const target = Math.min(640, Math.max(240, cw - 32));
+      setDisplayW(target);
+    });
+    ro.observe(el);
+    setDisplayW(Math.min(640, Math.max(240, el.clientWidth - 32)));
+    return () => ro.disconnect();
+  }, []);
+
+  const displayH = displayW * (CANVAS_H / CANVAS_W);
+
+  return (
+    <div ref={containerRef} className="w-full">
+      <div
+        className="bg-neutral-200 rounded-2xl p-4 shadow-inner mx-auto"
+        style={{ width: displayW + 32, height: displayH + 32 }}
+      >
+        <div
+          data-carousel-canvas
+          style={{ width: displayW, height: displayH, overflow: "hidden", background: doc.bgColor, borderRadius: 12, position: "relative" }}
+        >
+          <SlideCanvas
+            doc={doc}
+            slideIndex={slideIndex}
+            totalSlides={totalSlides}
+            displayScale={displayW / CANVAS_W}
+            selectedElementId={selectedId}
+            onSelectElement={setSelectedId}
+            onStartDrag={onStartDrag}
+          />
+        </div>
       </div>
     </div>
   );
