@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendPush } from "@/lib/apns";
 import { startOfDayUtc } from "@/lib/ceo-personal";
+import { activePatientCondition } from "@/lib/patient-active";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -61,8 +62,13 @@ async function handler(req: NextRequest) {
 
   const patients = await prisma.patient.findMany({
     where: {
-      onboardingStatus: "active",
+      onboardingStatus: "active",  // ya pasó anamnesis + contrato
       dailyReminderEnabled: true,
+      isTest: false,               // fantasmas no reciben avisos
+      // No mandamos recordatorios a atletas terminados: aunque su
+      // onboardingStatus siga siendo "active", si ya no tienen renovación
+      // vigente no procede animarles a entrenar hoy.
+      ...activePatientCondition(),
     },
     select: {
       id: true,

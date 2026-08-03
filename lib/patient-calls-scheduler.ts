@@ -24,6 +24,7 @@
  * "Pendiente de agendar".
  */
 import { prisma } from "@/lib/prisma";
+import { activePatientCondition } from "@/lib/patient-active";
 
 const OPT_PROGRAM_TYPES = ["RECUPERA", "CONSOLIDA"];
 const REN_PROGRAM_TYPES = ["RECUPERA", "CONSOLIDA", "ADVANCE"];
@@ -58,6 +59,11 @@ export async function schedulePatientCalls(now: Date = new Date()): Promise<Sche
       isTest: false, // pacientes fantasma quedan fuera del scheduler
       subscriptionStartDate: { not: null },
       programType: { in: [...new Set([...OPT_PROGRAM_TYPES, ...REN_PROGRAM_TYPES])] },
+      // Solo pacientes con renovación vigente. Los ventana-cierre tipo
+      // renovación filtran por días naturales y podrían pillar a un
+      // atleta ya terminado si aún guardara subscriptionStartDate — el
+      // filtro explícito lo previene.
+      ...activePatientCondition(),
     },
     select: {
       id: true,
