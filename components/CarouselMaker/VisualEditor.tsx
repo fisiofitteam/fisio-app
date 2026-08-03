@@ -210,14 +210,14 @@ export function VisualEditor({
     let parsed: SlideDoc;
     try { parsed = JSON.parse(tpl.slideJson); }
     catch { alert("La plantilla está corrupta."); return; }
-    if (!confirm(`Aplicar plantilla "${tpl.name}" al slide ${activeIdx + 1}? Se reemplazan los elementos por los de la plantilla, rellenando con el texto del slide.`)) return;
-    const source = slides[activeIdx];
-    if (!source) return;
+    if (!confirm(`Aplicar plantilla "${tpl.name}" al slide ${activeIdx + 1}? Se copian estilo y posiciones de la plantilla — el texto ACTUAL del slide se mantiene.`)) return;
+    const current = doc.slides[activeIdx];
+    if (!current) return;
     commitHistory();
-    const applied = applyTemplateToSlide(parsed, source);
+    const applied = applyTemplateToSlide(parsed, current);
     setSlideAt(activeIdx, () => applied);
     setSelectedId(null);
-  }, [templates, activeIdx, slides, setSlideAt, commitHistory]);
+  }, [templates, activeIdx, doc.slides, setSlideAt, commitHistory]);
 
   const deleteTemplate = useCallback(async (id: string) => {
     if (!confirm("¿Eliminar esta plantilla del equipo?")) return;

@@ -625,26 +625,57 @@ function extractCtaKeyword(title: string): string | null {
 
 /**
  * Aplica una plantilla visual (SlideDoc guardado) a un slide destino.
- * Reasignamos los `id` de los elementos para no chocar con otros slides,
- * y — si el slide destino tiene contenido de texto — vamos "rellenando"
- * los textos de la plantilla en orden con el título / subtítulo / body /
- * caption del slide fuente. Los estilos y posiciones vienen de la
- * plantilla; el contenido, del slide.
+ * El principio: la plantilla APORTA EL ESTILO, el slide destino APORTA
+ * SU CONTENIDO DE TEXTO ACTUAL. Es decir, si el user editó los textos
+ * del slide (bien a mano, bien porque la IA los generó tal cual), esos
+ * textos se preservan al aplicar la plantilla — solo cambian posiciones,
+ * fuentes, colores, chips, fondo, etc.
+ *
+ * Reglas por tipo:
+ *   - text  → posición y estilo de la plantilla, contenido del slide
+ *             (en orden: 1er text de la plantilla ← 1er text del slide,
+ *             etc). Si al slide le sobran textos se quedan fuera; si le
+ *             faltan, los text elements extra de la plantilla mantienen
+ *             el texto que llevaran (el user lo edita a mano si quiere).
+ *   - logo  → si el slide tiene un logo con imageUrl (PNG del user),
+ *             preservamos ESE logo con la posición/tamaño de la plantilla.
+ *             Si no, usamos el logo de la plantilla tal cual.
+ *   - resto → chips, líneas, imágenes → todo viene de la plantilla.
+ *
+ * Reasignamos los `id` de los elementos para no chocar con otros slides.
  */
-export function applyTemplateToSlide(template: SlideDoc, source: CarouselSlide): SlideDoc {
+export function applyTemplateToSlide(template: SlideDoc, current: SlideDoc): SlideDoc {
+  // Pool de textos del slide actual, en el orden en que aparecen sus
+  // elementos. Ignoramos vacíos para no consumir "huecos" con "".
   const textPool: string[] = [];
-  if (source.title) textPool.push(source.title);
-  if (source.subtitle) textPool.push(source.subtitle);
-  if (source.body) textPool.push(source.body);
+  for (const el of current.elements) {
+    if (el.type === "text" && el.content?.trim()) {
+      textPool.push(el.content);
+    }
+  }
+
+  // Logo custom del slide actual: si el user ha subido un PNG, lo
+  // transferimos a la plantilla para no perderlo al aplicar el estilo.
+  const currentLogoWithImage = current.elements.find(
+    (e): e is LogoElement => e.type === "logo" && !!e.imageUrl,
+  );
 
   let textCursor = 0;
   const elements: SlideElement[] = template.elements.map((el) => {
     const withId = { ...el, id: newId(el.type) } as SlideElement;
     if (withId.type === "text" && textCursor < textPool.length) {
-      const nextContent = textPool[textCursor++];
-      // Si el texto original de la plantilla estaba en MAYÚSCULAS y el
-      // uppercase flag está activo, respetamos ese estilo.
-      return { ...withId, content: nextContent };
+      return { ...withId, content: textPool[textCursor++] };
+    }
+    if (withId.type === "logo" && currentLogoWithImage) {
+      // Mantenemos la posición/tamaño de la plantilla, sustituimos la
+      // imageUrl por la del user.
+      return {
+        ...withId,
+        imageUrl: currentLogoWithImage.imageUrl,
+        // Si la plantilla no traía height (era logo de texto), heredamos
+        // el del user para que el PNG se dimensione bien.
+        height: withId.height ?? currentLogoWithImage.height,
+      } as LogoElement;
     }
     return withId;
   });
