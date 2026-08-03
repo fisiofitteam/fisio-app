@@ -18,6 +18,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { notifyProfessional } from "@/lib/notifications";
 import { parseCategories, categoryMeta } from "@/lib/community";
+import { getActiveProfessional } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -54,19 +55,35 @@ async function handler(req: NextRequest) {
   const auth = req.headers.get("authorization") ?? "";
   const isTest = req.nextUrl.searchParams.get("test") === "1";
   const isLocal = process.env.NODE_ENV !== "production";
-  if (cronSecret && auth !== `Bearer ${cronSecret}` && !(isTest && isLocal)) {
+  const isManual = req.nextUrl.searchParams.get("manual") === "1";
+
+  if (isManual) {
+    // Disparo manual desde el navegador (CEO/head_success). Sin Bearer,
+    // igual que patient-calls-scheduler y notify-patient-calls-week.
+    const user = await getActiveProfessional();
+    if (!user || (user.role !== "ceo" && user.role !== "head_success")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+  } else if (cronSecret && auth !== `Bearer ${cronSecret}` && !(isTest && isLocal)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const force = req.nextUrl.searchParams.get("force") === "1";
+  // manual=1 implica force=1 (si un humano lo dispara es porque quiere
+  // saltarse la guarda de hora).
+  const force = isManual || req.nextUrl.searchParams.get("force") === "1";
   const madridHour = getMadridHour();
-  // Corremos solo cuando la hora Madrid es exactamente 7. Con `force=1` se
-  // salta la guarda para testing manual.
   if (!force && madridHour !== 7) {
     return NextResponse.json({ ok: true, skipped: true, madridHour });
   }
 
   const today = todayMadridUtc();
+
+  // Diagnóstico: cuántos posts hay hoy con fisio asignado (independientemente
+  // de si ya se notificaron). Sirve para saber por qué el cron no notifica
+  // (no hay post asignado vs ya se notificó).
+  const allTodayAssigned = await prisma.communityPost.count({
+    where: { date: today, assignedToId: { not: null } },
+  });
 
   // Cargamos posts de hoy con un fisio asignado y que aún no hayan sido
   // notificados.
@@ -145,7 +162,14 @@ async function handler(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, notified: results.length, results });
+  return NextResponse.json({
+    ok: true,
+    today: today.toISOString().slice(0, 10),
+    postsAssignedToday: allTodayAssigned,
+    alreadyNotifiedBefore: allTodayAssigned - posts.length,
+    notifiedNow: results.filter((r) => r.ok).length,
+    results,
+  });
 }
 
 export const GET = handler;
