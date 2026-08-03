@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useMemo } from "react";
+import { forwardRef, useEffect, useMemo, useRef } from "react";
 import {
   CANVAS_H,
   CANVAS_W,
@@ -26,12 +26,15 @@ type Props = {
   totalSlides: number;
   displayScale?: number;
   selectedElementId?: string | null;
+  editingElementId?: string | null;
   onSelectElement?: (id: string | null) => void;
   onStartDrag?: (id: string, e: React.PointerEvent<HTMLDivElement>) => void;
+  onStartEditing?: (id: string) => void;
+  onFinishEditing?: (id: string, content: string) => void;
 };
 
 export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanvas(
-  { doc, slideIndex, totalSlides, displayScale = 1, selectedElementId, onSelectElement, onStartDrag },
+  { doc, slideIndex, totalSlides, displayScale = 1, selectedElementId, editingElementId, onSelectElement, onStartDrag, onStartEditing, onFinishEditing },
   ref,
 ) {
   return (
@@ -49,8 +52,11 @@ export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanva
         slideIndex={slideIndex}
         totalSlides={totalSlides}
         selectedElementId={selectedElementId ?? null}
+        editingElementId={editingElementId ?? null}
         onSelectElement={onSelectElement}
         onStartDrag={onStartDrag}
+        onStartEditing={onStartEditing}
+        onFinishEditing={onFinishEditing}
       />
     </div>
   );
@@ -61,9 +67,12 @@ function SlideInner({
   slideIndex,
   totalSlides,
   selectedElementId,
+  editingElementId,
   onSelectElement,
   onStartDrag,
-}: Omit<Props, "displayScale"> & { selectedElementId: string | null }) {
+  onStartEditing,
+  onFinishEditing,
+}: Omit<Props, "displayScale"> & { selectedElementId: string | null; editingElementId: string | null }) {
   return (
     <div
       onPointerDown={(e) => {
@@ -100,9 +109,12 @@ function SlideInner({
           key={el.id}
           el={el}
           selected={selectedElementId === el.id}
+          editing={editingElementId === el.id}
           selectable={!!onSelectElement}
           onSelect={() => onSelectElement?.(el.id)}
           onStartDrag={onStartDrag}
+          onStartEditing={onStartEditing}
+          onFinishEditing={onFinishEditing}
         />
       ))}
     </div>
@@ -114,15 +126,21 @@ function SlideInner({
 function ElementView({
   el,
   selected,
+  editing,
   selectable,
   onSelect,
   onStartDrag,
+  onStartEditing,
+  onFinishEditing,
 }: {
   el: SlideElement;
   selected: boolean;
+  editing: boolean;
   selectable: boolean;
   onSelect: () => void;
   onStartDrag?: (id: string, e: React.PointerEvent<HTMLDivElement>) => void;
+  onStartEditing?: (id: string) => void;
+  onFinishEditing?: (id: string, content: string) => void;
 }) {
   // Contenedor común: posición en % del canvas, transform para centrar en (x, y).
   const boxStyle: React.CSSProperties = {
@@ -130,64 +148,135 @@ function ElementView({
     left: `${el.x}%`,
     top: `${el.y}%`,
     transform: "translate(-50%, -50%)",
-    outline: selected ? `2px solid ${PALETTE.yellow}` : selectable ? "2px solid transparent" : undefined,
+    outline: editing
+      ? `2px dashed ${PALETTE.yellow}`
+      : selected
+        ? `2px solid ${PALETTE.yellow}`
+        : selectable ? "2px solid transparent" : undefined,
     outlineOffset: 4,
-    cursor: selectable ? "grab" : undefined,
-    userSelect: "none",
+    cursor: editing ? "text" : selectable ? "grab" : undefined,
+    userSelect: editing ? "text" : "none",
   };
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!selectable) return;
+    if (editing) return; // en modo edición no arrastramos; dejamos que llegue al text nativo.
     e.stopPropagation();
     onSelect();
     onStartDrag?.(el.id, e);
   };
 
-  if (el.type === "text") return <TextView el={el} boxStyle={boxStyle} onPointerDown={handlePointerDown} />;
+  if (el.type === "text") return (
+    <TextView
+      el={el}
+      boxStyle={boxStyle}
+      editing={editing}
+      onPointerDown={handlePointerDown}
+      onDoubleClick={() => onStartEditing?.(el.id)}
+      onFinishEditing={(v) => onFinishEditing?.(el.id, v)}
+    />
+  );
   if (el.type === "line") return <LineView el={el} boxStyle={boxStyle} onPointerDown={handlePointerDown} />;
   if (el.type === "chip") return <ChipView el={el} boxStyle={boxStyle} onPointerDown={handlePointerDown} />;
   if (el.type === "image") return <ImageView el={el} boxStyle={boxStyle} onPointerDown={handlePointerDown} />;
   return null;
 }
 
-function TextView({ el, boxStyle, onPointerDown }: { el: TextElement; boxStyle: React.CSSProperties; onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void }) {
+function TextView({
+  el,
+  boxStyle,
+  editing,
+  onPointerDown,
+  onDoubleClick,
+  onFinishEditing,
+}: {
+  el: TextElement;
+  boxStyle: React.CSSProperties;
+  editing: boolean;
+  onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
+  onDoubleClick: () => void;
+  onFinishEditing: (v: string) => void;
+}) {
   const tokens = useMemo(
     () => tokenizeYellow(el.content, el.yellowWords ?? []),
     [el.content, el.yellowWords],
   );
-  // Sobreescribimos el `transform` según el anchor del texto: por defecto
-  // es center-en-(x,y), pero los presets usan anchor="top" para apilar
-  // sin solapamiento; en ese caso la caja crece hacia abajo desde `y`.
   const anchor = el.anchor ?? "center";
   const transform =
     anchor === "top" ? "translate(-50%, 0)"
     : anchor === "bottom" ? "translate(-50%, -100%)"
     : "translate(-50%, -50%)";
+
+  const commonTextStyle: React.CSSProperties = {
+    fontFamily: FONT_STACK[el.font],
+    fontSize: el.size,
+    fontWeight: el.weight,
+    color: el.color,
+    textAlign: el.align,
+    lineHeight: el.lineHeight ?? 1.1,
+    letterSpacing: el.letterSpacing !== undefined ? `${el.letterSpacing}em` : undefined,
+    textTransform: el.uppercase ? "uppercase" : undefined,
+    fontStyle: el.italic ? "italic" : undefined,
+    textShadow: el.shadow ? "0 3px 0 rgba(0,0,0,.55)" : undefined,
+    wordBreak: "break-word",
+    whiteSpace: "pre-wrap",
+  };
+
+  // Al entrar en modo edición, autoenfocamos y ponemos el cursor al final.
+  const editableRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!editing) return;
+    const node = editableRef.current;
+    if (!node) return;
+    node.focus();
+    // Cursor al final del contenido.
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+  }, [editing]);
+
   return (
     <div
       onPointerDown={onPointerDown}
+      onDoubleClick={onDoubleClick}
       style={{
         ...boxStyle,
         transform,
         width: `${el.width}%`,
-        fontFamily: FONT_STACK[el.font],
-        fontSize: el.size,
-        fontWeight: el.weight,
-        color: el.color,
-        textAlign: el.align,
-        lineHeight: el.lineHeight ?? 1.1,
-        letterSpacing: el.letterSpacing !== undefined ? `${el.letterSpacing}em` : undefined,
-        textTransform: el.uppercase ? "uppercase" : undefined,
-        fontStyle: el.italic ? "italic" : undefined,
-        textShadow: el.shadow ? "0 3px 0 rgba(0,0,0,.55)" : undefined,
-        wordBreak: "break-word",
-        whiteSpace: "pre-wrap",
       }}
     >
-      {tokens.map((t, i) =>
-        t.break ? <br key={i} /> : (
-          <span key={i} style={{ color: t.yellow ? PALETTE.yellow : undefined }}>{t.text}</span>
-        ),
+      {editing ? (
+        <div
+          ref={editableRef}
+          contentEditable
+          suppressContentEditableWarning
+          onBlur={(e) => onFinishEditing(e.currentTarget.innerText ?? "")}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") { (e.currentTarget as HTMLElement).blur(); }
+            // Enter respetamos el salto (multi-línea es útil en carruseles).
+            // Ctrl/Cmd+Enter cierra edición.
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              (e.currentTarget as HTMLElement).blur();
+            }
+          }}
+          style={{ ...commonTextStyle, outline: "none", minWidth: 40 }}
+        >
+          {/* En modo edición mostramos el contenido plano, sin tokenizar amarillos —
+              se recolorean al terminar. Esto simplifica el DOM editable. */}
+          {el.content}
+        </div>
+      ) : (
+        <div style={commonTextStyle}>
+          {tokens.map((t, i) =>
+            t.break ? <br key={i} /> : (
+              <span key={i} style={{ color: t.yellow ? PALETTE.yellow : undefined }}>{t.text}</span>
+            ),
+          )}
+        </div>
       )}
     </div>
   );

@@ -94,8 +94,23 @@ function ElementCommonHeader({ label, onDelete, onBringForward, onSendBackward }
 }
 
 function PositionSizeControls({ el, onChange }: { el: SlideElement; onChange: (patch: Partial<SlideElement>) => void }) {
+  // Snap el elemento al lado izq / centro / der del canvas. Calculamos x
+  // asumiendo que el elemento se posiciona por su CENTRO, así que para
+  // pegarlo al borde izquierdo hacemos x = width/2 + margen; centro = 50;
+  // derecha = 100 - width/2 - margen. Con margen del 8%.
+  const w = "width" in el && typeof (el as any).width === "number" ? (el as any).width as number : 40;
+  const marginPct = 8;
+  const leftX = Math.min(50, w / 2 + marginPct);
+  const rightX = Math.max(50, 100 - w / 2 - marginPct);
   return (
     <>
+      <Row label="Alinear en el canvas">
+        <div className="flex gap-1">
+          <button onClick={() => onChange({ x: leftX })} title="Pegar a la izquierda" className="text-xs px-2 py-1 rounded border border-neutral-200 hover:border-neutral-500">⬅</button>
+          <button onClick={() => onChange({ x: 50 })} title="Centrar horizontalmente" className="text-xs px-2 py-1 rounded border border-neutral-200 hover:border-neutral-500">↔</button>
+          <button onClick={() => onChange({ x: rightX })} title="Pegar a la derecha" className="text-xs px-2 py-1 rounded border border-neutral-200 hover:border-neutral-500">➡</button>
+        </div>
+      </Row>
       <Row label="Posición X %">
         <NumberInput value={el.x} min={0} max={100} step={0.5} onChange={(v) => onChange({ x: v })} />
       </Row>

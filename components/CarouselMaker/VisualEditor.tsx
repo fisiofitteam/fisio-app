@@ -67,6 +67,7 @@ export function VisualEditor({
 
   const [activeIdx, setActiveIdx] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -195,8 +196,14 @@ export function VisualEditor({
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key !== "Delete" && e.key !== "Backspace") return;
-      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      const target = e.target as HTMLElement;
+      const tag = target?.tagName?.toLowerCase();
       if (tag === "input" || tag === "textarea" || tag === "select") return;
+      // Si el foco está dentro de un contenteditable (inline edit del texto)
+      // no queremos borrar el elemento entero — dejamos que el backspace
+      // funcione como borrado de caracteres.
+      if (target?.isContentEditable) return;
+      if (editingId) return; // safety
       if (selectedId) {
         e.preventDefault();
         deleteElement(selectedId);
@@ -204,7 +211,7 @@ export function VisualEditor({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectedId, deleteElement]);
+  }, [selectedId, editingId, deleteElement]);
 
   // ─── Autosave ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -318,12 +325,18 @@ export function VisualEditor({
   slideIndex={activeIdx}
   totalSlides={doc.slides.length}
   selectedId={selectedId}
-  setSelectedId={setSelectedId}
+  setSelectedId={(id) => { setSelectedId(id); if (editingId && editingId !== id) setEditingId(null); }}
+  editingId={editingId}
   onStartDrag={handleStartDrag}
+  onStartEditing={(id) => { setSelectedId(id); setEditingId(id); }}
+  onFinishEditing={(id, content) => {
+    updateElement(id, { content } as Partial<SlideElement>);
+    setEditingId(null);
+  }}
 />
 
-        <p className="text-[10px] text-neutral-500">
-          Click en un elemento para seleccionarlo · arrastra para mover · Supr para eliminar · edita en el panel de la derecha
+        <p className="text-[10px] text-neutral-500 text-center">
+          Click = seleccionar · arrastrar = mover · <strong>doble-click en un texto = editar en la propia imagen</strong> · Supr = eliminar · Esc / Cmd+Enter = terminar edición
         </p>
       </div>
 
@@ -373,14 +386,20 @@ function CanvasStage({
   totalSlides,
   selectedId,
   setSelectedId,
+  editingId,
   onStartDrag,
+  onStartEditing,
+  onFinishEditing,
 }: {
   doc: SlideDoc;
   slideIndex: number;
   totalSlides: number;
   selectedId: string | null;
   setSelectedId: (id: string | null) => void;
+  editingId: string | null;
   onStartDrag: (id: string, e: React.PointerEvent<HTMLDivElement>) => void;
+  onStartEditing: (id: string) => void;
+  onFinishEditing: (id: string, content: string) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [displayW, setDisplayW] = useState(560);
@@ -417,8 +436,11 @@ function CanvasStage({
             totalSlides={totalSlides}
             displayScale={displayW / CANVAS_W}
             selectedElementId={selectedId}
+            editingElementId={editingId}
             onSelectElement={setSelectedId}
             onStartDrag={onStartDrag}
+            onStartEditing={onStartEditing}
+            onFinishEditing={onFinishEditing}
           />
         </div>
       </div>
