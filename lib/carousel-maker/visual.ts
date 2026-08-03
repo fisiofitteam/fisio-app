@@ -76,6 +76,22 @@ export type CarouselVisual = {
 };
 
 /**
+ * Parsea visualJson (string almacenado en DB) a un objeto CarouselVisual.
+ * Vive en este módulo — que es puro TS sin "use client" — para poder
+ * llamarlo desde server components sin arrastrar dependencias de cliente.
+ */
+export function parseVisual(raw: string | null | undefined): CarouselVisual {
+  if (!raw) return {};
+  try {
+    const obj = JSON.parse(raw);
+    if (typeof obj !== "object" || obj === null) return {};
+    return obj as CarouselVisual;
+  } catch {
+    return {};
+  }
+}
+
+/**
  * Heurística mínima para asignar layout inicial a cada slide cuando el
  * user abre por primera vez el editor visual. Reglas:
  *  - Último slide y `title` empieza por "Escríbeme" / contiene una palabra

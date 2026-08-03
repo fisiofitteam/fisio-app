@@ -298,13 +298,3 @@ export function VisualEditor({
   );
 }
 
-export function parseVisual(raw: string | null | undefined): CarouselVisual {
-  if (!raw) return {};
-  try {
-    const obj = JSON.parse(raw);
-    if (typeof obj !== "object" || obj === null) return {};
-    return obj as CarouselVisual;
-  } catch {
-    return {};
-  }
-}

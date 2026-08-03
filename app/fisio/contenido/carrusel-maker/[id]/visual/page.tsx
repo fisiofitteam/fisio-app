@@ -3,7 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 import { parseSlides } from "@/lib/carousel-maker/types";
-import { VisualEditor, parseVisual } from "@/components/CarouselMaker/VisualEditor";
+import { parseVisual } from "@/lib/carousel-maker/visual";
+import { VisualEditor } from "@/components/CarouselMaker/VisualEditor";
 
 export const dynamic = "force-dynamic";
 
