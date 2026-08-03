@@ -2494,6 +2494,7 @@ model Carousel {
   brief       String                                // brief que el user escribió al generar
   category    String?                               // misma taxonomía que biblioteca
   slidesJson  String                                // JSON de slides
+  captionText String?                               // pie del post en IG (generado o editado)
   status      String   @default("draft")            // draft | published | archived
   createdById String?
   createdAt   DateTime @default(now())
