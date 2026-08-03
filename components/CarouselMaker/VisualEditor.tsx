@@ -1,295 +1,351 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CarouselSlide } from "@/lib/carousel-maker/types";
 import {
-  autoAssignLayout,
-  suggestYellowWords,
-  type CarouselVisual,
-  type SlideLayout,
-  type SlideVisual,
-} from "@/lib/carousel-maker/visual";
+  buildInitialDoc,
+  CANVAS_H,
+  CANVAS_W,
+  defaultChipElement,
+  defaultImageElement,
+  defaultLineElement,
+  defaultTextElement,
+  emptySlideDoc,
+  presetChips,
+  presetCta,
+  presetHook,
+  presetTextBody,
+  type CarouselDoc,
+  type SlideDoc,
+  type SlideElement,
+} from "@/lib/carousel-maker/canvas";
 import { CarouselFontsLoader } from "./FontsLoader";
 import { SlideCanvas } from "./SlideCanvas";
+import { PropertyPanel } from "./PropertyPanel";
 import { downloadCarouselZip, downloadSingleSlide } from "./exportCarousel";
 
-const LAYOUT_OPTIONS: Array<{ value: SlideLayout; label: string }> = [
-  { value: "hook", label: "Hook (titular gigante)" },
-  { value: "hook_photo", label: "Hook + foto" },
-  { value: "chips_list", label: "Titular + chips" },
-  { value: "text_body", label: "Titular + cuerpo largo" },
-  { value: "cta_ribbon", label: "CTA (cinta amarilla)" },
-];
-
 /**
- * Editor visual del carrusel: sidebar con miniaturas, canvas central
- * escalado, panel derecho con opciones del slide activo (layout, palabras
- * en amarillo, chips manuales, CTA keyword). Persiste el visual en el
- * backend (Carousel.visualJson) y exporta PNG / ZIP con html-to-image.
+ * Editor visual "estilo Canva" del carrusel:
+ *   - Sidebar izquierda: miniaturas de slides.
+ *   - Canvas central: slide activo escalado, con drag de elementos y
+ *     selección por click.
+ *   - Panel derecho: propiedades del elemento seleccionado (o del slide
+ *     si no hay ninguno). Fuente, tamaño, color, alineación, posición,
+ *     todo se toca a mano.
+ *   - Toolbar superior: añadir elementos, aplicar preset, exportar,
+ *     estado guardado.
+ *
+ * Auto-guarda cambios con debounce a Carousel.visualJson.
  */
 export function VisualEditor({
   carouselId,
   title,
   slides,
-  initialVisual,
+  initialDoc,
 }: {
   carouselId: string;
   title: string;
   slides: CarouselSlide[];
-  initialVisual: CarouselVisual;
+  initialDoc: CarouselDoc | null;
 }) {
-  // Rellenamos los slides que no tienen visual con auto-asignación.
-  const [visual, setVisual] = useState<CarouselVisual>(() => {
-    const out: CarouselVisual = { ...initialVisual };
-    slides.forEach((s, i) => {
-      if (!out[s.n]) {
-        out[s.n] = {
-          layout: autoAssignLayout(s, { isFirst: i === 0, isLast: i === slides.length - 1 }),
-          yellowWords: s.title ? suggestYellowWords(s.title) : [],
+  // Si el draft ya tenía visualJson v2 lo usamos; si tenía v1 antigua o
+  // nada, buildInitialDoc lo migra/crea desde los slides de texto.
+  const [doc, setDoc] = useState<CarouselDoc>(() => {
+    if (initialDoc?.slides?.length) {
+      // Rellenar slides que falten (si el user regeneró texto con más slides).
+      if (initialDoc.slides.length < slides.length) {
+        const migrated = buildInitialDoc(slides, {});
+        return {
+          version: 2,
+          slides: slides.map((_, i) => initialDoc.slides[i] ?? migrated.slides[i]),
         };
       }
-    });
-    return out;
+      return initialDoc;
+    }
+    return buildInitialDoc(slides, {});
   });
 
-  const [activeN, setActiveN] = useState<number>(slides[0]?.n ?? 1);
-  const [saving, setSaving] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
 
-  const activeSlide = slides.find((s) => s.n === activeN) ?? slides[0];
-  const activeVisual = visual[activeN] ?? { layout: "hook" as SlideLayout };
+  const activeSlide = doc.slides[activeIdx] ?? emptySlideDoc();
+  const selectedEl = activeSlide.elements.find((e) => e.id === selectedId) ?? null;
 
-  // Refs para captura: uno por slide. En pantalla mostramos SOLO el activo
-  // (los demás como miniatura scaled). Los ocultos para exportar viven en
-  // un contenedor off-screen que renderiza los N slides a tamaño real.
+  // Refs para exportar
   const exportRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
-  function setActiveVisual(patch: Partial<SlideVisual>) {
-    setVisual((prev) => ({ ...prev, [activeN]: { ...prev[activeN], ...patch } }));
+  // ─── Mutations ─────────────────────────────────────────────────────
+  const setSlideAt = useCallback((idx: number, patch: Partial<SlideDoc> | ((prev: SlideDoc) => SlideDoc)) => {
+    setDoc((prev) => ({
+      ...prev,
+      slides: prev.slides.map((s, i) => {
+        if (i !== idx) return s;
+        return typeof patch === "function" ? patch(s) : { ...s, ...patch };
+      }),
+    }));
     setDirty(true);
-  }
+  }, []);
 
-  async function save() {
-    setSaving(true);
-    const res = await fetch("/api/carousel-maker/drafts", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id: carouselId,
-        // Guardamos el visual JSON. El resto del draft no se toca desde aquí.
-        visualJson: JSON.stringify(visual),
-      } as any),
+  const updateActiveSlide = useCallback((patch: Partial<SlideDoc>) => {
+    setSlideAt(activeIdx, patch);
+  }, [activeIdx, setSlideAt]);
+
+  const updateElement = useCallback((id: string, patch: Partial<SlideElement>) => {
+    setSlideAt(activeIdx, (s) => ({
+      ...s,
+      elements: s.elements.map((e) => (e.id === id ? ({ ...e, ...patch } as SlideElement) : e)),
+    }));
+  }, [activeIdx, setSlideAt]);
+
+  const addElement = useCallback((el: SlideElement) => {
+    setSlideAt(activeIdx, (s) => ({ ...s, elements: [...s.elements, el] }));
+    setSelectedId(el.id);
+  }, [activeIdx, setSlideAt]);
+
+  const deleteElement = useCallback((id: string) => {
+    setSlideAt(activeIdx, (s) => ({ ...s, elements: s.elements.filter((e) => e.id !== id) }));
+    setSelectedId(null);
+  }, [activeIdx, setSlideAt]);
+
+  const reorderElement = useCallback((id: string, dir: "up" | "down") => {
+    setSlideAt(activeIdx, (s) => {
+      const idx = s.elements.findIndex((e) => e.id === id);
+      if (idx < 0) return s;
+      const swap = dir === "up" ? idx + 1 : idx - 1;
+      if (swap < 0 || swap >= s.elements.length) return s;
+      const arr = [...s.elements];
+      [arr[idx], arr[swap]] = [arr[swap], arr[idx]];
+      return { ...s, elements: arr };
     });
-    if (res.ok) setDirty(false);
-    setSaving(false);
+  }, [activeIdx, setSlideAt]);
+
+  const applyPreset = useCallback((preset: "hook" | "chips" | "text_body" | "cta") => {
+    if (!confirm("Esto reemplaza los elementos del slide actual por la plantilla. ¿Continuar?")) return;
+    const source = slides[activeIdx];
+    if (!source) return;
+    const newSlide =
+      preset === "hook" ? presetHook(source)
+      : preset === "chips" ? presetChips(source)
+      : preset === "text_body" ? presetTextBody(source)
+      : presetCta(source);
+    // Preservamos toggles del slide actual (bgColor / grain / header).
+    setSlideAt(activeIdx, (prev) => ({ ...newSlide, bgColor: prev.bgColor, showHeader: prev.showHeader, showNumber: prev.showNumber, showGrain: prev.showGrain }));
+    setSelectedId(null);
+  }, [activeIdx, slides, setSlideAt]);
+
+  // ─── Drag ──────────────────────────────────────────────────────────
+  const dragStateRef = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number; canvasEl: HTMLDivElement | null } | null>(null);
+
+  const handleStartDrag = useCallback((id: string, e: React.PointerEvent<HTMLDivElement>) => {
+    const canvasEl = (e.currentTarget.closest("[data-carousel-canvas]") as HTMLDivElement) ?? null;
+    if (!canvasEl) return;
+    const rect = canvasEl.getBoundingClientRect();
+    const el = doc.slides[activeIdx]?.elements.find((x) => x.id === id);
+    if (!el) return;
+    dragStateRef.current = {
+      id,
+      startX: e.clientX,
+      startY: e.clientY,
+      origX: el.x,
+      origY: el.y,
+      canvasEl,
+    };
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+  }, [doc.slides, activeIdx]);
+
+  useEffect(() => {
+    function onMove(e: PointerEvent) {
+      const st = dragStateRef.current;
+      if (!st?.canvasEl) return;
+      const rect = st.canvasEl.getBoundingClientRect();
+      const dxPct = ((e.clientX - st.startX) / rect.width) * 100;
+      const dyPct = ((e.clientY - st.startY) / rect.height) * 100;
+      const nx = Math.max(0, Math.min(100, st.origX + dxPct));
+      const ny = Math.max(0, Math.min(100, st.origY + dyPct));
+      updateElement(st.id, { x: nx, y: ny });
+    }
+    function onUp() {
+      dragStateRef.current = null;
+    }
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+  }, [updateElement]);
+
+  // ─── Delete con Supr/Backspace ─────────────────────────────────────
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Delete" && e.key !== "Backspace") return;
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select") return;
+      if (selectedId) {
+        e.preventDefault();
+        deleteElement(selectedId);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedId, deleteElement]);
+
+  // ─── Autosave ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!dirty) return;
+    const t = setTimeout(async () => {
+      setSaving(true);
+      const res = await fetch("/api/carousel-maker/drafts", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: carouselId, visualJson: JSON.stringify(doc) }),
+      });
+      if (res.ok) setDirty(false);
+      setSaving(false);
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [dirty, doc, carouselId]);
+
+  // ─── Export ────────────────────────────────────────────────────────
+  const baseName = useMemo(
+    () => title.toLowerCase().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 50) || "carrusel",
+    [title],
+  );
+
+  async function exportOne() {
+    const node = exportRefs.current.get(activeIdx);
+    if (!node) return;
+    setExporting(true);
+    try {
+      await downloadSingleSlide(node, activeIdx, baseName);
+    } finally {
+      setExporting(false);
+    }
   }
 
   async function exportZip() {
     setExporting(true);
-    const nodes = slides
-      .map((s) => exportRefs.current.get(s.n))
-      .filter((n): n is HTMLDivElement => !!n);
-    const baseName = title.toLowerCase().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 50) || "carrusel";
     try {
+      const nodes: HTMLDivElement[] = [];
+      for (let i = 0; i < doc.slides.length; i++) {
+        const n = exportRefs.current.get(i);
+        if (n) nodes.push(n);
+      }
       await downloadCarouselZip(nodes, baseName);
     } finally {
       setExporting(false);
     }
   }
 
-  async function exportOne() {
-    const node = exportRefs.current.get(activeN);
-    if (!node) return;
-    const baseName = title.toLowerCase().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 50) || "carrusel";
-    setExporting(true);
-    try {
-      await downloadSingleSlide(node, slides.findIndex((s) => s.n === activeN), baseName);
-    } finally {
-      setExporting(false);
-    }
-  }
-
-  // Auto-guarda con debounce.
-  useEffect(() => {
-    if (!dirty) return;
-    const t = setTimeout(() => { save(); }, 1500);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visual, dirty]);
-
   return (
     <div className="flex gap-4">
       <CarouselFontsLoader />
 
       {/* Sidebar miniaturas */}
-      <div className="w-40 flex-shrink-0 space-y-2">
+      <div className="w-40 flex-shrink-0 space-y-2 max-h-[85vh] overflow-y-auto">
         <div className="text-[10px] uppercase tracking-wider text-neutral-500 font-medium mb-1">Slides</div>
-        {slides.map((s) => (
+        {doc.slides.map((s, i) => (
           <button
-            key={s.n}
-            onClick={() => setActiveN(s.n)}
+            key={i}
+            onClick={() => { setActiveIdx(i); setSelectedId(null); }}
             className={`w-full block relative rounded-lg overflow-hidden border-2 transition-colors ${
-              s.n === activeN ? "border-neutral-900" : "border-transparent hover:border-neutral-300"
+              i === activeIdx ? "border-neutral-900" : "border-transparent hover:border-neutral-300"
             }`}
           >
-            <div style={{ width: 160, height: 200, background: "#0A0A0A" }}>
+            <div style={{ width: 160, height: 200, background: s.bgColor, overflow: "hidden" }}>
               <SlideCanvas
-                slide={s}
-                visual={visual[s.n] ?? { layout: "hook" as SlideLayout }}
-                slideIndex={slides.findIndex((x) => x.n === s.n)}
-                totalSlides={slides.length}
-                displayScale={160 / 1080}
+                doc={s}
+                slideIndex={i}
+                totalSlides={doc.slides.length}
+                displayScale={160 / CANVAS_W}
               />
             </div>
             <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1.5 py-0.5 rounded">
-              {s.n}
+              {i + 1}
             </div>
           </button>
         ))}
       </div>
 
-      {/* Canvas central */}
-      <div className="flex-1 flex flex-col items-center gap-4">
-        <div className="flex items-center gap-2 flex-wrap w-full">
-          <div className="text-xs text-neutral-500">
+      {/* Canvas central + toolbar */}
+      <div className="flex-1 min-w-0 flex flex-col items-center gap-3">
+        <div className="w-full flex items-center gap-2 flex-wrap">
+          <div className="text-xs text-neutral-500 mr-auto">
             {dirty ? "Cambios sin guardar…" : saving ? "Guardando…" : "Guardado"}
           </div>
-          <div className="ml-auto flex gap-2">
+          <div className="flex gap-1 items-center">
+            <ToolbarButton onClick={() => addElement(defaultTextElement())}>+ Texto</ToolbarButton>
+            <ToolbarButton onClick={() => addElement(defaultLineElement())}>+ Línea</ToolbarButton>
+            <ToolbarButton onClick={() => addElement(defaultChipElement())}>+ Chip</ToolbarButton>
+            <ToolbarButton onClick={() => {
+              const url = prompt("URL de la imagen (Fase D+ tendremos upload propio):");
+              if (url) addElement(defaultImageElement(url));
+            }}>+ Imagen</ToolbarButton>
+            <div className="mx-1 h-6 border-l border-neutral-200" />
+            <PresetMenu onApply={applyPreset} />
+            <div className="mx-1 h-6 border-l border-neutral-200" />
             <button onClick={exportOne} disabled={exporting} className="btn btn-ghost text-xs">
-              {exporting ? "Exportando…" : "⬇ Exportar slide"}
+              ⬇ Slide
             </button>
             <button onClick={exportZip} disabled={exporting} className="btn btn-primary text-xs">
-              {exporting ? "Exportando…" : "⬇ Exportar ZIP"}
+              {exporting ? "Exportando…" : "⬇ ZIP"}
             </button>
           </div>
         </div>
 
         <div
-          className="bg-neutral-100 rounded-2xl p-4 shadow-inner"
-          style={{ width: 540 + 32, height: 675 + 32 }}
+          className="bg-neutral-200 rounded-2xl p-4 shadow-inner"
+          style={{ width: 560 + 32, height: 700 + 32 }}
         >
-          <div style={{ width: 540, height: 675, overflow: "hidden", background: "#0A0A0A", borderRadius: 12 }}>
+          <div
+            data-carousel-canvas
+            style={{ width: 560, height: 700, overflow: "hidden", background: activeSlide.bgColor, borderRadius: 12, position: "relative" }}
+          >
             <SlideCanvas
-              slide={activeSlide}
-              visual={activeVisual}
-              slideIndex={slides.findIndex((s) => s.n === activeN)}
-              totalSlides={slides.length}
-              displayScale={540 / 1080}
+              doc={activeSlide}
+              slideIndex={activeIdx}
+              totalSlides={doc.slides.length}
+              displayScale={560 / CANVAS_W}
+              selectedElementId={selectedId}
+              onSelectElement={setSelectedId}
+              onStartDrag={handleStartDrag}
             />
           </div>
         </div>
+
+        <p className="text-[10px] text-neutral-500">
+          Click en un elemento para seleccionarlo · arrastra para mover · Supr para eliminar · edita en el panel de la derecha
+        </p>
       </div>
 
       {/* Panel derecho */}
-      <div className="w-72 flex-shrink-0 space-y-4">
-        <div>
-          <label className="text-[10px] uppercase tracking-wider text-neutral-500 font-medium block mb-1">
-            Layout del slide {activeN}
-          </label>
-          <select
-            className="input text-sm"
-            value={activeVisual.layout}
-            onChange={(e) => setActiveVisual({ layout: e.target.value as SlideLayout })}
-          >
-            {LAYOUT_OPTIONS.map((l) => (
-              <option key={l.value} value={l.value}>{l.label}</option>
-            ))}
-          </select>
-        </div>
-
-        {activeSlide.title && (
-          <div>
-            <label className="text-[10px] uppercase tracking-wider text-neutral-500 font-medium block mb-1">
-              Palabras en amarillo
-            </label>
-            <input
-              type="text"
-              className="input text-sm"
-              value={(activeVisual.yellowWords ?? []).join(" ")}
-              onChange={(e) => setActiveVisual({
-                yellowWords: e.target.value.split(/\s+/).map((w) => w.trim()).filter(Boolean),
-              })}
-              placeholder="ej: MÁS HOMBRO"
-            />
-            <p className="text-[10px] text-neutral-500 mt-1">
-              Separadas por espacios. Case-insensitive. Sugerencias: {suggestYellowWords(activeSlide.title).join(", ") || "—"}
-            </p>
-          </div>
-        )}
-
-        {activeVisual.layout === "chips_list" && (
-          <div>
-            <label className="text-[10px] uppercase tracking-wider text-neutral-500 font-medium block mb-1">
-              Chips (uno por línea, "Icono | Etiqueta")
-            </label>
-            <textarea
-              className="input text-sm font-mono"
-              rows={6}
-              value={(activeVisual.chips ?? []).map((c) => `${c.icon} | ${c.label}`).join("\n")}
-              onChange={(e) => setActiveVisual({
-                chips: e.target.value.split(/\n/).map((line) => {
-                  const [icon, ...rest] = line.split("|").map((p) => p.trim());
-                  const label = rest.join("|").trim();
-                  if (!label) return null;
-                  return { icon: icon || label[0].toUpperCase(), label };
-                }).filter((x): x is { icon: string; label: string } => !!x),
-              })}
-              placeholder="⚡ | Colgarte&#10;💪 | Empujar"
-            />
-            <p className="text-[10px] text-neutral-500 mt-1">
-              Si dejas vacío, se autogeneran del body del slide.
-            </p>
-          </div>
-        )}
-
-        {activeVisual.layout === "cta_ribbon" && (
-          <div>
-            <label className="text-[10px] uppercase tracking-wider text-neutral-500 font-medium block mb-1">
-              Palabra CTA (en la cinta)
-            </label>
-            <input
-              type="text"
-              className="input text-sm font-mono uppercase"
-              value={activeVisual.ctaKeyword ?? ""}
-              onChange={(e) => setActiveVisual({ ctaKeyword: e.target.value.toUpperCase() })}
-              placeholder="HOMBRO"
-            />
-          </div>
-        )}
-
-        {(activeVisual.layout === "hook_photo") && (
-          <div>
-            <label className="text-[10px] uppercase tracking-wider text-neutral-500 font-medium block mb-1">
-              URL de foto (opcional)
-            </label>
-            <input
-              type="url"
-              className="input text-sm"
-              value={activeVisual.photoUrl ?? ""}
-              onChange={(e) => setActiveVisual({ photoUrl: e.target.value })}
-              placeholder="https://..."
-            />
-            <p className="text-[10px] text-neutral-500 mt-1">
-              Upload propio llega en Fase D. De momento, pega la URL de una foto ya subida.
-            </p>
-          </div>
-        )}
+      <div className="w-80 flex-shrink-0 max-h-[85vh] overflow-y-auto">
+        <PropertyPanel
+          selected={selectedEl}
+          slide={activeSlide}
+          onChangeElement={(patch) => selectedId && updateElement(selectedId, patch)}
+          onChangeSlide={updateActiveSlide}
+          onDeleteElement={() => selectedId && deleteElement(selectedId)}
+          onBringForward={() => selectedId && reorderElement(selectedId, "up")}
+          onSendBackward={() => selectedId && reorderElement(selectedId, "down")}
+        />
       </div>
 
-      {/* Contenedor off-screen con los N slides a 1080×1350 para capturar en export */}
+      {/* Contenedor off-screen para captura de export a 1080×1350 */}
       <div style={{ position: "fixed", left: -99999, top: 0, pointerEvents: "none" }} aria-hidden>
-        {slides.map((s, i) => (
+        {doc.slides.map((s, i) => (
           <SlideCanvas
-            key={s.n}
+            key={i}
             ref={(el) => {
-              if (el) exportRefs.current.set(s.n, el);
-              else exportRefs.current.delete(s.n);
+              if (el) exportRefs.current.set(i, el);
+              else exportRefs.current.delete(i);
             }}
-            slide={s}
-            visual={visual[s.n] ?? { layout: "hook" as SlideLayout }}
+            doc={s}
             slideIndex={i}
-            totalSlides={slides.length}
+            totalSlides={doc.slides.length}
             displayScale={1}
           />
         ))}
@@ -298,3 +354,36 @@ export function VisualEditor({
   );
 }
 
+function ToolbarButton({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="text-xs px-2.5 py-1.5 rounded border border-neutral-200 bg-white hover:border-neutral-400 whitespace-nowrap">
+      {children}
+    </button>
+  );
+}
+
+function PresetMenu({ onApply }: { onApply: (p: "hook" | "chips" | "text_body" | "cta") => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen((v) => !v)} className="text-xs px-2.5 py-1.5 rounded border border-neutral-200 bg-white hover:border-neutral-400 whitespace-nowrap">
+        🎨 Preset ▾
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 mt-1 bg-white border border-neutral-200 rounded-lg shadow-lg z-50 min-w-[220px]">
+            <MenuItem onClick={() => { onApply("hook"); setOpen(false); }}>Hook (titular gigante)</MenuItem>
+            <MenuItem onClick={() => { onApply("chips"); setOpen(false); }}>Titular + chips</MenuItem>
+            <MenuItem onClick={() => { onApply("text_body"); setOpen(false); }}>Titular + cuerpo largo</MenuItem>
+            <MenuItem onClick={() => { onApply("cta"); setOpen(false); }}>CTA (cinta amarilla)</MenuItem>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function MenuItem({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+  return <button onClick={onClick} className="block w-full text-left text-xs px-3 py-2 hover:bg-neutral-50">{children}</button>;
+}

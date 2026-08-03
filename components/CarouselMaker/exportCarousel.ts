@@ -2,7 +2,7 @@
 
 import { toPng } from "html-to-image";
 import JSZip from "jszip";
-import { CANVAS_H, CANVAS_W } from "@/lib/carousel-maker/visual";
+import { CANVAS_H, CANVAS_W } from "@/lib/carousel-maker/canvas";
 
 /**
  * Convierte un nodo DOM que renderiza un slide (1080×1350) a un PNG en

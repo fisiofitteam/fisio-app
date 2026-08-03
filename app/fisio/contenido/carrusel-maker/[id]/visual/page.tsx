@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 import { parseSlides } from "@/lib/carousel-maker/types";
-import { parseVisual } from "@/lib/carousel-maker/visual";
+import { buildInitialDoc, parseCarouselDoc } from "@/lib/carousel-maker/canvas";
 import { VisualEditor } from "@/components/CarouselMaker/VisualEditor";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +18,10 @@ export default async function CarouselVisualPage({ params }: { params: { id: str
   if (!draft) notFound();
 
   const slides = parseSlides(draft.slidesJson);
-  const visual = parseVisual(draft.visualJson);
+  // Doc v2. Si el visualJson es null o formato v1, buildInitialDoc lo migra
+  // en el cliente (o creamos aquí uno inicial para evitar hidratación diff).
+  const parsedDoc = parseCarouselDoc(draft.visualJson);
+  const initialDoc = parsedDoc ?? buildInitialDoc(slides, tryParseV1(draft.visualJson));
 
   return (
     <main>
@@ -32,8 +35,19 @@ export default async function CarouselVisualPage({ params }: { params: { id: str
         carouselId={draft.id}
         title={draft.title}
         slides={slides}
-        initialVisual={visual}
+        initialDoc={initialDoc}
       />
     </main>
   );
+}
+
+function tryParseV1(raw: string | null | undefined): any {
+  if (!raw) return {};
+  try {
+    const obj = JSON.parse(raw);
+    if (obj?.version === 2) return {};
+    return obj ?? {};
+  } catch {
+    return {};
+  }
 }
