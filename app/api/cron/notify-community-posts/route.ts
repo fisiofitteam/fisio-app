@@ -1,7 +1,7 @@
 /**
  * Cron diario que avisa por la mañana (hora Madrid) al profesional que tiene
- * un CommunityPost asignado para HOY, y en paralelo al CEO para que también
- * lo vea en su campanita.
+ * un CommunityPost asignado para HOY. El CEO NO recibe copia — puede verlo
+ * en el calendario si quiere, y tenerlo duplicado en su campanita ensuciaba.
  *
  * Se dispara desde Vercel Cron a las 05:00, 06:00 y 07:00 UTC (vercel.json)
  * — tres intentos redundantes porque Vercel Cron es best-effort y a veces
@@ -109,24 +109,6 @@ async function handler(req: NextRequest) {
     },
   });
 
-  // CEOs activos: reciben una notificación paralela por cada post del día
-  // (el CEO quiere ver en su campanita quién publica hoy). Si un CEO está
-  // asignado él mismo al post, evitamos duplicarle.
-  const ceos = await prisma.professional.findMany({
-    where: { role: "ceo", active: true },
-    select: { id: true, fullName: true },
-  });
-
-  const assigneeCache = new Map<string, string>();
-  async function getAssigneeName(id: string): Promise<string> {
-    const cached = assigneeCache.get(id);
-    if (cached) return cached;
-    const pro = await prisma.professional.findUnique({ where: { id }, select: { fullName: true } });
-    const name = pro?.fullName ?? "un fisio";
-    assigneeCache.set(id, name);
-    return name;
-  }
-
   const results: Array<{ postId: string; ok: boolean; error?: string }> = [];
   for (const p of posts) {
     try {
@@ -144,19 +126,6 @@ async function handler(req: NextRequest) {
         body,
         actionUrl: "/fisio/comunidad/plan",
       });
-
-      const assigneeName = await getAssigneeName(p.assignedToId!);
-      const ceoBody = `Publica ${assigneeName}. Etiquetas: ${labels}.`;
-      for (const ceo of ceos) {
-        if (ceo.id === p.assignedToId) continue; // el CEO ya recibió el aviso como asignado
-        await notifyProfessional({
-          professionalId: ceo.id,
-          type: "community_post_today_ceo",
-          title: "📅 Post de comunidad de hoy",
-          body: ceoBody,
-          actionUrl: "/fisio/comunidad/plan",
-        });
-      }
 
       await prisma.communityPost.update({
         where: { id: p.id },
