@@ -1,10 +1,12 @@
 "use client";
 
+import { useRef, useState } from "react";
 import type {
   ChipElement,
   FontKey,
   ImageElement,
   LineElement,
+  LogoElement,
   SlideDoc,
   SlideElement,
   TextElement,
@@ -33,6 +35,7 @@ export function PropertyPanel(props: Props) {
   if (selected.type === "line") return <LinePanel {...props} el={selected} />;
   if (selected.type === "chip") return <ChipPanel {...props} el={selected} />;
   if (selected.type === "image") return <ImagePanel {...props} el={selected} />;
+  if (selected.type === "logo") return <LogoPanel {...props} el={selected} />;
   return null;
 }
 
@@ -275,6 +278,87 @@ function ImagePanel({ el, onChangeElement, onDeleteElement, onBringForward, onSe
           <option value="contain">Contain (encaja)</option>
         </select>
       </Row>
+      <div className="border-t border-neutral-200 pt-3 space-y-2">
+        <PositionSizeControls el={el} onChange={onChangeElement} />
+      </div>
+    </div>
+  );
+}
+
+// ─── Logo panel ─────────────────────────────────────────────────────────
+
+function LogoPanel({ el, onChangeElement, onDeleteElement, onBringForward, onSendBackward }: Props & { el: LogoElement }) {
+  const setEl = (patch: Partial<LogoElement>) => onChangeElement(patch as Partial<SlideElement>);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+
+  async function upload(file: File) {
+    setUploading(true);
+    setUploadError("");
+    const form = new FormData();
+    form.set("file", file);
+    try {
+      const res = await fetch("/api/carousel-maker/upload", { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "No se pudo subir.");
+      setEl({ imageUrl: data.url });
+    } catch (e: any) {
+      setUploadError(e?.message ?? "Error de subida.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <ElementCommonHeader label="Logo" onDelete={onDeleteElement} onBringForward={onBringForward} onSendBackward={onSendBackward} />
+      <div className="space-y-2">
+        <Row label="Imagen del logo (PNG / SVG)">
+          {el.imageUrl ? (
+            <div className="flex items-center gap-2">
+              <img src={el.imageUrl} alt="logo" className="w-14 h-14 object-contain rounded border border-neutral-200 bg-neutral-900 p-1" />
+              <div className="flex flex-col gap-1">
+                <button onClick={() => fileRef.current?.click()} disabled={uploading} className="text-xs underline text-neutral-600">
+                  {uploading ? "Subiendo…" : "Cambiar"}
+                </button>
+                <button onClick={() => setEl({ imageUrl: undefined })} className="text-xs underline text-red-600">Quitar (volver a texto)</button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => fileRef.current?.click()} disabled={uploading} className="btn btn-ghost text-xs w-full">
+              {uploading ? "Subiendo…" : "⬆ Subir PNG del logo"}
+            </button>
+          )}
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/png,image/svg+xml,image/jpeg"
+            className="hidden"
+            onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])}
+          />
+          {uploadError && <p className="text-[10px] text-red-600 mt-1">{uploadError}</p>}
+          <p className="text-[10px] text-neutral-500 mt-1">
+            Recomendado: PNG con fondo transparente. Si borras la imagen, vuelve al wordmark de texto.
+          </p>
+        </Row>
+      </div>
+      {!el.imageUrl && (
+        <div className="border-t border-neutral-200 pt-3 space-y-2">
+          <Row label={`Tamaño texto (${el.textSize ?? 46}px)`}>
+            <input type="range" min={16} max={120} value={el.textSize ?? 46} onChange={(e) => setEl({ textSize: Number(e.target.value) })} className="w-full" />
+          </Row>
+          <Row label="Color texto"><ColorInput value={el.textColor ?? PALETTE.chalkWhite} onChange={(v) => setEl({ textColor: v })} /></Row>
+          <Row label="Color rayo"><ColorInput value={el.accentColor ?? PALETTE.yellow} onChange={(v) => setEl({ accentColor: v })} /></Row>
+        </div>
+      )}
+      {el.imageUrl && (
+        <div className="border-t border-neutral-200 pt-3 space-y-2">
+          <Row label="Alto %">
+            <NumberInput value={el.height ?? 6} min={2} max={40} step={0.5} onChange={(v) => setEl({ height: v })} />
+          </Row>
+        </div>
+      )}
       <div className="border-t border-neutral-200 pt-3 space-y-2">
         <PositionSizeControls el={el} onChange={onChangeElement} />
       </div>

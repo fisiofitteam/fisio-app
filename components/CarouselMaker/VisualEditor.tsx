@@ -3,12 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CarouselSlide } from "@/lib/carousel-maker/types";
 import {
+  applyTemplateToSlide,
   buildInitialDoc,
   CANVAS_H,
   CANVAS_W,
   defaultChipElement,
   defaultImageElement,
   defaultLineElement,
+  defaultLogoElement,
   defaultTextElement,
   emptySlideDoc,
   presetChips,
@@ -75,6 +77,14 @@ export function VisualEditor({
   const activeSlide = doc.slides[activeIdx] ?? emptySlideDoc();
   const selectedEl = activeSlide.elements.find((e) => e.id === selectedId) ?? null;
 
+  // Plantillas visuales guardadas por el equipo.
+  const [templates, setTemplates] = useState<Array<{ id: string; name: string; description: string | null; slideJson: string }>>([]);
+  useEffect(() => {
+    fetch("/api/carousel-maker/templates").then((r) => r.ok ? r.json() : []).then((data) => {
+      if (Array.isArray(data)) setTemplates(data);
+    }).catch(() => {});
+  }, []);
+
   // Refs para exportar
   const exportRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
@@ -136,6 +146,44 @@ export function VisualEditor({
     setSlideAt(activeIdx, (prev) => ({ ...newSlide, bgColor: prev.bgColor, showHeader: prev.showHeader, showNumber: prev.showNumber, showGrain: prev.showGrain }));
     setSelectedId(null);
   }, [activeIdx, slides, setSlideAt]);
+
+  const saveAsTemplate = useCallback(async () => {
+    const name = prompt("Nombre para la plantilla (ej. 'Slide de errores', 'Portada gancho'):");
+    if (!name?.trim()) return;
+    const res = await fetch("/api/carousel-maker/templates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name.trim(), slideJson: JSON.stringify(activeSlide) }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data?.error ?? "No se pudo guardar la plantilla.");
+      return;
+    }
+    const created = await res.json();
+    setTemplates((prev) => [created, ...prev]);
+    alert(`Plantilla "${name}" guardada. Ya puedes aplicarla a otros slides.`);
+  }, [activeSlide]);
+
+  const applyTemplate = useCallback((templateId: string) => {
+    const tpl = templates.find((t) => t.id === templateId);
+    if (!tpl) return;
+    let parsed: SlideDoc;
+    try { parsed = JSON.parse(tpl.slideJson); }
+    catch { alert("La plantilla está corrupta."); return; }
+    if (!confirm(`Aplicar plantilla "${tpl.name}" al slide ${activeIdx + 1}? Se reemplazan los elementos por los de la plantilla, rellenando con el texto del slide.`)) return;
+    const source = slides[activeIdx];
+    if (!source) return;
+    const applied = applyTemplateToSlide(parsed, source);
+    setSlideAt(activeIdx, () => applied);
+    setSelectedId(null);
+  }, [templates, activeIdx, slides, setSlideAt]);
+
+  const deleteTemplate = useCallback(async (id: string) => {
+    if (!confirm("¿Eliminar esta plantilla del equipo?")) return;
+    await fetch(`/api/carousel-maker/templates?id=${id}`, { method: "DELETE" });
+    setTemplates((prev) => prev.filter((t) => t.id !== id));
+  }, []);
 
   /**
    * Rehace el layout de TODOS los slides desde 0 con las heurísticas
@@ -308,12 +356,34 @@ export function VisualEditor({
             <ToolbarButton onClick={() => addElement(defaultTextElement())}>+ Texto</ToolbarButton>
             <ToolbarButton onClick={() => addElement(defaultLineElement())}>+ Línea</ToolbarButton>
             <ToolbarButton onClick={() => addElement(defaultChipElement())}>+ Chip</ToolbarButton>
-            <ToolbarButton onClick={() => {
-              const url = prompt("URL de la imagen (Fase D+ tendremos upload propio):");
-              if (url) addElement(defaultImageElement(url));
+            <ToolbarButton onClick={() => addElement(defaultLogoElement())} title="Añade el logo FISIOF/T CROSS (editable o reemplazable por PNG)">
+              + Logo
+            </ToolbarButton>
+            <ToolbarButton onClick={async () => {
+              // Upload directo desde toolbar: abre file picker, sube y añade image element.
+              const input = document.createElement("input");
+              input.type = "file";
+              input.accept = "image/*";
+              input.onchange = async () => {
+                const file = input.files?.[0];
+                if (!file) return;
+                const form = new FormData();
+                form.set("file", file);
+                const res = await fetch("/api/carousel-maker/upload", { method: "POST", body: form });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) { alert(data?.error ?? "No se pudo subir."); return; }
+                addElement(defaultImageElement(data.url));
+              };
+              input.click();
             }}>+ Imagen</ToolbarButton>
             <div className="mx-1 h-6 border-l border-neutral-200" />
             <PresetMenu onApply={applyPreset} />
+            <TemplatesMenu
+              templates={templates}
+              onSave={saveAsTemplate}
+              onApply={applyTemplate}
+              onDelete={deleteTemplate}
+            />
             <ToolbarButton onClick={relayoutAll} title="Rehace la posición de TODOS los slides con la heurística actual (mantiene texto)">
               ♻ Recolocar todo
             </ToolbarButton>
@@ -480,4 +550,66 @@ function PresetMenu({ onApply }: { onApply: (p: "hook" | "chips" | "text_body" |
 
 function MenuItem({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
   return <button onClick={onClick} className="block w-full text-left text-xs px-3 py-2 hover:bg-neutral-50">{children}</button>;
+}
+
+function TemplatesMenu({
+  templates,
+  onSave,
+  onApply,
+  onDelete,
+}: {
+  templates: Array<{ id: string; name: string; description: string | null }>;
+  onSave: () => void;
+  onApply: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen((v) => !v)} className="text-xs px-2.5 py-1.5 rounded border border-neutral-200 bg-white hover:border-neutral-400 whitespace-nowrap">
+        📥 Plantillas ({templates.length}) ▾
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 mt-1 bg-white border border-neutral-200 rounded-lg shadow-lg z-50 min-w-[260px] max-h-[60vh] overflow-y-auto">
+            <div className="border-b border-neutral-100">
+              <MenuItem onClick={() => { onSave(); setOpen(false); }}>
+                💾 <strong>Guardar este slide como plantilla</strong>
+              </MenuItem>
+            </div>
+            {templates.length === 0 ? (
+              <p className="text-[11px] text-neutral-500 px-3 py-3 text-center">
+                Aún no tienes plantillas.<br />Guarda un slide para reutilizar su estilo.
+              </p>
+            ) : (
+              <>
+                <div className="text-[10px] uppercase tracking-wider text-neutral-500 font-medium px-3 pt-2">
+                  Aplicar al slide actual
+                </div>
+                {templates.map((t) => (
+                  <div key={t.id} className="flex items-center gap-1 px-2 py-1 hover:bg-neutral-50">
+                    <button
+                      onClick={() => { onApply(t.id); setOpen(false); }}
+                      className="flex-1 text-left text-xs px-2 py-1"
+                    >
+                      {t.name}
+                      {t.description && <span className="block text-[10px] text-neutral-500">{t.description}</span>}
+                    </button>
+                    <button
+                      onClick={() => onDelete(t.id)}
+                      className="text-xs text-red-600 px-1"
+                      title="Eliminar plantilla"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
 }

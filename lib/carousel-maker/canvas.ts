@@ -111,7 +111,25 @@ export type ImageElement = BaseElement & {
   opacity?: number; // 0..1
 };
 
-export type SlideElement = TextElement | LineElement | ChipElement | ImageElement;
+/**
+ * Logo — un elemento especial que puede ser texto (por defecto el wordmark
+ * "FISIOF/T CROSS") o una imagen PNG/SVG subida por el user. Vive como
+ * cualquier otro elemento en `elements`, así se puede mover, redimensionar
+ * o eliminar (o el user puede sustituirlo por su propia versión gráfica).
+ */
+export type LogoElement = BaseElement & {
+  type: "logo";
+  /** Si hay imageUrl la usa; si no, cae al texto FISIOF/T CROSS. */
+  imageUrl?: string;
+  width: number;      // % del canvas
+  height?: number;    // % del canvas (opcional, si es imagen); para texto se ajusta al content
+  /** Solo si es texto: tamaño en px. */
+  textSize?: number;
+  textColor?: string;
+  accentColor?: string; // color del rayo del logo
+};
+
+export type SlideElement = TextElement | LineElement | ChipElement | ImageElement | LogoElement;
 
 // ─── Slide + Doc ────────────────────────────────────────────────────────
 
@@ -143,10 +161,10 @@ export function newId(prefix: string = "el"): string {
 export function emptySlideDoc(): SlideDoc {
   return {
     bgColor: PALETTE.bg,
-    showHeader: true,
+    showHeader: false, // Ya no usamos el header fijo — el logo va como elemento.
     showNumber: true,
     showGrain: true,
-    elements: [],
+    elements: [defaultLogoElement()],
   };
 }
 
@@ -216,6 +234,19 @@ export function defaultImageElement(url: string, overrides: Partial<ImageElement
     objectFit: "cover",
     borderRadius: 20,
     opacity: 1,
+    ...overrides,
+  };
+}
+
+export function defaultLogoElement(overrides: Partial<LogoElement> = {}): LogoElement {
+  return {
+    id: newId("logo"),
+    type: "logo",
+    x: 50, y: 5,
+    width: 36,
+    textSize: 46,
+    textColor: PALETTE.chalkWhite,
+    accentColor: PALETTE.yellow,
     ...overrides,
   };
 }
@@ -584,11 +615,57 @@ function extractCtaKeyword(title: string): string | null {
 
 // ─── Parser/serializer del visualJson en DB ─────────────────────────────
 
+/**
+ * Aplica una plantilla visual (SlideDoc guardado) a un slide destino.
+ * Reasignamos los `id` de los elementos para no chocar con otros slides,
+ * y — si el slide destino tiene contenido de texto — vamos "rellenando"
+ * los textos de la plantilla en orden con el título / subtítulo / body /
+ * caption del slide fuente. Los estilos y posiciones vienen de la
+ * plantilla; el contenido, del slide.
+ */
+export function applyTemplateToSlide(template: SlideDoc, source: CarouselSlide): SlideDoc {
+  const textPool: string[] = [];
+  if (source.title) textPool.push(source.title);
+  if (source.subtitle) textPool.push(source.subtitle);
+  if (source.body) textPool.push(source.body);
+
+  let textCursor = 0;
+  const elements: SlideElement[] = template.elements.map((el) => {
+    const withId = { ...el, id: newId(el.type) } as SlideElement;
+    if (withId.type === "text" && textCursor < textPool.length) {
+      const nextContent = textPool[textCursor++];
+      // Si el texto original de la plantilla estaba en MAYÚSCULAS y el
+      // uppercase flag está activo, respetamos ese estilo.
+      return { ...withId, content: nextContent };
+    }
+    return withId;
+  });
+
+  return {
+    ...template,
+    elements,
+  };
+}
+
 export function parseCarouselDoc(raw: string | null | undefined): CarouselDoc | null {
   if (!raw) return null;
   try {
     const obj = JSON.parse(raw);
-    if (obj?.version === 2 && Array.isArray(obj?.slides)) return obj as CarouselDoc;
+    if (obj?.version === 2 && Array.isArray(obj?.slides)) {
+      // Backfill: si algún slide guardado no tiene logo entre sus elementos
+      // pero sí tenía showHeader activo, insertamos el logo por defecto
+      // para que sea editable. Si el user prefiere que no aparezca puede
+      // borrarlo desde el editor.
+      const doc = obj as CarouselDoc;
+      doc.slides = doc.slides.map((s) => {
+        const hasLogo = s.elements.some((e) => e.type === "logo");
+        if (!hasLogo && s.showHeader !== false) {
+          return { ...s, showHeader: false, elements: [defaultLogoElement(), ...s.elements] };
+        }
+        return s;
+      });
+      return doc;
+    }
     return null; // formato v1 antiguo → dejar que buildInitialDoc lo migre
   } catch {
     return null;

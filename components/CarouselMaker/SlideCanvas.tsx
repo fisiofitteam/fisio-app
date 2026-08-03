@@ -10,6 +10,7 @@ import {
   type ChipElement,
   type ImageElement,
   type LineElement,
+  type LogoElement,
   type SlideDoc,
   type SlideElement,
   type TextElement,
@@ -101,7 +102,9 @@ function SlideInner({
         <div style={{ position: "absolute", inset: 0, background: doc.bgOverlayColor, opacity: doc.bgOverlayOpacity ?? 0.4, pointerEvents: "none" }} />
       )}
       {doc.showGrain !== false && <GrainOverlay />}
-      {doc.showHeader !== false && <BrandHeader />}
+      {/* Header fijo solo si el user lo dejó activo Y no hay ya un logo como
+          elemento (nuevos docs siempre traen logo como elemento editable). */}
+      {doc.showHeader === true && !doc.elements.some((e) => e.type === "logo") && <BrandHeader />}
       {doc.showNumber !== false && <SlideNumber index={slideIndex} total={totalSlides} />}
 
       {doc.elements.map((el) => (
@@ -179,7 +182,52 @@ function ElementView({
   if (el.type === "line") return <LineView el={el} boxStyle={boxStyle} onPointerDown={handlePointerDown} />;
   if (el.type === "chip") return <ChipView el={el} boxStyle={boxStyle} onPointerDown={handlePointerDown} />;
   if (el.type === "image") return <ImageView el={el} boxStyle={boxStyle} onPointerDown={handlePointerDown} />;
+  if (el.type === "logo") return <LogoView el={el} boxStyle={boxStyle} onPointerDown={handlePointerDown} />;
   return null;
+}
+
+function LogoView({ el, boxStyle, onPointerDown }: { el: LogoElement; boxStyle: React.CSSProperties; onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void }) {
+  if (el.imageUrl) {
+    return (
+      <div
+        onPointerDown={onPointerDown}
+        style={{
+          ...boxStyle,
+          width: `${el.width}%`,
+          height: el.height !== undefined ? `${el.height}%` : undefined,
+        }}
+      >
+        <img
+          src={el.imageUrl}
+          alt=""
+          draggable={false}
+          style={{ width: "100%", height: el.height !== undefined ? "100%" : "auto", objectFit: "contain", display: "block" }}
+        />
+      </div>
+    );
+  }
+  // Fallback texto: reproduce el wordmark FISIOF/T CROSS.
+  const size = el.textSize ?? 46;
+  return (
+    <div
+      onPointerDown={onPointerDown}
+      style={{
+        ...boxStyle,
+        width: `${el.width}%`,
+        fontFamily: FONT_STACK.Anton,
+        fontSize: size,
+        letterSpacing: 4,
+        color: el.textColor ?? PALETTE.chalkWhite,
+        textAlign: "center",
+      }}
+    >
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+        <span>FISIOF</span>
+        <span style={{ color: el.accentColor ?? PALETTE.yellow, fontSize: size * 1.13 }}>⚡</span>
+        <span>T CROSS</span>
+      </span>
+    </div>
+  );
 }
 
 function TextView({

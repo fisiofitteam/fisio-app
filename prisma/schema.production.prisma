@@ -2486,6 +2486,22 @@ model CarouselLibraryEntry {
   @@index([createdAt])
 }
 
+// Plantillas visuales — un slide guardado para reutilizar su estilo (fondo,
+// tipografías, layout de elementos). Al aplicar una plantilla a un slide,
+// se copian los elementos ajustando el contenido de texto al del slide
+// destino. Cada equipo comparte las plantillas.
+model CarouselVisualTemplate {
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  slideJson    String
+  createdById  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([createdAt])
+}
+
 // Draft generado por la IA (o creado a mano). Al "publicarlo" el user puede
 // promoverlo también a CarouselLibraryEntry para que enriquezca la biblioteca.
 model Carousel {
