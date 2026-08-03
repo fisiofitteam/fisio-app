@@ -42,33 +42,101 @@ export function PropertyPanel(props: Props) {
 // ─── Slide panel ────────────────────────────────────────────────────────
 
 function SlidePanel({ slide, onChange }: { slide: SlideDoc; onChange: (patch: Partial<SlideDoc>) => void }) {
+  const bgFileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+
+  async function uploadBg(file: File) {
+    setUploading(true);
+    setUploadError("");
+    const form = new FormData();
+    form.set("file", file);
+    try {
+      const res = await fetch("/api/carousel-maker/upload", { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "No se pudo subir.");
+      // Al subir foto de fondo aplicamos overlay negro al 80% + degradado
+      // oscuro arriba por defecto — es el look que pide el CEO cuando la
+      // foto es clara. Se puede ajustar después manualmente.
+      onChange({
+        bgImageUrl: data.url,
+        bgOverlayColor: "#000000",
+        bgOverlayOpacity: 0.8,
+        bgGradient: slide.bgGradient ?? "top-dark",
+      });
+    } catch (e: any) {
+      setUploadError(e?.message ?? "Error de subida.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <SectionLabel>Ajustes del slide</SectionLabel>
       <Row label="Color de fondo">
         <ColorInput value={slide.bgColor} onChange={(v) => onChange({ bgColor: v })} />
       </Row>
-      <Row label="Foto de fondo (URL)">
+      <Row label="Foto de fondo">
+        {slide.bgImageUrl ? (
+          <div className="flex items-center gap-2">
+            <img src={slide.bgImageUrl} alt="fondo" className="w-14 h-14 object-cover rounded border border-neutral-200" />
+            <div className="flex flex-col gap-1">
+              <button onClick={() => bgFileRef.current?.click()} disabled={uploading} className="text-xs underline text-neutral-600">
+                {uploading ? "Subiendo…" : "Cambiar"}
+              </button>
+              <button
+                onClick={() => onChange({ bgImageUrl: undefined, bgOverlayColor: undefined, bgOverlayOpacity: undefined, bgGradient: "none" })}
+                className="text-xs underline text-red-600"
+              >
+                Quitar
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button onClick={() => bgFileRef.current?.click()} disabled={uploading} className="btn btn-ghost text-xs w-full">
+            {uploading ? "Subiendo…" : "⬆ Subir foto de fondo"}
+          </button>
+        )}
         <input
-          className="input text-xs"
-          value={slide.bgImageUrl ?? ""}
-          onChange={(e) => onChange({ bgImageUrl: e.target.value || undefined })}
-          placeholder="https://…"
+          ref={bgFileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => e.target.files?.[0] && uploadBg(e.target.files[0])}
         />
+        {uploadError && <p className="text-[10px] text-red-600 mt-1">{uploadError}</p>}
+        {!slide.bgImageUrl && (
+          <p className="text-[10px] text-neutral-500 mt-1">
+            Al subir se aplica overlay negro al 80% + degradado oscuro arriba. Ajústalo después si quieres.
+          </p>
+        )}
       </Row>
       {slide.bgImageUrl && (
         <>
           <Row label="Overlay">
             <ColorInput value={slide.bgOverlayColor ?? "#000000"} onChange={(v) => onChange({ bgOverlayColor: v })} />
           </Row>
-          <Row label={`Opacidad overlay (${Math.round((slide.bgOverlayOpacity ?? 0.4) * 100)}%)`}>
+          <Row label={`Opacidad overlay (${Math.round((slide.bgOverlayOpacity ?? 0.8) * 100)}%)`}>
             <input
               type="range"
               min={0} max={100}
-              value={Math.round((slide.bgOverlayOpacity ?? 0.4) * 100)}
+              value={Math.round((slide.bgOverlayOpacity ?? 0.8) * 100)}
               onChange={(e) => onChange({ bgOverlayOpacity: Number(e.target.value) / 100 })}
               className="w-full"
             />
+          </Row>
+          <Row label="Degradado extra">
+            <select
+              className="input text-xs"
+              value={slide.bgGradient ?? "none"}
+              onChange={(e) => onChange({ bgGradient: e.target.value as any })}
+            >
+              <option value="none">— Sin degradado —</option>
+              <option value="top-dark">Oscuro arriba</option>
+              <option value="bottom-dark">Oscuro abajo</option>
+              <option value="both-dark">Oscuro arriba y abajo</option>
+            </select>
           </Row>
         </>
       )}

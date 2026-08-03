@@ -133,11 +133,19 @@ export type SlideElement = TextElement | LineElement | ChipElement | ImageElemen
 
 // ─── Slide + Doc ────────────────────────────────────────────────────────
 
+/**
+ * Degradado negro opcional para dar peso a los textos cuando el fondo es
+ * una foto clara. Los mismos presets que StoryMaker (top-dark, bottom-dark,
+ * both-dark). Se pinta encima de la foto y del overlay uniforme.
+ */
+export type BgGradient = "none" | "top-dark" | "bottom-dark" | "both-dark";
+
 export type SlideDoc = {
   bgColor: string;
   bgImageUrl?: string;
   bgOverlayColor?: string;
   bgOverlayOpacity?: number;
+  bgGradient?: BgGradient;
   showHeader?: boolean;   // FISIOF/T CROSS arriba
   showNumber?: boolean;   // "1/N" arriba derecha
   showGrain?: boolean;    // overlay de grano

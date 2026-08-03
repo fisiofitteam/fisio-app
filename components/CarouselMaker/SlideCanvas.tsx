@@ -108,6 +108,9 @@ function SlideInner({
       {doc.bgOverlayColor && (
         <div style={{ position: "absolute", inset: 0, background: doc.bgOverlayColor, opacity: doc.bgOverlayOpacity ?? 0.4, pointerEvents: "none" }} />
       )}
+      {doc.bgGradient && doc.bgGradient !== "none" && (
+        <div style={{ position: "absolute", inset: 0, background: gradientCss(doc.bgGradient), pointerEvents: "none" }} />
+      )}
       {doc.showGrain !== false && <GrainOverlay />}
       {/* Header fijo solo si el user lo dejó activo Y no hay ya un logo como
           elemento (nuevos docs siempre traen logo como elemento editable). */}
@@ -506,6 +509,19 @@ function BrandHeader() {
       </span>
     </div>
   );
+}
+
+function gradientCss(kind: "top-dark" | "bottom-dark" | "both-dark"): string {
+  switch (kind) {
+    case "top-dark":
+      // Oscuro arriba, se desvanece hacia el medio-abajo. Ideal cuando tu
+      // texto principal vive en el tercio superior sobre una foto clara.
+      return "linear-gradient(to bottom, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.55) 25%, rgba(0,0,0,0.15) 50%, rgba(0,0,0,0) 70%)";
+    case "bottom-dark":
+      return "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.55) 25%, rgba(0,0,0,0.15) 50%, rgba(0,0,0,0) 70%)";
+    case "both-dark":
+      return "linear-gradient(to bottom, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.25) 22%, rgba(0,0,0,0) 45%, rgba(0,0,0,0) 55%, rgba(0,0,0,0.25) 78%, rgba(0,0,0,0.85) 100%)";
+  }
 }
 
 function SlideNumber({ index, total }: { index: number; total: number }) {
