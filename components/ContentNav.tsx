@@ -12,6 +12,7 @@ const TABS: Tab[] = [
   // El editor Story Maker vive en /fisio/contenido/story-maker (page Next
   // con iframe embebido a /storymaker). Así se queda dentro de la app.
   { key: "story-maker", label: "🎨 Story Maker", href: "/fisio/contenido/story-maker" },
+  { key: "carousel-maker", label: "🎞 Carrusel Maker", href: "/fisio/contenido/carrusel-maker" },
   { key: "metrics", label: "📈 Métricas", href: "/fisio/contenido/metricas" },
   { key: "bank", label: "🗂 Banco recursos", href: "/fisio/contenido/banco" },
   { key: "brief-ia", label: "✨ Brief IA", href: "/fisio/contenido/brief-ia", ceoOnly: true },

@@ -2323,6 +2323,47 @@ model CommunityIdea {
 }
 
 // ============================================================================
+// CARRUSEL MAKER — biblioteca de referencia + drafts generados por IA
+// ============================================================================
+// Filosofía: para que la IA no suene a IA, la alimentamos con carruseles
+// REALES ya publicados por el equipo. Cada CarouselLibraryEntry es un
+// carrusel publicado (guardado por slide + caption) que sirve como few-shot
+// para el generador. Al pedir un nuevo carrusel, elegimos los N más
+// parecidos al brief y los pasamos a Sonnet como referencia de tono.
+// ============================================================================
+
+model CarouselLibraryEntry {
+  id          String   @id @default(cuid())
+  topic       String                                // "dolor hombro atletas crossfit"
+  category    String?                               // "errores" | "caso_clinico" | "educativo" | "mito" | "frustracion" | otro
+  slidesJson  String                                // JSON [{ n, title?, subtitle?, body?, note? }]
+  captionText String?                               // pie del post en Instagram
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([category])
+  @@index([createdAt])
+}
+
+// Draft generado por la IA (o creado a mano). Al "publicarlo" el user puede
+// promoverlo también a CarouselLibraryEntry para que enriquezca la biblioteca.
+model Carousel {
+  id          String   @id @default(cuid())
+  title       String                                // etiqueta libre para el listado
+  brief       String                                // brief que el user escribió al generar
+  category    String?                               // misma taxonomía que biblioteca
+  slidesJson  String                                // JSON de slides
+  status      String   @default("draft")            // draft | published | archived
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ============================================================================
 // COMUNIDAD CARA AL PACIENTE (tipo Skool): clases en módulos, vídeos cortos y
 // muro de posts con comentarios/reacciones. Distinto del calendario interno
 // de arriba (CommunityPost / CommunityIdea = "Plan de contenido interno").
