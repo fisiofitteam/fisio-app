@@ -136,6 +136,19 @@ export function VisualEditor({
     setSelectedId(null);
   }, [activeIdx, slides, setSlideAt]);
 
+  /**
+   * Rehace el layout de TODOS los slides desde 0 con las heurísticas
+   * actuales de canvas.ts. Útil cuando cambiamos los presets y queremos
+   * que un draft antiguo se vea con la mejor versión sin regenerar texto.
+   */
+  const relayoutAll = useCallback(() => {
+    if (!confirm("Esto va a reescribir la posición y tamaño de los elementos en TODOS los slides (mantiene el texto y el caption). ¿Continuar?")) return;
+    const fresh = buildInitialDoc(slides, {});
+    setDoc(fresh);
+    setDirty(true);
+    setSelectedId(null);
+  }, [slides]);
+
   // ─── Drag ──────────────────────────────────────────────────────────
   const dragStateRef = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number; canvasEl: HTMLDivElement | null } | null>(null);
 
@@ -286,6 +299,7 @@ export function VisualEditor({
             }}>+ Imagen</ToolbarButton>
             <div className="mx-1 h-6 border-l border-neutral-200" />
             <PresetMenu onApply={applyPreset} />
+            <ToolbarButton onClick={relayoutAll}>♻ Recolocar todo</ToolbarButton>
             <div className="mx-1 h-6 border-l border-neutral-200" />
             <button onClick={exportOne} disabled={exporting} className="btn btn-ghost text-xs">
               ⬇ Slide

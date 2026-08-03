@@ -155,11 +155,20 @@ function TextView({ el, boxStyle, onPointerDown }: { el: TextElement; boxStyle: 
     () => tokenizeYellow(el.content, el.yellowWords ?? []),
     [el.content, el.yellowWords],
   );
+  // Sobreescribimos el `transform` según el anchor del texto: por defecto
+  // es center-en-(x,y), pero los presets usan anchor="top" para apilar
+  // sin solapamiento; en ese caso la caja crece hacia abajo desde `y`.
+  const anchor = el.anchor ?? "center";
+  const transform =
+    anchor === "top" ? "translate(-50%, 0)"
+    : anchor === "bottom" ? "translate(-50%, -100%)"
+    : "translate(-50%, -50%)";
   return (
     <div
       onPointerDown={onPointerDown}
       style={{
         ...boxStyle,
+        transform,
         width: `${el.width}%`,
         fontFamily: FONT_STACK[el.font],
         fontSize: el.size,
@@ -172,6 +181,7 @@ function TextView({ el, boxStyle, onPointerDown }: { el: TextElement; boxStyle: 
         fontStyle: el.italic ? "italic" : undefined,
         textShadow: el.shadow ? "0 3px 0 rgba(0,0,0,.55)" : undefined,
         wordBreak: "break-word",
+        whiteSpace: "pre-wrap",
       }}
     >
       {tokens.map((t, i) =>

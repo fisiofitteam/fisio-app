@@ -71,6 +71,14 @@ export type TextElement = BaseElement & {
    * match case-insensitive. Vacío = todo el texto usa `color`.
    */
   yellowWords?: string[];
+  /**
+   * Ancla vertical del bloque. `center` (default) posiciona el CENTRO del
+   * texto en (x,y). `top` posiciona la esquina superior; `bottom` la
+   * esquina inferior. Ojo: esto solo cambia dónde se dibuja el texto
+   * respecto de `y`; ideal para presets donde queremos flow top-down y
+   * evitar que dos elementos con contenido variable se solapen.
+   */
+  anchor?: "center" | "top" | "bottom";
 };
 
 export type LineElement = BaseElement & {
@@ -217,24 +225,44 @@ export function defaultImageElement(url: string, overrides: Partial<ImageElement
 // reemplazar el contenido, elegimos entre estos presets. Están diseñados
 // para coincidir con el look FisioFit Cross de los ejemplos reales.
 
+/**
+ * Todos los presets siguen el mismo principio: los textos se posicionan
+ * con `anchor: "top"` y una Y explícita — así el titular puede crecer
+ * hacia abajo sin invadir el cuerpo. La zona útil vertical es 15%..90%
+ * (arriba dejamos el header FISIOF/T CROSS y numeración).
+ */
+
+const SAFE_TOP = 16;
+const SAFE_BOTTOM = 90;
+
 export function presetHook(slide: CarouselSlide): SlideDoc {
   const title = (slide.title ?? "").trim() || "TITULAR";
-  const subtitle = slide.subtitle ?? slide.body ?? "";
-  const size = pickTitleSize(title);
-  const els: SlideElement[] = [
+  const body = (slide.body ?? "").trim();
+  const subtitle = (slide.subtitle ?? "").trim();
+  const hasSecondary = !!(subtitle || body);
+  const size = pickTitleSize(title, hasSecondary);
+  const els: SlideElement[] = [];
+  // Titular anclado arriba de la zona útil
+  els.push(
     defaultTextElement({
-      x: 50, y: subtitle ? 42 : 50, width: 82,
+      x: 50, y: SAFE_TOP, width: 84,
       content: title.toUpperCase(),
       size,
       align: "left",
       uppercase: true,
+      lineHeight: 0.98,
+      anchor: "top",
       yellowWords: suggestYellowWords(title.toUpperCase()),
     }),
-  ];
+  );
+  // Estimación de altura del titular en % del canvas para colocar el body debajo.
+  const titleHeightPct = estimateTextHeightPct(title, size, 84, 0.98);
+  const gap = 5;
+  let nextY = SAFE_TOP + titleHeightPct + gap;
   if (subtitle) {
     els.push(
       defaultTextElement({
-        x: 50, y: 60, width: 82,
+        x: 50, y: nextY, width: 84,
         content: subtitle,
         font: "Geist",
         size: 34,
@@ -243,33 +271,61 @@ export function presetHook(slide: CarouselSlide): SlideDoc {
         align: "left",
         uppercase: false,
         letterSpacing: 0,
+        lineHeight: 1.3,
         shadow: false,
+        anchor: "top",
+      }),
+    );
+    nextY += estimateTextHeightPct(subtitle, 34, 84, 1.3) + gap;
+  }
+  if (body) {
+    els.push(
+      defaultTextElement({
+        x: 50, y: nextY, width: 84,
+        content: body,
+        font: "Geist",
+        size: 30,
+        weight: 400,
+        color: PALETTE.chalkWhite,
+        align: "left",
+        uppercase: false,
+        letterSpacing: 0,
+        lineHeight: 1.4,
+        shadow: false,
+        anchor: "top",
       }),
     );
   }
-  els.push(defaultLineElement({ x: 10, y: 78, width: 6, height: 5 }));
-  els.push(defaultLineElement({ x: 18, y: 78, width: 2, height: 5 }));
+  // Adorno de líneas amarillas al fondo del slide.
+  els.push(defaultLineElement({ x: 10, y: SAFE_BOTTOM - 2, width: 6, height: 5 }));
+  els.push(defaultLineElement({ x: 18, y: SAFE_BOTTOM - 2, width: 2, height: 5 }));
   return { ...emptySlideDoc(), elements: els };
 }
 
 export function presetChips(slide: CarouselSlide): SlideDoc {
   const title = (slide.title ?? "").trim() || "TITULAR";
-  const subtitle = slide.subtitle ?? "";
+  const subtitle = (slide.subtitle ?? "").trim();
   const chips = autoExtractChips(slide.body ?? "");
-  const els: SlideElement[] = [
+  const els: SlideElement[] = [];
+  const titleSize = pickTitleSize(title, true);
+  els.push(
     defaultTextElement({
-      x: 50, y: 22, width: 82,
+      x: 50, y: SAFE_TOP, width: 84,
       content: title.toUpperCase(),
-      size: 96,
+      size: titleSize,
       align: "left",
       uppercase: true,
+      lineHeight: 0.98,
+      anchor: "top",
       yellowWords: suggestYellowWords(title.toUpperCase()),
     }),
-  ];
+  );
+  const titleH = estimateTextHeightPct(title, titleSize, 84, 0.98);
+  let nextY = SAFE_TOP + titleH + 3;
   if (subtitle) {
     els.push(
       defaultTextElement({
-        x: 50, y: 32, width: 82,
+        x: 50, y: nextY, width: 84,
         content: subtitle,
         font: "Geist",
         size: 32,
@@ -277,22 +333,24 @@ export function presetChips(slide: CarouselSlide): SlideDoc {
         color: PALETTE.white,
         align: "left",
         uppercase: false,
-        letterSpacing: 0,
+        lineHeight: 1.3,
         shadow: false,
+        anchor: "top",
       }),
     );
+    nextY += estimateTextHeightPct(subtitle, 32, 84, 1.3) + 4;
   }
-  // Rejilla 2 columnas
+  // Rejilla de chips: filas de 2, altura de chip ~7% del canvas, gap 2%
   const cols = 2;
-  const startY = 48;
-  const rowGap = 10;
+  const chipH = 7;
+  const rowGap = 2.5;
   chips.forEach((c, i) => {
     const col = i % cols;
     const row = Math.floor(i / cols);
     els.push(
       defaultChipElement({
         x: col === 0 ? 27 : 73,
-        y: startY + row * rowGap,
+        y: nextY + row * (chipH + rowGap) + chipH / 2, // los chips van center-anchored, así centro = top + h/2
         width: 42,
         icon: c.icon,
         label: c.label,
@@ -306,25 +364,30 @@ export function presetTextBody(slide: CarouselSlide): SlideDoc {
   const title = (slide.title ?? "").trim();
   const body = (slide.body ?? "").trim();
   const els: SlideElement[] = [];
+  let nextY = SAFE_TOP;
   if (title) {
+    const size = pickTitleSize(title, true);
     els.push(
       defaultTextElement({
-        x: 50, y: 22, width: 82,
+        x: 50, y: nextY, width: 84,
         content: title.toUpperCase(),
-        size: 76,
+        size,
         align: "left",
         uppercase: true,
+        lineHeight: 0.98,
+        anchor: "top",
         yellowWords: suggestYellowWords(title.toUpperCase()),
       }),
     );
+    nextY += estimateTextHeightPct(title, size, 84, 0.98) + 4;
   }
   if (body) {
     els.push(
       defaultTextElement({
-        x: 50, y: 60, width: 82,
+        x: 50, y: nextY, width: 84,
         content: body,
         font: "Geist",
-        size: 34,
+        size: 32,
         weight: 400,
         color: PALETTE.chalkWhite,
         align: "left",
@@ -332,6 +395,7 @@ export function presetTextBody(slide: CarouselSlide): SlideDoc {
         letterSpacing: 0,
         lineHeight: 1.4,
         shadow: false,
+        anchor: "top",
       }),
     );
   }
@@ -430,22 +494,57 @@ function pickPresetHeuristic(slide: CarouselSlide, isFirst: boolean, isLast: boo
   if (isLast && (/^escr[íi]beme/i.test(title.trim()) || /\b[A-ZÁÉÍÓÚÑ]{4,}\b/.test(title))) {
     return "cta_ribbon";
   }
-  if (isFirst) return "hook";
+  // Chips: bullets cortos y sin body largo detrás.
   const bullets = (body.match(/^\s*(?:[•\-–—✔️✅🔹🟡🟠🟢]|👉|\d+\.)/gm) ?? []).length;
   if (bullets >= 4 && body.length < 300) return "chips_list";
-  if (body.length > 250) return "text_body";
+  // Hook puro: solo primer slide sin body, o slides con body corto.
+  if (isFirst && body.length < 120) return "hook";
+  // El resto — cualquier slide con body sustancial — va a text_body, que
+  // apila títular arriba + cuerpo debajo sin solaparse.
+  if (body.length > 60) return "text_body";
   return "hook";
 }
 
 // ─── Utilidades usadas por presets ──────────────────────────────────────
 
-function pickTitleSize(title: string): number {
+/**
+ * Elegir tamaño del titular. Si el slide tiene contenido secundario
+ * (subtítulo o body), reducimos el máximo para dejar sitio y no invadir.
+ */
+function pickTitleSize(title: string, hasSecondary = false): number {
   const len = title.replace(/\s+/g, "").length;
-  if (len <= 18) return 180;
-  if (len <= 30) return 150;
-  if (len <= 50) return 120;
-  if (len <= 80) return 96;
-  return 76;
+  const cap = hasSecondary ? 96 : 180;
+  if (len <= 18) return Math.min(180, cap);
+  if (len <= 30) return Math.min(140, cap);
+  if (len <= 50) return Math.min(110, cap);
+  if (len <= 80) return Math.min(84, cap);
+  return Math.min(66, cap);
+}
+
+/**
+ * Estima la altura (en % del canvas 1350px) que va a ocupar un texto según
+ * su tamaño en px y el ancho disponible. Usamos una regla aproximada:
+ * caracteres por línea ≈ (widthPct/100 * canvas_w) / (px * 0.55), luego
+ * altura = líneas * px * lineHeight. Con esto colocamos elementos en
+ * cascada sin necesidad de medir DOM real (importante para presets que
+ * se aplican en cliente en el mismo tick).
+ */
+function estimateTextHeightPct(text: string, sizePx: number, widthPct: number, lineHeight: number): number {
+  const canvasWpx = 1080;
+  const canvasHpx = 1350;
+  const boxWidthPx = (widthPct / 100) * canvasWpx;
+  // Ancho aproximado por carácter en fuentes tipo Anton ~ 0.5-0.6em.
+  const avgCharWidth = sizePx * 0.55;
+  const charsPerLine = Math.max(4, Math.floor(boxWidthPx / avgCharWidth));
+  // Contamos líneas por saltos explícitos y wraps aproximados.
+  const explicitLines = text.split(/\n/);
+  let totalLines = 0;
+  for (const line of explicitLines) {
+    if (!line.trim()) { totalLines += 1; continue; }
+    totalLines += Math.max(1, Math.ceil(line.length / charsPerLine));
+  }
+  const heightPx = totalLines * sizePx * lineHeight;
+  return (heightPx / canvasHpx) * 100;
 }
 
 function suggestYellowWords(title: string): string[] {
