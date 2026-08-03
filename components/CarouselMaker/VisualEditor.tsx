@@ -283,13 +283,21 @@ export function VisualEditor({
         ))}
       </div>
 
-      {/* Canvas central + toolbar */}
+      {/* Canvas central + toolbar en 2 filas para no chocar con el panel derecho */}
       <div className="flex-1 min-w-0 flex flex-col items-center gap-3">
-        <div className="w-full flex items-center gap-2 flex-wrap">
-          <div className="text-xs text-neutral-500 mr-auto">
-            {dirty ? "Cambios sin guardar…" : saving ? "Guardando…" : "Guardado"}
+        <div className="w-full space-y-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="text-xs text-neutral-500 mr-auto">
+              {dirty ? "Cambios sin guardar…" : saving ? "Guardando…" : "Guardado"}
+            </div>
+            <button onClick={exportOne} disabled={exporting} className="btn btn-ghost text-xs">
+              ⬇ Slide
+            </button>
+            <button onClick={exportZip} disabled={exporting} className="btn btn-primary text-xs">
+              {exporting ? "Exportando…" : "⬇ ZIP"}
+            </button>
           </div>
-          <div className="flex gap-1 items-center">
+          <div className="flex items-center gap-1 flex-wrap">
             <ToolbarButton onClick={() => addElement(defaultTextElement())}>+ Texto</ToolbarButton>
             <ToolbarButton onClick={() => addElement(defaultLineElement())}>+ Línea</ToolbarButton>
             <ToolbarButton onClick={() => addElement(defaultChipElement())}>+ Chip</ToolbarButton>
@@ -299,14 +307,9 @@ export function VisualEditor({
             }}>+ Imagen</ToolbarButton>
             <div className="mx-1 h-6 border-l border-neutral-200" />
             <PresetMenu onApply={applyPreset} />
-            <ToolbarButton onClick={relayoutAll}>♻ Recolocar todo</ToolbarButton>
-            <div className="mx-1 h-6 border-l border-neutral-200" />
-            <button onClick={exportOne} disabled={exporting} className="btn btn-ghost text-xs">
-              ⬇ Slide
-            </button>
-            <button onClick={exportZip} disabled={exporting} className="btn btn-primary text-xs">
-              {exporting ? "Exportando…" : "⬇ ZIP"}
-            </button>
+            <ToolbarButton onClick={relayoutAll} title="Rehace la posición de TODOS los slides con la heurística actual (mantiene texto)">
+              ♻ Recolocar todo
+            </ToolbarButton>
           </div>
         </div>
 
@@ -368,9 +371,9 @@ export function VisualEditor({
   );
 }
 
-function ToolbarButton({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+function ToolbarButton({ children, onClick, title }: { children: React.ReactNode; onClick: () => void; title?: string }) {
   return (
-    <button onClick={onClick} className="text-xs px-2.5 py-1.5 rounded border border-neutral-200 bg-white hover:border-neutral-400 whitespace-nowrap">
+    <button onClick={onClick} title={title} className="text-xs px-2.5 py-1.5 rounded border border-neutral-200 bg-white hover:border-neutral-400 whitespace-nowrap">
       {children}
     </button>
   );

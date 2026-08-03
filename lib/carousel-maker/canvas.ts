@@ -240,7 +240,10 @@ export function presetHook(slide: CarouselSlide): SlideDoc {
   const body = (slide.body ?? "").trim();
   const subtitle = (slide.subtitle ?? "").trim();
   const hasSecondary = !!(subtitle || body);
-  const size = pickTitleSize(title, hasSecondary);
+  // En hook el titular DOMINA aunque haya body — es el gancho del carrusel.
+  // Le dejamos más margen que en text_body (cap 130 en vez de 96) para que
+  // se lea gigante como en los carruseles reales de FisioFit Cross.
+  const size = pickTitleSize(title, hasSecondary, /* heroCap */ hasSecondary ? 130 : 200);
   const els: SlideElement[] = [];
   // Titular anclado arriba de la zona útil
   els.push(
@@ -491,16 +494,19 @@ export function buildInitialDoc(slides: CarouselSlide[], v1: any): CarouselDoc {
 function pickPresetHeuristic(slide: CarouselSlide, isFirst: boolean, isLast: boolean): string {
   const title = slide.title ?? "";
   const body = slide.body ?? "";
+  // CTA claro: último slide con "escríbeme X" o palabra en mayúsculas gritada.
   if (isLast && (/^escr[íi]beme/i.test(title.trim()) || /\b[A-ZÁÉÍÓÚÑ]{4,}\b/.test(title))) {
     return "cta_ribbon";
   }
   // Chips: bullets cortos y sin body largo detrás.
   const bullets = (body.match(/^\s*(?:[•\-–—✔️✅🔹🟡🟠🟢]|👉|\d+\.)/gm) ?? []).length;
   if (bullets >= 4 && body.length < 300) return "chips_list";
-  // Hook puro: solo primer slide sin body, o slides con body corto.
-  if (isFirst && body.length < 120) return "hook";
+  // Primer slide: SIEMPRE hook. Es el gancho del carrusel — el titular
+  // manda, aunque haya body — el preset hook v2 apila título arriba y
+  // subtítulo/body debajo sin solaparse gracias al anchor top.
+  if (isFirst) return "hook";
   // El resto — cualquier slide con body sustancial — va a text_body, que
-  // apila títular arriba + cuerpo debajo sin solaparse.
+  // usa titular más pequeño arriba + cuerpo grande debajo.
   if (body.length > 60) return "text_body";
   return "hook";
 }
@@ -510,14 +516,16 @@ function pickPresetHeuristic(slide: CarouselSlide, isFirst: boolean, isLast: boo
 /**
  * Elegir tamaño del titular. Si el slide tiene contenido secundario
  * (subtítulo o body), reducimos el máximo para dejar sitio y no invadir.
+ * `heroCap` sobrescribe el tope habitual — el preset hook lo sube porque
+ * ahí el titular tiene que dominar (gancho gigante estilo FisioFit Cross).
  */
-function pickTitleSize(title: string, hasSecondary = false): number {
+function pickTitleSize(title: string, hasSecondary = false, heroCap?: number): number {
   const len = title.replace(/\s+/g, "").length;
-  const cap = hasSecondary ? 96 : 180;
-  if (len <= 18) return Math.min(180, cap);
-  if (len <= 30) return Math.min(140, cap);
-  if (len <= 50) return Math.min(110, cap);
-  if (len <= 80) return Math.min(84, cap);
+  const cap = heroCap ?? (hasSecondary ? 96 : 180);
+  if (len <= 18) return Math.min(200, cap);
+  if (len <= 30) return Math.min(160, cap);
+  if (len <= 50) return Math.min(120, cap);
+  if (len <= 80) return Math.min(88, cap);
   return Math.min(66, cap);
 }
 
