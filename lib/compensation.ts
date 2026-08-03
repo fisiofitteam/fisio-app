@@ -1,6 +1,7 @@
 // Cálculo de la compensación mensual de un profesional según sus condiciones.
 // Solo servidor (usa prisma).
 import { prisma } from "@/lib/prisma";
+import { activePatientCondition, currentlyPausedCondition } from "@/lib/patient-active";
 
 // Umbral de días de vacaciones para activar descuento de salario.
 // Debe coincidir con MIN_DAYS_TO_COMPENSATE en app/api/professional-leaves/route.ts.
@@ -80,10 +81,24 @@ export async function computeMonthlySalary(
   const config = await getCompensation(professionalId);
   const { start, end } = monthRangeUTC(year, month);
 
-  // Pacientes activos asignados (snapshot actual). Los pacientes fantasma
-  // (isTest) no cuentan para compensación.
+  // Pacientes por los que el fisio COBRA este mes (snapshot actual):
+  //   - Asignados a él
+  //   - Con SubscriptionRenewal activo y endDate en el futuro (no terminados)
+  //   - No en pausa activa hoy (durante la pausa NO se factura porque el
+  //     paciente no está recibiendo servicio)
+  //   - No pacientes fantasma
+  //
+  // Antes usábamos `onboardingStatus: "active"`, que solo marca "acabó el
+  // onboarding" (anamnesis + contrato). Eso incluía terminados y pausados,
+  // por eso Sofía veía 21 en factura cuando solo tenía 15 activos. Ahora
+  // usamos el mismo criterio real de "activo" que la app entera.
   const activePatients = await prisma.patient.count({
-    where: { assignedProfessionalId: professionalId, onboardingStatus: "active", isTest: false },
+    where: {
+      assignedProfessionalId: professionalId,
+      isTest: false,
+      ...activePatientCondition(),
+      NOT: currentlyPausedCondition(),
+    },
   });
 
   // Renovaciones del mes: propias vs resto del equipo.

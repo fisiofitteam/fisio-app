@@ -145,25 +145,29 @@ export default async function PatientsListPage({
   if (user.isManager) {
     // Contamos SIN los Prevention ni pacientes fantasma (isTest) — coherente
     // con lo que ven las metricas del panel y con la exclusion de KPIs.
-    const all = await prisma.patient.findMany({
+    // Además excluimos TERMINADOS (sin renovación activa con endDate futura):
+    // las tabs deben mostrar solo pacientes vigentes (activos + pausados),
+    // no los ya salidos del programa.
+    const allEver = await prisma.patient.findMany({
       where: { programType: { not: "PREVENTION" }, isTest: false },
       select: { id: true, assignedProfessionalId: true },
     });
-    counts.all = all.length;
-    counts.unassigned = all.filter((p) => p.assignedProfessionalId === null).length;
-    counts.mine = all.filter((p) => p.assignedProfessionalId === user.id).length;
-    for (const pro of professionals) {
-      counts.byPro[pro.id] = all.filter((p) => p.assignedProfessionalId === pro.id).length;
-    }
-    // Terminados: sin ningún SubscriptionRenewal active con endDate > hoy.
     const allActive = await prisma.subscriptionRenewal.findMany({
-      where: { patientId: { in: all.map((p) => p.id) }, status: "active" },
+      where: { patientId: { in: allEver.map((p) => p.id) }, status: "active" },
       select: { patientId: true, endDate: true },
     });
     const vigentes = new Set(
       allActive.filter((r) => r.endDate && r.endDate.getTime() > Date.now()).map((r) => r.patientId)
     );
-    counts.finished = all.filter((p) => !vigentes.has(p.id)).length;
+    const vigentesArr = allEver.filter((p) => vigentes.has(p.id));
+
+    counts.all = vigentesArr.length;
+    counts.unassigned = vigentesArr.filter((p) => p.assignedProfessionalId === null).length;
+    counts.mine = vigentesArr.filter((p) => p.assignedProfessionalId === user.id).length;
+    for (const pro of professionals) {
+      counts.byPro[pro.id] = vigentesArr.filter((p) => p.assignedProfessionalId === pro.id).length;
+    }
+    counts.finished = allEver.length - vigentesArr.length;
   } else {
     // Fisios normales: contar solo sus terminados para el badge (sin
     // Prevention ni fantasma).
@@ -179,6 +183,7 @@ export default async function PatientsListPage({
       active.filter((r) => r.endDate && r.endDate.getTime() > Date.now()).map((r) => r.patientId)
     );
     counts.finished = mine.filter((p) => !vigentes.has(p.id)).length;
+    counts.mine = mine.filter((p) => vigentes.has(p.id)).length;
   }
 
   const adherences = await Promise.all(patients.map((p) => calculateAdherence(p.id)));
