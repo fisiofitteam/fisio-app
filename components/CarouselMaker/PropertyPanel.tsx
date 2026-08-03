@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   ChipElement,
   FontKey,
@@ -12,6 +12,7 @@ import type {
   TextElement,
 } from "@/lib/carousel-maker/canvas";
 import { FONT_STACK, PALETTE } from "@/lib/carousel-maker/canvas";
+import { uploadCarouselImage } from "./uploadImage";
 
 /**
  * Panel derecho del editor visual: si hay un elemento seleccionado, muestra
@@ -49,17 +50,13 @@ function SlidePanel({ slide, onChange }: { slide: SlideDoc; onChange: (patch: Pa
   async function uploadBg(file: File) {
     setUploading(true);
     setUploadError("");
-    const form = new FormData();
-    form.set("file", file);
     try {
-      const res = await fetch("/api/carousel-maker/upload", { method: "POST", body: form });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error ?? "No se pudo subir.");
+      const url = await uploadCarouselImage(file);
       // Al subir foto de fondo aplicamos overlay negro al 80% + degradado
       // oscuro arriba por defecto — es el look que pide el CEO cuando la
       // foto es clara. Se puede ajustar después manualmente.
       onChange({
-        bgImageUrl: data.url,
+        bgImageUrl: url,
         bgOverlayColor: "#000000",
         bgOverlayOpacity: 0.8,
         bgGradient: slide.bgGradient ?? "top-dark",
@@ -220,13 +217,13 @@ function TextPanel({ el, onChangeElement, onDeleteElement, onBringForward, onSen
         />
       </div>
       <Row label="Palabras en amarillo">
-        <input
-          type="text"
-          className="input text-xs"
-          value={(el.yellowWords ?? []).join(" ")}
-          onChange={(e) => setEl({ yellowWords: e.target.value.split(/\s+/).map((w) => w.trim()).filter(Boolean) })}
-          placeholder="MÁS HOMBRO"
+        <YellowWordsInput
+          value={el.yellowWords ?? []}
+          onChange={(words) => setEl({ yellowWords: words })}
         />
+        <p className="text-[10px] text-neutral-500 mt-1">
+          Separadas por espacios. Case-insensitive. Ej: <code>MÁS HOMBRO</code>
+        </p>
       </Row>
       <div className="border-t border-neutral-200 pt-3 space-y-2">
         <Row label="Fuente">
@@ -364,13 +361,9 @@ function LogoPanel({ el, onChangeElement, onDeleteElement, onBringForward, onSen
   async function upload(file: File) {
     setUploading(true);
     setUploadError("");
-    const form = new FormData();
-    form.set("file", file);
     try {
-      const res = await fetch("/api/carousel-maker/upload", { method: "POST", body: form });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error ?? "No se pudo subir.");
-      setEl({ imageUrl: data.url });
+      const url = await uploadCarouselImage(file);
+      setEl({ imageUrl: url });
     } catch (e: any) {
       setUploadError(e?.message ?? "Error de subida.");
     } finally {
@@ -466,6 +459,34 @@ function NumberInput({ value, min, max, step, onChange }: { value: number; min?:
       value={value}
       min={min} max={max} step={step}
       onChange={(e) => onChange(Number(e.target.value))}
+    />
+  );
+}
+
+/**
+ * Input para lista de "palabras en amarillo". Guarda el estado local
+ * como STRING (no como array) mientras el user escribe, para que los
+ * espacios no se coman al split-ear en cada tecla. Sincroniza con el
+ * padre solo al perder el foco o pulsar Enter.
+ */
+function YellowWordsInput({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+  const [text, setText] = useState(value.join(" "));
+  // Si el padre nos manda un nuevo array (cambio de elemento seleccionado),
+  // reflejamos el nuevo valor en el input.
+  useEffect(() => { setText(value.join(" ")); }, [value.join("|")]);
+  function commit() {
+    const parsed = text.split(/\s+/).map((w) => w.trim()).filter(Boolean);
+    onChange(parsed);
+  }
+  return (
+    <input
+      type="text"
+      className="input text-xs"
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => { if (e.key === "Enter") { (e.currentTarget as HTMLInputElement).blur(); } }}
+      placeholder="MÁS HOMBRO"
     />
   );
 }

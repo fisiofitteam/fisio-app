@@ -25,6 +25,7 @@ import { CarouselFontsLoader } from "./FontsLoader";
 import { SlideCanvas } from "./SlideCanvas";
 import { PropertyPanel } from "./PropertyPanel";
 import { downloadCarouselZip, downloadSingleSlide } from "./exportCarousel";
+import { uploadCarouselImage } from "./uploadImage";
 
 /**
  * Editor visual "estilo Canva" del carrusel:
@@ -503,19 +504,18 @@ export function VisualEditor({
               + Logo
             </ToolbarButton>
             <ToolbarButton onClick={async () => {
-              // Upload directo desde toolbar: abre file picker, sube y añade image element.
               const input = document.createElement("input");
               input.type = "file";
               input.accept = "image/*";
               input.onchange = async () => {
                 const file = input.files?.[0];
                 if (!file) return;
-                const form = new FormData();
-                form.set("file", file);
-                const res = await fetch("/api/carousel-maker/upload", { method: "POST", body: form });
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok) { alert(data?.error ?? "No se pudo subir."); return; }
-                addElement(defaultImageElement(data.url));
+                try {
+                  const url = await uploadCarouselImage(file);
+                  addElement(defaultImageElement(url));
+                } catch (e: any) {
+                  alert(e?.message ?? "No se pudo subir la imagen.");
+                }
               };
               input.click();
             }}>+ Imagen</ToolbarButton>
