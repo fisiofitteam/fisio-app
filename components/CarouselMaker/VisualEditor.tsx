@@ -73,6 +73,15 @@ export function VisualEditor({
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
+  // Guías de alineación: se activan durante el drag/resize cuando el
+  // elemento queda cerca del centro del canvas. Igual que en el editor
+  // de historias de Instagram.
+  const [guides, setGuides] = useState<{ vCenter: boolean; hCenter: boolean }>({ vCenter: false, hCenter: false });
+  // Historial para undo/redo. Guardamos snapshots del doc antes de cada
+  // cambio "significativo" (drag, resize, add/remove elemento, apply
+  // preset/plantilla, cambio de propiedad, etc). Cambios de texto en el
+  // panel se debouncean para no llenar el historial con cada tecla.
+  const historyRef = useRef<{ past: CarouselDoc[]; future: CarouselDoc[] }>({ past: [], future: [] });
 
   const activeSlide = doc.slides[activeIdx] ?? emptySlideDoc();
   const selectedEl = activeSlide.elements.find((e) => e.id === selectedId) ?? null;
@@ -87,6 +96,35 @@ export function VisualEditor({
 
   // Refs para exportar
   const exportRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+
+  // ─── Historial (undo / redo) ───────────────────────────────────────
+  const HISTORY_MAX = 50;
+  const commitHistory = useCallback(() => {
+    const past = historyRef.current.past;
+    past.push(JSON.parse(JSON.stringify(doc)) as CarouselDoc);
+    if (past.length > HISTORY_MAX) past.shift();
+    historyRef.current.future = [];
+  }, [doc]);
+
+  const undo = useCallback(() => {
+    const { past, future } = historyRef.current;
+    if (past.length === 0) return;
+    const prev = past.pop()!;
+    future.push(JSON.parse(JSON.stringify(doc)) as CarouselDoc);
+    setDoc(prev);
+    setSelectedId(null);
+    setDirty(true);
+  }, [doc]);
+
+  const redo = useCallback(() => {
+    const { past, future } = historyRef.current;
+    if (future.length === 0) return;
+    const next = future.pop()!;
+    past.push(JSON.parse(JSON.stringify(doc)) as CarouselDoc);
+    setDoc(next);
+    setSelectedId(null);
+    setDirty(true);
+  }, [doc]);
 
   // ─── Mutations ─────────────────────────────────────────────────────
   const setSlideAt = useCallback((idx: number, patch: Partial<SlideDoc> | ((prev: SlideDoc) => SlideDoc)) => {
@@ -112,9 +150,10 @@ export function VisualEditor({
   }, [activeIdx, setSlideAt]);
 
   const addElement = useCallback((el: SlideElement) => {
+    commitHistory();
     setSlideAt(activeIdx, (s) => ({ ...s, elements: [...s.elements, el] }));
     setSelectedId(el.id);
-  }, [activeIdx, setSlideAt]);
+  }, [activeIdx, setSlideAt, commitHistory]);
 
   const deleteElement = useCallback((id: string) => {
     setSlideAt(activeIdx, (s) => ({ ...s, elements: s.elements.filter((e) => e.id !== id) }));
@@ -137,15 +176,15 @@ export function VisualEditor({
     if (!confirm("Esto reemplaza los elementos del slide actual por la plantilla. ¿Continuar?")) return;
     const source = slides[activeIdx];
     if (!source) return;
+    commitHistory();
     const newSlide =
       preset === "hook" ? presetHook(source)
       : preset === "chips" ? presetChips(source)
       : preset === "text_body" ? presetTextBody(source)
       : presetCta(source);
-    // Preservamos toggles del slide actual (bgColor / grain / header).
     setSlideAt(activeIdx, (prev) => ({ ...newSlide, bgColor: prev.bgColor, showHeader: prev.showHeader, showNumber: prev.showNumber, showGrain: prev.showGrain }));
     setSelectedId(null);
-  }, [activeIdx, slides, setSlideAt]);
+  }, [activeIdx, slides, setSlideAt, commitHistory]);
 
   const saveAsTemplate = useCallback(async () => {
     const name = prompt("Nombre para la plantilla (ej. 'Slide de errores', 'Portada gancho'):");
@@ -174,10 +213,11 @@ export function VisualEditor({
     if (!confirm(`Aplicar plantilla "${tpl.name}" al slide ${activeIdx + 1}? Se reemplazan los elementos por los de la plantilla, rellenando con el texto del slide.`)) return;
     const source = slides[activeIdx];
     if (!source) return;
+    commitHistory();
     const applied = applyTemplateToSlide(parsed, source);
     setSlideAt(activeIdx, () => applied);
     setSelectedId(null);
-  }, [templates, activeIdx, slides, setSlideAt]);
+  }, [templates, activeIdx, slides, setSlideAt, commitHistory]);
 
   const deleteTemplate = useCallback(async (id: string) => {
     if (!confirm("¿Eliminar esta plantilla del equipo?")) return;
@@ -192,19 +232,20 @@ export function VisualEditor({
    */
   const relayoutAll = useCallback(() => {
     if (!confirm("Esto va a reescribir la posición y tamaño de los elementos en TODOS los slides (mantiene el texto y el caption). ¿Continuar?")) return;
+    commitHistory();
     const fresh = buildInitialDoc(slides, {});
     setDoc(fresh);
     setDirty(true);
     setSelectedId(null);
-  }, [slides]);
+  }, [slides, commitHistory]);
 
   // ─── Drag ──────────────────────────────────────────────────────────
-  const dragStateRef = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number; canvasEl: HTMLDivElement | null } | null>(null);
+  const dragStateRef = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number; canvasEl: HTMLDivElement | null; committed: boolean } | null>(null);
+  const SNAP_THRESHOLD = 1.2; // %
 
   const handleStartDrag = useCallback((id: string, e: React.PointerEvent<HTMLDivElement>) => {
     const canvasEl = (e.currentTarget.closest("[data-carousel-canvas]") as HTMLDivElement) ?? null;
     if (!canvasEl) return;
-    const rect = canvasEl.getBoundingClientRect();
     const el = doc.slides[activeIdx]?.elements.find((x) => x.id === id);
     if (!el) return;
     dragStateRef.current = {
@@ -214,6 +255,7 @@ export function VisualEditor({
       origX: el.x,
       origY: el.y,
       canvasEl,
+      committed: false,
     };
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
   }, [doc.slides, activeIdx]);
@@ -222,15 +264,28 @@ export function VisualEditor({
     function onMove(e: PointerEvent) {
       const st = dragStateRef.current;
       if (!st?.canvasEl) return;
+      // Antes del primer move real, commit al historial. Así "arrastrar"
+      // cuenta como una operación undoable y no fragmentamos por pixel.
+      if (!st.committed) {
+        commitHistory();
+        st.committed = true;
+      }
       const rect = st.canvasEl.getBoundingClientRect();
       const dxPct = ((e.clientX - st.startX) / rect.width) * 100;
       const dyPct = ((e.clientY - st.startY) / rect.height) * 100;
-      const nx = Math.max(0, Math.min(100, st.origX + dxPct));
-      const ny = Math.max(0, Math.min(100, st.origY + dyPct));
+      let nx = Math.max(0, Math.min(100, st.origX + dxPct));
+      let ny = Math.max(0, Math.min(100, st.origY + dyPct));
+      // Snap al centro del canvas si estamos a menos de 1.2%.
+      const snappedX = Math.abs(nx - 50) < SNAP_THRESHOLD;
+      const snappedY = Math.abs(ny - 50) < SNAP_THRESHOLD;
+      if (snappedX) nx = 50;
+      if (snappedY) ny = 50;
+      setGuides({ vCenter: snappedX, hCenter: snappedY });
       updateElement(st.id, { x: nx, y: ny });
     }
     function onUp() {
       dragStateRef.current = null;
+      setGuides({ vCenter: false, hCenter: false });
     }
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
@@ -238,28 +293,114 @@ export function VisualEditor({
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [updateElement]);
 
-  // ─── Delete con Supr/Backspace ─────────────────────────────────────
+  // ─── Resize ────────────────────────────────────────────────────────
+  const resizeStateRef = useRef<{ id: string; corner: string; startX: number; startY: number; origWidth: number; origHeight?: number; origSize?: number; canvasEl: HTMLDivElement | null; committed: boolean } | null>(null);
+
+  const handleStartResize = useCallback((id: string, corner: "nw" | "ne" | "sw" | "se", e: React.PointerEvent<HTMLDivElement>) => {
+    const canvasEl = (e.currentTarget.closest("[data-carousel-canvas]") as HTMLDivElement) ?? null;
+    if (!canvasEl) return;
+    const el = doc.slides[activeIdx]?.elements.find((x) => x.id === id);
+    if (!el) return;
+    const origWidth = "width" in el && typeof (el as any).width === "number" ? (el as any).width as number : 40;
+    const origHeight = "height" in el && typeof (el as any).height === "number" ? (el as any).height as number : undefined;
+    const origSize = el.type === "text" ? el.size : el.type === "logo" ? (el.textSize ?? 46) : undefined;
+    resizeStateRef.current = {
+      id, corner,
+      startX: e.clientX, startY: e.clientY,
+      origWidth, origHeight, origSize,
+      canvasEl,
+      committed: false,
+    };
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+  }, [doc.slides, activeIdx]);
+
+  useEffect(() => {
+    function onMove(e: PointerEvent) {
+      const st = resizeStateRef.current;
+      if (!st?.canvasEl) return;
+      if (!st.committed) {
+        commitHistory();
+        st.committed = true;
+      }
+      const rect = st.canvasEl.getBoundingClientRect();
+      // Diferencia proporcional al canvas (aumentar hacia fuera de la
+      // esquina agranda). Simplificación: sumamos el "delta absoluto" a
+      // width y también escalamos el size para textos/logos para no perder
+      // ratio visual.
+      const dxPct = ((e.clientX - st.startX) / rect.width) * 100;
+      const dyPct = ((e.clientY - st.startY) / rect.height) * 100;
+      // El signo depende de la esquina: nw/sw crecen si arrastramos hacia
+      // la izquierda (dx negativo); ne/se crecen hacia la derecha.
+      const wSign = (st.corner === "ne" || st.corner === "se") ? 1 : -1;
+      const hSign = (st.corner === "sw" || st.corner === "se") ? 1 : -1;
+      const deltaW = wSign * dxPct * 2; // multiplicamos por 2 porque el elemento se ancla en el centro
+      const deltaH = hSign * dyPct * 2;
+      const nextWidth = Math.max(3, Math.min(100, st.origWidth + deltaW));
+      const factor = nextWidth / st.origWidth;
+
+      const patch: any = { width: nextWidth };
+      if (st.origHeight !== undefined) {
+        // Para imagen y logo con height, mantenemos ratio si es esquina diagonal.
+        patch.height = Math.max(2, Math.min(100, st.origHeight + deltaH));
+      }
+      if (st.origSize !== undefined) {
+        // Textos/logos: escalamos también el tamaño de fuente por factor.
+        const key = doc.slides[activeIdx]?.elements.find((x) => x.id === st.id)?.type === "logo" ? "textSize" : "size";
+        patch[key] = Math.max(8, Math.min(400, st.origSize * factor));
+      }
+      updateElement(st.id, patch as Partial<SlideElement>);
+    }
+    function onUp() {
+      resizeStateRef.current = null;
+    }
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [updateElement, activeIdx, doc.slides]);
+
+  // ─── Atajos de teclado ─────────────────────────────────────────────
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key !== "Delete" && e.key !== "Backspace") return;
       const target = e.target as HTMLElement;
       const tag = target?.tagName?.toLowerCase();
-      if (tag === "input" || tag === "textarea" || tag === "select") return;
-      // Si el foco está dentro de un contenteditable (inline edit del texto)
-      // no queremos borrar el elemento entero — dejamos que el backspace
-      // funcione como borrado de caracteres.
-      if (target?.isContentEditable) return;
-      if (editingId) return; // safety
-      if (selectedId) {
+      const isTyping = tag === "input" || tag === "textarea" || tag === "select" || target?.isContentEditable;
+
+      // Undo/Redo — funcionan aunque haya un input enfocado NO editable de texto.
+      if ((e.metaKey || e.ctrlKey) && (e.key === "z" || e.key === "Z")) {
+        // No pisamos undo del navegador si el user está escribiendo en un input real.
+        if (isTyping) return;
         e.preventDefault();
-        deleteElement(selectedId);
+        if (e.shiftKey) redo(); else undo();
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && (e.key === "y" || e.key === "Y")) {
+        if (isTyping) return;
+        e.preventDefault();
+        redo();
+        return;
+      }
+
+      // Delete/Backspace — eliminar elemento seleccionado.
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (isTyping) return;
+        if (editingId) return;
+        if (selectedId) {
+          e.preventDefault();
+          commitHistory();
+          deleteElement(selectedId);
+        }
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectedId, editingId, deleteElement]);
+  }, [selectedId, editingId, deleteElement, undo, redo, commitHistory]);
 
   // ─── Autosave ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -345,6 +486,8 @@ export function VisualEditor({
             <div className="text-xs text-neutral-500 mr-auto">
               {dirty ? "Cambios sin guardar…" : saving ? "Guardando…" : "Guardado"}
             </div>
+            <button onClick={undo} className="btn btn-ghost text-xs" title="Deshacer (Cmd+Z)">↶ Deshacer</button>
+            <button onClick={redo} className="btn btn-ghost text-xs" title="Rehacer (Cmd+Shift+Z)">↷ Rehacer</button>
             <button onClick={exportOne} disabled={exporting} className="btn btn-ghost text-xs">
               ⬇ Slide
             </button>
@@ -398,15 +541,18 @@ export function VisualEditor({
   setSelectedId={(id) => { setSelectedId(id); if (editingId && editingId !== id) setEditingId(null); }}
   editingId={editingId}
   onStartDrag={handleStartDrag}
+  onStartResize={handleStartResize}
   onStartEditing={(id) => { setSelectedId(id); setEditingId(id); }}
   onFinishEditing={(id, content) => {
+    commitHistory();
     updateElement(id, { content } as Partial<SlideElement>);
     setEditingId(null);
   }}
+  guides={guides}
 />
 
         <p className="text-[10px] text-neutral-500 text-center">
-          Click = seleccionar · arrastrar = mover · <strong>doble-click en un texto = editar en la propia imagen</strong> · Supr = eliminar · Esc / Cmd+Enter = terminar edición
+          Click = seleccionar · arrastrar = mover · <strong>doble-click en un texto = editar in situ</strong> · esquinas amarillas = redimensionar · Supr = eliminar · <kbd>Cmd+Z</kbd> deshacer · guía amarilla = centrado
         </p>
       </div>
 
@@ -460,6 +606,8 @@ function CanvasStage({
   onStartDrag,
   onStartEditing,
   onFinishEditing,
+  onStartResize,
+  guides,
 }: {
   doc: SlideDoc;
   slideIndex: number;
@@ -470,6 +618,8 @@ function CanvasStage({
   onStartDrag: (id: string, e: React.PointerEvent<HTMLDivElement>) => void;
   onStartEditing: (id: string) => void;
   onFinishEditing: (id: string, content: string) => void;
+  onStartResize: (id: string, corner: "nw" | "ne" | "sw" | "se", e: React.PointerEvent<HTMLDivElement>) => void;
+  guides: { vCenter: boolean; hCenter: boolean };
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [displayW, setDisplayW] = useState(560);
@@ -511,6 +661,8 @@ function CanvasStage({
             onStartDrag={onStartDrag}
             onStartEditing={onStartEditing}
             onFinishEditing={onFinishEditing}
+            onStartResize={onStartResize}
+            guides={guides}
           />
         </div>
       </div>
