@@ -1,16 +1,21 @@
 /**
  * GET /api/cron/generate-weekly-reports
  *
- * Cron semanal. Programado para dom 22:00 UTC (lun 00:00 Madrid) via
- * vercel.json. Genera un PatientWeeklyReport para cada paciente RECUPERA/
- * CONSOLIDA con >=2 sesiones completadas en la semana que acaba de
- * terminar (lunes anterior al lunes de "ahora").
+ * Cron semanal. Programado para dos ventanas en vercel.json:
+ *  - dom 22:00 UTC (lun 00:00 Madrid): disparo principal
+ *  - lun 06:00 UTC (~7-8am Madrid según DST): red de seguridad por si
+ *    Vercel se saltase el disparo dominical
  *
- * Idempotente: si ya existe report para (paciente, semana), lo regenera y
- * limpia dismissedAt para que el fisio lo vea otra vez en el feed.
+ * Genera un PatientWeeklyReport para cada paciente RECUPERA/CONSOLIDA con
+ * >=2 sesiones completadas en la semana que acaba de terminar (lunes
+ * anterior al lunes de "ahora").
  *
- * Protección: Bearer CRON_SECRET. Permite ?test=1 en dev y ?week=YYYY-MM-DD
- * para re-generar una semana concreta desde admin.
+ * Idempotencia: si ya existe report para (paciente, semana), SALTAMOS
+ * (no re-notificamos). Se puede forzar la regeneración con `?force=1`.
+ *
+ * Protección: Bearer CRON_SECRET. Permite ?test=1 en dev, ?week=YYYY-MM-DD
+ * para re-generar una semana concreta desde admin, y ?force=1 para pasar
+ * por encima de la protección de idempotencia.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { getActiveProfessional } from "@/lib/session";
@@ -56,7 +61,8 @@ async function handler(req: NextRequest) {
     monday.setUTCDate(monday.getUTCDate() - 7);
   }
 
-  const result = await runWeeklyReportsForWeek(monday);
+  const force = req.nextUrl.searchParams.get("force") === "1";
+  const result = await runWeeklyReportsForWeek(monday, { force });
   return NextResponse.json(result);
 }
 

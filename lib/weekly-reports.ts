@@ -411,7 +411,11 @@ export type WeeklyReportsRunResult = {
 };
 
 /** Genera reportes para una semana concreta. Idempotente: si ya existe, actualiza. */
-export async function runWeeklyReportsForWeek(monday: Date): Promise<WeeklyReportsRunResult> {
+export async function runWeeklyReportsForWeek(monday: Date, opts?: { force?: boolean }): Promise<WeeklyReportsRunResult> {
+  // Sin `force`, saltamos los reports ya generados para esta semana.
+  // Esto convierte el cron en re-ejecutable: el disparo dominical genera,
+  // el disparo lunes por la mañana solo actúa si el domingo se saltó.
+  const force = opts?.force ?? false;
   const { start, end } = weekWindow(monday);
 
   // ─── RECUPERA / CONSOLIDA: ≥2 ProgramSession completadas esa semana ───
@@ -468,6 +472,15 @@ export async function runWeeklyReportsForWeek(monday: Date): Promise<WeeklyRepor
 
   async function processOne(patient: Patient, minCompleted: number, notifyFisio: boolean) {
     try {
+      // Idempotencia: si ya existe report para (paciente, semana), saltamos
+      // (ni AI ni notificación). Solo `force` regenera.
+      if (!force) {
+        const existing = await (prisma as any).patientWeeklyReport.findUnique({
+          where: { patientId_weekStartDate: { patientId: patient.id, weekStartDate: monday } },
+          select: { id: true },
+        });
+        if (existing) { skipped++; return; }
+      }
       const base = await collectPatientWeekData(patient, monday);
       if (base.sessionsCompleted < minCompleted) { skipped++; return; }
       const ai = await generateWithAi({ patient, highlights: base });
@@ -492,12 +505,12 @@ export async function runWeeklyReportsForWeek(monday: Date): Promise<WeeklyRepor
 
   // Procesamos por lotes en paralelo para no tardar N * (llamada Sonnet)
   // segundos. Sonnet 4.6 admite muchas requests concurrentes; 5 en paralelo
-  // deja margen para el rate limit y multiplica x5 la velocidad del cron.
+  // deja margen para el rate limit y multiplica x8 la velocidad del cron.
   //
   // Antes: 40 pacientes * 4-6s cada uno = 160-240s solo en RECUPERA/CONSOLIDA,
   // + otro tanto en ADVANCE, + el card global. Se pasaba de los 300s del
-  // maxDuration y Vercel disparaba 504. Con batches de 5 baja a ~50s totales.
-  const CONCURRENCY = 5;
+  // maxDuration y Vercel disparaba 504. Con batches de 8 baja a ~30s totales.
+  const CONCURRENCY = 8;
   async function processInBatches(patients: Patient[], notifyFisio: boolean) {
     for (let i = 0; i < patients.length; i += CONCURRENCY) {
       const slice = patients.slice(i, i + CONCURRENCY);
@@ -515,9 +528,22 @@ export async function runWeeklyReportsForWeek(monday: Date): Promise<WeeklyRepor
   let advanceGlobalGenerated = false;
   if (advanceGenerated.length > 0) {
     try {
-      await generateAdvanceGlobalSummary(monday, advanceGenerated);
-      advanceGlobalGenerated = true;
-      await notifyManagersAdvanceGlobal(monday, advanceGenerated.length);
+      if (!force) {
+        // Si ya existe el resumen global ADVANCE de esta semana, no
+        // regeneramos ni renotificamos.
+        const existingAdv = await (prisma as any).advanceWeeklySummary.findUnique({
+          where: { weekStartDate: monday },
+          select: { id: true },
+        });
+        if (existingAdv) {
+          advanceGlobalGenerated = true;
+        }
+      }
+      if (!advanceGlobalGenerated) {
+        await generateAdvanceGlobalSummary(monday, advanceGenerated);
+        advanceGlobalGenerated = true;
+        await notifyManagersAdvanceGlobal(monday, advanceGenerated.length);
+      }
     } catch { /* silencioso */ }
   }
 
