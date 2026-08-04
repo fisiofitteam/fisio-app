@@ -20,7 +20,7 @@ import { calculatePreventionMetrics } from "@/lib/prevention-metrics";
 import { PreventionMetricsBlock } from "@/components/PreventionMetricsBlock";
 import { hasPendingFormReview } from "@/lib/pending-form-review";
 import { activePatientCondition } from "@/lib/patient-active";
-import { getRenewalOpportunitiesInPeriod } from "@/lib/renewals";
+import { getRenewalActivityInPeriod } from "@/lib/renewals";
 import { markFormReviewed } from "./formularios-pendientes/actions";
 
 const TYPE_LABELS: Record<string, string> = {
@@ -214,7 +214,7 @@ export default async function FisioPanelPage({
   let teamRenewals = { renewed: 0, lost: 0, total: 0, rate: null as number | null };
   let perFisio: PerFisio[] = [];
   if (isManager) {
-    const opportunities = await getRenewalOpportunitiesInPeriod(periodStart, periodEnd);
+    const opportunities = await getRenewalActivityInPeriod(periodStart, periodEnd);
     const tr = opportunities.filter((o) => o.outcome === "renewed").length;
     const tl = opportunities.filter((o) => o.outcome === "lost").length;
     const tt = tr + tl;

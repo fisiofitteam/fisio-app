@@ -4,38 +4,75 @@
 // vencida/sin activo → active cerrando el anterior).
 import { prisma } from "@/lib/prisma";
 
-export type RenewalOpportunity = {
-  /** ID del SubscriptionRenewal cuyo endDate cae en el rango (el periodo que "vence"). */
-  endedPeriodId: string;
+export type RenewalActivityRow = {
   patientId: string;
   assignedProfessionalId: string | null;
-  endDate: Date;
-  /** "renewed" si el paciente tiene un periodo posterior; "lost" si no. */
   outcome: "renewed" | "lost";
-  /** Si renovada, ID e importe del periodo posterior. */
-  renewalId: string | null;
-  renewalAmount: number | null;
+  /** Para renovadas, decidedAt. Para perdidas, endDate. */
+  when: Date;
+  amountPaid: number | null; // solo aplica a renovadas
 };
 
 /**
- * "Oportunidades de renovación" que caen dentro del rango: cualquier
- * SubscriptionRenewal cuyo `endDate` está en [from, to] cuenta como una
- * decisión que el paciente tuvo que tomar en ese periodo.
+ * Actividad de renovaciones que cae dentro de un rango, contada tal
+ * como se ve desde el punto de vista del negocio:
  *
- * Se clasifican:
- *   - "renewed": el paciente tiene otro SubscriptionRenewal cuyo startDate
- *     empieza en o después del endDate del que vence.
- *   - "lost": no hay periodo posterior → el paciente no renovó.
+ *   - "renewed" ← SubscriptionRenewal cuyo `decidedAt` está en el rango
+ *     Y el paciente ya tenía un periodo anterior (excluye alta inicial).
+ *     Se atribuye al MES DE DECISIÓN, así una renovación cerrada en
+ *     agosto cuenta en agosto, aunque el periodo previo terminase en
+ *     julio.
  *
- * Esta es la definición canónica de "renewal rate" (denominador =
- * chances de renovar, numerador = quienes renovaron). Distinta de
- * `listRealRenewalsInPeriod`, que cuenta DECISIONES de renovación por
- * fecha de creación (útil para comisiones).
+ *   - "lost" ← SubscriptionRenewal cuyo `endDate` está en el rango Y
+ *     NO existe follow-up (ningún periodo del mismo paciente con
+ *     startDate >= endDate). Se atribuye al MES DE VENCIMIENTO.
+ *
+ * De este modo las métricas del mes reflejan la actividad real:
+ * cierres de renovación + bajas por no-renovación. El rate es una
+ * proxy útil (renewed / (renewed + lost)) sabiendo que no es
+ * matemáticamente el "% de una cohorte concreta" — es la mezcla de
+ * cierres y bajas del periodo, que es lo que el CEO quiere ver.
  *
  * Pacientes fantasma (isTest) quedan fuera.
  */
-export async function getRenewalOpportunitiesInPeriod(from: Date, to: Date): Promise<RenewalOpportunity[]> {
-  const ended = await prisma.subscriptionRenewal.findMany({
+export async function getRenewalActivityInPeriod(from: Date, to: Date): Promise<RenewalActivityRow[]> {
+  // ── Renovadas: SubscriptionRenewal cuya decidedAt cae en el rango ──
+  const decidedInPeriod = await prisma.subscriptionRenewal.findMany({
+    where: {
+      decidedAt: { gte: from, lte: to },
+      patient: { isTest: false },
+    },
+    select: {
+      id: true,
+      patientId: true,
+      decidedAt: true,
+      amountPaid: true,
+      patient: { select: { assignedProfessionalId: true } },
+    },
+  });
+
+  let renewed: RenewalActivityRow[] = [];
+  if (decidedInPeriod.length > 0) {
+    const decIds = Array.from(new Set(decidedInPeriod.map((r) => r.patientId)));
+    const decHistory = await prisma.subscriptionRenewal.findMany({
+      where: { patientId: { in: decIds } },
+      select: { id: true, patientId: true, decidedAt: true },
+    });
+    renewed = decidedInPeriod
+      .filter((r) =>
+        decHistory.some((h) => h.patientId === r.patientId && h.id !== r.id && h.decidedAt < r.decidedAt),
+      )
+      .map((r) => ({
+        patientId: r.patientId,
+        assignedProfessionalId: r.patient?.assignedProfessionalId ?? null,
+        outcome: "renewed" as const,
+        when: r.decidedAt,
+        amountPaid: r.amountPaid,
+      }));
+  }
+
+  // ── Perdidas: periodos que VENCEN en el rango sin follow-up ──
+  const endedInPeriod = await prisma.subscriptionRenewal.findMany({
     where: {
       endDate: { gte: from, lte: to },
       patient: { isTest: false },
@@ -47,34 +84,34 @@ export async function getRenewalOpportunitiesInPeriod(from: Date, to: Date): Pro
       patient: { select: { assignedProfessionalId: true } },
     },
   });
-  if (ended.length === 0) return [];
 
-  const patientIds = Array.from(new Set(ended.map((e) => e.patientId)));
-  const allPeriods = await prisma.subscriptionRenewal.findMany({
-    where: { patientId: { in: patientIds } },
-    select: { id: true, patientId: true, startDate: true, amountPaid: true },
-  });
+  let lost: RenewalActivityRow[] = [];
+  if (endedInPeriod.length > 0) {
+    const endIds = Array.from(new Set(endedInPeriod.map((e) => e.patientId)));
+    const followUps = await prisma.subscriptionRenewal.findMany({
+      where: { patientId: { in: endIds } },
+      select: { id: true, patientId: true, startDate: true },
+    });
+    lost = endedInPeriod
+      .filter((e) => {
+        if (!e.endDate) return false;
+        // Margen de 1 día: renovación creada el mismo día o al siguiente cuenta.
+        const cutoff = new Date(e.endDate.getTime() - 86400000);
+        const hasFollowUp = followUps.some(
+          (h) => h.patientId === e.patientId && h.id !== e.id && h.startDate && h.startDate.getTime() >= cutoff.getTime(),
+        );
+        return !hasFollowUp;
+      })
+      .map((e) => ({
+        patientId: e.patientId,
+        assignedProfessionalId: e.patient?.assignedProfessionalId ?? null,
+        outcome: "lost" as const,
+        when: e.endDate!,
+        amountPaid: null,
+      }));
+  }
 
-  return ended.map((e) => {
-    // Un follow-up cuenta si empieza EXACTAMENTE cuando o después vence
-    // el periodo actual (permitimos 1 día de margen para pillar los que
-    // renovaron en el mismo día o al día siguiente).
-    const cutoff = e.endDate ? new Date(e.endDate.getTime() - 86400000) : null;
-    const followUp = cutoff
-      ? allPeriods.find(
-          (p) => p.patientId === e.patientId && p.id !== e.id && p.startDate && p.startDate.getTime() >= cutoff.getTime(),
-        )
-      : null;
-    return {
-      endedPeriodId: e.id,
-      patientId: e.patientId,
-      assignedProfessionalId: e.patient?.assignedProfessionalId ?? null,
-      endDate: e.endDate!,
-      outcome: followUp ? "renewed" : "lost",
-      renewalId: followUp?.id ?? null,
-      renewalAmount: followUp?.amountPaid ?? null,
-    };
-  });
+  return [...renewed, ...lost];
 }
 
 export type RealRenewalRow = {

@@ -2,7 +2,7 @@
 // finanzas y añade adquisición (CAC), cliente (LTV, activos, renovación).
 import { prisma } from "@/lib/prisma";
 import { calculateFinanceSummary } from "@/lib/finance";
-import { getRenewalOpportunitiesInPeriod } from "@/lib/renewals";
+import { getRenewalActivityInPeriod } from "@/lib/renewals";
 
 // Comisión del closer sobre ventas nuevas (igual que el panel del closer).
 const CLOSER_COMMISSION_RATE = 0.1;
@@ -87,10 +87,10 @@ export async function computeMonthlyBusinessMetrics(year: number): Promise<Month
       where: { occurredAt: { gte: yearStart, lte: yearEnd } },
       select: { type: true, amount: true, occurredAt: true },
     }),
-    // Oportunidades de renovación del año: periodos que VENCEN dentro
-    // del año. La renovación se atribuye al mes en que vence el periodo
-    // (denominador) — sea o no aceptada por el paciente.
-    getRenewalOpportunitiesInPeriod(yearStart, yearEnd),
+    // Actividad de renovaciones del año: renovadas por mes de decisión
+    // (para que "renovadas en agosto" refleje lo cerrado en agosto) +
+    // perdidas por mes de vencimiento (baja efectiva).
+    getRenewalActivityInPeriod(yearStart, yearEnd),
     prisma.transaction.findMany({
       where: { type: "income_new", occurredAt: { gte: yearStart, lte: yearEnd } },
       select: { occurredAt: true, amount: true, patient: { select: { programType: true } } },
@@ -128,14 +128,15 @@ export async function computeMonthlyBusinessMetrics(year: number): Promise<Month
   }
   const programTypes = [...programSet].sort();
 
-  // Renovaciones y perdidas por mes de vencimiento (endDate). Ojo:
-  // ahora renewals es un RenewalOpportunity[], no un SubscriptionRenewal[].
+  // Renovadas por mes de decisión, perdidas por mes de vencimiento.
+  // renewals es RenewalActivityRow[]: `when` es decidedAt (renewed) o
+  // endDate (lost) según el outcome.
   for (const o of renewals) {
-    const m = months[new Date(o.endDate).getUTCMonth()];
+    const m = months[new Date(o.when).getUTCMonth()];
     if (!m) continue;
     if (o.outcome === "renewed") {
       m.renewedCount++;
-      if (o.renewalAmount) { m.incomeRenewal += o.renewalAmount; m.income += o.renewalAmount; }
+      if (o.amountPaid) { m.incomeRenewal += o.amountPaid; m.income += o.amountPaid; }
     } else {
       m.lostCount++;
     }
@@ -251,12 +252,10 @@ export async function computeBusinessMetrics(start: Date, end: Date): Promise<Bu
   const callsShowBase = callsDone + callsNoShow;
   const showRate = callsShowBase > 0 ? Math.round((callsDone / callsShowBase) * 100) : null;
 
-  // Renovaciones y perdidas del período: cualquier periodo que VENCE
-  // dentro del rango cuenta como oportunidad de renovación.
-  // Si tiene follow-up → renewed. Si no → lost.
-  const opps = await getRenewalOpportunitiesInPeriod(start, end);
-  const renewedCount = opps.filter((o) => o.outcome === "renewed").length;
-  const lostCount = opps.filter((o) => o.outcome === "lost").length;
+  // Renovadas por mes de decisión + perdidas por mes de vencimiento.
+  const activity = await getRenewalActivityInPeriod(start, end);
+  const renewedCount = activity.filter((o) => o.outcome === "renewed").length;
+  const lostCount = activity.filter((o) => o.outcome === "lost").length;
   const decided = renewedCount + lostCount;
   const renewalRate = decided > 0 ? Math.round((renewedCount / decided) * 100) : null;
 
