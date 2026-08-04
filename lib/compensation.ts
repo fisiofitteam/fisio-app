@@ -173,11 +173,17 @@ export async function computeMonthlySalary(
   // Solo cuentan las que duran >= MIN_LEAVE_DAYS_FOR_DISCOUNT (igual al umbral
   // de compensación a pacientes). Para cada una, contamos los días naturales
   // del rango que caen DENTRO de [start, end).
+  //
+  // Los estados válidos en ProfessionalLeave son "scheduled", "applied" y
+  // "cancelled" — descartamos únicamente las canceladas. (Antes filtrábamos
+  // por ["pending", "applied"], pero "pending" NO existe como estado, así
+  // que las vacaciones aún no procesadas por el cron `process-pauses`
+  // — o cualquier caso en el que el status siguiera siendo "scheduled" —
+  // no salían nunca en la factura del mes.)
   const leaves = await prisma.professionalLeave.findMany({
     where: {
       professionalId,
-      // status != "cancelled": "pending" y "applied" descuentan; "cancelled" no.
-      status: { in: ["pending", "applied"] },
+      status: { not: "cancelled" },
       // Solapamiento con el mes: startDate < end AND endDate >= start.
       startDate: { lt: end },
       endDate: { gte: start },
