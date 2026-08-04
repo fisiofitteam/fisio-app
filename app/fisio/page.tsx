@@ -20,6 +20,7 @@ import { calculatePreventionMetrics } from "@/lib/prevention-metrics";
 import { PreventionMetricsBlock } from "@/components/PreventionMetricsBlock";
 import { hasPendingFormReview } from "@/lib/pending-form-review";
 import { activePatientCondition } from "@/lib/patient-active";
+import { listRealRenewalsInPeriod } from "@/lib/renewals";
 import { markFormReviewed } from "./formularios-pendientes/actions";
 
 const TYPE_LABELS: Record<string, string> = {
@@ -200,20 +201,26 @@ export default async function FisioPanelPage({
         ])
       : [null, []];
 
-  // Métricas para managers en el período seleccionado
+  // Métricas para managers en el período seleccionado.
+  //
+  // OJO: en el modelo actual `SubscriptionRenewal` representa TANTO el
+  // alta inicial como las renovaciones reales. Para "renovaciones" nos
+  // quedamos solo con las que tienen un periodo previo (mismo criterio
+  // que compensation.ts). Antes filtrábamos por el campo `outcome`, pero
+  // es legacy y no se rellena en los periodos nuevos — resultado:
+  // la métrica salía siempre 0.
+  //
+  // "lost" hoy no lo setea ningún código (el patient que no renueva
+  // simplemente vence y pasa a status "finished"). Lo dejamos en 0 hasta
+  // que exista un mecanismo explícito para marcar renovaciones perdidas.
   let teamRenewals = { renewed: 0, lost: 0, total: 0, rate: null as number | null };
   let perFisio: PerFisio[] = [];
   if (isManager) {
-    const periodRenewals = await prisma.subscriptionRenewal.findMany({
-      where: { decidedAt: { gte: periodStart, lte: periodEnd } },
-      include: { patient: true },
-    });
-    const tr = periodRenewals.filter((r) => r.outcome === "renewed").length;
-    const tl = periodRenewals.filter((r) => r.outcome === "lost").length;
-    const tt = tr + tl;
+    const realRenewals = await listRealRenewalsInPeriod(periodStart, periodEnd);
+    const tr = realRenewals.length;
     teamRenewals = {
-      renewed: tr, lost: tl, total: tt,
-      rate: tt > 0 ? Math.round((tr / tt) * 100) : null,
+      renewed: tr, lost: 0, total: tr,
+      rate: tr > 0 ? 100 : null,
     };
 
     const fisios = await prisma.professional.findMany({
@@ -227,11 +234,15 @@ export default async function FisioPanelPage({
           select: { id: true },
         });
         const myPatientIds = myPatients.map((p) => p.id);
-        const fisioRenewals = periodRenewals.filter((r) => myPatientIds.includes(r.patientId));
-        const fr = fisioRenewals.filter((r) => r.outcome === "renewed").length;
-        const fl = fisioRenewals.filter((r) => r.outcome === "lost").length;
-        const ft = fr + fl;
-        const fRate = ft > 0 ? Math.round((fr / ft) * 100) : null;
+        // Nota importante: contamos renovaciones cuyo paciente pertenece
+        // AHORA a este fisio (assignedProfessionalId actual). Si un
+        // paciente cambió de fisio a media suscripción, la renovación
+        // se atribuye al fisio actual, no al que estaba cuando renovó.
+        const fisioRenewals = realRenewals.filter(
+          (r) => r.assignedProfessionalId === f.id || myPatientIds.includes(r.patientId),
+        );
+        const fr = fisioRenewals.length;
+        const fRate = fr > 0 ? 100 : null;
         const adhs = await Promise.all(myPatientIds.map((id) => calculateAdherence(id)));
         const validAdhs = adhs.filter((a) => a.total > 0);
         const avgAdh = validAdhs.length > 0
@@ -240,7 +251,7 @@ export default async function FisioPanelPage({
         return {
           id: f.id, fullName: f.fullName, role: f.role,
           patientsCount: myPatientIds.length,
-          renewed: fr, lost: fl, rate: fRate, adherence: avgAdh,
+          renewed: fr, lost: 0, rate: fRate, adherence: avgAdh,
         };
       })
     );

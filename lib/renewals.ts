@@ -4,6 +4,72 @@
 // vencida/sin activo → active cerrando el anterior).
 import { prisma } from "@/lib/prisma";
 
+export type RealRenewalRow = {
+  id: string;
+  patientId: string;
+  amountPaid: number | null;
+  assignedProfessionalId: string | null;
+  decidedAt: Date;
+  status: string;
+};
+
+/**
+ * Devuelve las RENOVACIONES REALES cuyo `decidedAt` cae dentro del rango.
+ *
+ * "Renovación real" = el paciente ya tenía al menos otro `SubscriptionRenewal`
+ * previo con `decidedAt` anterior. Excluimos el alta inicial, que sí crea
+ * también un SubscriptionRenewal pero no cuenta como renovación.
+ *
+ * Necesario porque el campo `outcome` del modelo es LEGACY — el código
+ * antiguo filtraba por `outcome === "renewed"` pero los nuevos periodos no
+ * lo setean, así que las métricas de renovación se iban a 0. Con este
+ * helper unificamos el criterio (mismo que compensation.ts).
+ */
+export async function listRealRenewalsInPeriod(from: Date, to: Date): Promise<RealRenewalRow[]> {
+  const periodRenewals = await prisma.subscriptionRenewal.findMany({
+    where: { decidedAt: { gte: from, lte: to } },
+    select: {
+      id: true,
+      patientId: true,
+      decidedAt: true,
+      amountPaid: true,
+      status: true,
+      patient: { select: { assignedProfessionalId: true, isTest: true } },
+    },
+  });
+  if (periodRenewals.length === 0) return [];
+
+  // Cargamos el historial completo de los pacientes implicados en una
+  // sola query para poder distinguir alta vs renovación sin N+1.
+  const patientIds = Array.from(new Set(periodRenewals.map((r) => r.patientId)));
+  const history = await prisma.subscriptionRenewal.findMany({
+    where: { patientId: { in: patientIds } },
+    select: { id: true, patientId: true, decidedAt: true },
+  });
+
+  const priorCounts = new Map<string, number>();
+  for (const r of periodRenewals) {
+    priorCounts.set(
+      r.id,
+      history.filter((h) => h.patientId === r.patientId && h.id !== r.id && h.decidedAt < r.decidedAt).length,
+    );
+  }
+
+  return periodRenewals
+    // Alta inicial: sin periodo previo → no cuenta como renovación.
+    .filter((r) => (priorCounts.get(r.id) ?? 0) > 0)
+    // Fantasma fuera de KPIs.
+    .filter((r) => !r.patient?.isTest)
+    .map((r) => ({
+      id: r.id,
+      patientId: r.patientId,
+      amountPaid: r.amountPaid,
+      assignedProfessionalId: r.patient?.assignedProfessionalId ?? null,
+      decidedAt: r.decidedAt,
+      status: r.status,
+    }));
+}
+
 export async function applyRenewal(opts: {
   patientId: string;
   programType: string;
