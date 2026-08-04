@@ -36,10 +36,19 @@ export type RenewalActivityRow = {
  * Pacientes fantasma (isTest) quedan fuera.
  */
 export async function getRenewalActivityInPeriod(from: Date, to: Date): Promise<RenewalActivityRow[]> {
+  // Capamos el `to` al momento actual: no cuenta ni renovaciones ni bajas
+  // que "van a ocurrir" en un futuro dentro del rango. Ejemplo: si estamos
+  // a 4 de agosto y el rango es "agosto entero", no queremos incluir los
+  // 27 vencimientos que aún no han pasado — solo los efectivos hasta hoy.
+  const now = new Date();
+  const effectiveTo = to.getTime() > now.getTime() ? now : to;
+  // Si el rango es enteramente futuro, no hay actividad que reportar.
+  if (from.getTime() > now.getTime()) return [];
+
   // ── Renovadas: SubscriptionRenewal cuya decidedAt cae en el rango ──
   const decidedInPeriod = await prisma.subscriptionRenewal.findMany({
     where: {
-      decidedAt: { gte: from, lte: to },
+      decidedAt: { gte: from, lte: effectiveTo },
       patient: { isTest: false },
     },
     select: {
@@ -71,10 +80,13 @@ export async function getRenewalActivityInPeriod(from: Date, to: Date): Promise<
       }));
   }
 
-  // ── Perdidas: periodos que VENCEN en el rango sin follow-up ──
+  // ── Perdidas: periodos que YA HAN VENCIDO en el rango sin follow-up ──
+  // Aquí es crítico usar `effectiveTo` (hoy): un periodo que vence el 20
+  // de agosto no debería contar como "perdido" en agosto si estamos a
+  // día 4 — todavía tiene margen para renovar.
   const endedInPeriod = await prisma.subscriptionRenewal.findMany({
     where: {
-      endDate: { gte: from, lte: to },
+      endDate: { gte: from, lte: effectiveTo },
       patient: { isTest: false },
     },
     select: {
