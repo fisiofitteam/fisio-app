@@ -2,7 +2,7 @@
 // finanzas y añade adquisición (CAC), cliente (LTV, activos, renovación).
 import { prisma } from "@/lib/prisma";
 import { calculateFinanceSummary } from "@/lib/finance";
-import { listRealRenewalsInPeriod } from "@/lib/renewals";
+import { getRenewalOpportunitiesInPeriod } from "@/lib/renewals";
 
 // Comisión del closer sobre ventas nuevas (igual que el panel del closer).
 const CLOSER_COMMISSION_RATE = 0.1;
@@ -87,14 +87,10 @@ export async function computeMonthlyBusinessMetrics(year: number): Promise<Month
       where: { occurredAt: { gte: yearStart, lte: yearEnd } },
       select: { type: true, amount: true, occurredAt: true },
     }),
-    // Cargamos TODOS los periodos del año + su historial mínimo para
-    // distinguir alta inicial de renovación real (has-prior-period).
-    // Antes filtrábamos por `outcome === "renewed"` pero es un campo
-    // legacy que ya no se rellena, así que las métricas iban a 0.
-    prisma.subscriptionRenewal.findMany({
-      where: { decidedAt: { gte: yearStart, lte: yearEnd } },
-      select: { id: true, patientId: true, amountPaid: true, decidedAt: true, status: true },
-    }),
+    // Oportunidades de renovación del año: periodos que VENCEN dentro
+    // del año. La renovación se atribuye al mes en que vence el periodo
+    // (denominador) — sea o no aceptada por el paciente.
+    getRenewalOpportunitiesInPeriod(yearStart, yearEnd),
     prisma.transaction.findMany({
       where: { type: "income_new", occurredAt: { gte: yearStart, lte: yearEnd } },
       select: { occurredAt: true, amount: true, patient: { select: { programType: true } } },
@@ -132,31 +128,17 @@ export async function computeMonthlyBusinessMetrics(year: number): Promise<Month
   }
   const programTypes = [...programSet].sort();
 
-  // Distinguimos alta inicial vs renovación real: solo cuentan como
-  // renovación las que tienen algún periodo previo del mismo paciente
-  // con decidedAt anterior. Mismo criterio que lib/renewals y compensation.
-  const patientIds = Array.from(new Set(renewals.map((r) => r.patientId)));
-  const priorHistory = patientIds.length > 0
-    ? await prisma.subscriptionRenewal.findMany({
-        where: { patientId: { in: patientIds } },
-        select: { id: true, patientId: true, decidedAt: true },
-      })
-    : [];
-  const priorCount = new Map<string, number>();
-  for (const r of renewals) {
-    priorCount.set(
-      r.id,
-      priorHistory.filter((h) => h.patientId === r.patientId && h.id !== r.id && h.decidedAt < r.decidedAt).length,
-    );
-  }
-  for (const r of renewals) {
-    const m = months[new Date(r.decidedAt!).getUTCMonth()];
-    const isRealRenewal = (priorCount.get(r.id) ?? 0) > 0;
-    if (!isRealRenewal) continue;
-    m.renewedCount++;
-    if (r.amountPaid) { m.incomeRenewal += r.amountPaid; m.income += r.amountPaid; }
-    // "lost" no lo setea nadie ahora mismo (los pacientes que no renuevan
-    // simplemente vencen). Mantenemos el campo por si añadimos el flujo.
+  // Renovaciones y perdidas por mes de vencimiento (endDate). Ojo:
+  // ahora renewals es un RenewalOpportunity[], no un SubscriptionRenewal[].
+  for (const o of renewals) {
+    const m = months[new Date(o.endDate).getUTCMonth()];
+    if (!m) continue;
+    if (o.outcome === "renewed") {
+      m.renewedCount++;
+      if (o.renewalAmount) { m.incomeRenewal += o.renewalAmount; m.income += o.renewalAmount; }
+    } else {
+      m.lostCount++;
+    }
   }
 
   // Llamadas comerciales (por callScheduledAt)
@@ -269,12 +251,12 @@ export async function computeBusinessMetrics(start: Date, end: Date): Promise<Bu
   const callsShowBase = callsDone + callsNoShow;
   const showRate = callsShowBase > 0 ? Math.round((callsDone / callsShowBase) * 100) : null;
 
-  // Renovaciones decididas en el período — solo las reales (no altas
-  // iniciales). El campo `outcome` es legacy: usamos el helper que
-  // detecta renovación real por "el paciente ya tenía otro periodo antes".
-  const realRenewals = await listRealRenewalsInPeriod(start, end);
-  const renewedCount = realRenewals.length;
-  const lostCount = 0; // no hay flujo actual para marcar renovaciones perdidas
+  // Renovaciones y perdidas del período: cualquier periodo que VENCE
+  // dentro del rango cuenta como oportunidad de renovación.
+  // Si tiene follow-up → renewed. Si no → lost.
+  const opps = await getRenewalOpportunitiesInPeriod(start, end);
+  const renewedCount = opps.filter((o) => o.outcome === "renewed").length;
+  const lostCount = opps.filter((o) => o.outcome === "lost").length;
   const decided = renewedCount + lostCount;
   const renewalRate = decided > 0 ? Math.round((renewedCount / decided) * 100) : null;
 

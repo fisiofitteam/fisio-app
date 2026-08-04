@@ -4,6 +4,79 @@
 // vencida/sin activo → active cerrando el anterior).
 import { prisma } from "@/lib/prisma";
 
+export type RenewalOpportunity = {
+  /** ID del SubscriptionRenewal cuyo endDate cae en el rango (el periodo que "vence"). */
+  endedPeriodId: string;
+  patientId: string;
+  assignedProfessionalId: string | null;
+  endDate: Date;
+  /** "renewed" si el paciente tiene un periodo posterior; "lost" si no. */
+  outcome: "renewed" | "lost";
+  /** Si renovada, ID e importe del periodo posterior. */
+  renewalId: string | null;
+  renewalAmount: number | null;
+};
+
+/**
+ * "Oportunidades de renovación" que caen dentro del rango: cualquier
+ * SubscriptionRenewal cuyo `endDate` está en [from, to] cuenta como una
+ * decisión que el paciente tuvo que tomar en ese periodo.
+ *
+ * Se clasifican:
+ *   - "renewed": el paciente tiene otro SubscriptionRenewal cuyo startDate
+ *     empieza en o después del endDate del que vence.
+ *   - "lost": no hay periodo posterior → el paciente no renovó.
+ *
+ * Esta es la definición canónica de "renewal rate" (denominador =
+ * chances de renovar, numerador = quienes renovaron). Distinta de
+ * `listRealRenewalsInPeriod`, que cuenta DECISIONES de renovación por
+ * fecha de creación (útil para comisiones).
+ *
+ * Pacientes fantasma (isTest) quedan fuera.
+ */
+export async function getRenewalOpportunitiesInPeriod(from: Date, to: Date): Promise<RenewalOpportunity[]> {
+  const ended = await prisma.subscriptionRenewal.findMany({
+    where: {
+      endDate: { gte: from, lte: to },
+      patient: { isTest: false },
+    },
+    select: {
+      id: true,
+      patientId: true,
+      endDate: true,
+      patient: { select: { assignedProfessionalId: true } },
+    },
+  });
+  if (ended.length === 0) return [];
+
+  const patientIds = Array.from(new Set(ended.map((e) => e.patientId)));
+  const allPeriods = await prisma.subscriptionRenewal.findMany({
+    where: { patientId: { in: patientIds } },
+    select: { id: true, patientId: true, startDate: true, amountPaid: true },
+  });
+
+  return ended.map((e) => {
+    // Un follow-up cuenta si empieza EXACTAMENTE cuando o después vence
+    // el periodo actual (permitimos 1 día de margen para pillar los que
+    // renovaron en el mismo día o al día siguiente).
+    const cutoff = e.endDate ? new Date(e.endDate.getTime() - 86400000) : null;
+    const followUp = cutoff
+      ? allPeriods.find(
+          (p) => p.patientId === e.patientId && p.id !== e.id && p.startDate && p.startDate.getTime() >= cutoff.getTime(),
+        )
+      : null;
+    return {
+      endedPeriodId: e.id,
+      patientId: e.patientId,
+      assignedProfessionalId: e.patient?.assignedProfessionalId ?? null,
+      endDate: e.endDate!,
+      outcome: followUp ? "renewed" : "lost",
+      renewalId: followUp?.id ?? null,
+      renewalAmount: followUp?.amountPaid ?? null,
+    };
+  });
+}
+
 export type RealRenewalRow = {
   id: string;
   patientId: string;
