@@ -42,7 +42,19 @@ const PREVENTION_PLAN_LABELS: Record<PreventionPlan, string> = {
   annual: "12 meses",
 };
 
-const APP_BASE_URL = "https://app.fisiofitteam.com"; // dominio público para el link
+/**
+ * Dominio del link de pago. En producción es el dominio real; en un preview
+ * de Vercel (feature branch) usamos el dominio actual del navegador, así
+ * los links generados durante testing van al preview y no a producción.
+ */
+const APP_BASE_URL = (() => {
+  if (typeof window === "undefined") return "https://app.fisiofitteam.com";
+  const { origin } = window.location;
+  if (origin.includes("localhost") || origin.includes(".vercel.app")) {
+    return origin;
+  }
+  return "https://app.fisiofitteam.com";
+})();
 
 export function PaymentLinkModal({
   lead,
