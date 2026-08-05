@@ -48,6 +48,11 @@ export type CreateOrderResult = {
  */
 export async function createOrder(input: CreateOrderInput): Promise<CreateOrderResult> {
   const amount = input.amountEur.toFixed(2);
+  // Nota: la Orders API v2 aceptaba tanto `application_context` como
+  // `payment_source.paypal.experience_context`, pero tenerlos ambos causa
+  // 422 (semantically incorrect) en la versión actual. Usamos solo
+  // application_context, que sigue siendo el más soportado y también
+  // dispara el banner de Pay Later sin necesidad de payment_source.
   const body: any = {
     intent: "CAPTURE",
     purchase_units: [
@@ -69,22 +74,6 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       shipping_preference: "NO_SHIPPING",
       return_url: input.returnUrl,
       cancel_url: input.cancelUrl,
-    },
-    // Habilitar Pay Later explícitamente: PayPal muestra el banner de
-    // fraccionamiento a los usuarios elegibles del país destino.
-    payment_source: {
-      paypal: {
-        experience_context: {
-          brand_name: "FisioFit Team",
-          locale: input.locale ?? "es-ES",
-          landing_page: "NO_PREFERENCE",
-          shipping_preference: "NO_SHIPPING",
-          user_action: "PAY_NOW",
-          return_url: input.returnUrl,
-          cancel_url: input.cancelUrl,
-          payment_method_preference: "IMMEDIATE_PAYMENT_REQUIRED",
-        },
-      },
     },
   };
 

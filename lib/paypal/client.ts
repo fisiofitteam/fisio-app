@@ -119,8 +119,19 @@ function safeJson(s: string): any {
 
 function errorSummary(body: any): string | null {
   if (!body || typeof body !== "object") return null;
+  // PayPal 4xx: el mensaje corto está en body.message pero los detalles
+  // útiles ("VALIDATION_ERROR: field X is required") están en el array
+  // details[]. Si hay details, incluir el issue + description del primero.
+  const details = Array.isArray(body.details) && body.details.length > 0 ? body.details[0] : null;
+  if (details) {
+    const parts: string[] = [];
+    if (body.message) parts.push(body.message);
+    if (details.issue) parts.push(`[${details.issue}]`);
+    if (details.field) parts.push(`field=${details.field}`);
+    if (details.description) parts.push(details.description);
+    return parts.join(" · ");
+  }
   if (body.message) return String(body.message);
-  if (body.details?.[0]?.description) return String(body.details[0].description);
   if (body.error_description) return String(body.error_description);
   return null;
 }
