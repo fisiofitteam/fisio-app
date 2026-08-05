@@ -8,7 +8,7 @@ export type RenewalActivityRow = {
   patientId: string;
   assignedProfessionalId: string | null;
   outcome: "renewed" | "lost";
-  /** Para renovadas, decidedAt. Para perdidas, endDate. */
+  /** Para renovadas, startDate del nuevo periodo. Para perdidas, endDate del que vence. */
   when: Date;
   amountPaid: number | null; // solo aplica a renovadas
 };
@@ -17,18 +17,18 @@ export type RenewalActivityRow = {
  * Actividad de renovaciones que cae dentro de un rango, contada tal
  * como se ve desde el punto de vista del negocio:
  *
- *   - "renewed" ← SubscriptionRenewal cuyo `decidedAt` está en el rango
- *     Y el paciente ya tenía un periodo anterior (excluye alta inicial).
- *     Se atribuye al MES DE DECISIÓN, así una renovación cerrada en
- *     agosto cuenta en agosto, aunque el periodo previo terminase en
- *     julio.
+ *   - "renewed" ← SubscriptionRenewal cuyo `startDate` cae en el rango Y
+ *     el paciente ya tenía un periodo anterior (excluye alta inicial).
+ *     Se atribuye al MES en que empieza el NUEVO PERIODO — así una
+ *     renovación manual registrada en agosto con fecha de inicio "julio"
+ *     cuenta en julio (que es cuando el paciente arrancó su nuevo ciclo).
  *
  *   - "lost" ← SubscriptionRenewal cuyo `endDate` está en el rango Y
  *     NO existe follow-up (ningún periodo del mismo paciente con
  *     startDate >= endDate). Se atribuye al MES DE VENCIMIENTO.
  *
  * De este modo las métricas del mes reflejan la actividad real:
- * cierres de renovación + bajas por no-renovación. El rate es una
+ * arranques de nuevo ciclo + bajas por no-renovación. El rate es una
  * proxy útil (renewed / (renewed + lost)) sabiendo que no es
  * matemáticamente el "% de una cohorte concreta" — es la mezcla de
  * cierres y bajas del periodo, que es lo que el CEO quiere ver.
@@ -45,15 +45,19 @@ export async function getRenewalActivityInPeriod(from: Date, to: Date): Promise<
   // Si el rango es enteramente futuro, no hay actividad que reportar.
   if (from.getTime() > now.getTime()) return [];
 
-  // ── Renovadas: SubscriptionRenewal cuya decidedAt cae en el rango ──
-  const decidedInPeriod = await prisma.subscriptionRenewal.findMany({
+  // ── Renovadas: SubscriptionRenewal cuyo startDate cae en el rango ──
+  // Filtramos por startDate (fecha efectiva del nuevo periodo) en vez
+  // de decidedAt (cuándo se creó el registro), para que renovaciones
+  // manuales registradas a posteriori aparezcan en el mes real.
+  const startedInPeriod = await prisma.subscriptionRenewal.findMany({
     where: {
-      decidedAt: { gte: from, lte: effectiveTo },
+      startDate: { gte: from, lte: effectiveTo },
       patient: { isTest: false },
     },
     select: {
       id: true,
       patientId: true,
+      startDate: true,
       decidedAt: true,
       amountPaid: true,
       patient: { select: { assignedProfessionalId: true } },
@@ -61,21 +65,33 @@ export async function getRenewalActivityInPeriod(from: Date, to: Date): Promise<
   });
 
   let renewed: RenewalActivityRow[] = [];
-  if (decidedInPeriod.length > 0) {
-    const decIds = Array.from(new Set(decidedInPeriod.map((r) => r.patientId)));
+  if (startedInPeriod.length > 0) {
+    const decIds = Array.from(new Set(startedInPeriod.map((r) => r.patientId)));
+    // Determinamos "es renovación" comparando con el resto del historial
+    // por startDate: si el paciente tiene otro periodo con startDate
+    // anterior a este, es una renovación. Antes usábamos decidedAt para
+    // esta comprobación, pero con las manuales retroactivas puede fallar
+    // (la manual tiene decidedAt reciente pero el alta previa también).
     const decHistory = await prisma.subscriptionRenewal.findMany({
       where: { patientId: { in: decIds } },
-      select: { id: true, patientId: true, decidedAt: true },
+      select: { id: true, patientId: true, startDate: true },
     });
-    renewed = decidedInPeriod
+    renewed = startedInPeriod
       .filter((r) =>
-        decHistory.some((h) => h.patientId === r.patientId && h.id !== r.id && h.decidedAt < r.decidedAt),
+        decHistory.some(
+          (h) =>
+            h.patientId === r.patientId &&
+            h.id !== r.id &&
+            h.startDate &&
+            r.startDate &&
+            h.startDate < r.startDate,
+        ),
       )
       .map((r) => ({
         patientId: r.patientId,
         assignedProfessionalId: r.patient?.assignedProfessionalId ?? null,
         outcome: "renewed" as const,
-        when: r.decidedAt,
+        when: r.startDate!,
         amountPaid: r.amountPaid,
       }));
   }
