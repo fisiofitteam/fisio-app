@@ -58,7 +58,8 @@ export function ContractLandingClient({ token, copy }: { token: string; copy: Co
   async function startCheckout() {
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/sale/${token}/checkout`, { method: "POST" });
+      // Endpoint PayPal (migración desde Stripe agosto 2026).
+      const res = await fetch(`/api/sale/${token}/paypal`, { method: "POST" });
       const data = await res.json();
       if (!res.ok || !data.url) {
         setError(data.error || "No se pudo iniciar el pago");
@@ -242,7 +243,7 @@ export function ContractLandingClient({ token, copy }: { token: string; copy: Co
                 {/* Métodos de pago */}
                 <div className="mt-4 text-center">
                   <p className="text-[11px]" style={{ color: "#737373" }}>
-                    Tarjeta o Klarna (3 plazos sin intereses) · Pago seguro con Stripe
+                    PayPal, tarjeta o Paga en 3 plazos sin intereses · Pago seguro
                   </p>
                 </div>
               </div>

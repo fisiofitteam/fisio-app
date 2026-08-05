@@ -40,8 +40,11 @@ export async function POST(_req: Request, { params }: { params: { token: string 
   }
 
   const base = appBaseUrl();
-  const returnUrl = `${base}/pagar/${sale.paymentToken}/gracias`;
-  const cancelUrl = `${base}/pagar/${sale.paymentToken}?cancelled=1`;
+  // Misma landing que Stripe. La página /pagar/gracias detecta si venimos
+  // de PayPal (por `PayerID` en query) y hace el capture server-side antes
+  // de arrancar el polling de Sale.status.
+  const returnUrl = `${base}/pagar/gracias?token=${sale.paymentToken}`;
+  const cancelUrl = `${base}/contratar/${sale.paymentToken}?cancelled=1`;
 
   try {
     const order = await createOrder({
