@@ -236,7 +236,7 @@ export function SubscriptionPeriodsBlock({
       {adding && (
         <AddRenewalModal
           patientId={patientId}
-          isCeo={isCeo}
+          canManualRenewal={allowEdit}
           onClose={() => setAdding(false)}
           onSaved={() => {
             setAdding(false);
@@ -263,12 +263,18 @@ export function SubscriptionPeriodsBlock({
 
 function AddRenewalModal({
   patientId,
-  isCeo,
+  canManualRenewal,
   onClose,
   onSaved,
 }: {
   patientId: string;
-  isCeo: boolean;
+  /** Muestra el toggle "manual (sin pago)". El backend hace la comprobación
+   *  fina (managers siempre; fisio solo si el paciente no vino por Stripe),
+   *  así que aquí basta con reflejar la misma intención — antes el toggle
+   *  se ocultaba a todo el mundo excepto al CEO, y el head_success + fisio
+   *  no podían registrar renovaciones sin pago aunque el backend sí les
+   *  dejaba. */
+  canManualRenewal: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -379,8 +385,10 @@ function AddRenewalModal({
           </div>
         ) : (
           <div className="space-y-3 mt-2">
-            {/* Selector de modo: el manual solo para CEO */}
-            {isCeo && (
+            {/* Selector de modo (link / manual). Antes solo lo veía el CEO;
+                ahora también head_success y fisios que pueden editar la
+                suscripción del paciente (el backend aplica el check fino). */}
+            {canManualRenewal && (
               <div className="flex gap-1 p-1 rounded-lg bg-neutral-100">
                 <button
                   type="button"
