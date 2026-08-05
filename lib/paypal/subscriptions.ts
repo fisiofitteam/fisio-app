@@ -30,15 +30,14 @@ export async function createProduct(input: {
   name: string;
   description?: string;
 }): Promise<{ id: string; raw: any }> {
-  // `category` debe ser una MerchantCategory reconocida por PayPal (enum
-  // cerrada). "HEALTH_AND_BEAUTY_SPAS" y "MEDICAL_SERVICES" son válidos;
-  // usamos "FITNESS_AND_RECREATIONAL_SPORTS_CENTERS" que encaja mejor con
-  // programas de fisioterapia deportiva.
+  // `category` es opcional y PayPal solo acepta valores de una enum interna
+  // muy específica (probamos HEALTH_AND_BEAUTY y FITNESS_AND_RECREATIONAL_
+  // SPORTS_CENTERS y ambas dieron INVALID_PARAMETER_VALUE). Como no aporta
+  // nada operativo para nosotros, la omitimos.
   const body = {
     name: input.name.slice(0, 127),
     description: input.description?.slice(0, 256) ?? undefined,
     type: "SERVICE",
-    category: "FITNESS_AND_RECREATIONAL_SPORTS_CENTERS",
   };
   const data = await paypalFetch<any>("/v1/catalogs/products", {
     method: "POST",
