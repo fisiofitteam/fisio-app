@@ -2127,7 +2127,11 @@ model Sale {
   stripePriceId           String                        // price_xxx de Stripe
   amountCents             Int                           // en céntimos (60000 = 600€)
   currency                String   @default("eur")
-  paymentMethod           String?                       // "card" | "klarna" | null hasta pagar
+  paymentMethod           String?                       // "card" | "klarna" | "paypal" | "paypal_paylater" | null
+
+  // ─── PayPal ─────────────────────────────────────────────────────────────
+  paypalOrderId           String?  @unique
+  paypalCaptureId         String?
 
   // ─── Estado de la venta ─────────────────────────────────────────────────
   // "pending"  → link generado, todavía no pagado
