@@ -122,6 +122,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
   }
 
+  // Fraccionamiento opcional: si viene installmentCount en body y es >=2,
+  // el pago se hará como PayPal Subscription con N cobros mensuales del
+  // mismo importe. null/1 = pago único.
+  const installmentCountRaw = Number(body?.installmentCount);
+  let installmentCount: number | null = null;
+  if (Number.isFinite(installmentCountRaw) && installmentCountRaw >= 2) {
+    if (installmentCountRaw > 12) {
+      return NextResponse.json({ error: "installmentCount máximo 12" }, { status: 400 });
+    }
+    installmentCount = Math.floor(installmentCountRaw);
+  }
+
   // 4. Generar token + crear Sale
   const token = generatePaymentToken();
   const tokenExpiresAt = new Date(Date.now() + TOKEN_VALIDITY_DAYS * 86400 * 1000);
@@ -139,6 +151,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       paymentToken: token,
       tokenExpiresAt,
       status: "pending",
+      installmentCount,
     },
   });
 

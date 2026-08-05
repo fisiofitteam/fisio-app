@@ -72,6 +72,8 @@ export function PaymentLinkModal({
   const [priceEuros, setPriceEuros] = useState<string>("");
   const [priceSuggested, setPriceSuggested] = useState<number | null>(null); // en céntimos
   const [loadingPrice, setLoadingPrice] = useState(false);
+  // Fraccionamiento (null = pago único; 2..12 = N cuotas mensuales vía PayPal Subscription)
+  const [installmentCount, setInstallmentCount] = useState<number | null>(null);
 
   // Datos del Sale
   const [activeSale, setActiveSale] = useState<ActiveSale | null>(null);
@@ -180,7 +182,7 @@ export function PaymentLinkModal({
       const res = await fetch(`/api/leads/${lead.id}/generate-payment-link`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productCode, amountEuros }),
+        body: JSON.stringify({ productCode, amountEuros, installmentCount }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "No se pudo generar el link");
@@ -477,7 +479,7 @@ export function PaymentLinkModal({
             )}
 
             <div>
-              <label className="text-xs text-neutral-500 block mb-1">Importe a cobrar (€)</label>
+              <label className="text-xs text-neutral-500 block mb-1">Importe TOTAL a cobrar (€)</label>
               <div className="flex items-center gap-2">
                 <input
                   type="text"
@@ -490,6 +492,46 @@ export function PaymentLinkModal({
                 />
                 <span className="text-sm text-neutral-500">€</span>
               </div>
+            </div>
+
+            {/* Fraccionamiento en N cuotas (PayPal Subscription) */}
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">¿Cómo lo cobramos?</label>
+              <div className="grid grid-cols-5 gap-1.5">
+                {[null, 2, 3, 4, 6].map((n) => {
+                  const active = installmentCount === n;
+                  const label = n === null ? "1 pago" : `${n} cuotas`;
+                  return (
+                    <button
+                      key={n ?? "one"}
+                      onClick={() => setInstallmentCount(n)}
+                      className={`px-2 py-2 rounded-lg border text-xs font-medium ${
+                        active
+                          ? "bg-neutral-900 text-white border-neutral-900"
+                          : "bg-white border-neutral-200 hover:bg-neutral-50"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+              {installmentCount !== null && priceEuros.trim() && (() => {
+                const total = Number((priceEuros ?? "").replace(",", "."));
+                if (!Number.isFinite(total) || total <= 0) return null;
+                const perCycle = (total / installmentCount).toFixed(2).replace(".", ",");
+                return (
+                  <p className="text-[11px] text-neutral-500 italic mt-1.5">
+                    PayPal cobrará {installmentCount} × {perCycle} € mensuales.
+                    El cliente firma la suscripción al aprobar el primer cobro.
+                  </p>
+                );
+              })()}
+              {installmentCount === null && (
+                <p className="text-[11px] text-neutral-500 italic mt-1.5">
+                  Pago único. PayPal ofrecerá "Paga en 3 plazos" si el cliente califica.
+                </p>
+              )}
             </div>
 
             {error && (

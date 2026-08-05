@@ -2132,6 +2132,11 @@ model Sale {
   // ─── PayPal ─────────────────────────────────────────────────────────────
   paypalOrderId           String?  @unique
   paypalCaptureId         String?
+  // Suscripción PayPal para pago fraccionado en N cuotas mensuales
+  paypalSubscriptionId    String?  @unique
+  paypalPlanId            String?
+  // Si null/0 → pago único. Si 2..12 → N cobros mensuales del mismo importe.
+  installmentCount        Int?
 
   // ─── Estado de la venta ─────────────────────────────────────────────────
   // "pending"  → link generado, todavía no pagado

@@ -1,17 +1,22 @@
 /**
  * POST /api/webhooks/paypal
  *
- * Webhook que escucha eventos de PayPal (Orders + Captures). Espejo del
- * de Stripe, pero adaptado al modelo REST de PayPal.
+ * Webhook que escucha eventos de PayPal (Orders + Captures + Subscriptions).
+ * Espejo del de Stripe, adaptado al modelo REST de PayPal.
  *
- * Eventos procesados en Fase 1:
- *   - PAYMENT.CAPTURE.COMPLETED → marca Sale paid, crea Patient,
- *     notifica a head_success. Idéntico al flujo Stripe checkout.completed.
- *   - PAYMENT.CAPTURE.DENIED   → marca Sale failed.
- *   - PAYMENT.CAPTURE.REFUNDED → marca Sale refunded, notifica.
+ * Eventos procesados:
+ *   Fase 1 (pago único):
+ *     - PAYMENT.CAPTURE.COMPLETED → crea Patient, marca Sale paid.
+ *     - PAYMENT.CAPTURE.DENIED   → marca Sale failed.
+ *     - PAYMENT.CAPTURE.REFUNDED → marca Sale refunded, notifica.
  *
- * Fases siguientes añadirán BILLING.SUBSCRIPTION.* (fase 2) y eventos de
- * renovación (fase 3). Los eventos no manejados se loggean pero no fallan.
+ *   Fase 2 (suscripción N ciclos):
+ *     - BILLING.SUBSCRIPTION.ACTIVATED       → crea Patient (misma lógica que
+ *       capture.completed pero por importe total pactado).
+ *     - PAYMENT.SALE.COMPLETED               → informativo. Registra el
+ *       cobro mensual como transaction income_new proporcional a la cuota.
+ *     - BILLING.SUBSCRIPTION.CANCELLED       → notifica al equipo.
+ *     - BILLING.SUBSCRIPTION.PAYMENT.FAILED  → notifica al equipo.
  *
  * Diseño:
  *  - IDEMPOTENTE: si el Sale ya está paid con patientId, saltamos.
@@ -34,8 +39,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "PayPal not configured" }, { status: 500 });
   }
 
-  // Necesitamos body RAW para que PayPal recalcule la firma con el mismo
-  // string exacto. Parseamos JSON después para el handler.
   const raw = await req.text();
   let event: any;
   try {
@@ -65,10 +68,25 @@ export async function POST(req: NextRequest) {
         await handleCaptureRefunded(event.resource);
         break;
       case "CHECKOUT.ORDER.APPROVED":
-        // Informativo: user aprobó pero aún no capturado. Nosotros capturamos
-        // en el returnUrl de la landing, no hace falta reaccionar aquí.
         console.log("[paypal-webhook] Order aprobada (sin acción)", { orderId: event.resource?.id });
         break;
+
+      // ─── Fase 2 · Subscriptions ────────────────────────────────────────
+      case "BILLING.SUBSCRIPTION.ACTIVATED":
+        await handleSubscriptionActivated(event.resource);
+        break;
+      case "PAYMENT.SALE.COMPLETED":
+        await handleSubscriptionCyclePayment(event.resource);
+        break;
+      case "BILLING.SUBSCRIPTION.CANCELLED":
+      case "BILLING.SUBSCRIPTION.EXPIRED":
+      case "BILLING.SUBSCRIPTION.SUSPENDED":
+        await handleSubscriptionEnded(event.resource, event.event_type);
+        break;
+      case "BILLING.SUBSCRIPTION.PAYMENT.FAILED":
+        await handleSubscriptionPaymentFailed(event.resource);
+        break;
+
       default:
         console.log(`[paypal-webhook] Unhandled event type: ${event.event_type}`);
     }
@@ -80,57 +98,32 @@ export async function POST(req: NextRequest) {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// PAYMENT.CAPTURE.COMPLETED — crea Patient, marca Sale paid, notifica
+// Alta de paciente (compartida entre Order.capture.completed y
+// Subscription.activated). Idempotente vía Sale.status.
 // ────────────────────────────────────────────────────────────────────────────
-async function handleCaptureCompleted(capture: any) {
-  // El paymentToken vive en custom_id de la Order (lo pusimos en createOrder).
-  // PayPal puede duplicar en resource.custom_id o en purchase_units[0].custom_id.
-  const paymentToken: string | undefined =
-    capture?.custom_id ?? capture?.supplementary_data?.related_ids?.custom_id;
-  if (!paymentToken) {
-    console.warn("[paypal-webhook] capture.completed sin custom_id", { captureId: capture?.id });
-    return;
-  }
-
+async function activateSaleAsPatient(input: {
+  saleId: string;
+  paymentMethod: string;
+  paypalCaptureId?: string | null;
+  paypalSubscriptionId?: string | null;
+  amountVerified?: boolean;
+  notifyTitle: string;
+  notifyBody: string;
+}) {
   const sale = await prisma.sale.findUnique({
-    where: { paymentToken },
+    where: { id: input.saleId },
     include: { lead: true },
   });
-  if (!sale) {
-    console.warn("[paypal-webhook] Sale no encontrado", { paymentToken });
-    return;
-  }
-
-  // IDEMPOTENCIA: si ya está paid, ya procesamos. Salimos OK.
+  if (!sale) return;
   if (sale.status === "paid" && sale.patientId) {
     console.log("[paypal-webhook] Sale ya procesado, skipping", { saleId: sale.id });
     return;
   }
 
-  // Anti-tampering: verificar que el amount coincide (PayPal manda "34.95").
-  const amountValue = Number(capture?.amount?.value ?? 0);
-  const receivedCents = Math.round(amountValue * 100);
-  if (receivedCents && receivedCents !== sale.amountCents) {
-    console.error("[paypal-webhook] AMOUNT MISMATCH", {
-      saleId: sale.id,
-      expected: sale.amountCents,
-      received: receivedCents,
-    });
-    // Loggeado pero seguimos (mismo criterio que el webhook Stripe).
-  }
-
-  // Detectar Pay Later (BNPL) vs one-shot: si PayPal reporta "PAY_UPON_INVOICE"
-  // o "PAY_LATER" en payment_source o supplementary_data lo marcamos.
-  const isPayLater = detectIsPayLater(capture);
-  const paymentMethod = isPayLater ? "paypal_paylater" : "paypal";
-
   const now = new Date();
   const programEndDate = new Date(now);
   programEndDate.setMonth(programEndDate.getMonth() + sale.durationMonths);
 
-  // Datos extra que vienen del modal "Nuevo paciente" cuando el Sale se
-  // generó como alta manual (assignedProfessionalId, diagnosis). Mismo
-  // parseo que Stripe.
   let manualAlta: { assignedProfessionalId?: string; diagnosis?: string } = {};
   if ((sale as any).manualAltaData) {
     try {
@@ -141,7 +134,7 @@ async function handleCaptureCompleted(capture: any) {
     }
   }
 
-  const result = await prisma.$transaction(async (tx) => {
+  const patient = await prisma.$transaction(async (tx) => {
     const leadEmailRaw =
       sale.lead.contactType === "email" ? sale.lead.contactValue : sale.lead.email;
     const leadPhoneRaw =
@@ -177,17 +170,32 @@ async function handleCaptureCompleted(capture: any) {
         status: "paid",
         paidAt: now,
         patientId: patient.id,
-        paypalCaptureId: capture?.id ?? null,
-        paymentMethod,
+        paypalCaptureId: input.paypalCaptureId ?? sale.paypalCaptureId,
+        paypalSubscriptionId: input.paypalSubscriptionId ?? sale.paypalSubscriptionId,
+        paymentMethod: input.paymentMethod,
       },
     });
+
+    // Para pagos únicos: registramos el importe TOTAL en una sola transaction.
+    // Para suscripciones N ciclos: registramos SOLO la primera cuota aquí
+    // (activateSaleAsPatient se llama en subscription.activated cuando
+    // PayPal ya cobró el primer mes). Las siguientes cuotas llegan como
+    // PAYMENT.SALE.COMPLETED y se registran una por una.
+    const isSubscription = !!input.paypalSubscriptionId;
+    const installments = sale.installmentCount ?? 0;
+    const perCycleAmount =
+      isSubscription && installments >= 2
+        ? Math.round(sale.amountCents / installments) / 100
+        : sale.amountCents / 100;
 
     await tx.transaction.create({
       data: {
         type: "income_new",
         category: `${sale.programType} ${sale.durationMonths}M`,
-        amount: sale.amountCents / 100,
-        description: `Pago vía PayPal · ${sale.programType} ${sale.durationMonths} meses · ${paymentMethod}`,
+        amount: perCycleAmount,
+        description: isSubscription
+          ? `Pago vía PayPal · ${sale.programType} ${sale.durationMonths} meses · cuota 1/${installments}`
+          : `Pago vía PayPal · ${sale.programType} ${sale.durationMonths} meses · ${input.paymentMethod}`,
         occurredAt: now,
         patientId: patient.id,
         professionalId: sale.closerId,
@@ -204,7 +212,9 @@ async function handleCaptureCompleted(capture: any) {
         status: "active",
         amountPaid: sale.amountCents / 100,
         decidedAt: now,
-        notes: "Alta inicial (pago PayPal)",
+        notes: isSubscription
+          ? `Alta inicial (PayPal ${installments} cuotas)`
+          : "Alta inicial (pago PayPal)",
       },
     });
 
@@ -223,17 +233,191 @@ async function handleCaptureCompleted(capture: any) {
     return patient;
   });
 
-  console.log("[paypal-webhook] Patient creado", { patientId: result.id, saleId: sale.id });
+  console.log("[paypal-webhook] Patient creado", { patientId: patient.id, saleId: sale.id });
 
   try {
     await notifyHeadSuccess({
       type: "patient_new_unassigned",
-      title: "Nuevo paciente sin asignar",
-      body: `${sale.lead.fullName} ha pagado el programa ${sale.programType} de ${sale.durationMonths} meses (PayPal${isPayLater ? " · fraccionado" : ""}). Asígnale fisio.`,
-      actionUrl: `/fisio/paciente/${result.id}/ficha`,
+      title: input.notifyTitle,
+      body: input.notifyBody.replace("{{fullName}}", sale.lead.fullName),
+      actionUrl: `/fisio/paciente/${patient.id}/ficha`,
     });
   } catch (err) {
     console.error("[paypal-webhook] Error notificando a head_success:", err);
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// PAYMENT.CAPTURE.COMPLETED — Order de pago único
+// ────────────────────────────────────────────────────────────────────────────
+async function handleCaptureCompleted(capture: any) {
+  const paymentToken: string | undefined =
+    capture?.custom_id ?? capture?.supplementary_data?.related_ids?.custom_id;
+  if (!paymentToken) {
+    console.warn("[paypal-webhook] capture.completed sin custom_id", { captureId: capture?.id });
+    return;
+  }
+  const sale = await prisma.sale.findUnique({ where: { paymentToken } });
+  if (!sale) {
+    console.warn("[paypal-webhook] Sale no encontrado", { paymentToken });
+    return;
+  }
+
+  // Anti-tampering: verificar que el amount coincide.
+  const amountValue = Number(capture?.amount?.value ?? 0);
+  const receivedCents = Math.round(amountValue * 100);
+  if (receivedCents && receivedCents !== sale.amountCents) {
+    console.error("[paypal-webhook] AMOUNT MISMATCH", {
+      saleId: sale.id,
+      expected: sale.amountCents,
+      received: receivedCents,
+    });
+  }
+
+  const isPayLater = detectIsPayLater(capture);
+  const paymentMethod = isPayLater ? "paypal_paylater" : "paypal";
+
+  await activateSaleAsPatient({
+    saleId: sale.id,
+    paymentMethod,
+    paypalCaptureId: capture?.id ?? null,
+    notifyTitle: "Nuevo paciente sin asignar",
+    notifyBody: `{{fullName}} ha pagado el programa ${sale.programType} de ${sale.durationMonths} meses (PayPal${isPayLater ? " · fraccionado" : ""}). Asígnale fisio.`,
+  });
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// BILLING.SUBSCRIPTION.ACTIVATED — cliente aprobó la suscripción N ciclos
+// ────────────────────────────────────────────────────────────────────────────
+async function handleSubscriptionActivated(subscription: any) {
+  const paymentToken: string | undefined = subscription?.custom_id;
+  if (!paymentToken) {
+    console.warn("[paypal-webhook] subscription.activated sin custom_id", { subId: subscription?.id });
+    return;
+  }
+  const sale = await prisma.sale.findUnique({ where: { paymentToken } });
+  if (!sale) {
+    console.warn("[paypal-webhook] Sale no encontrado para subscription", { paymentToken });
+    return;
+  }
+  const installments = sale.installmentCount ?? 0;
+  await activateSaleAsPatient({
+    saleId: sale.id,
+    paymentMethod: "paypal_subscription",
+    paypalSubscriptionId: subscription?.id ?? sale.paypalSubscriptionId,
+    notifyTitle: "Nuevo paciente sin asignar",
+    notifyBody: `{{fullName}} ha activado el programa ${sale.programType} de ${sale.durationMonths} meses (PayPal · ${installments} cuotas mensuales). Asígnale fisio.`,
+  });
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// PAYMENT.SALE.COMPLETED — cobro periódico de una suscripción (cuota 2..N)
+// ────────────────────────────────────────────────────────────────────────────
+async function handleSubscriptionCyclePayment(sale: any) {
+  // sale.billing_agreement_id = subscription id (PayPal legacy naming)
+  const subscriptionId: string | undefined = sale?.billing_agreement_id;
+  if (!subscriptionId) {
+    // No es una cuota de suscripción (puede ser Orders API v1 antiguo).
+    return;
+  }
+  const saleRecord = await prisma.sale.findUnique({
+    where: { paypalSubscriptionId: subscriptionId },
+  });
+  if (!saleRecord || !saleRecord.patientId) {
+    console.warn("[paypal-webhook] sale.completed sin sale/paciente asociado", { subscriptionId });
+    return;
+  }
+
+  const amountValue = Number(sale?.amount?.total ?? 0);
+  if (!amountValue) return;
+
+  // Contar cuántas cuotas ya registramos (transactions income_new asociadas al
+  // paciente + descripción con "cuota"). Simple: contamos transacciones
+  // income_new de este paciente que empiezan por "Pago vía PayPal" con
+  // "cuota N/M". Para el índice de cuota actual usamos count+1.
+  const alreadyBilled = await prisma.transaction.count({
+    where: {
+      patientId: saleRecord.patientId,
+      type: "income_new",
+      description: { contains: "PayPal" },
+    },
+  });
+  const cycleNumber = alreadyBilled + 1;
+  const totalCycles = saleRecord.installmentCount ?? 0;
+
+  // La primera cuota ya se registró en subscription.activated → si cycleNumber
+  // es 1, esta ES la primera cuota, pero ya la contamos allí. Skip.
+  if (cycleNumber === 1) {
+    console.log("[paypal-webhook] Primera cuota ya contabilizada en activated, skip", {
+      subscriptionId,
+    });
+    return;
+  }
+
+  await prisma.transaction.create({
+    data: {
+      type: "income_new",
+      category: `${saleRecord.programType} ${saleRecord.durationMonths}M`,
+      amount: amountValue,
+      description: `Pago vía PayPal · ${saleRecord.programType} ${saleRecord.durationMonths} meses · cuota ${cycleNumber}/${totalCycles}`,
+      occurredAt: new Date(),
+      patientId: saleRecord.patientId,
+      professionalId: saleRecord.closerId,
+    },
+  });
+  console.log("[paypal-webhook] Cuota registrada", {
+    subscriptionId,
+    cycleNumber,
+    totalCycles,
+    amount: amountValue,
+  });
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// BILLING.SUBSCRIPTION.CANCELLED/EXPIRED/SUSPENDED — informar al equipo
+// ────────────────────────────────────────────────────────────────────────────
+async function handleSubscriptionEnded(subscription: any, eventType: string) {
+  const subscriptionId: string | undefined = subscription?.id;
+  if (!subscriptionId) return;
+  const sale = await prisma.sale.findUnique({
+    where: { paypalSubscriptionId: subscriptionId },
+    include: { lead: true },
+  });
+  if (!sale) return;
+  const suffix = eventType.split(".").pop()?.toLowerCase() ?? "ended";
+  console.log("[paypal-webhook] Subscription", suffix, { subscriptionId, saleId: sale.id });
+  try {
+    await notifyHeadSuccess({
+      type: "subscription_ended",
+      title: `Suscripción PayPal ${suffix}`,
+      body: `La suscripción de ${sale.lead.fullName} (${sale.programType}) está en estado ${suffix}. Revísalo.`,
+      actionUrl: sale.patientId ? `/fisio/paciente/${sale.patientId}/ficha` : `/fisio/finanzas`,
+    });
+  } catch (err) {
+    console.error("[paypal-webhook] Error notificando fin de suscripción:", err);
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// BILLING.SUBSCRIPTION.PAYMENT.FAILED — cuota no cobrada
+// ────────────────────────────────────────────────────────────────────────────
+async function handleSubscriptionPaymentFailed(subscription: any) {
+  const subscriptionId: string | undefined = subscription?.id;
+  if (!subscriptionId) return;
+  const sale = await prisma.sale.findUnique({
+    where: { paypalSubscriptionId: subscriptionId },
+    include: { lead: true },
+  });
+  if (!sale) return;
+  try {
+    await notifyHeadSuccess({
+      type: "subscription_payment_failed",
+      title: "Cobro PayPal fallido",
+      body: `PayPal no ha podido cobrar una cuota de ${sale.lead.fullName} (${sale.programType}). Contacta con el cliente.`,
+      actionUrl: sale.patientId ? `/fisio/paciente/${sale.patientId}/ficha` : `/fisio/finanzas`,
+    });
+  } catch (err) {
+    console.error("[paypal-webhook] Error notificando fallo cobro:", err);
   }
 }
 
@@ -259,8 +443,6 @@ async function handleCaptureDenied(capture: any) {
 // PAYMENT.CAPTURE.REFUNDED / REVERSED — reembolso
 // ────────────────────────────────────────────────────────────────────────────
 async function handleCaptureRefunded(refund: any) {
-  // PayPal manda distinta forma según refund vs reversal. Buscamos el sale
-  // por capture id o por custom_id.
   const captureId = refund?.links?.find((l: any) => l.rel === "up")?.href?.split("/").pop();
   const paymentToken: string | undefined = refund?.custom_id;
 
@@ -280,7 +462,6 @@ async function handleCaptureRefunded(refund: any) {
   });
   console.log("[paypal-webhook] Sale marcado refunded", { saleId: sale.id });
 
-  // Notificar al equipo para que sepa
   try {
     await notifyHeadSuccess({
       type: "sale_refunded",
@@ -295,9 +476,6 @@ async function handleCaptureRefunded(refund: any) {
 
 /**
  * Heurística para detectar si el pago fue con "Pay in 3/4" de PayPal (BNPL).
- * PayPal marca esto en `capture.payment_source` o en algún supplementary_data
- * en función del país. Simplemente miramos si aparece "pay_later"
- * o "paylater" en algún texto del payload.
  */
 function detectIsPayLater(capture: any): boolean {
   const blob = JSON.stringify(capture ?? {}).toLowerCase();

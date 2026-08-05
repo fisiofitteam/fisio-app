@@ -53,5 +53,6 @@ export async function GET(_req: Request, { params }: { params: { token: string }
     label: config?.label || sale.productCode,
     amountCents: sale.amountCents,
     currency: sale.currency,
+    installmentCount: sale.installmentCount ?? null,
   });
 }

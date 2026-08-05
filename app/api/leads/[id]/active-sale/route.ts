@@ -42,6 +42,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       productLabel: config?.label || sale.productCode,
       amountCents: sale.amountCents,
       currency: sale.currency,
+      installmentCount: sale.installmentCount ?? null,
       tokenExpiresAt: sale.tokenExpiresAt.toISOString(),
       createdAt: sale.createdAt.toISOString(),
     },

@@ -1,21 +1,21 @@
 /**
  * POST /api/sale/[token]/paypal
  *
- * Crea una Order de PayPal (Orders API v2) para el Sale identificado por
- * token. Devuelve la URL a la que redirigir al usuario (approve URL) —
- * exactamente el mismo contrato que /checkout usa con Stripe.
+ * Genera el flujo de pago PayPal para el Sale identificado por token.
+ * Devuelve la URL a la que redirigir al usuario (approve URL).
  *
- * Al crearla persistimos el `paypalOrderId` en el Sale para poder atarlo
- * en la vuelta y en el webhook. El `custom_id` de la Order = paymentToken
- * del Sale, así que en el webhook resolvemos el Sale desde PayPal sin
- * necesidad de otro id.
+ * Dos ramas según `sale.installmentCount`:
+ *   - null / 0 / 1  → Order de un solo pago (Orders API v2) con Pay Later.
+ *   - 2..12         → Subscription con N cobros mensuales del mismo importe.
  *
- * El Sale debe existir, no estar expirado, ni pagado.
+ * En ambos casos `custom_id` = `sale.paymentToken`, así que el webhook
+ * resuelve el Sale desde PayPal sin necesidad de otro id.
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PRODUCT_CONFIG } from "@/lib/stripe";
 import { createOrder } from "@/lib/paypal/orders";
+import { createPlan, createSubscription } from "@/lib/paypal/subscriptions";
 import { appBaseUrl, paypalCredentials } from "@/lib/paypal/config";
 
 export const dynamic = "force-dynamic";
@@ -40,16 +40,45 @@ export async function POST(_req: Request, { params }: { params: { token: string 
   }
 
   const base = appBaseUrl();
-  // Misma landing que Stripe. La página /pagar/gracias detecta si venimos
-  // de PayPal (por `PayerID` en query) y hace el capture server-side antes
-  // de arrancar el polling de Sale.status.
   const returnUrl = `${base}/pagar/gracias?token=${sale.paymentToken}`;
   const cancelUrl = `${base}/contratar/${sale.paymentToken}?cancelled=1`;
+  const totalEur = sale.amountCents / 100;
+
+  const installments = sale.installmentCount ?? 0;
+  const useSubscription = installments >= 2;
 
   try {
+    if (useSubscription) {
+      // ─── Rama Subscription: N cobros mensuales ───────────────────────────
+      const plan = await createPlan({
+        requestId: `plan-${sale.id}`,
+        name: `FisioFit ${config.programType} ${config.durationMonths}m — ${installments} cuotas`,
+        totalAmountEur: totalEur,
+        totalCycles: installments,
+      });
+      const sub = await createSubscription({
+        requestId: `sub-${sale.id}`,
+        planId: plan.id,
+        customId: sale.paymentToken,
+        returnUrl,
+        cancelUrl,
+        locale: "es-ES",
+      });
+      await prisma.sale.update({
+        where: { id: sale.id },
+        data: {
+          paypalPlanId: plan.id,
+          paypalSubscriptionId: sub.id,
+          paymentMethod: null,
+        },
+      });
+      return NextResponse.json({ url: sub.approveUrl, subscriptionId: sub.id, mode: "subscription" });
+    }
+
+    // ─── Rama Order: pago único con Pay Later ──────────────────────────────
     const order = await createOrder({
-      requestId: `sale-${sale.id}`, // idempotencia: mismo Sale → misma Order si se reintenta
-      amountEur: sale.amountCents / 100,
+      requestId: `sale-${sale.id}`,
+      amountEur: totalEur,
       description: config.label,
       returnUrl,
       cancelUrl,
@@ -57,19 +86,13 @@ export async function POST(_req: Request, { params }: { params: { token: string 
       referenceLabel: `FisioFit ${config.programType} ${config.durationMonths}m`,
       locale: "es-ES",
     });
-
-    // Persistimos el order ID en el Sale para atarlo al webhook y a la
-    // vuelta del usuario. Si el usuario relanza el pago (link roto, cambio
-    // de navegador), createOrder es idempotente por requestId así que
-    // PayPal nos devolvería la misma Order y refrescamos el mismo campo.
     await prisma.sale.update({
       where: { id: sale.id },
       data: { paypalOrderId: order.id, paymentMethod: null },
     });
-
-    return NextResponse.json({ url: order.approveUrl, orderId: order.id });
+    return NextResponse.json({ url: order.approveUrl, orderId: order.id, mode: "order" });
   } catch (e: any) {
-    console.error("[paypal/order] fallo al crear Order:", e);
+    console.error("[paypal] fallo en el flujo de pago:", e);
     return NextResponse.json({ error: e?.message ?? "No se pudo crear el pago" }, { status: 500 });
   }
 }
