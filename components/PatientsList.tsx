@@ -700,7 +700,13 @@ function CreatePatientModal({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "No se pudo generar el link");
-      const fullUrl = `https://app.fisiofitteam.com${data.landingUrl}`;
+      // En previews de Vercel (feature branch) usamos el dominio actual
+      // para que los links generados apunten al preview, no a producción.
+      const baseDomain =
+        typeof window !== "undefined" && (window.location.origin.includes("localhost") || window.location.origin.includes(".vercel.app"))
+          ? window.location.origin
+          : "https://app.fisiofitteam.com";
+      const fullUrl = `${baseDomain}${data.landingUrl}`;
       setGeneratedLink({ url: fullUrl, productLabel: data.productLabel });
       // Si hay teléfono, abrir WhatsApp en otra pestaña con el mensaje listo.
       const wa = buildWhatsAppLink(fullUrl);

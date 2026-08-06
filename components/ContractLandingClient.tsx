@@ -13,6 +13,7 @@ type SaleInfo = {
   label: string;
   amountCents: number;
   currency: string;
+  installmentCount: number | null;
 };
 
 function formatEuros(cents: number): string {
@@ -58,7 +59,8 @@ export function ContractLandingClient({ token, copy }: { token: string; copy: Co
   async function startCheckout() {
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/sale/${token}/checkout`, { method: "POST" });
+      // Endpoint PayPal (migración desde Stripe agosto 2026).
+      const res = await fetch(`/api/sale/${token}/paypal`, { method: "POST" });
       const data = await res.json();
       if (!res.ok || !data.url) {
         setError(data.error || "No se pudo iniciar el pago");
@@ -226,25 +228,35 @@ export function ContractLandingClient({ token, copy }: { token: string; copy: Co
                   </div>
                 </div>
 
-                {/* Botón pago */}
-                <button
-                  onClick={startCheckout}
-                  disabled={submitting}
-                  className="w-full py-3.5 rounded-xl text-sm font-semibold tracking-tight transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-                  style={{
-                    background: "#FFD400",
-                    color: "#0A0A0A",
-                  }}
-                >
-                  {submitting ? "Redirigiendo a pago seguro..." : `Pagar ${formatEuros(sale.amountCents)} →`}
-                </button>
-
-                {/* Métodos de pago */}
-                <div className="mt-4 text-center">
-                  <p className="text-[11px]" style={{ color: "#737373" }}>
-                    Tarjeta o Klarna (3 plazos sin intereses) · Pago seguro con Stripe
-                  </p>
-                </div>
+                {/* Botón pago (copy cambia si es suscripción de N cuotas) */}
+                {(() => {
+                  const n = sale.installmentCount;
+                  const isSub = typeof n === "number" && n >= 2;
+                  const perCycleCents = isSub ? Math.round(sale.amountCents / n) : sale.amountCents;
+                  const buttonLabel = isSub
+                    ? `Suscribirme por ${formatEuros(perCycleCents)}/mes (${n} meses) →`
+                    : `Pagar ${formatEuros(sale.amountCents)} →`;
+                  const footerCopy = isSub
+                    ? `${n} cuotas mensuales vía PayPal · Total ${formatEuros(sale.amountCents)} · Pago seguro`
+                    : "PayPal, tarjeta o Paga en 3 plazos sin intereses · Pago seguro";
+                  return (
+                    <>
+                      <button
+                        onClick={startCheckout}
+                        disabled={submitting}
+                        className="w-full py-3.5 rounded-xl text-sm font-semibold tracking-tight transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                        style={{ background: "#FFD400", color: "#0A0A0A" }}
+                      >
+                        {submitting ? "Redirigiendo a pago seguro..." : buttonLabel}
+                      </button>
+                      <div className="mt-4 text-center">
+                        <p className="text-[11px]" style={{ color: "#737373" }}>
+                          {footerCopy}
+                        </p>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
 
               {/* Footer pequeño */}
