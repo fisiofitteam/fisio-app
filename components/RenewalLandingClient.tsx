@@ -11,6 +11,7 @@ type Data = {
   durationMonths: number;
   amountCents: number;
   currency: string;
+  installmentCount: number | null;
 };
 
 function formatEuros(cents: number): string {
@@ -73,7 +74,8 @@ export function RenewalLandingClient({ token, copy }: { token: string; copy: Ren
   async function pay() {
     setPaying(true);
     try {
-      const res = await fetch(`/api/renewal/${token}/checkout`, { method: "POST" });
+      // Migración a PayPal (Fase 3, agosto 2026). Endpoint espejo del de Stripe.
+      const res = await fetch(`/api/renewal/${token}/paypal`, { method: "POST" });
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.url) {
         window.location.href = d.url;
@@ -212,19 +214,34 @@ export function RenewalLandingClient({ token, copy }: { token: string; copy: Ren
                           <p className="text-sm mb-4" style={{ color: "#FCA5A5" }}>{errorMsg}</p>
                         )}
 
-                        {/* Botón pago */}
-                        <button
-                          onClick={pay}
-                          disabled={paying}
-                          className="w-full py-3.5 rounded-xl text-sm font-semibold tracking-tight transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-                          style={{ background: "#FFD400", color: "#0A0A0A" }}
-                        >
-                          {paying ? "Redirigiendo a pago seguro..." : `${v(copy.ctaLabel)} · ${amount} →`}
-                        </button>
-
-                        <p className="mt-4 text-[11px] text-center" style={{ color: "#737373" }}>
-                          {v(copy.reassurance)}
-                        </p>
+                        {/* Botón pago (copy y sub-copy cambian si es N cuotas) */}
+                        {(() => {
+                          const n = data.installmentCount;
+                          const isSub = typeof n === "number" && n >= 2;
+                          const perCycleCents = isSub ? Math.round(data.amountCents / n) : data.amountCents;
+                          const perCycle = formatEuros(perCycleCents);
+                          const buttonLabel = isSub
+                            ? `Suscribirme por ${perCycle}/mes (${n} meses) →`
+                            : `${v(copy.ctaLabel)} · ${amount} →`;
+                          const subCopy = isSub
+                            ? `${n} cuotas mensuales vía PayPal · Total ${amount} · Pago seguro`
+                            : v(copy.reassurance);
+                          return (
+                            <>
+                              <button
+                                onClick={pay}
+                                disabled={paying}
+                                className="w-full py-3.5 rounded-xl text-sm font-semibold tracking-tight transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                                style={{ background: "#FFD400", color: "#0A0A0A" }}
+                              >
+                                {paying ? "Redirigiendo a pago seguro..." : buttonLabel}
+                              </button>
+                              <p className="mt-4 text-[11px] text-center" style={{ color: "#737373" }}>
+                                {subCopy}
+                              </p>
+                            </>
+                          );
+                        })()}
                       </Panel>
                     </>
                   );

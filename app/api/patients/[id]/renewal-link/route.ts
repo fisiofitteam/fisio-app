@@ -34,6 +34,17 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: "Importe no válido" }, { status: 400 });
   }
 
+  // Fraccionamiento opcional (mismo criterio que Sale): null/1 → pago único,
+  // 2..12 → suscripción PayPal con N cobros mensuales del mismo importe.
+  const installmentCountRaw = Number(body?.installmentCount);
+  let installmentCount: number | null = null;
+  if (Number.isFinite(installmentCountRaw) && installmentCountRaw >= 2) {
+    if (installmentCountRaw > 12) {
+      return NextResponse.json({ error: "installmentCount máximo 12" }, { status: 400 });
+    }
+    installmentCount = Math.floor(installmentCountRaw);
+  }
+
   const amountCents = Math.round(amountEuros * 100);
   const tokenExpiresAt = new Date();
   tokenExpiresAt.setDate(tokenExpiresAt.getDate() + TOKEN_VALIDITY_DAYS);
@@ -48,6 +59,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       paymentToken: generatePaymentToken(),
       tokenExpiresAt,
       status: "pending",
+      installmentCount,
     },
     select: { paymentToken: true },
   });

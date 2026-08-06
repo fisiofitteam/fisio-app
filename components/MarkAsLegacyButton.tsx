@@ -110,7 +110,7 @@ export function MarkAsLegacyButton({
 
             <div className="rounded-lg p-2 mb-3 text-xs" style={{ background: "#FEF3C7", border: "1px solid #FCD34D", color: "#78350F" }}>
               Solo para casos donde el fisio se equivocó de botón al crear
-              al paciente. Si viene de una compra real por Stripe, no lo
+              al paciente. Si viene de una compra real por PayPal, no lo
               conviertas — perderías la traza de pago.
             </div>
 

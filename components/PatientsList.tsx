@@ -673,7 +673,7 @@ function CreatePatientModal({
       return;
     }
     if (!productCode) {
-      setError("Stripe solo soporta RECUPERA o CONSOLIDA en 4 o 6 meses");
+      setError("El link de pago solo soporta RECUPERA o CONSOLIDA en 4 o 6 meses");
       return;
     }
     const amountEuros = stripePrice ? Number(stripePrice.replace(",", ".")) : NaN;
@@ -1000,15 +1000,15 @@ function CreatePatientModal({
                   type="button"
                   onClick={() => setShowStripe(true)}
                   className="text-xs text-neutral-600 hover:text-neutral-900 underline"
-                  title="En vez de crear el paciente ya, genera un link Stripe. Cuando pague, el paciente se crea automáticamente."
+                  title="En vez de crear el paciente ya, genera un link PayPal. Cuando pague, el paciente se crea automáticamente."
                 >
-                  💳 ¿Prefieres que pague online con Stripe?
+                  💳 ¿Prefieres que pague online con PayPal?
                 </button>
               ) : (
                 <div className="rounded-lg p-3 space-y-2" style={{ background: "#F0F9FF", border: "1px solid #BAE6FD" }}>
                   <div className="flex items-baseline justify-between gap-2">
                     <p className="text-xs font-semibold" style={{ color: "#075985" }}>
-                      💳 Link de pago Stripe
+                      💳 Link de pago PayPal
                     </p>
                     <button
                       type="button"
@@ -1020,15 +1020,16 @@ function CreatePatientModal({
                     </button>
                   </div>
                   <p className="text-[11px]" style={{ color: "#0C4A6E" }}>
-                    En vez de marcar el cobro aquí, generamos un link Stripe.
+                    En vez de marcar el cobro aquí, generamos un link PayPal.
                     Cuando el paciente pague, el alta se crea sola con los
                     datos que has rellenado arriba (nombre, email, teléfono,
                     fisio asignado, diagnóstico).
                   </p>
                   {!canStripe && (
                     <div className="text-xs px-2 py-1.5 rounded" style={{ background: "#FEF3C7", color: "#7C2D12", border: "1px solid #FCD34D" }}>
-                      Stripe solo está configurado para RECUPERA o CONSOLIDA en
-                      4 o 6 meses. Ajusta programa y duración para activarlo.
+                      El link de pago solo está configurado para RECUPERA o
+                      CONSOLIDA en 4 o 6 meses. Ajusta programa y duración
+                      para activarlo.
                     </div>
                   )}
                   {canStripe && (

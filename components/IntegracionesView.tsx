@@ -118,7 +118,7 @@ export function IntegracionesView({
       </section>
 
       <p className="text-[11px] text-neutral-500 italic px-1">
-        Más integraciones próximamente (Stripe, Meta Pixel, etc.)
+        Más integraciones próximamente (Meta Pixel, etc.)
       </p>
     </div>
   );

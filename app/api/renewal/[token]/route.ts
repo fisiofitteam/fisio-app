@@ -20,5 +20,6 @@ export async function GET(_req: Request, { params }: { params: { token: string }
     durationMonths: checkout.durationMonths,
     amountCents: checkout.amountCents,
     currency: checkout.currency,
+    installmentCount: checkout.installmentCount ?? null,
   });
 }

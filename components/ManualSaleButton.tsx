@@ -50,7 +50,7 @@ export function ManualSaleButton({
           setOpen(true);
         }}
         className="text-[11px] text-emerald-700 mt-1 inline-block hover:underline"
-        title="Dar de alta al paciente y registrar el ingreso — pago fuera de Stripe"
+        title="Dar de alta al paciente y registrar el ingreso — pago fuera de PayPal"
       >
         💰 Registrar venta manual
       </button>
@@ -137,7 +137,7 @@ function ManualSaleModal({
           <button onClick={onClose} className="text-neutral-400 text-xl">✕</button>
         </div>
         <p className="text-xs text-neutral-500 mb-4">
-          {lead.fullName} pagó fuera de Stripe. Se dará de alta como paciente y se
+          {lead.fullName} pagó fuera de PayPal. Se dará de alta como paciente y se
           registrará el ingreso en Finanzas.
         </p>
 
