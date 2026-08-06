@@ -1,12 +1,13 @@
 /**
  * GET /api/sale/[token]/status
  *
- * Endpoint público que devuelve el estado actual del Sale.
- * Usado por la página de gracias para hacer polling hasta que el webhook
- * confirme el pago.
+ * Endpoint público que devuelve el estado actual del Sale. Usado por la
+ * página de gracias para hacer polling hasta que el webhook confirme el pago.
  *
- * Como fallback (si el webhook todavía no está configurado o tarda), también
- * verifica directamente contra Stripe API si el Sale tiene stripeSessionId.
+ * Los pagos nuevos van por PayPal (webhook /api/webhooks/paypal actualiza el
+ * Sale directamente). Este endpoint conserva un fallback contra Stripe API
+ * SOLO para Sales históricos previos a la migración PayPal que aún tengan
+ * stripeSessionId — no se dispara para los pagos nuevos.
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
