@@ -34,15 +34,22 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: "Importe no válido" }, { status: 400 });
   }
 
+  // Reserva de plaza: si el fisio marca el toggle, el enlace es una señal
+  // (típ. 100€/1m). Se fuerza pago único — no admite fraccionamiento.
+  const isReservation = body?.isReservation === true;
+
   // Fraccionamiento opcional (mismo criterio que Sale): null/1 → pago único,
   // 2..12 → suscripción PayPal con N cobros mensuales del mismo importe.
-  const installmentCountRaw = Number(body?.installmentCount);
+  // Ignorado si es reserva (una señal siempre va en un pago).
   let installmentCount: number | null = null;
-  if (Number.isFinite(installmentCountRaw) && installmentCountRaw >= 2) {
-    if (installmentCountRaw > 12) {
-      return NextResponse.json({ error: "installmentCount máximo 12" }, { status: 400 });
+  if (!isReservation) {
+    const installmentCountRaw = Number(body?.installmentCount);
+    if (Number.isFinite(installmentCountRaw) && installmentCountRaw >= 2) {
+      if (installmentCountRaw > 12) {
+        return NextResponse.json({ error: "installmentCount máximo 12" }, { status: 400 });
+      }
+      installmentCount = Math.floor(installmentCountRaw);
     }
-    installmentCount = Math.floor(installmentCountRaw);
   }
 
   const amountCents = Math.round(amountEuros * 100);
@@ -60,6 +67,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       tokenExpiresAt,
       status: "pending",
       installmentCount,
+      isReservation,
     },
     select: { paymentToken: true },
   });

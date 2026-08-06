@@ -1079,6 +1079,11 @@ model SubscriptionRenewal {
   amountPaid    Float?                                   // importe pagado por este periodo (€)
   notes         String?
 
+  // Reserva de plaza: el paciente paga una señal (típ. 100€ / 1 mes)
+  // para mantener plaza y acceso a la app hasta que renueve del todo.
+  // Adicional al importe de la renovación futura, no descuenta.
+  isReservation Boolean  @default(false)
+
   invoices      PatientInvoice[]
 
   @@index([patientId])
@@ -2103,6 +2108,11 @@ model RenewalCheckout {
   paypalSubscriptionId  String?  @unique
   paypalPlanId          String?
   installmentCount      Int?     // null/1 → pago único; 2..12 → N cuotas
+
+  // Reserva de plaza: señal para mantener el sitio hasta que renueve del
+  // todo. Solo permite 1 pago (installmentCount se ignora), y el
+  // SubscriptionRenewal que se crea al pagar hereda este flag.
+  isReservation Boolean  @default(false)
 
   status        String   @default("pending")         // "pending" | "paid" | "failed" | "expired"
   paidAt        DateTime?

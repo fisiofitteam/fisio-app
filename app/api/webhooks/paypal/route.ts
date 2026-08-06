@@ -563,15 +563,19 @@ async function applyRenewalCheckoutPaid(opts: {
       ? Math.round(checkout.amountCents / installments) / 100
       : totalEur;
 
+  const isReservation = (checkout as any).isReservation === true;
   const { renewalId } = await applyRenewal({
     patientId: checkout.patientId,
     programType: checkout.programType,
     periodMonths: checkout.durationMonths,
-    amountPaid: totalEur, // registrar el total pactado en la renovación
+    amountPaid: totalEur,
     professionalId: checkout.createdById,
-    notes: opts.isSubscription
-      ? `Renovación PayPal (${installments} cuotas)`
-      : "Renovación PayPal",
+    isReservation,
+    notes: isReservation
+      ? "Reserva de plaza (PayPal)"
+      : opts.isSubscription
+        ? `Renovación PayPal (${installments} cuotas)`
+        : "Renovación PayPal",
   });
 
   await prisma.renewalCheckout.update({
@@ -591,9 +595,11 @@ async function applyRenewalCheckoutPaid(opts: {
       type: "income_renewal",
       category: `${checkout.programType} ${checkout.durationMonths}M`,
       amount: firstAmountEur,
-      description: opts.isSubscription
-        ? `Renovación PayPal · ${checkout.programType} ${checkout.durationMonths} meses · cuota 1/${installments}`
-        : `Renovación PayPal · ${checkout.programType} ${checkout.durationMonths} meses`,
+      description: isReservation
+        ? `Reserva de plaza PayPal · ${checkout.programType}`
+        : opts.isSubscription
+          ? `Renovación PayPal · ${checkout.programType} ${checkout.durationMonths} meses · cuota 1/${installments}`
+          : `Renovación PayPal · ${checkout.programType} ${checkout.durationMonths} meses`,
       occurredAt: new Date(),
       patientId: checkout.patientId,
       professionalId: checkout.createdById,
