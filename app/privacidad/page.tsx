@@ -112,7 +112,7 @@ export default function PrivacidadPage() {
             </li>
             <li>
               <strong>Datos de pago</strong>: gestionados íntegramente por{" "}
-              <strong>Stripe</strong>. Nosotros nunca vemos ni almacenamos los
+              <strong>PayPal</strong>. Nosotros nunca vemos ni almacenamos los
               datos completos de tu tarjeta — solo el resultado del cobro
               (importe, fecha, estado).
             </li>
@@ -165,7 +165,7 @@ export default function PrivacidadPage() {
               en la UE).
             </li>
             <li>
-              <strong>Stripe</strong> (procesamiento de pagos, certificado PCI
+              <strong>PayPal</strong> (procesamiento de pagos, certificado PCI
               DSS).
             </li>
             <li>

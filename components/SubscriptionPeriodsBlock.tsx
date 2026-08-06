@@ -283,6 +283,8 @@ function AddRenewalModal({
   const [periodMonths, setPeriodMonths] = useState("4");
   const [amountEuros, setAmountEuros] = useState("");
   const [notes, setNotes] = useState("");
+  // Fraccionamiento del enlace de pago (null/1 = pago único; 2..12 = N cuotas mensuales vía PayPal)
+  const [installmentCount, setInstallmentCount] = useState<number | null>(null);
   // Fecha de inicio opcional solo en modo manual. Si se rellena, el
   // endpoint la respeta (puede ser pasada o futura). Si se deja vacía,
   // aplica la lógica antigua: activo empieza hoy, scheduled tras el actual.
@@ -302,6 +304,7 @@ function AddRenewalModal({
         programType,
         durationMonths: Number(periodMonths),
         amountEuros: Number(amountEuros),
+        installmentCount,
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -493,6 +496,43 @@ function AddRenewalModal({
                   </p>
                 )}
               </>
+            )}
+
+            {/* Fraccionamiento (solo en modo enlace de pago). Igual que en el modal de altas. */}
+            {mode === "link" && (
+              <div>
+                <label className="text-xs text-neutral-500 block mb-1">¿Cómo lo cobramos?</label>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {[null, 2, 3, 4, 6].map((n) => {
+                    const active = installmentCount === n;
+                    const label = n === null ? "1 pago" : `${n} cuotas`;
+                    return (
+                      <button
+                        key={n ?? "one"}
+                        type="button"
+                        onClick={() => setInstallmentCount(n)}
+                        className={`px-2 py-2 rounded-lg border text-xs font-medium ${
+                          active
+                            ? "bg-neutral-900 text-white border-neutral-900"
+                            : "bg-white border-neutral-200 hover:bg-neutral-50"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {installmentCount !== null && amountEuros && Number(amountEuros) > 0 && (
+                  <p className="text-[11px] text-neutral-500 italic mt-1.5">
+                    PayPal cobrará {installmentCount} × {(Number(amountEuros) / installmentCount).toFixed(2).replace(".", ",")} € mensuales.
+                  </p>
+                )}
+                {installmentCount === null && (
+                  <p className="text-[11px] text-neutral-500 italic mt-1.5">
+                    Pago único. PayPal ofrecerá "Paga en 3 plazos" si el cliente califica.
+                  </p>
+                )}
+              </div>
             )}
 
             {error && <p className="text-sm text-red-600">{error}</p>}

@@ -2202,6 +2202,13 @@ model RenewalCheckout {
   stripePaymentIntentId String?
   paymentMethod         String?
 
+  // PayPal (Fase 3): pago único o suscripción con N cuotas mensuales
+  paypalOrderId         String?  @unique
+  paypalCaptureId       String?
+  paypalSubscriptionId  String?  @unique
+  paypalPlanId          String?
+  installmentCount      Int?     // null/1 → pago único; 2..12 → N cuotas
+
   status        String   @default("pending")         // "pending" | "paid" | "failed" | "expired"
   paidAt        DateTime?
   renewalId     String?                              // SubscriptionRenewal creado al pagar
