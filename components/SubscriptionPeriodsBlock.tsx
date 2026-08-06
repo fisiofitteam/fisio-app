@@ -11,6 +11,7 @@ type Renewal = {
   status: string;
   amountPaid: number | null;
   notes: string | null;
+  isReservation?: boolean;
 };
 
 type Pause = {
@@ -166,6 +167,15 @@ export function SubscriptionPeriodsBlock({
                         {r.programType}
                       </span>
                     )}
+                    {r.isReservation && (
+                      <span
+                        className="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded"
+                        style={{ background: "#FEF3C7", color: "#78350F", border: "1px solid #F59E0B" }}
+                        title="Reserva de plaza: señal para mantener el sitio hasta que renueve del todo."
+                      >
+                        🎟️ RESERVA
+                      </span>
+                    )}
                   </div>
                   {allowEdit && (
                     <div className="flex gap-1 shrink-0">
@@ -285,6 +295,9 @@ function AddRenewalModal({
   const [notes, setNotes] = useState("");
   // Fraccionamiento del enlace de pago (null/1 = pago único; 2..12 = N cuotas mensuales vía PayPal)
   const [installmentCount, setInstallmentCount] = useState<number | null>(null);
+  // Reserva de plaza: señal fija (edit importe/duración) para mantener el sitio
+  // hasta que renueve del todo. Fuerza pago único y no descuenta del futuro.
+  const [isReservation, setIsReservation] = useState(false);
   // Fecha de inicio opcional solo en modo manual. Si se rellena, el
   // endpoint la respeta (puede ser pasada o futura). Si se deja vacía,
   // aplica la lógica antigua: activo empieza hoy, scheduled tras el actual.
@@ -304,7 +317,8 @@ function AddRenewalModal({
         programType,
         durationMonths: Number(periodMonths),
         amountEuros: Number(amountEuros),
-        installmentCount,
+        installmentCount: isReservation ? null : installmentCount,
+        isReservation,
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -416,6 +430,37 @@ function AddRenewalModal({
                 : "Registra la renovación directamente (sin pago online). Solo para casos puntuales."}
             </p>
 
+            {/* Toggle Reserva de plaza (solo en modo enlace). Prefill 100€/1m
+                pero se pueden editar. Fuerza pago único. */}
+            {mode === "link" && (
+              <div className="rounded-lg p-2.5 border" style={{ background: isReservation ? "#FEF3C7" : "#FAFAFA", borderColor: isReservation ? "#F59E0B" : "#E5E7EB" }}>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isReservation}
+                    onChange={(e) => {
+                      const on = e.target.checked;
+                      setIsReservation(on);
+                      if (on) {
+                        setAmountEuros("100");
+                        setPeriodMonths("1");
+                        setInstallmentCount(null);
+                      }
+                    }}
+                  />
+                  <span className="text-xs font-semibold" style={{ color: isReservation ? "#78350F" : "#374151" }}>
+                    🎟️ Reserva de plaza (señal)
+                  </span>
+                </label>
+                {isReservation && (
+                  <p className="text-[11px] mt-1.5" style={{ color: "#78350F" }}>
+                    El paciente paga una señal para guardar su sitio y mantener acceso a la app.
+                    <strong> No descuenta</strong> del importe de la renovación real posterior.
+                  </p>
+                )}
+              </div>
+            )}
+
             <div>
               <label className="text-xs text-neutral-500 block mb-1">¿A qué programa renueva?</label>
               <div className="flex gap-1">
@@ -498,8 +543,9 @@ function AddRenewalModal({
               </>
             )}
 
-            {/* Fraccionamiento (solo en modo enlace de pago). Igual que en el modal de altas. */}
-            {mode === "link" && (
+            {/* Fraccionamiento (solo en modo enlace de pago y no reserva).
+                Una reserva es siempre pago único, no tiene sentido cuotas. */}
+            {mode === "link" && !isReservation && (
               <div>
                 <label className="text-xs text-neutral-500 block mb-1">¿Cómo lo cobramos?</label>
                 <div className="grid grid-cols-5 gap-1.5">

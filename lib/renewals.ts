@@ -215,6 +215,8 @@ export async function applyRenewal(opts: {
   amountPaid?: number | null;
   professionalId?: string | null;
   notes?: string | null;
+  /** Reserva de plaza: marca el SubscriptionRenewal como reserva (badge). */
+  isReservation?: boolean;
 }): Promise<{ renewalId: string; status: "active" | "scheduled" }> {
   const { patientId, programType, professionalId } = opts;
   const months = Number(opts.periodMonths) || 4;
@@ -257,6 +259,7 @@ export async function applyRenewal(opts: {
       status,
       amountPaid: opts.amountPaid != null ? Number(opts.amountPaid) : null,
       notes: opts.notes?.trim() || null,
+      isReservation: opts.isReservation === true,
     },
   });
 
