@@ -111,53 +111,78 @@ export async function computeMonthlySalary(
   // Estrategia: traemos los periodos del mes con la fecha (decidedAt) y,
   // por paciente, comprobamos si el atleta tiene periodos anteriores a
   // ese decidedAt. Si no, es el alta inicial y no computa como renovacion.
-  // Ojo con las RESERVAS DE PLAZA: son señal, no una renovación real.
-  // No cuentan en el count (renewalOwnCount) pero SÍ en el revenue
-  // (renewalOwnRevenue) — el fisio cobra la comisión sobre los 100€ igual
-  // que sobre el resto. Cuando el paciente hace la renovación real, el
-  // importe pagado por la reserva se descuenta del total, y esa renovación
-  // real llega aquí ya con el importe descontado (isReservation=false).
-  const monthRenewals = await prisma.subscriptionRenewal.findMany({
-    where: { decidedAt: { gte: start, lt: end } },
+  // Renovaciones atribuidas al mes por VENCIMIENTO DEL PROGRAMA DEL PACIENTE
+  // (endDate del periodo previo), no por decidedAt del registro (regla
+  // acordada con Alberto, 2026-08-06). Así una renovación tardía —el paciente
+  // renovó en agosto pero su programa vencía en julio— cuenta en JULIO tanto
+  // en la factura del fisio como en las métricas.
+  //
+  // Estrategia: partimos de los periodos cuyo endDate cae en el mes; para
+  // cada uno buscamos si tiene follow-up (renovación real). Si sí, ese
+  // follow-up cuenta para la compensación de este mes.
+  //
+  // RESERVAS DE PLAZA: son señal, no una renovación real. Su vencimiento
+  // no cuenta como "mes de renovación" (no atribuimos comisiones a un mes
+  // donde solo venció una reserva), pero SÍ se cuenta el importe cobrado
+  // por la reserva como revenue del mes en que vencía el PREVIO A ELLA
+  // (o del mes de su decidedAt si es primera reserva sin previo).
+  //
+  // Para simplificar y mantener coherencia con las métricas: incluimos el
+  // amountPaid de la reserva en el revenue del follow-up (renovación real)
+  // que la consuma. Y por si acaso el fisio hizo una reserva pero no
+  // renovación aún, contamos también las reservas cuyo previo vencía en
+  // el mes como revenue puntual (sin count).
+  const endedInMonth = await prisma.subscriptionRenewal.findMany({
+    where: {
+      endDate: { gte: start, lt: end },
+      isReservation: false,
+      patient: { isTest: false },
+    },
     select: {
       id: true,
       patientId: true,
-      amountPaid: true,
-      decidedAt: true,
-      isReservation: true,
+      endDate: true,
       patient: { select: { assignedProfessionalId: true } },
     },
   });
+
   let renewalOwnCount = 0;
   let renewalOwnRevenue = 0;
   let renewalOthersRevenue = 0;
-  if (monthRenewals.length > 0) {
-    // Contamos, para cada paciente involucrado, cuantos periodos previos
-    // (anteriores a la fecha del periodo actual) tiene. Solo con ≥1
-    // consideramos que es renovacion real.
-    const patientIds = Array.from(new Set(monthRenewals.map((r) => r.patientId)));
-    const earlierByPatient: Record<string, number> = {};
-    // Una unica query traedo todo el historial de esos pacientes.
-    const history = await prisma.subscriptionRenewal.findMany({
+
+  if (endedInMonth.length > 0) {
+    const patientIds = Array.from(new Set(endedInMonth.map((e) => e.patientId)));
+    const followUps = await prisma.subscriptionRenewal.findMany({
       where: { patientId: { in: patientIds } },
-      select: { patientId: true, decidedAt: true, id: true },
+      select: {
+        id: true,
+        patientId: true,
+        startDate: true,
+        amountPaid: true,
+        isReservation: true,
+      },
     });
-    for (const r of monthRenewals) {
-      const priorCount = history.filter((h) =>
-        h.patientId === r.patientId && h.id !== r.id && h.decidedAt < r.decidedAt
-      ).length;
-      earlierByPatient[r.id] = priorCount;
-    }
-    for (const r of monthRenewals) {
-      const isRealRenewal = (earlierByPatient[r.id] ?? 0) > 0;
-      if (!isRealRenewal) continue; // alta inicial — no computa
-      const amt = r.amountPaid || 0;
-      if (r.patient?.assignedProfessionalId === professionalId) {
-        // Reserva: cobra comisión (revenue) pero NO suma al count.
-        if (!r.isReservation) renewalOwnCount++;
-        renewalOwnRevenue += amt;
-      } else {
-        renewalOthersRevenue += amt;
+
+    for (const e of endedInMonth) {
+      if (!e.endDate) continue;
+      const cutoff = new Date(e.endDate.getTime() - 86400000);
+      // Todos los follow-ups del paciente (reales o reserva) que arrancan
+      // en o después del vencimiento del previo — les atribuimos al mes.
+      const attributed = followUps.filter(
+        (h) => h.patientId === e.patientId && h.id !== e.id && h.startDate && h.startDate.getTime() >= cutoff.getTime(),
+      );
+      if (attributed.length === 0) continue;
+
+      const isOwn = e.patient?.assignedProfessionalId === professionalId;
+      for (const h of attributed) {
+        const amt = h.amountPaid || 0;
+        if (isOwn) {
+          // Reserva: revenue sí, count no.
+          if (!h.isReservation) renewalOwnCount++;
+          renewalOwnRevenue += amt;
+        } else {
+          renewalOthersRevenue += amt;
+        }
       }
     }
   }
