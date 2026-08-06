@@ -47,8 +47,8 @@ export async function createPatientAlert(input: CreateAlertInput) {
 /**
  * Cuenta alertas visibles (warn+) aun sin ver. Es lo que pinta el badge de
  * la sidebar. Si assignedProfessionalId se pasa, filtra a los pacientes
- * de ese fisio Y excluye ADVANCE (el CEO gestiona ADVANCE, no los fisios).
- * Si es null, cuenta globales (para roles CEO/head_success).
+ * de ese fisio (incluyendo ADVANCE si le están asignados). Si es null,
+ * cuenta globales (para roles CEO/head_success).
  */
 export async function countUnseenAlerts(assignedProfessionalId?: string | null): Promise<number> {
   const where: any = {
@@ -62,8 +62,6 @@ export async function countUnseenAlerts(assignedProfessionalId?: string | null):
     where.patient = {
       ...where.patient,
       assignedProfessionalId,
-      // Los fisios normales no ven pacientes ADVANCE (los lleva el CEO).
-      NOT: { programType: "ADVANCE" },
     };
   }
   return await (prisma as any).patientAlert.count({ where });
@@ -93,7 +91,6 @@ export async function listAlerts(f: AlertListFilters) {
       where.patient = {
         ...where.patient,
         assignedProfessionalId: f.professionalId,
-        NOT: { programType: "ADVANCE" },
       };
     }
   } else {
