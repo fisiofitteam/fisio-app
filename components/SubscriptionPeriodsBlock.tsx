@@ -298,6 +298,9 @@ function AddRenewalModal({
   // Reserva de plaza: señal fija (edit importe/duración) para mantener el sitio
   // hasta que renueve del todo. Fuerza pago único y no descuenta del futuro.
   const [isReservation, setIsReservation] = useState(false);
+  // Reserva pendiente de aplicar: si el paciente ya pagó una reserva y aún
+  // no ha renovado del todo, se descuenta automáticamente en la renovación real.
+  const [pendingReservation, setPendingReservation] = useState<{ id: string; amount: number } | null>(null);
   // Fecha de inicio opcional solo en modo manual. Si se rellena, el
   // endpoint la respeta (puede ser pasada o futura). Si se deja vacía,
   // aplica la lógica antigua: activo empieza hoy, scheduled tras el actual.
@@ -306,6 +309,18 @@ function AddRenewalModal({
   const [error, setError] = useState("");
   const [link, setLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Al montar el modal, consultamos si hay reserva pendiente para
+  // aplicar el descuento automático cuando el fisio genere una renovación real.
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`/api/patients/${patientId}/renewal-link`);
+        const data = await res.json().catch(() => ({}));
+        if (data?.pendingReservation) setPendingReservation(data.pendingReservation);
+      } catch {}
+    })();
+  }, [patientId]);
 
   async function generate() {
     setError("");
@@ -430,9 +445,25 @@ function AddRenewalModal({
                 : "Registra la renovación directamente (sin pago online). Solo para casos puntuales."}
             </p>
 
-            {/* Toggle Reserva de plaza (solo en modo enlace). Prefill 100€/1m
-                pero se pueden editar. Fuerza pago único. */}
-            {mode === "link" && (
+            {/* Aviso de reserva pendiente que se descontará automáticamente
+                cuando se genere una renovación real (no aplica en modo
+                reserva ni en modo manual). */}
+            {mode === "link" && !isReservation && pendingReservation && (
+              <div className="rounded-lg p-2.5 border" style={{ background: "#E0F2FE", borderColor: "#0284C7" }}>
+                <p className="text-xs" style={{ color: "#075985" }}>
+                  <strong>🎟️ Reserva pendiente de aplicar</strong>: {pendingReservation.amount.toFixed(2).replace(".", ",")} €
+                </p>
+                <p className="text-[11px] mt-1" style={{ color: "#0369A1" }}>
+                  Pon el importe TOTAL nominal de la renovación — se descontará la reserva
+                  automáticamente al generar el link. El cliente pagará {" "}
+                  <strong>importe − {pendingReservation.amount.toFixed(2).replace(".", ",")} €</strong>.
+                </p>
+              </div>
+            )}
+
+            {/* Toggle Reserva de plaza (solo en modo enlace y sin reserva
+                pendiente ya cobrada — no tiene sentido apilar dos reservas). */}
+            {mode === "link" && !pendingReservation && (
               <div className="rounded-lg p-2.5 border" style={{ background: isReservation ? "#FEF3C7" : "#FAFAFA", borderColor: isReservation ? "#F59E0B" : "#E5E7EB" }}>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input

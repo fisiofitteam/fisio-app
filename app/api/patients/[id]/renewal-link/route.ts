@@ -6,6 +6,41 @@ import { generatePaymentToken } from "@/lib/stripe";
 const TOKEN_VALIDITY_DAYS = 7;
 const PROGRAMS = ["RECUPERA", "CONSOLIDA", "ADVANCE"];
 
+/**
+ * Localiza la reserva de plaza pendiente de aplicar: SubscriptionRenewal
+ * marcado como reserva, pagado (importe > 0) y aún no consumido en una
+ * renovación real. Si hay varias, devuelve la más reciente.
+ */
+async function findPendingReservation(patientId: string) {
+  return await prisma.subscriptionRenewal.findFirst({
+    where: {
+      patientId,
+      isReservation: true,
+      reservationConsumedAt: null,
+      amountPaid: { gt: 0 },
+    },
+    orderBy: { decidedAt: "desc" },
+    select: { id: true, amountPaid: true, decidedAt: true },
+  });
+}
+
+/**
+ * GET /api/patients/[id]/renewal-link?probe=1
+ * Devuelve la reserva pendiente si existe. Sirve para que el modal del
+ * fisio muestre "tiene reserva de X€ pendiente, se descontará" antes de
+ * escribir el importe.
+ */
+export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+  const user = await getActiveProfessional();
+  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const reservation = await findPendingReservation(params.id);
+  return NextResponse.json({
+    pendingReservation: reservation
+      ? { id: reservation.id, amount: reservation.amountPaid ?? 0 }
+      : null,
+  });
+}
+
 // POST /api/patients/[id]/renewal-link
 // Crea un enlace de pago de renovación para el paciente. Solo CEO/head_success.
 // body: { programType, durationMonths, amountEuros }
@@ -52,7 +87,32 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
   }
 
-  const amountCents = Math.round(amountEuros * 100);
+  // Renovación REAL: si hay reserva de plaza pendiente, descontamos su
+  // importe. La reserva se marca como "consumida" ahora (aunque el pago
+  // real aún esté pendiente) para evitar que dos links simultáneos se
+  // lleven la misma reserva. Si el enlace no llega a pagarse el fisio
+  // puede eliminarlo desde el panel y regenerarlo — no se re-abre la
+  // reserva automáticamente, es más seguro que arriesgar duplicidades.
+  let amountCents = Math.round(amountEuros * 100);
+  let discountCents = 0;
+  let consumedReservationId: string | null = null;
+  if (!isReservation) {
+    const pending = await findPendingReservation(patient.id);
+    if (pending && (pending.amountPaid ?? 0) > 0) {
+      discountCents = Math.round((pending.amountPaid ?? 0) * 100);
+      if (discountCents >= amountCents) {
+        return NextResponse.json(
+          {
+            error: `El importe (${amountEuros.toFixed(2)}€) es menor o igual que la reserva pendiente (${(pending.amountPaid ?? 0).toFixed(2)}€). Sube el importe.`,
+          },
+          { status: 400 }
+        );
+      }
+      amountCents -= discountCents;
+      consumedReservationId = pending.id;
+    }
+  }
+
   const tokenExpiresAt = new Date();
   tokenExpiresAt.setDate(tokenExpiresAt.getDate() + TOKEN_VALIDITY_DAYS);
 
@@ -72,9 +132,20 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     select: { paymentToken: true },
   });
 
+  // Marcar reserva como consumida (idempotente si ya lo estaba: nadie
+  // más la puede pillar en carrera). Se hace después de crear el
+  // checkout para asegurar que el link ya existe.
+  if (consumedReservationId) {
+    await prisma.subscriptionRenewal.update({
+      where: { id: consumedReservationId },
+      data: { reservationConsumedAt: new Date() },
+    });
+  }
+
   return NextResponse.json({
     token: checkout.paymentToken,
     url: `/renovar/${checkout.paymentToken}`,
     amountCents,
+    discountCents,
   });
 }
