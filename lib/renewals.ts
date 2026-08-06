@@ -49,9 +49,11 @@ export async function getRenewalActivityInPeriod(from: Date, to: Date): Promise<
   // Filtramos por startDate (fecha efectiva del nuevo periodo) en vez
   // de decidedAt (cuándo se creó el registro), para que renovaciones
   // manuales registradas a posteriori aparezcan en el mes real.
+  // Excluimos reservas de plaza — son "señal", no una renovación real.
   const startedInPeriod = await prisma.subscriptionRenewal.findMany({
     where: {
       startDate: { gte: from, lte: effectiveTo },
+      isReservation: false,
       patient: { isTest: false },
     },
     select: {
@@ -100,9 +102,13 @@ export async function getRenewalActivityInPeriod(from: Date, to: Date): Promise<
   // Aquí es crítico usar `effectiveTo` (hoy): un periodo que vence el 20
   // de agosto no debería contar como "perdido" en agosto si estamos a
   // día 4 — todavía tiene margen para renovar.
+  // Igual que arriba: las reservas no cuentan como "pérdida" — su vencimiento
+  // solo indica que hay que perseguir la renovación real, no que el cliente
+  // se ha ido.
   const endedInPeriod = await prisma.subscriptionRenewal.findMany({
     where: {
       endDate: { gte: from, lte: effectiveTo },
+      isReservation: false,
       patient: { isTest: false },
     },
     select: {
@@ -165,7 +171,10 @@ export type RealRenewalRow = {
  */
 export async function listRealRenewalsInPeriod(from: Date, to: Date): Promise<RealRenewalRow[]> {
   const periodRenewals = await prisma.subscriptionRenewal.findMany({
-    where: { decidedAt: { gte: from, lte: to } },
+    where: {
+      decidedAt: { gte: from, lte: to },
+      isReservation: false, // las reservas de plaza no son renovaciones
+    },
     select: {
       id: true,
       patientId: true,

@@ -111,6 +111,12 @@ export async function computeMonthlySalary(
   // Estrategia: traemos los periodos del mes con la fecha (decidedAt) y,
   // por paciente, comprobamos si el atleta tiene periodos anteriores a
   // ese decidedAt. Si no, es el alta inicial y no computa como renovacion.
+  // Ojo con las RESERVAS DE PLAZA: son señal, no una renovación real.
+  // No cuentan en el count (renewalOwnCount) pero SÍ en el revenue
+  // (renewalOwnRevenue) — el fisio cobra la comisión sobre los 100€ igual
+  // que sobre el resto. Cuando el paciente hace la renovación real, el
+  // importe pagado por la reserva se descuenta del total, y esa renovación
+  // real llega aquí ya con el importe descontado (isReservation=false).
   const monthRenewals = await prisma.subscriptionRenewal.findMany({
     where: { decidedAt: { gte: start, lt: end } },
     select: {
@@ -118,6 +124,7 @@ export async function computeMonthlySalary(
       patientId: true,
       amountPaid: true,
       decidedAt: true,
+      isReservation: true,
       patient: { select: { assignedProfessionalId: true } },
     },
   });
@@ -146,7 +153,8 @@ export async function computeMonthlySalary(
       if (!isRealRenewal) continue; // alta inicial — no computa
       const amt = r.amountPaid || 0;
       if (r.patient?.assignedProfessionalId === professionalId) {
-        renewalOwnCount++;
+        // Reserva: cobra comisión (revenue) pero NO suma al count.
+        if (!r.isReservation) renewalOwnCount++;
         renewalOwnRevenue += amt;
       } else {
         renewalOthersRevenue += amt;
