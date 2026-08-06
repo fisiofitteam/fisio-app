@@ -486,7 +486,7 @@ function AddRenewalModal({
                 {isReservation && (
                   <p className="text-[11px] mt-1.5" style={{ color: "#78350F" }}>
                     El paciente paga una señal para guardar su sitio y mantener acceso a la app.
-                    <strong> No descuenta</strong> del importe de la renovación real posterior.
+                    <strong> Se descontará automáticamente</strong> del importe cuando renueve del todo.
                   </p>
                 )}
               </div>
