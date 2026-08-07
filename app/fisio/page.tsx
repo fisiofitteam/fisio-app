@@ -173,12 +173,62 @@ export default async function FisioPanelPage({
   // Recortamos a 5 tras filtrar para el recuadro compacto.
   const pendingForms = pendingFormSessions.filter(hasPendingFormReview).slice(0, 5);
 
-  const withRenewal = patients
-    .map((p) => ({ patient: p, days: daysUntilRenewal(p.subscriptionStartDate, p.subscriptionPeriodMonths) }))
-    .filter((x) => x.days !== null)
-    .sort((a, b) => (a.days! - b.days!))
+  // Renovaciones próximas: partimos del endDate REAL del SubscriptionRenewal
+  // activo/scheduled más tardío de cada paciente (no del subscriptionStartDate
+  // inicial + periodMonths, que no refleja renovaciones — los pacientes
+  // renovados salían como "vencida hace 29 días").
+  //
+  // Ventana: [hoy - 7d, hoy + 60d]. Vencidas hace menos de una semana
+  // siguen apareciendo (chase pendiente); las de hace más se salen del
+  // recuadro porque saturan la vista y ya se ven en /fisio/pacientes.
+  //
+  // Filtramos por assigned al fisio si no es manager, y por pacientes
+  // activos (activePatientCondition + no test). Reservas de plaza NO
+  // cuentan como "renovación cubierta": el paciente tiene reserva, pero
+  // su renovación real sigue pendiente — para saber cuándo hay que
+  // perseguir, miramos el endDate del último periodo NO reserva.
+  const renewalsWindowFrom = new Date();
+  renewalsWindowFrom.setDate(renewalsWindowFrom.getDate() - 7);
+  const renewalsWindowTo = new Date();
+  renewalsWindowTo.setDate(renewalsWindowTo.getDate() + 60);
+  const activePeriods = await prisma.subscriptionRenewal.findMany({
+    where: {
+      status: { in: ["active", "scheduled"] },
+      isReservation: false,
+      endDate: { gte: renewalsWindowFrom, lte: renewalsWindowTo },
+      patient: {
+        isTest: false,
+        ...activePatientCondition(),
+        ...(isManager ? {} : { assignedProfessionalId: user.id }),
+      },
+    },
+    select: {
+      patientId: true,
+      endDate: true,
+      patient: { select: { id: true, fullName: true } },
+    },
+  });
+  // Cuando un paciente tiene active + scheduled, nos quedamos con el endDate
+  // más tardío (que es el próximo vencimiento real, ya que el scheduled
+  // arranca cuando acaba el active).
+  const byPatient = new Map<string, { patient: { id: string; fullName: string }; endDate: Date }>();
+  for (const p of activePeriods) {
+    if (!p.endDate) continue;
+    const prev = byPatient.get(p.patientId);
+    if (!prev || p.endDate.getTime() > prev.endDate.getTime()) {
+      byPatient.set(p.patientId, { patient: p.patient, endDate: p.endDate });
+    }
+  }
+  const nowStart = new Date();
+  nowStart.setHours(0, 0, 0, 0);
+  const withRenewal = Array.from(byPatient.values())
+    .map(({ patient, endDate }) => ({
+      patient,
+      days: Math.round((endDate.getTime() - nowStart.getTime()) / 86400000),
+    }))
+    .sort((a, b) => a.days - b.days)
     .slice(0, 5);
-  const renewalsIn30 = withRenewal.filter((x) => x.days !== null && x.days <= 30).length;
+  const renewalsIn30 = withRenewal.filter((x) => x.days >= 0 && x.days <= 30).length;
 
   // Programas asignados a punto de terminar (≤7 días) → recuadro + campanita
   const programEndings = await getProgramEndingsForProfessional(user.id);
