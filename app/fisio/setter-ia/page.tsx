@@ -101,6 +101,22 @@ export default async function SetterIaPage({
         </p>
       </header>
 
+      {/* Aviso: la API actual de Skalex solo permite buscar por identidad,
+          así que solo vemos conversaciones cuya @Instagram o teléfono ya
+          existe en nuestro CRM (Lead/Patient). Las fases anteriores del
+          funnel (aún sin agendar) están fuera del scope. */}
+      <div
+        className="mb-5 rounded-lg p-3 text-xs"
+        style={{ background: "#FEF3C7", border: "1px solid #F59E0B", color: "#78350F" }}
+      >
+        <strong>⚠ Vista parcial del funnel</strong> — Skalex solo nos deja consultar por
+        identidad, así que aquí ves las conversaciones cuyo <em>@Instagram</em> o
+        teléfono ya está en tu CRM. Los leads que están en fases anteriores (aún
+        no han agendado y no existen en tu CRM) no aparecen. Pendiente que
+        Skalex nos habilite listado paginado o filtro por etiqueta para pintar
+        el funnel completo.
+      </div>
+
       {/* Selector de periodo */}
       <div className="flex flex-wrap items-center gap-2 mb-5">
         <PeriodBtn href={linkPeriod("month")} active={range.period === "month"} label="Este mes" />
