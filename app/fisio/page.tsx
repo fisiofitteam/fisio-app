@@ -178,9 +178,9 @@ export default async function FisioPanelPage({
   // inicial + periodMonths, que no refleja renovaciones — los pacientes
   // renovados salían como "vencida hace 29 días").
   //
-  // Ventana: [hoy - 7d, hoy + 60d]. Vencidas hace menos de una semana
-  // siguen apareciendo (chase pendiente); las de hace más se salen del
-  // recuadro porque saturan la vista y ya se ven en /fisio/pacientes.
+  // Ventana: solo FUTURAS, de hoy a +30 días. Las vencidas no salen aquí
+  // (ya se ven en /fisio/pacientes y en otros paneles). Las de más de 30
+  // días también se salen para no saturar.
   //
   // Filtramos por assigned al fisio si no es manager, y por pacientes
   // activos (activePatientCondition + no test). Reservas de plaza NO
@@ -188,9 +188,9 @@ export default async function FisioPanelPage({
   // su renovación real sigue pendiente — para saber cuándo hay que
   // perseguir, miramos el endDate del último periodo NO reserva.
   const renewalsWindowFrom = new Date();
-  renewalsWindowFrom.setDate(renewalsWindowFrom.getDate() - 7);
+  renewalsWindowFrom.setHours(0, 0, 0, 0);
   const renewalsWindowTo = new Date();
-  renewalsWindowTo.setDate(renewalsWindowTo.getDate() + 60);
+  renewalsWindowTo.setDate(renewalsWindowTo.getDate() + 30);
   const activePeriods = await prisma.subscriptionRenewal.findMany({
     where: {
       status: { in: ["active", "scheduled"] },
