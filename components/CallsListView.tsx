@@ -7,6 +7,7 @@ import { SendCaseFlow, type SendCaseTemplate, type SuccessCaseOption } from "@/c
 import { SendDirectButton } from "@/components/SendDirectButton";
 import { SendAppLinkButton } from "@/components/SendAppLinkButton";
 import { ManualSaleButton } from "@/components/ManualSaleButton";
+import { LeadAiSummaryBlock } from "@/components/LeadAiSummaryBlock";
 import {
   datetimeLocalInputToUtcIso,
   utcIsoToDatetimeLocalInput,
@@ -113,6 +114,7 @@ export function CallsListView({
   meetingReminderTemplates,
   successCases,
   currentUserCloserIntro,
+  skalexAiByLeadId,
 }: {
   activeStatus: string;
   activeCloserId: string;
@@ -125,6 +127,8 @@ export function CallsListView({
   meetingReminderTemplates: DirectTemplate[];
   successCases: SuccessCaseOption[];
   currentUserCloserIntro: string | null;
+  /** Análisis IA (Skalex/Zapp) por leadId. Se muestra en la card si existe. */
+  skalexAiByLeadId?: Record<string, import("@/lib/skalex/summaries").LeadAiSummary>;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState<Lead | null>(null);
@@ -230,13 +234,13 @@ export function CallsListView({
       ) : showGrouped ? (
         <div className="space-y-4">
           {today.length > 0 && (
-            <CallsGroup label="Hoy" badge="amber" leads={today} currentUser={currentUser} onClick={setEditing} sendCaseProps={{ successCaseTemplates, meetingReminderTemplates, successCases, currentUserCloserIntro }} />
+            <CallsGroup label="Hoy" badge="amber" leads={today} currentUser={currentUser} onClick={setEditing} sendCaseProps={{ successCaseTemplates, meetingReminderTemplates, successCases, currentUserCloserIntro }} skalexAiByLeadId={skalexAiByLeadId} />
           )}
           {thisWeek.length > 0 && (
-            <CallsGroup label="Esta semana" badge="blue" leads={thisWeek} currentUser={currentUser} onClick={setEditing} sendCaseProps={{ successCaseTemplates, meetingReminderTemplates, successCases, currentUserCloserIntro }} />
+            <CallsGroup label="Esta semana" badge="blue" leads={thisWeek} currentUser={currentUser} onClick={setEditing} sendCaseProps={{ successCaseTemplates, meetingReminderTemplates, successCases, currentUserCloserIntro }} skalexAiByLeadId={skalexAiByLeadId} />
           )}
           {future.length > 0 && (
-            <CallsGroup label="Próximas" badge="neutral" leads={future} currentUser={currentUser} onClick={setEditing} sendCaseProps={{ successCaseTemplates, meetingReminderTemplates, successCases, currentUserCloserIntro }} />
+            <CallsGroup label="Próximas" badge="neutral" leads={future} currentUser={currentUser} onClick={setEditing} sendCaseProps={{ successCaseTemplates, meetingReminderTemplates, successCases, currentUserCloserIntro }} skalexAiByLeadId={skalexAiByLeadId} />
           )}
         </div>
       ) : (
@@ -250,6 +254,7 @@ export function CallsListView({
                 fisios={fisios}
                 onClick={() => setEditing(lead)}
                 sendCaseProps={{ successCaseTemplates, meetingReminderTemplates, successCases, currentUserCloserIntro }}
+                aiSummary={skalexAiByLeadId?.[lead.id]}
               />
             ))}
           </div>
@@ -309,6 +314,7 @@ function CallsGroup({
   currentUser,
   onClick,
   sendCaseProps,
+  skalexAiByLeadId,
 }: {
   label: string;
   badge: "amber" | "blue" | "neutral";
@@ -316,6 +322,7 @@ function CallsGroup({
   currentUser: { id: string; fullName: string; role: string };
   onClick: (lead: Lead) => void;
   sendCaseProps: SendCaseProps;
+  skalexAiByLeadId?: Record<string, import("@/lib/skalex/summaries").LeadAiSummary>;
 }) {
   const badgeClass =
     badge === "amber" ? "bg-amber-100 text-amber-800 border-amber-200"
@@ -331,7 +338,7 @@ function CallsGroup({
       </div>
       <div className="divide-y divide-neutral-100">
         {leads.map((lead) => (
-          <CallRow key={lead.id} lead={lead} currentUser={currentUser} onClick={() => onClick(lead)} sendCaseProps={sendCaseProps} />
+          <CallRow key={lead.id} lead={lead} currentUser={currentUser} onClick={() => onClick(lead)} sendCaseProps={sendCaseProps} aiSummary={skalexAiByLeadId?.[lead.id]} />
         ))}
       </div>
     </section>
@@ -344,12 +351,14 @@ function CallRow({
   fisios,
   onClick,
   sendCaseProps,
+  aiSummary,
 }: {
   lead: Lead;
   currentUser: { id: string; fullName: string; role: string };
   fisios?: Pro[];
   onClick: () => void;
   sendCaseProps: SendCaseProps;
+  aiSummary?: import("@/lib/skalex/summaries").LeadAiSummary;
 }) {
   return (
     <button onClick={onClick} className="w-full text-left py-3 px-2 -mx-2 hover:bg-neutral-50 rounded transition-colors">
@@ -493,6 +502,7 @@ function CallRow({
           </div>
         </div>
       </div>
+      {aiSummary && aiSummary.analysis && <LeadAiSummaryBlock summary={aiSummary} />}
     </button>
   );
 }

@@ -9,6 +9,7 @@ import {
   nowPlusHoursForInput,
 } from "@/lib/datetime-local";
 import { LeadSourceTagPicker, LeadSourceTagChip } from "@/components/LeadSourceTagPicker";
+import { LeadAiSummaryBlock } from "@/components/LeadAiSummaryBlock";
 
 type Pro = { id: string; fullName: string; role: string };
 
@@ -57,11 +58,14 @@ export function SetterLeadsView({
   counts,
   closers,
   leads,
+  skalexAiByLeadId,
 }: {
   activeFilter: string;
   counts: Record<string, number>;
   closers: Pro[];
   leads: Lead[];
+  /** Análisis IA (Skalex/Zapp) por leadId. */
+  skalexAiByLeadId?: Record<string, import("@/lib/skalex/summaries").LeadAiSummary>;
 }) {
   const router = useRouter();
   const [showNew, setShowNew] = useState(false);
@@ -210,6 +214,7 @@ export function SetterLeadsView({
                   {lead.aiSummary && (
                     <p className="text-xs text-neutral-600 italic mt-2">"{lead.aiSummary}"</p>
                   )}
+                  <LeadAiSummaryBlock summary={skalexAiByLeadId?.[lead.id]} />
                 </button>
                 <div className="text-right flex-shrink-0">
                   <div className="text-xs font-medium text-blue-700 whitespace-nowrap">

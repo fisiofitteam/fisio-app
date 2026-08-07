@@ -55,11 +55,16 @@ export default async function LeadsPage({
     counts[c.id] = allPending.filter((l) => l.closerId === c.id).length;
   }
 
+  // Análisis IA de Skalex (Zapp) por lead, para pintarlo en cada card.
+  const { getSkalexAiForLeads } = await import("@/lib/skalex/summaries");
+  const skalexAiByLeadId = await getSkalexAiForLeads(leads.map((l) => l.id));
+
   return (
     <SetterLeadsView
       activeFilter={activeFilter}
       counts={counts}
       closers={closers.map((c) => ({ id: c.id, fullName: c.fullName, role: c.role }))}
+      skalexAiByLeadId={skalexAiByLeadId}
       leads={leads.map((l) => ({
         id: l.id,
         fullName: l.fullName,

@@ -123,6 +123,10 @@ export default async function LlamadasVentaPage({
   const successCaseTemplates = visibleActionTemplates.filter((t) => t.actionType === "send_success_case");
   const meetingReminderTemplates = visibleActionTemplates.filter((t) => t.actionType === "send_meeting_reminder");
 
+  // Análisis IA de Skalex (Zapp) por lead, para pintarlo en cada card.
+  const { getSkalexAiForLeads } = await import("@/lib/skalex/summaries");
+  const skalexAiByLeadId = await getSkalexAiForLeads(leads.map((l) => l.id));
+
   return (
     <CallsListView
       activeStatus={status}
@@ -169,6 +173,7 @@ export default async function LlamadasVentaPage({
       meetingReminderTemplates={meetingReminderTemplates.map((t) => ({ id: t.id, name: t.name, body: t.body, actionType: "send_meeting_reminder" as const }))}
       successCases={successCases}
       currentUserCloserIntro={currentUserFull?.closerIntro ?? null}
+      skalexAiByLeadId={skalexAiByLeadId}
     />
   );
 }
