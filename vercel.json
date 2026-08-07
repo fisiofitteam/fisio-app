@@ -51,6 +51,10 @@
     {
       "path": "/api/cron/notify-patient-calls-week",
       "schedule": "0 6 * * 1"
+    },
+    {
+      "path": "/api/cron/skalex-sync",
+      "schedule": "*/30 * * * *"
     }
   ]
 }

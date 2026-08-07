@@ -3056,3 +3056,71 @@ model ResourceDocument {
   @@index([category])
   @@index([createdAt])
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SKALEX / ZAPP · Setter IA de Instagram y WhatsApp
+// ═══════════════════════════════════════════════════════════════════════════
+model SkalexConversation {
+  id             String   @id @default(cuid())
+  conversationId String   @unique
+
+  platform       String
+  customerName   String?
+  customerPhone  String?
+  igUsername     String?
+  igUserId       String?
+
+  aiPhase        Int?
+  aiPhaseName    String?
+  aiAnalysis     String?
+  aiNextStepGoal String?
+  aiUpdatedAt    DateTime?
+
+  externalCreatedAt   DateTime
+  lastMessageAt       DateTime
+
+  leadId         String?
+  patientId      String?
+
+  labels         SkalexLabel[]
+
+  syncedAt       DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([igUserId])
+  @@index([customerPhone])
+  @@index([leadId])
+  @@index([patientId])
+  @@index([lastMessageAt])
+  @@index([aiPhase])
+}
+
+model SkalexLabel {
+  id               String   @id @default(cuid())
+  conversationId   String
+  conversation     SkalexConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  name             String
+  color            String?
+  addedAt          DateTime
+
+  createdAt        DateTime @default(now())
+
+  @@unique([conversationId, name])
+  @@index([name, addedAt])
+  @@index([addedAt])
+}
+
+model SkalexSyncState {
+  id              String   @id @default("singleton")
+  lastRunAt       DateTime?
+  lastSuccessAt   DateTime?
+  lastError       String?
+  cursor          String?
+  lastProcessed   Int      @default(0)
+  lastCreated     Int      @default(0)
+  lastUpdated     Int      @default(0)
+
+  updatedAt       DateTime @updatedAt
+}
