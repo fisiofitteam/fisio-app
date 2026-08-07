@@ -24,7 +24,7 @@ export function LeadAiSummaryBlock({ summary }: { summary: LeadAiSummary | null 
     >
       <div className="flex items-center gap-1.5 mb-1">
         <span className="text-[13px]">🤖</span>
-        <span className="font-semibold">Análisis IA</span>
+        <span className="font-semibold">Estado del setter IA</span>
         {summary.phaseName && (
           <span
             className="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded ml-1"
