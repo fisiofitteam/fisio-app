@@ -3251,3 +3251,83 @@ model ResourceDocument {
   @@index([createdAt])
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// SKALEX / ZAPP · Setter IA de Instagram y WhatsApp
+// ═══════════════════════════════════════════════════════════════════════════
+// Espejo local de las conversaciones que Skalex nos expone en su API de datos
+// (https://zapp.skalex.pro/api/v1). Sincronizado vía cron: por cada
+// Lead/Patient con instagram o phone hacemos reverse-lookup.
+//
+// Fuente de verdad = Skalex. Aquí solo copiamos para queries rápidas y para
+// cruzar con nuestro CRM en métricas.
+model SkalexConversation {
+  id             String   @id @default(cuid())
+  // ID de conversación en Skalex (identificador natural para upsert)
+  conversationId String   @unique
+
+  platform       String   // "whatsapp" | "instagram" | ...
+  customerName   String?
+  customerPhone  String?
+  igUsername     String?
+  igUserId       String?  // IGSID: el mejor identificador para cruzar
+
+  // Análisis IA (nullable si Skalex aún no ha analizado)
+  aiPhase        Int?
+  aiPhaseName    String?
+  aiAnalysis     String?
+  aiNextStepGoal String?
+  aiUpdatedAt    DateTime?
+
+  externalCreatedAt   DateTime
+  lastMessageAt       DateTime
+
+  // Enlaces resueltos con nuestro CRM (sin FK dura: si el Lead se borra,
+  // el registro histórico de Skalex sigue vivo).
+  leadId         String?
+  patientId      String?
+
+  labels         SkalexLabel[]
+
+  syncedAt       DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([igUserId])
+  @@index([customerPhone])
+  @@index([leadId])
+  @@index([patientId])
+  @@index([lastMessageAt])
+  @@index([aiPhase])
+}
+
+model SkalexLabel {
+  id               String   @id @default(cuid())
+  conversationId   String
+  conversation     SkalexConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  name             String   // "Interesado", "No interesado", "Agendó llamada"...
+  color            String?
+  addedAt          DateTime // cuándo Skalex marcó la etiqueta (base de métricas)
+
+  createdAt        DateTime @default(now())
+
+  @@unique([conversationId, name])
+  @@index([name, addedAt])
+  @@index([addedAt])
+}
+
+// Estado del sync (fila única id="singleton"): última vez que corrió el
+// cron, cuántos leads procesó, si hubo error.
+model SkalexSyncState {
+  id              String   @id @default("singleton")
+  lastRunAt       DateTime?
+  lastSuccessAt   DateTime?
+  lastError       String?
+  cursor          String?  // por si Skalex añade paginación por fecha
+  lastProcessed   Int      @default(0)
+  lastCreated     Int      @default(0)
+  lastUpdated     Int      @default(0)
+
+  updatedAt       DateTime @updatedAt
+}
+

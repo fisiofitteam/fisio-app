@@ -20,6 +20,8 @@ import { calculatePreventionMetrics } from "@/lib/prevention-metrics";
 import { PreventionMetricsBlock } from "@/components/PreventionMetricsBlock";
 import { hasPendingFormReview } from "@/lib/pending-form-review";
 import { activePatientCondition } from "@/lib/patient-active";
+import { getSkalexMonthlyMetrics } from "@/lib/skalex/metrics";
+import { SkalexMetricsCard } from "@/components/SkalexMetricsCard";
 import { getRenewalActivityInPeriod } from "@/lib/renewals";
 import { markFormReviewed } from "./formularios-pendientes/actions";
 
@@ -233,6 +235,12 @@ export default async function FisioPanelPage({
   // Programas asignados a punto de terminar (≤7 días) → recuadro + campanita
   const programEndings = await getProgramEndingsForProfessional(user.id);
 
+  // Métricas del setter IA (Skalex). Solo CEO — el resto no necesita este
+  // detalle y evitamos las agregaciones para roles que no lo van a ver.
+  const skalexMetrics = user.role === "ceo"
+    ? await getSkalexMonthlyMetrics(periodStart, periodEnd)
+    : null;
+
   // Controles de cargas pendientes de revisar (cada loadReviewIntervalWeeks).
   // El CEO ve los de todos; el head_success y los fisios solo los de SUS
   // pacientes asignados.
@@ -436,6 +444,12 @@ export default async function FisioPanelPage({
 
   const gestionContent = (
     <>
+      {skalexMetrics && (
+        <div className="mb-5">
+          <SkalexMetricsCard metrics={skalexMetrics} periodLabel={periodLabel} />
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-5">
         <ProgramEndingsBox initialItems={programEndings} />
         <LoadReviewsBox initialItems={loadReviews} />
