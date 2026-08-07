@@ -30,6 +30,7 @@ import {
   Brain,
   AlertTriangle,
   Sunrise,
+  Bot,
   LucideIcon,
 } from "lucide-react";
 
@@ -62,6 +63,7 @@ const FINANZAS: Item = { id: "finanzas", label: "Cuadro de mandos", Icon: Gauge,
 const EQUIPO: Item = { id: "equipo", label: "Equipo", Icon: UserCog, href: "/fisio/equipo", match: (p) => p.startsWith("/fisio/equipo") };
 const CHAT: Item = { id: "chat", label: "Chat", Icon: MessageSquare, href: "/fisio/chat", match: (p) => p.startsWith("/fisio/chat") };
 const FISIO_IA: Item = { id: "fisio-ia", label: "Fisio IA", Icon: Brain, href: "/fisio/fisio-ia", match: (p) => p.startsWith("/fisio/fisio-ia") };
+const SETTER_IA: Item = { id: "setter-ia", label: "Setter IA", Icon: Bot, href: "/fisio/setter-ia", match: (p) => p.startsWith("/fisio/setter-ia") };
 const ALERTAS: Item = { id: "alertas", label: "Alertas", Icon: AlertTriangle, href: "/fisio/alertas", match: (p) => p.startsWith("/fisio/alertas") };
 const RESUMENES: Item = { id: "resumenes", label: "Resúmenes", Icon: Sunrise, href: "/fisio/resumenes", match: (p) => p.startsWith("/fisio/resumenes") };
 const AJUSTES: Item = { id: "ajustes", label: "Ajustes", Icon: Settings, href: "/fisio/ajustes", match: (p) => p.startsWith("/fisio/ajustes") };
@@ -71,7 +73,7 @@ function itemsForRole(role: string, opts: { withResumenes: boolean }): Item[] {
   if (role === "ceo") {
     // CEO no ve el buzon de Alertas (lo gestionan head_success y fisios).
     // Solo ve Resumenes cuando hay contenido para el (card global ADVANCE).
-    return [PANEL, PACIENTES, ...R, ADVANCE, LLAMADAS_VENTA, CONTENIDO, ANUNCIOS, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, RECURSOS, FINANZAS, EQUIPO, CHAT, FISIO_IA, AJUSTES];
+    return [PANEL, PACIENTES, ...R, ADVANCE, LLAMADAS_VENTA, CONTENIDO, ANUNCIOS, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, RECURSOS, FINANZAS, EQUIPO, CHAT, FISIO_IA, SETTER_IA, AJUSTES];
   }
   if (role === "head_success") {
     return [PANEL, PACIENTES, ALERTAS, ...R, ADVANCE, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, CHAT, AJUSTES];

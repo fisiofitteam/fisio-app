@@ -20,8 +20,6 @@ import { calculatePreventionMetrics } from "@/lib/prevention-metrics";
 import { PreventionMetricsBlock } from "@/components/PreventionMetricsBlock";
 import { hasPendingFormReview } from "@/lib/pending-form-review";
 import { activePatientCondition } from "@/lib/patient-active";
-import { getSkalexMonthlyMetrics } from "@/lib/skalex/metrics";
-import { SkalexMetricsCard } from "@/components/SkalexMetricsCard";
 import { getRenewalActivityInPeriod } from "@/lib/renewals";
 import { markFormReviewed } from "./formularios-pendientes/actions";
 
@@ -382,10 +380,6 @@ export default async function FisioPanelPage({
     // mismo período seleccionado que "Métricas equipo" para coherencia.
     const preventionMetrics = await calculatePreventionMetrics(periodStart, periodEnd, periodLabel);
 
-    // Métricas del setter IA (Skalex) — la pestaña "Métricas de venta" es
-    // el sitio natural: el setter IA genera leads que luego el closer cierra.
-    const skalexMetricsForCeo = await getSkalexMonthlyMetrics(salesStart, salesEnd);
-
     const salesBlock = (
       <>
         <SalesMetricsBlock
@@ -398,9 +392,6 @@ export default async function FisioPanelPage({
           title="Métricas de venta — Equipo"
         />
         <LeadOriginBlock metrics={originMetrics} periodLabel={salesLabel} />
-        <div className="mt-3">
-          <SkalexMetricsCard metrics={skalexMetricsForCeo} periodLabel={salesLabel} />
-        </div>
       </>
     );
 
