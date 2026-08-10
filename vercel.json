@@ -41,6 +41,10 @@
       "schedule": "0 6 * * 1"
     },
     {
+      "path": "/api/cron/generate-weekly-reports",
+      "schedule": "0 10 * * 1"
+    },
+    {
       "path": "/api/cron/patient-calls-scheduler",
       "schedule": "0 7 * * *"
     },
