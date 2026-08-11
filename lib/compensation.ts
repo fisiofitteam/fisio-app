@@ -111,74 +111,96 @@ export async function computeMonthlySalary(
   // Estrategia: traemos los periodos del mes con la fecha (decidedAt) y,
   // por paciente, comprobamos si el atleta tiene periodos anteriores a
   // ese decidedAt. Si no, es el alta inicial y no computa como renovacion.
-  // Renovaciones atribuidas al mes por VENCIMIENTO DEL PROGRAMA DEL PACIENTE
-  // (endDate del periodo previo), no por decidedAt del registro (regla
-  // acordada con Alberto, 2026-08-06). Así una renovación tardía —el paciente
-  // renovó en agosto pero su programa vencía en julio— cuenta en JULIO tanto
-  // en la factura del fisio como en las métricas.
+  // Renovaciones atribuidas al mes con la regla híbrida (2026-08-11):
+  //   attributionDate = MIN(previo.endDate, followUp.decidedAt)
   //
-  // Estrategia: partimos de los periodos cuyo endDate cae en el mes; para
-  // cada uno buscamos si tiene follow-up (renovación real). Si sí, ese
-  // follow-up cuenta para la compensación de este mes.
+  //  - Renovación tardía (previo venció ANTES de que se decidiera): cuenta
+  //    en el mes de vencimiento del previo (petición original de Alberto).
+  //  - Renovación anticipada (se decidió ANTES de que venciera el previo):
+  //    cuenta en el mes de decisión (para que el fisio la vea en su
+  //    factura del mes que trabajó por conseguirla).
   //
-  // RESERVAS DE PLAZA: son señal, no una renovación real. Su vencimiento
-  // no cuenta como "mes de renovación" (no atribuimos comisiones a un mes
-  // donde solo venció una reserva), pero SÍ se cuenta el importe cobrado
-  // por la reserva como revenue del mes en que vencía el PREVIO A ELLA
-  // (o del mes de su decidedAt si es primera reserva sin previo).
-  //
-  // Para simplificar y mantener coherencia con las métricas: incluimos el
-  // amountPaid de la reserva en el revenue del follow-up (renovación real)
-  // que la consuma. Y por si acaso el fisio hizo una reserva pero no
-  // renovación aún, contamos también las reservas cuyo previo vencía en
-  // el mes como revenue puntual (sin count).
-  const endedInMonth = await prisma.subscriptionRenewal.findMany({
-    where: {
-      endDate: { gte: start, lt: end },
-      isReservation: false,
-      patient: { isTest: false },
-    },
-    select: {
-      id: true,
-      patientId: true,
-      endDate: true,
-      patient: { select: { assignedProfessionalId: true } },
-    },
-  });
+  // Las reservas de plaza no cuentan en count, pero sí suman al revenue
+  // por ser ingreso efectivo. Se contabilizan como cualquier follow-up.
+  const monthStart = start;
+  const monthEnd = end; // exclusivo
+
+  // Candidatos: renovaciones cuya decidedAt cae en el mes (anticipadas) o
+  // cuyo previo tiene endDate en el mes (tardías + puntuales).
+  const [decisionsInMonth, endedInMonth] = await Promise.all([
+    prisma.subscriptionRenewal.findMany({
+      where: {
+        decidedAt: { gte: monthStart, lt: monthEnd },
+        isReservation: false,
+        patient: { isTest: false },
+      },
+      select: { patientId: true },
+    }),
+    prisma.subscriptionRenewal.findMany({
+      where: {
+        endDate: { gte: monthStart, lt: monthEnd },
+        isReservation: false,
+        patient: { isTest: false },
+      },
+      select: { patientId: true },
+    }),
+  ]);
+
+  const patientIds = Array.from(new Set([
+    ...decisionsInMonth.map((r) => r.patientId),
+    ...endedInMonth.map((r) => r.patientId),
+  ]));
 
   let renewalOwnCount = 0;
   let renewalOwnRevenue = 0;
   let renewalOthersRevenue = 0;
 
-  if (endedInMonth.length > 0) {
-    const patientIds = Array.from(new Set(endedInMonth.map((e) => e.patientId)));
-    const followUps = await prisma.subscriptionRenewal.findMany({
-      where: { patientId: { in: patientIds } },
-      select: {
-        id: true,
-        patientId: true,
-        startDate: true,
-        amountPaid: true,
-        isReservation: true,
-      },
-    });
+  if (patientIds.length > 0) {
+    const [history, patientsInfo] = await Promise.all([
+      prisma.subscriptionRenewal.findMany({
+        where: { patientId: { in: patientIds } },
+        select: {
+          id: true,
+          patientId: true,
+          startDate: true,
+          endDate: true,
+          decidedAt: true,
+          amountPaid: true,
+          isReservation: true,
+        },
+      }),
+      prisma.patient.findMany({
+        where: { id: { in: patientIds } },
+        select: { id: true, assignedProfessionalId: true },
+      }),
+    ]);
 
-    for (const e of endedInMonth) {
-      if (!e.endDate) continue;
-      const cutoff = new Date(e.endDate.getTime() - 86400000);
-      // Todos los follow-ups del paciente (reales o reserva) que arrancan
-      // en o después del vencimiento del previo — les atribuimos al mes.
-      const attributed = followUps.filter(
-        (h) => h.patientId === e.patientId && h.id !== e.id && h.startDate && h.startDate.getTime() >= cutoff.getTime(),
-      );
-      if (attributed.length === 0) continue;
+    const profByPatient = new Map(patientsInfo.map((p) => [p.id, p.assignedProfessionalId]));
 
-      const isOwn = e.patient?.assignedProfessionalId === professionalId;
-      for (const h of attributed) {
-        const amt = h.amountPaid || 0;
+    // Agrupar histórico por paciente y ordenar por startDate asc
+    const historyByPatient = new Map<string, typeof history>();
+    for (const h of history) {
+      if (!historyByPatient.has(h.patientId)) historyByPatient.set(h.patientId, []);
+      historyByPatient.get(h.patientId)!.push(h);
+    }
+
+    for (const [patientId, list] of historyByPatient) {
+      const real = list
+        .filter((h) => !h.isReservation && h.startDate)
+        .sort((a, b) => (a.startDate?.getTime() ?? 0) - (b.startDate?.getTime() ?? 0));
+      for (let i = 1; i < real.length; i++) {
+        const follow = real[i];
+        const previous = real[i - 1];
+        if (!previous.endDate || !follow.startDate) continue;
+        const cutoff = previous.endDate.getTime() - 86400000;
+        if (follow.startDate.getTime() < cutoff) continue;
+        const attributionMs = Math.min(previous.endDate.getTime(), follow.decidedAt.getTime());
+        if (attributionMs < monthStart.getTime() || attributionMs >= monthEnd.getTime()) continue;
+
+        const isOwn = profByPatient.get(patientId) === professionalId;
+        const amt = follow.amountPaid || 0;
         if (isOwn) {
-          // Reserva: revenue sí, count no.
-          if (!h.isReservation) renewalOwnCount++;
+          if (!follow.isReservation) renewalOwnCount++;
           renewalOwnRevenue += amt;
         } else {
           renewalOthersRevenue += amt;

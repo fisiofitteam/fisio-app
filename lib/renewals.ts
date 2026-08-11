@@ -8,103 +8,172 @@ export type RenewalActivityRow = {
   patientId: string;
   assignedProfessionalId: string | null;
   outcome: "renewed" | "lost";
-  /** Para renovadas, startDate del nuevo periodo. Para perdidas, endDate del que vence. */
+  /** Fecha de atribución: MIN(endDate del previo, decidedAt del follow-up) para
+   *  renewed; endDate del previo para lost. */
   when: Date;
   amountPaid: number | null; // solo aplica a renovadas
 };
 
 /**
- * Actividad de renovaciones que cae dentro de un rango. Ambas ramas
- * (renewed y lost) se atribuyen al MES EN QUE VENCÍA EL PROGRAMA DEL
- * PACIENTE = `endDate` del periodo previo. Regla decidida con Alberto:
- * las métricas y la factura fisio→CEO reflejan la decisión del cliente
- * en el mes en que le acababa el programa, no cuando el fisio registra
- * la transacción ni cuando arranca el nuevo periodo.
+ * Atribución de una renovación al mes correspondiente. Regla híbrida
+ * (2026-08-11) que satisface ambos casos:
  *
- *   - "renewed" ← periodo con `endDate` en el rango que tiene follow-up
- *     (otro SubscriptionRenewal real —no reserva— del mismo paciente
- *     con `startDate >= endDate - 1 día`).
+ *   attributionDate = MIN(previo.endDate, followUp.decidedAt)
  *
- *   - "lost" ← periodo con `endDate` en el rango sin follow-up.
+ *  - Renovación tardía: previo venció en julio, se decidió en agosto →
+ *    cuenta en JULIO (mes en que le tocaba renovar). Coherente con la
+ *    petición original de Alberto.
+ *  - Renovación anticipada: se decidió en agosto, previo vence en
+ *    septiembre → cuenta en AGOSTO (mes en que se cerró la venta). El
+ *    fisio la ve en su factura del mes en que hizo el trabajo.
+ *  - Renovación puntual: ambas fechas coinciden → mismo mes.
  *
- * Pacientes fantasma (isTest) y reservas de plaza quedan fuera. Las
- * renovaciones tempranas donde el `endDate` del previo aún es futuro
- * respecto al `to` NO cuentan en este rango (cuentan en el mes real
- * en que vencía el previo).
+ * Las pérdidas siguen atribuyéndose al mes de vencimiento del previo,
+ * capado a hoy (no marcar como perdido algo que aún tiene margen).
  */
-export async function getRenewalActivityInPeriod(from: Date, to: Date): Promise<RenewalActivityRow[]> {
-  const now = new Date();
-  if (from.getTime() > now.getTime()) return [];
+type HistoryRow = {
+  id: string;
+  patientId: string;
+  startDate: Date | null;
+  endDate: Date | null;
+  decidedAt: Date;
+  amountPaid: number | null;
+  status: string;
+  isReservation: boolean;
+};
 
-  // Distinción clave:
-  //  - RENEWED se cuenta si el paciente YA hizo la renovación anticipada,
-  //    aunque el periodo previo aún no haya vencido físicamente. Ejemplo:
-  //    Joselín renovó en agosto; su previo vencía el 25 de agosto y estamos
-  //    a día 11. La decisión ya está tomada → cuenta en agosto.
-  //  - LOST solo se cuenta si el periodo ya venció (endDate <= hoy) sin
-  //    follow-up. No queremos marcar como "perdido" algo que aún tiene
-  //    margen para renovar.
-  //
-  // Solo el filtro de LOST se capa al momento actual.
-  const effectiveToForLost = to.getTime() > now.getTime() ? now : to;
+/**
+ * Para cada follow-up (no alta inicial, no reserva) del histórico devuelve
+ * su fecha de atribución. Un follow-up es una renovación cuyo previo
+ * (registro con startDate anterior más cercano) tiene endDate finito.
+ */
+function attributionsFor(historyByPatient: Map<string, HistoryRow[]>): Array<{
+  followUp: HistoryRow;
+  previous: HistoryRow;
+  attribution: Date;
+}> {
+  const attrs: Array<{ followUp: HistoryRow; previous: HistoryRow; attribution: Date }> = [];
+  for (const [, list] of historyByPatient) {
+    // Solo consideramos los "reales" para follow-ups y previos (reservas
+    // fuera). Ordenados por startDate asc.
+    const real = list
+      .filter((h) => !h.isReservation && h.startDate)
+      .sort((a, b) => (a.startDate?.getTime() ?? 0) - (b.startDate?.getTime() ?? 0));
+    for (let i = 1; i < real.length; i++) {
+      const follow = real[i];
+      const previous = real[i - 1];
+      // Margen de 1 día: si el follow-up arranca a partir de endDate del
+      // previo (o el día antes), lo consideramos su renovación.
+      if (!previous.endDate || !follow.startDate) continue;
+      const cutoff = previous.endDate.getTime() - 86400000;
+      if (follow.startDate.getTime() < cutoff) continue; // gap grande, no es follow-up directo
+      const attributionMs = Math.min(previous.endDate.getTime(), follow.decidedAt.getTime());
+      attrs.push({ followUp: follow, previous, attribution: new Date(attributionMs) });
+    }
+  }
+  return attrs;
+}
 
-  // Periodos cuya fecha de vencimiento cae en el rango completo (sin capar).
-  const endedInPeriod = await prisma.subscriptionRenewal.findMany({
-    where: {
-      endDate: { gte: from, lte: to },
-      isReservation: false,
-      patient: { isTest: false },
-    },
+/** Carga el histórico completo de renovaciones (con reservas) para un set de
+ *  pacientes agrupado por patientId. */
+async function loadHistoryFor(patientIds: string[]): Promise<Map<string, HistoryRow[]>> {
+  const rows = await prisma.subscriptionRenewal.findMany({
+    where: { patientId: { in: patientIds } },
     select: {
       id: true,
       patientId: true,
+      startDate: true,
       endDate: true,
-      patient: { select: { assignedProfessionalId: true } },
+      decidedAt: true,
+      amountPaid: true,
+      status: true,
+      isReservation: true,
     },
   });
-  if (endedInPeriod.length === 0) return [];
+  const map = new Map<string, HistoryRow[]>();
+  for (const r of rows) {
+    if (!map.has(r.patientId)) map.set(r.patientId, []);
+    map.get(r.patientId)!.push(r);
+  }
+  return map;
+}
 
-  // Traemos el resto del historial (real) de esos pacientes para localizar
-  // follow-ups sin N+1. Solo periodos "reales" cuentan como follow-up: una
-  // reserva de plaza no cierra el ciclo, solo lo aplaza.
-  const patientIds = Array.from(new Set(endedInPeriod.map((e) => e.patientId)));
-  const followUps = await prisma.subscriptionRenewal.findMany({
-    where: {
-      patientId: { in: patientIds },
-      isReservation: false,
-    },
-    select: { id: true, patientId: true, startDate: true, amountPaid: true },
-  });
+export async function getRenewalActivityInPeriod(from: Date, to: Date): Promise<RenewalActivityRow[]> {
+  const now = new Date();
+  if (from.getTime() > now.getTime()) return [];
+  const effectiveToForLost = to.getTime() > now.getTime() ? now : to;
+
+  // Candidatos que pueden aportar attribution en [from, to]:
+  //   (A) follow-ups con decidedAt en el rango (anticipadas)
+  //   (B) periodos con endDate en el rango (previos de renovadas tardías + lost)
+  const [followUpsByDecision, endedInRange] = await Promise.all([
+    prisma.subscriptionRenewal.findMany({
+      where: {
+        decidedAt: { gte: from, lte: to },
+        isReservation: false,
+        patient: { isTest: false },
+      },
+      select: { id: true, patientId: true },
+    }),
+    prisma.subscriptionRenewal.findMany({
+      where: {
+        endDate: { gte: from, lte: to },
+        isReservation: false,
+        patient: { isTest: false },
+      },
+      select: {
+        id: true,
+        patientId: true,
+        endDate: true,
+        patient: { select: { assignedProfessionalId: true } },
+      },
+    }),
+  ]);
+
+  const patientIds = Array.from(new Set([
+    ...followUpsByDecision.map((f) => f.patientId),
+    ...endedInRange.map((e) => e.patientId),
+  ]));
+  if (patientIds.length === 0) return [];
+
+  const [history, patientProfs] = await Promise.all([
+    loadHistoryFor(patientIds),
+    prisma.patient.findMany({
+      where: { id: { in: patientIds } },
+      select: { id: true, assignedProfessionalId: true },
+    }),
+  ]);
+  const profByPatient = new Map(patientProfs.map((p) => [p.id, p.assignedProfessionalId]));
 
   const result: RenewalActivityRow[] = [];
-  for (const e of endedInPeriod) {
+  const countedAsRenewedPreviousIds = new Set<string>();
+
+  // RENEWED: attribution = MIN(previo.endDate, followUp.decidedAt) en [from, to]
+  for (const a of attributionsFor(history)) {
+    if (a.attribution.getTime() < from.getTime()) continue;
+    if (a.attribution.getTime() > to.getTime()) continue;
+    result.push({
+      patientId: a.followUp.patientId,
+      assignedProfessionalId: profByPatient.get(a.followUp.patientId) ?? null,
+      outcome: "renewed",
+      when: a.attribution,
+      amountPaid: a.followUp.amountPaid,
+    });
+    countedAsRenewedPreviousIds.add(a.previous.id);
+  }
+
+  // LOST: periodos con endDate en [from, effectiveToForLost] sin follow-up
+  for (const e of endedInRange) {
     if (!e.endDate) continue;
-    // Margen de 1 día: renovación creada el mismo día o al siguiente cuenta.
-    const cutoff = new Date(e.endDate.getTime() - 86400000);
-    const followUp = followUps.find(
-      (h) => h.patientId === e.patientId && h.id !== e.id && h.startDate && h.startDate.getTime() >= cutoff.getTime(),
-    );
-    if (followUp) {
-      // La decisión ya está tomada — cuenta en el mes de vencimiento del
-      // previo aunque ese vencimiento sea futuro.
-      result.push({
-        patientId: e.patientId,
-        assignedProfessionalId: e.patient?.assignedProfessionalId ?? null,
-        outcome: "renewed",
-        when: e.endDate,
-        amountPaid: followUp.amountPaid,
-      });
-    } else if (e.endDate.getTime() <= effectiveToForLost.getTime()) {
-      // Perdido solo si ya venció físicamente sin follow-up.
-      result.push({
-        patientId: e.patientId,
-        assignedProfessionalId: e.patient?.assignedProfessionalId ?? null,
-        outcome: "lost",
-        when: e.endDate,
-        amountPaid: null,
-      });
-    }
-    // Sin follow-up y aún no venció → todavía tiene margen; no cuenta.
+    if (e.endDate.getTime() > effectiveToForLost.getTime()) continue;
+    if (countedAsRenewedPreviousIds.has(e.id)) continue;
+    result.push({
+      patientId: e.patientId,
+      assignedProfessionalId: e.patient?.assignedProfessionalId ?? null,
+      outcome: "lost",
+      when: e.endDate,
+      amountPaid: null,
+    });
   }
   return result;
 }
@@ -114,66 +183,64 @@ export type RealRenewalRow = {
   patientId: string;
   amountPaid: number | null;
   assignedProfessionalId: string | null;
-  decidedAt: Date;
+  decidedAt: Date; // fecha de atribución (MIN previo.endDate, followUp.decidedAt)
   status: string;
 };
 
 /**
- * Devuelve las RENOVACIONES REALES atribuidas a un rango por
- * `endDate` DEL PERIODO PREVIO (mes en que le vencía el programa al
- * paciente), no por `decidedAt` ni por `startDate` del nuevo.
+ * Devuelve las RENOVACIONES REALES atribuidas al rango por la regla
+ * híbrida MIN(previo.endDate, followUp.decidedAt).
  *
- * "Renovación real" = follow-up de un periodo previo — el paciente ya
- * tenía otro SubscriptionRenewal cuyo endDate cae en el rango. Excluye
- * altas iniciales, reservas de plaza y pacientes fantasma.
- *
- * `decidedAt` en la fila devuelta se rellena con el `endDate` del previo
- * (la fecha de atribución), no con el decidedAt real del registro, para
- * que las gráficas por mes agrupen bien y coincidan con las métricas de
- * renovación (regla acordada con Alberto, 2026-08-06).
+ * `decidedAt` en la fila devuelta = fecha de atribución (no el decidedAt
+ * real del registro), para que las gráficas por mes coincidan con las
+ * demás métricas.
  */
 export async function listRealRenewalsInPeriod(from: Date, to: Date): Promise<RealRenewalRow[]> {
-  // Sin cap a hoy: una renovación anticipada donde el previo aún no ha
-  // vencido (endDate futuro) cuenta igual — la decisión está tomada.
-  const ended = await prisma.subscriptionRenewal.findMany({
-    where: {
-      endDate: { gte: from, lte: to },
-      isReservation: false,
-      patient: { isTest: false },
-    },
-    select: {
-      id: true,
-      patientId: true,
-      endDate: true,
-      patient: { select: { assignedProfessionalId: true, isTest: true } },
-    },
-  });
-  if (ended.length === 0) return [];
+  const [followUpsByDecision, endedInRange] = await Promise.all([
+    prisma.subscriptionRenewal.findMany({
+      where: {
+        decidedAt: { gte: from, lte: to },
+        isReservation: false,
+        patient: { isTest: false },
+      },
+      select: { id: true, patientId: true },
+    }),
+    prisma.subscriptionRenewal.findMany({
+      where: {
+        endDate: { gte: from, lte: to },
+        isReservation: false,
+        patient: { isTest: false },
+      },
+      select: { id: true, patientId: true },
+    }),
+  ]);
 
-  const patientIds = Array.from(new Set(ended.map((e) => e.patientId)));
-  const followUps = await prisma.subscriptionRenewal.findMany({
-    where: {
-      patientId: { in: patientIds },
-      isReservation: false,
-    },
-    select: { id: true, patientId: true, startDate: true, amountPaid: true, status: true },
-  });
+  const patientIds = Array.from(new Set([
+    ...followUpsByDecision.map((f) => f.patientId),
+    ...endedInRange.map((e) => e.patientId),
+  ]));
+  if (patientIds.length === 0) return [];
+
+  const [history, patientProfs] = await Promise.all([
+    loadHistoryFor(patientIds),
+    prisma.patient.findMany({
+      where: { id: { in: patientIds } },
+      select: { id: true, assignedProfessionalId: true },
+    }),
+  ]);
+  const profByPatient = new Map(patientProfs.map((p) => [p.id, p.assignedProfessionalId]));
 
   const result: RealRenewalRow[] = [];
-  for (const e of ended) {
-    if (!e.endDate) continue;
-    const cutoff = new Date(e.endDate.getTime() - 86400000);
-    const followUp = followUps.find(
-      (h) => h.patientId === e.patientId && h.id !== e.id && h.startDate && h.startDate.getTime() >= cutoff.getTime(),
-    );
-    if (!followUp) continue;
+  for (const a of attributionsFor(history)) {
+    if (a.attribution.getTime() < from.getTime()) continue;
+    if (a.attribution.getTime() > to.getTime()) continue;
     result.push({
-      id: followUp.id,
-      patientId: e.patientId,
-      amountPaid: followUp.amountPaid,
-      assignedProfessionalId: e.patient?.assignedProfessionalId ?? null,
-      decidedAt: e.endDate, // atribución: mes en que vencía el previo
-      status: followUp.status,
+      id: a.followUp.id,
+      patientId: a.followUp.patientId,
+      amountPaid: a.followUp.amountPaid,
+      assignedProfessionalId: profByPatient.get(a.followUp.patientId) ?? null,
+      decidedAt: a.attribution,
+      status: a.followUp.status,
     });
   }
   return result;
