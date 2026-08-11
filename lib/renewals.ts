@@ -15,20 +15,24 @@ export type RenewalActivityRow = {
 };
 
 /**
- * Atribución de una renovación al mes correspondiente. Regla híbrida
- * (2026-08-11) que satisface ambos casos:
+ * Atribución de una renovación al mes correspondiente. Regla simple
+ * (2026-08-11, decisión final):
  *
- *   attributionDate = MIN(previo.endDate, followUp.decidedAt)
+ *   attributionDate = followUp.decidedAt
  *
- *  - Renovación tardía: previo venció en julio, se decidió en agosto →
- *    cuenta en JULIO (mes en que le tocaba renovar). Coherente con la
- *    petición original de Alberto.
- *  - Renovación anticipada: se decidió en agosto, previo vence en
- *    septiembre → cuenta en AGOSTO (mes en que se cerró la venta). El
- *    fisio la ve en su factura del mes en que hizo el trabajo.
- *  - Renovación puntual: ambas fechas coinciden → mismo mes.
+ * Es decir, la renovación cuenta siempre en el mes en que se
+ * decidió/pagó/registró — coherente con "el fisio cobra en el mes en
+ * que trabajó por conseguir la renovación".
  *
- * Las pérdidas siguen atribuyéndose al mes de vencimiento del previo,
+ * Historial de esta decisión:
+ *  - 06-ago: probamos endDate del previo (regla de Alberto). Contra-
+ *    intuitivo para renovaciones anticipadas.
+ *  - 11-ago-mañana: probamos MIN(endDate, decidedAt). Contra-intuitivo
+ *    para renovaciones tardías (Manolo/Joselín pagaron en agosto pero
+ *    aparecían en julio).
+ *  - 11-ago-tarde: dejamos la regla simple decidedAt del follow-up.
+ *
+ * Las pérdidas se siguen atribuyendo al mes de vencimiento del previo,
  * capado a hoy (no marcar como perdido algo que aún tiene margen).
  */
 type HistoryRow = {
@@ -67,8 +71,7 @@ function attributionsFor(historyByPatient: Map<string, HistoryRow[]>): Array<{
       if (!previous.endDate || !follow.startDate) continue;
       const cutoff = previous.endDate.getTime() - 86400000;
       if (follow.startDate.getTime() < cutoff) continue; // gap grande, no es follow-up directo
-      const attributionMs = Math.min(previous.endDate.getTime(), follow.decidedAt.getTime());
-      attrs.push({ followUp: follow, previous, attribution: new Date(attributionMs) });
+      attrs.push({ followUp: follow, previous, attribution: follow.decidedAt });
     }
   }
   return attrs;

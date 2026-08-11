@@ -94,12 +94,11 @@ async function handleByPatient(name: string) {
         );
         continue;
       }
-      const attributionMs = Math.min(previous.endDate.getTime(), follow.decidedAt.getTime());
-      const attrDate = new Date(attributionMs);
+      const attrDate = follow.decidedAt;
       const label = attrDate.toLocaleDateString("es-ES", { month: "long", year: "numeric", timeZone: "UTC" });
       attribution.push(
         `Renewal ${follow.id.slice(-4)} (${follow.programType} ${follow.periodMonths}m, ${follow.amountPaid ?? "?"}€) → cuenta en ${label} ` +
-          `(prev.endDate=${previous.endDate.toISOString().slice(0, 10)}, decidedAt=${follow.decidedAt.toISOString().slice(0, 10)})`,
+          `(decidedAt=${follow.decidedAt.toISOString().slice(0, 10)}, prev.endDate=${previous.endDate.toISOString().slice(0, 10)})`,
       );
     }
 
@@ -224,7 +223,8 @@ async function handleByMonth(monthParam: string | null, fisioFilter: string | nu
       if (!previous.endDate || !follow.startDate) continue;
       const cutoff = previous.endDate.getTime() - 86400000;
       if (follow.startDate.getTime() < cutoff) continue;
-      const attributionMs = Math.min(previous.endDate.getTime(), follow.decidedAt.getTime());
+      // Regla: atribución al mes de decisión/pago del follow-up.
+      const attributionMs = follow.decidedAt.getTime();
       if (attributionMs < start.getTime() || attributionMs >= end.getTime()) continue;
 
       const p = patientById.get(patientId);

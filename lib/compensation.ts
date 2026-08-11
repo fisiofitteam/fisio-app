@@ -111,14 +111,14 @@ export async function computeMonthlySalary(
   // Estrategia: traemos los periodos del mes con la fecha (decidedAt) y,
   // por paciente, comprobamos si el atleta tiene periodos anteriores a
   // ese decidedAt. Si no, es el alta inicial y no computa como renovacion.
-  // Renovaciones atribuidas al mes con la regla híbrida (2026-08-11):
-  //   attributionDate = MIN(previo.endDate, followUp.decidedAt)
+  // Renovaciones atribuidas al mes en que se decidieron/pagaron
+  // (2026-08-11, decisión final: siempre attributionDate = followUp.decidedAt).
   //
-  //  - Renovación tardía (previo venció ANTES de que se decidiera): cuenta
-  //    en el mes de vencimiento del previo (petición original de Alberto).
-  //  - Renovación anticipada (se decidió ANTES de que venciera el previo):
-  //    cuenta en el mes de decisión (para que el fisio la vea en su
-  //    factura del mes que trabajó por conseguirla).
+  //  - Renovación tardía: paciente vencía en julio, se decidió en agosto
+  //    → cuenta en AGOSTO (mes en que trabajó el fisio por conseguirla).
+  //  - Renovación anticipada: se decidió en agosto, previo vence en
+  //    septiembre → cuenta en AGOSTO.
+  //  - Renovación puntual: fecha de decisión, siempre.
   //
   // Las reservas de plaza no cuentan en count, pero sí suman al revenue
   // por ser ingreso efectivo. Se contabilizan como cualquier follow-up.
@@ -194,7 +194,7 @@ export async function computeMonthlySalary(
         if (!previous.endDate || !follow.startDate) continue;
         const cutoff = previous.endDate.getTime() - 86400000;
         if (follow.startDate.getTime() < cutoff) continue;
-        const attributionMs = Math.min(previous.endDate.getTime(), follow.decidedAt.getTime());
+        const attributionMs = follow.decidedAt.getTime();
         if (attributionMs < monthStart.getTime() || attributionMs >= monthEnd.getTime()) continue;
 
         const isOwn = profByPatient.get(patientId) === professionalId;
