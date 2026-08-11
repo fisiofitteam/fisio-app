@@ -253,20 +253,12 @@ export async function applyRenewal(opts: {
     data: { subscriptionTotalMonths: total },
   });
 
-  // Ingreso income_renewal si hay importe
-  if (opts.amountPaid && Number(opts.amountPaid) > 0) {
-    const patient = await prisma.patient.findUnique({ where: { id: patientId } });
-    await prisma.transaction.create({
-      data: {
-        type: "income_renewal",
-        amount: Number(opts.amountPaid),
-        description: `Renovación - ${patient?.fullName ?? ""} (${programType}, ${months}m)`,
-        occurredAt: new Date(),
-        patientId,
-        professionalId: professionalId || null,
-      },
-    });
-  }
+  // NOTA: NO creamos Transaction aquí. Antes lo hacíamos con el importe
+  // total, pero eso duplicaba en pagos vía PayPal (el webhook ya registra
+  // una Transaction por cuota) y en el flujo manual (POST /api/renewals
+  // que también crea la Transaction directamente). El caller es responsable
+  // de crear su(s) Transaction(s) según el flujo (una por cuota en
+  // suscripción, una total en pago único o manual).
 
   return { renewalId: renewal.id, status };
 }
