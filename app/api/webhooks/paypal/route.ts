@@ -181,31 +181,30 @@ async function activateSaleAsPatient(input: {
       },
     });
 
-    // Para pagos únicos: registramos el importe TOTAL en una sola transaction.
-    // Para suscripciones N ciclos: registramos SOLO la primera cuota aquí
-    // (activateSaleAsPatient se llama en subscription.activated cuando
-    // PayPal ya cobró el primer mes). Las siguientes cuotas llegan como
-    // PAYMENT.SALE.COMPLETED y se registran una por una.
+    // Para pagos ÚNICOS: registramos el importe total en una sola Transaction
+    // AQUÍ (no hay PAYMENT.SALE.COMPLETED en Orders API).
+    // Para SUSCRIPCIONES: NO creamos Transaction aquí. Cada cuota se
+    // contabiliza cuando llega el evento PAYMENT.SALE.COMPLETED
+    // (registerSubscriptionCycle). Antes creábamos la primera aquí y luego
+    // se duplicaba con el PAYMENT.SALE.COMPLETED del primer cobro, que sí
+    // viene junto al activated. Ahora es responsabilidad única del handler
+    // de cuotas.
     const isSubscription = !!input.paypalSubscriptionId;
     const installments = sale.installmentCount ?? 0;
-    const perCycleAmount =
-      isSubscription && installments >= 2
-        ? Math.round(sale.amountCents / installments) / 100
-        : sale.amountCents / 100;
 
-    await tx.transaction.create({
-      data: {
-        type: "income_new",
-        category: `${sale.programType} ${sale.durationMonths}M`,
-        amount: perCycleAmount,
-        description: isSubscription
-          ? `Pago vía PayPal · ${sale.programType} ${sale.durationMonths} meses · cuota 1/${installments}`
-          : `Pago vía PayPal · ${sale.programType} ${sale.durationMonths} meses · ${input.paymentMethod}`,
-        occurredAt: now,
-        patientId: patient.id,
-        professionalId: sale.closerId,
-      },
-    });
+    if (!isSubscription) {
+      await tx.transaction.create({
+        data: {
+          type: "income_new",
+          category: `${sale.programType} ${sale.durationMonths}M`,
+          amount: sale.amountCents / 100,
+          description: `Pago vía PayPal · ${sale.programType} ${sale.durationMonths} meses · ${input.paymentMethod}`,
+          occurredAt: now,
+          patientId: patient.id,
+          professionalId: sale.closerId,
+        },
+      });
+    }
 
     await tx.subscriptionRenewal.create({
       data: {
@@ -380,8 +379,10 @@ async function handleSubscriptionCyclePayment(sale: any) {
 
 /**
  * Registra una cuota mensual como Transaction. Cuenta las ya registradas para
- * ese paciente con la descripción "cuota N/M" y salta si es la primera (que
- * ya se creó en subscription.activated).
+ * ese paciente con la etiqueta "cuota" y crea una nueva cada vez que llega
+ * PAYMENT.SALE.COMPLETED. Esto incluye la PRIMERA cuota — antes se creaba
+ * en subscription.activated, ahora es responsabilidad única de este handler
+ * para evitar el duplicado.
  */
 async function registerSubscriptionCycle(opts: {
   patientId: string;
@@ -393,20 +394,16 @@ async function registerSubscriptionCycle(opts: {
   transactionType: "income_new" | "income_renewal";
   subscriptionId: string;
 }) {
+  // Contamos las cuotas ya registradas para ESTE paciente por PayPal (marca
+  // "cuota" en descripción). Así calculamos el número de cuota actual.
   const alreadyBilled = await prisma.transaction.count({
     where: {
       patientId: opts.patientId,
       type: opts.transactionType,
-      description: { contains: "PayPal" },
+      description: { contains: "cuota" },
     },
   });
   const cycleNumber = alreadyBilled + 1;
-  if (cycleNumber === 1) {
-    console.log("[paypal-webhook] Primera cuota ya contabilizada en activated, skip", {
-      subscriptionId: opts.subscriptionId,
-    });
-    return;
-  }
   const label = opts.transactionType === "income_renewal" ? "Renovación PayPal" : "Pago vía PayPal";
   await prisma.transaction.create({
     data: {
@@ -556,12 +553,6 @@ async function applyRenewalCheckoutPaid(opts: {
 
   const installments = checkout.installmentCount ?? 0;
   const totalEur = checkout.amountCents / 100;
-  // En suscripción, PayPal solo ha cobrado la primera cuota. Registramos ese
-  // importe. En pago único, registramos el total.
-  const firstAmountEur =
-    opts.isSubscription && installments >= 2
-      ? Math.round(checkout.amountCents / installments) / 100
-      : totalEur;
 
   const isReservation = (checkout as any).isReservation === true;
   const { renewalId } = await applyRenewal({
@@ -590,26 +581,31 @@ async function applyRenewalCheckoutPaid(opts: {
     },
   });
 
-  await prisma.transaction.create({
-    data: {
-      type: "income_renewal",
-      category: `${checkout.programType} ${checkout.durationMonths}M`,
-      amount: firstAmountEur,
-      description: isReservation
-        ? `Reserva de plaza PayPal · ${checkout.programType}`
-        : opts.isSubscription
-          ? `Renovación PayPal · ${checkout.programType} ${checkout.durationMonths} meses · cuota 1/${installments}`
+  // Solo creamos Transaction aquí para pagos ÚNICOS. En suscripciones cada
+  // cuota se contabiliza cuando llega el evento PAYMENT.SALE.COMPLETED —
+  // así evitamos el duplicado que aparecía al superponerse activated +
+  // PAYMENT.SALE.COMPLETED del primer cobro.
+  if (!opts.isSubscription) {
+    await prisma.transaction.create({
+      data: {
+        type: "income_renewal",
+        category: `${checkout.programType} ${checkout.durationMonths}M`,
+        amount: totalEur,
+        description: isReservation
+          ? `Reserva de plaza PayPal · ${checkout.programType}`
           : `Renovación PayPal · ${checkout.programType} ${checkout.durationMonths} meses`,
-      occurredAt: new Date(),
-      patientId: checkout.patientId,
-      professionalId: checkout.createdById,
-    },
-  });
+        occurredAt: new Date(),
+        patientId: checkout.patientId,
+        professionalId: checkout.createdById,
+      },
+    });
+  }
 
   console.log("[paypal-webhook] Renovación aplicada", {
     checkoutId: checkout.id,
     renewalId,
     patient: checkout.patient.fullName,
+    isSubscription: opts.isSubscription,
   });
 }
 

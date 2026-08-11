@@ -33,19 +33,25 @@ export type RenewalActivityRow = {
  * en que vencía el previo).
  */
 export async function getRenewalActivityInPeriod(from: Date, to: Date): Promise<RenewalActivityRow[]> {
-  // Capamos el `to` al momento actual: no cuenta ni renovaciones ni bajas
-  // que "van a ocurrir" en un futuro dentro del rango. Ejemplo: si estamos
-  // a 4 de agosto y el rango es "agosto entero", no queremos incluir los
-  // 27 vencimientos que aún no han pasado — solo los efectivos hasta hoy.
   const now = new Date();
-  const effectiveTo = to.getTime() > now.getTime() ? now : to;
   if (from.getTime() > now.getTime()) return [];
 
-  // Periodos cuya fecha de vencimiento cae en el rango. Cada uno se
-  // clasificará como renewed o lost según tenga follow-up.
+  // Distinción clave:
+  //  - RENEWED se cuenta si el paciente YA hizo la renovación anticipada,
+  //    aunque el periodo previo aún no haya vencido físicamente. Ejemplo:
+  //    Joselín renovó en agosto; su previo vencía el 25 de agosto y estamos
+  //    a día 11. La decisión ya está tomada → cuenta en agosto.
+  //  - LOST solo se cuenta si el periodo ya venció (endDate <= hoy) sin
+  //    follow-up. No queremos marcar como "perdido" algo que aún tiene
+  //    margen para renovar.
+  //
+  // Solo el filtro de LOST se capa al momento actual.
+  const effectiveToForLost = to.getTime() > now.getTime() ? now : to;
+
+  // Periodos cuya fecha de vencimiento cae en el rango completo (sin capar).
   const endedInPeriod = await prisma.subscriptionRenewal.findMany({
     where: {
-      endDate: { gte: from, lte: effectiveTo },
+      endDate: { gte: from, lte: to },
       isReservation: false,
       patient: { isTest: false },
     },
@@ -79,14 +85,17 @@ export async function getRenewalActivityInPeriod(from: Date, to: Date): Promise<
       (h) => h.patientId === e.patientId && h.id !== e.id && h.startDate && h.startDate.getTime() >= cutoff.getTime(),
     );
     if (followUp) {
+      // La decisión ya está tomada — cuenta en el mes de vencimiento del
+      // previo aunque ese vencimiento sea futuro.
       result.push({
         patientId: e.patientId,
         assignedProfessionalId: e.patient?.assignedProfessionalId ?? null,
         outcome: "renewed",
-        when: e.endDate,          // mes en que le vencía el programa
-        amountPaid: followUp.amountPaid, // importe del follow-up (renovación real)
+        when: e.endDate,
+        amountPaid: followUp.amountPaid,
       });
-    } else {
+    } else if (e.endDate.getTime() <= effectiveToForLost.getTime()) {
+      // Perdido solo si ya venció físicamente sin follow-up.
       result.push({
         patientId: e.patientId,
         assignedProfessionalId: e.patient?.assignedProfessionalId ?? null,
@@ -95,6 +104,7 @@ export async function getRenewalActivityInPeriod(from: Date, to: Date): Promise<
         amountPaid: null,
       });
     }
+    // Sin follow-up y aún no venció → todavía tiene margen; no cuenta.
   }
   return result;
 }
@@ -123,6 +133,8 @@ export type RealRenewalRow = {
  * renovación (regla acordada con Alberto, 2026-08-06).
  */
 export async function listRealRenewalsInPeriod(from: Date, to: Date): Promise<RealRenewalRow[]> {
+  // Sin cap a hoy: una renovación anticipada donde el previo aún no ha
+  // vencido (endDate futuro) cuenta igual — la decisión está tomada.
   const ended = await prisma.subscriptionRenewal.findMany({
     where: {
       endDate: { gte: from, lte: to },
