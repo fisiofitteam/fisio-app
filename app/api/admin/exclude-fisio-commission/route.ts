@@ -91,14 +91,36 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "?names=Manolo,Larbi,Elena requerido" }, { status: 400 });
   }
   const monthParam = req.nextUrl.searchParams.get("month");
+  const apply = req.nextUrl.searchParams.get("apply") === "1";
   const names = namesParam.split(",").map((s) => s.trim()).filter(Boolean);
   const targets = await findTargets(names, monthParam);
+
+  if (!apply) {
+    return NextResponse.json({
+      mode: "preview",
+      total: targets.length,
+      totalRevenueRemoved: Number(targets.reduce((s, t) => s + (t.currentAmountPaid ?? 0), 0).toFixed(2)),
+      targets,
+      hint: "Añade &apply=1 a la URL para aplicar los cambios.",
+    });
+  }
+
+  const applied: any[] = [];
+  for (const t of targets) {
+    const newNotes = (t.currentNotes ?? "").includes(MARK)
+      ? t.currentNotes
+      : (t.currentNotes ?? "").concat(MARK);
+    await prisma.subscriptionRenewal.update({
+      where: { id: t.renewalId },
+      data: { amountPaid: null, notes: newNotes },
+    });
+    applied.push({ ...t, newAmountPaid: null, newNotes });
+  }
   return NextResponse.json({
-    mode: "preview",
-    total: targets.length,
-    totalRevenueRemoved: Number(targets.reduce((s, t) => s + (t.currentAmountPaid ?? 0), 0).toFixed(2)),
-    targets,
-    hint: "Si esto es lo que quieres, repite la llamada con POST para aplicar los cambios.",
+    mode: "applied",
+    total: applied.length,
+    totalRevenueRemoved: Number(applied.reduce((s, t) => s + (t.currentAmountPaid ?? 0), 0).toFixed(2)),
+    applied,
   });
 }
 
