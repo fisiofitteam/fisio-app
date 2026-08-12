@@ -366,10 +366,12 @@ function PostForm({
           onChange={(e) => setVideoUrl(e.target.value)}
         />
         {videoUrl && !videoOk && (
-          <p className="text-[11px] text-red-600 mt-1">No reconozco esa URL. Usa un enlace de YouTube o Vimeo.</p>
+          <p className="text-[11px] text-red-600 mt-1">No reconozco esa URL. Usa un enlace de YouTube, Vimeo o Loom.</p>
         )}
         {videoInfo?.provider && (
-          <p className="text-[11px] text-emerald-700 mt-1">✓ Vídeo de {videoInfo.provider === "youtube" ? "YouTube" : "Vimeo"} detectado.</p>
+          <p className="text-[11px] text-emerald-700 mt-1">
+            ✓ Vídeo de {videoInfo.provider === "youtube" ? "YouTube" : videoInfo.provider === "vimeo" ? "Vimeo" : "Loom"} detectado.
+          </p>
         )}
       </div>
       <label className="flex items-center gap-2 text-sm cursor-pointer">
