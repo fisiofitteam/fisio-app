@@ -72,8 +72,11 @@ export function CombinedSessionRunner({
       body: JSON.stringify({ sessionIds, responses, patientNotes: patientNotes.trim() }),
     });
     if (whatsappUrl) {
-      window.location.href = whatsappUrl;
-      return;
+      // Abrimos WhatsApp/grupo de seguimiento en una pestaña nueva para
+      // que la app siga abierta detrás. Después redirigimos a la home
+      // del paciente para no dejarle en el runner con la sesión ya
+      // completada.
+      window.open(whatsappUrl, "_blank", "noopener,noreferrer");
     }
     router.push(`/paciente/${patientId}`);
     router.refresh();
