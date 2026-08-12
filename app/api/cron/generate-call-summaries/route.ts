@@ -64,7 +64,11 @@ async function handler(req: NextRequest) {
       },
     },
     orderBy: { callScheduledAt: "desc" },
-    take: 60,
+    // Batch pequeño: cada resumen tarda 8-15s (Meet fetch + Sonnet) y el
+    // límite de Vercel Pro es 300s. Con 15 no llegamos al techo aunque
+    // todos tengan transcript largo. El cron se ejecuta cada 30 min, así
+    // que los backlogs se drenan solos en pocas iteraciones.
+    take: 15,
   });
 
   const targets = leads.filter((l) => {
