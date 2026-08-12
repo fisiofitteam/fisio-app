@@ -5,8 +5,7 @@ import Link from "next/link";
 import { PatientNav } from "@/components/PatientNav";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { sanitizeRichText, isRichTextEmpty } from "@/lib/rich-text";
-import { CourseCover } from "@/components/CourseCover";
-import { Heart, MessageCircle, Send, ChevronRight, BadgeCheck, ImagePlus, X } from "lucide-react";
+import { Heart, MessageCircle, Send, BadgeCheck, ImagePlus, X } from "lucide-react";
 import { upload } from "@vercel/blob/client";
 import { parseVideo } from "@/lib/video";
 
@@ -14,10 +13,6 @@ type Post = {
   id: string; title: string | null; body: string; imageUrl: string | null; videoUrl: string | null;
   category: string; pinned: boolean; authorName: string; authorPhotoUrl: string | null; isPatient: boolean;
   createdAt: string; comments: number; reactions: number; likedByMe: boolean;
-};
-type Course = {
-  id: string; title: string; description: string | null; coverUrl: string | null;
-  lessonCount: number; doneCount: number;
 };
 type Comment = { id: string; body: string; createdAt: string; authorName: string; authorPhotoUrl: string | null; isPatient: boolean };
 
@@ -52,20 +47,20 @@ async function api(url: string, method: string, body?: unknown) {
 }
 
 export function PatientCommunity({
-  patientId, myName, myPhotoUrl, initialPosts, courses, navVariant = "default", lastSeenAt,
+  patientId, myName, myPhotoUrl, initialPosts, navVariant = "default", lastSeenAt,
 }: {
   patientId: string;
   myName: string;
   myPhotoUrl: string | null;
   initialPosts: Post[];
-  courses: Course[];
   navVariant?: "default" | "advance" | "prevention";
   /** ISO. Timestamp de la última visita del usuario a la comunidad ANTES
    *  de esta pantalla. Se usa para pintar badges "NUEVO" en posts y
    *  comentarios más recientes. */
   lastSeenAt?: string;
 }) {
-  const [tab, setTab] = useState<"community" | "classroom">("community");
+  // Antes había un tab "Clases" aquí — ahora las clases viven en su propia
+  // ruta (/paciente/[id]/clases) y sustituyen a Biblioteca en el home.
   const [posts, setPosts] = useState<Post[]>(initialPosts);
   const lastSeenMs = lastSeenAt ? new Date(lastSeenAt).getTime() : 0;
 
@@ -77,25 +72,7 @@ export function PatientCommunity({
           <h1 className="text-2xl font-bold mt-1" style={{ letterSpacing: "-0.025em" }}>Comunidad</h1>
         </header>
 
-        {/* tabs */}
-        <div className="flex gap-1 p-1 rounded-xl mb-5" style={{ background: "var(--p-surface)" }}>
-          {(["community", "classroom"] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors"
-              style={tab === t ? { background: "var(--p-accent)", color: "var(--p-accent-ink)" } : { color: "var(--p-text-dim)" }}
-            >
-              {t === "community" ? "Comunidad" : "Clases"}
-            </button>
-          ))}
-        </div>
-
-        {tab === "community" ? (
-          <CommunityFeed posts={posts} setPosts={setPosts} myName={myName} myPhotoUrl={myPhotoUrl} lastSeenMs={lastSeenMs} />
-        ) : (
-          <Classroom courses={courses} patientId={patientId} />
-        )}
+        <CommunityFeed posts={posts} setPosts={setPosts} myName={myName} myPhotoUrl={myPhotoUrl} lastSeenMs={lastSeenMs} />
       </div>
 
       <PatientNav patientId={patientId} active="comunidad" variant={navVariant} />
@@ -450,40 +427,5 @@ function PostItem({ post, onChange, lastSeenMs }: { post: Post; onChange: (p: Po
   );
 }
 
-/* ─────────────────── CLASSROOM ─────────────────── */
-
-function Classroom({ courses, patientId }: { courses: Course[]; patientId: string }) {
-  if (courses.length === 0) {
-    return <p className="text-sm text-center py-8" style={{ color: "var(--p-text-faint)" }}>Aún no hay cursos disponibles.</p>;
-  }
-  return (
-    <div className="space-y-4">
-      {courses.map((c) => {
-        const pct = c.lessonCount > 0 ? Math.round((c.doneCount / c.lessonCount) * 100) : 0;
-        return (
-          <Link
-            key={c.id}
-            href={`/paciente/${patientId}/comunidad/curso/${c.id}`}
-            className="block rounded-2xl overflow-hidden"
-            style={CARD_STYLE}
-          >
-            <CourseCover title={c.title} coverUrl={c.coverUrl} className="aspect-[16/6]" />
-            <div className="p-4">
-              <div className="flex items-center gap-2">
-                <h3 className="font-semibold text-base flex-1" style={{ letterSpacing: "-0.015em" }}>{c.title}</h3>
-                <ChevronRight size={18} style={{ color: "var(--p-text-faint)" }} />
-              </div>
-              {c.description && <p className="text-sm mt-1" style={{ color: "var(--p-text-dim)" }}>{c.description}</p>}
-              <div className="mt-3">
-                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--p-border-strong)" }}>
-                  <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "linear-gradient(90deg, var(--p-accent), #F59E0B)" }} />
-                </div>
-                <div className="text-[11px] mt-1" style={{ color: "var(--p-text-faint)" }}>{pct}% · {c.doneCount}/{c.lessonCount} lecciones</div>
-              </div>
-            </div>
-          </Link>
-        );
-      })}
-    </div>
-  );
-}
+/* Antes vivía aquí el sub-componente Classroom. Se movió a su propia
+ * página `/paciente/[id]/clases` y componente `PatientClassroom`. */

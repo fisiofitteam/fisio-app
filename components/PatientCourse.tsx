@@ -52,7 +52,7 @@ export function PatientCourse({ patientId, course }: { patientId: string; course
     <main className="min-h-screen text-white" style={{ color: "var(--p-text)" }}>
       <div className="relative max-w-md mx-auto px-5 py-7 pb-28">
         <header className="mb-4">
-          <Link href={`/paciente/${patientId}/comunidad`} className="text-xs" style={{ color: "var(--p-text-faint)" }}>← Comunidad</Link>
+          <Link href={`/paciente/${patientId}/clases`} className="text-xs" style={{ color: "var(--p-text-faint)" }}>← Clases</Link>
           <h1 className="text-xl font-bold mt-1" style={{ letterSpacing: "-0.025em" }}>{course.title}</h1>
           {course.description && <p className="text-sm mt-1" style={{ color: "var(--p-text-dim)" }}>{course.description}</p>}
           <div className="mt-3">

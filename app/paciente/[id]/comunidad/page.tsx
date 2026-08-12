@@ -21,7 +21,8 @@ export default async function PatientCommunityPage({ params }: { params: { id: s
   // Marca la comunidad como vista (reset del badge de novedades en la home).
   prisma.patient.update({ where: { id: patient.id }, data: { communityLastSeenAt: new Date() } }).catch(() => {});
 
-  const [posts, courses, myReactions, myProgress] = await Promise.all([
+  // Clases se separaron a /paciente/[id]/clases — aquí solo carga el feed.
+  const [posts, myReactions] = await Promise.all([
     prisma.communityFeedPost.findMany({
       where: { published: true },
       orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
@@ -31,17 +32,10 @@ export default async function PatientCommunityPage({ params }: { params: { id: s
         _count: { select: { comments: true, reactions: true } },
       },
     }),
-    prisma.communityModule.findMany({
-      where: { published: true },
-      orderBy: { order: "asc" },
-      include: { sections: { include: { lessons: { select: { id: true } } } } },
-    }),
     prisma.communityReaction.findMany({ where: { patientId: patient.id }, select: { postId: true } }),
-    prisma.communityLessonProgress.findMany({ where: { patientId: patient.id }, select: { lessonId: true } }),
   ]);
 
   const likedSet = new Set(myReactions.map((r) => r.postId));
-  const doneSet = new Set(myProgress.map((p) => p.lessonId));
 
   return (
     <PatientCommunity
@@ -66,18 +60,6 @@ export default async function PatientCommunityPage({ params }: { params: { id: s
         reactions: p._count.reactions,
         likedByMe: likedSet.has(p.id),
       }))}
-      courses={courses.map((c) => {
-        const lessonIds = c.sections.flatMap((s) => s.lessons.map((l) => l.id));
-        const done = lessonIds.filter((id) => doneSet.has(id)).length;
-        return {
-          id: c.id,
-          title: c.title,
-          description: c.description,
-          coverUrl: c.coverUrl,
-          lessonCount: lessonIds.length,
-          doneCount: done,
-        };
-      })}
     />
   );
 }

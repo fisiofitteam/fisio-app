@@ -402,9 +402,9 @@ export function PatientHomeRolling({
               sublabel={challenge.title}
             />
           )}
-          {/* ADVANCE: sustituimos Biblioteca (vacia) por Historico —
-              registro de entrenos + sensaciones dia a dia. Para PREVENTION
-              mantenemos Biblioteca (aun no tiene historico propio). */}
+          {/* ADVANCE: sustituimos Clases por Histórico — registro de
+              entrenos + sensaciones día a día. Para el resto mostramos
+              Clases (cursos publicados en /paciente/[id]/clases). */}
           {programType === "ADVANCE" ? (
             <RollingActionCard
               href={`/paciente/${patientId}/historico`}
@@ -414,10 +414,10 @@ export function PatientHomeRolling({
             />
           ) : (
             <RollingActionCard
-              href={`/paciente/${patientId}/biblioteca`}
+              href={`/paciente/${patientId}/clases`}
               Icon={BookOpen}
-              label="Biblioteca"
-              sublabel="Recursos y vídeos"
+              label="Clases"
+              sublabel="Cursos y lecciones"
             />
           )}
           <RollingActionCard

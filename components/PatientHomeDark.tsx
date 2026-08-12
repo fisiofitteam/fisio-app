@@ -365,10 +365,10 @@ export function PatientHomeDark({
             sublabel="Mis restricciones"
           />
           <ActionCard
-            href={`/paciente/${patient.id}/biblioteca`}
+            href={`/paciente/${patient.id}/clases`}
             Icon={BookOpen}
-            label="Biblioteca"
-            sublabel="Recursos y vídeos"
+            label="Clases"
+            sublabel="Cursos y lecciones"
           />
           <ActionCard
             href={`/paciente/${patient.id}/comunidad`}
