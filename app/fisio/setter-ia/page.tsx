@@ -101,20 +101,19 @@ export default async function SetterIaPage({
         </p>
       </header>
 
-      {/* Aviso: la API actual de Skalex solo permite buscar por identidad,
-          así que solo vemos conversaciones cuya @Instagram o teléfono ya
-          existe en nuestro CRM (Lead/Patient). Las fases anteriores del
-          funnel (aún sin agendar) están fuera del scope. */}
+      {/* Skalex habilitó GET /conversations/started?date=... el 2026-08-12,
+          así que ahora sí bajamos TODAS las conversaciones abiertas los
+          últimos 3 días (incluso las que aún no cruzan con Lead/Patient).
+          Los que aún no cruzan aparecen en el KPI "Sin cruce". */}
       <div
         className="mb-5 rounded-lg p-3 text-xs"
-        style={{ background: "#FEF3C7", border: "1px solid #F59E0B", color: "#78350F" }}
+        style={{ background: "#DBEAFE", border: "1px solid #60A5FA", color: "#1E3A8A" }}
       >
-        <strong>⚠ Vista parcial del funnel</strong> — Skalex solo nos deja consultar por
-        identidad, así que aquí ves las conversaciones cuyo <em>@Instagram</em> o
-        teléfono ya está en tu CRM. Los leads que están en fases anteriores (aún
-        no han agendado y no existen en tu CRM) no aparecen. Pendiente que
-        Skalex nos habilite listado paginado o filtro por etiqueta para pintar
-        el funnel completo.
+        <strong>ℹ Funnel completo (últimos 3 días)</strong> — El sync ahora usa el
+        endpoint <code>/conversations/started</code> para bajar todas las
+        conversaciones abiertas en los 3 canales, incluidas las que aún no
+        cruzan con tu CRM (aparecen como "Sin cruce"). Las conversaciones más
+        antiguas se siguen actualizando por reverse-lookup vía Lead/Patient.
       </div>
 
       {/* Selector de periodo */}

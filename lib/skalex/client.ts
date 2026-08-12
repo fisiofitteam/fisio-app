@@ -148,3 +148,24 @@ export async function findByName(name: string): Promise<SkalexConversationDto[]>
   const data = await skalexFetch<SkalexListResponse>("/conversations", { name: name.trim() });
   return data.conversations ?? [];
 }
+
+/**
+ * Lista TODAS las conversaciones abiertas por primera vez un día concreto en
+ * los 3 canales (WhatsApp, Instagram, Messenger). Se filtra por createdAt
+ * dentro del día indicado en la zona horaria pasada en tzOffset.
+ *
+ * Este endpoint es forward-lookup (a diferencia de findByIgUsername/findByPhone,
+ * que son reverse por identidad conocida). Sirve para poblar el embudo del setter:
+ * queremos ver TODOS los leads que hoy escribieron, aunque aún no tengan
+ * cuenta o registro en nuestra app.
+ *
+ * @param date       Formato "YYYY-MM-DD" en la zona horaria de tzOffset.
+ * @param tzOffset   Offset en formato "+02:00" / "-05:00". Default Madrid.
+ */
+export async function findStartedOnDate(
+  date: string,
+  tzOffset: string = "+02:00",
+): Promise<SkalexConversationDto[]> {
+  const data = await skalexFetch<SkalexListResponse>("/conversations/started", { date, tzOffset });
+  return data.conversations ?? [];
+}

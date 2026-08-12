@@ -18,6 +18,7 @@ import {
   findByIgUsername,
   findByIgUserId,
   findByPhone,
+  findStartedOnDate,
   type SkalexConversationDto,
 } from "./client";
 
@@ -217,6 +218,97 @@ export async function runFullSync(): Promise<SyncStats> {
       lastUpdated: stats.updated,
     },
   });
+
+  return stats;
+}
+
+/**
+ * Sincronización FORWARD: baja todas las conversaciones abiertas los últimos
+ * N días (por defecto 3). Complementa al reverse-lookup: captura leads que
+ * aún no tenemos en nuestra BD (empezaron a hablar por WhatsApp/IG pero
+ * todavía no agendaron llamada, así que ni Lead ni Patient existen).
+ *
+ * Las conversaciones sin match a Lead/Patient se guardan igual con
+ * leadId=null / patientId=null; luego, cuando el lead se cree y se cruce
+ * por igUserId/phone, la fila se re-liga.
+ *
+ * @param days     Número de días hacia atrás a bajar. 3 es el default.
+ * @param tzOffset Offset horario para el rango de fecha (default Madrid).
+ */
+export async function runForwardSync(
+  days: number = 3,
+  tzOffset: string = "+02:00",
+): Promise<{ days: number; created: number; updated: number; errors: number }> {
+  const stats = { days, created: 0, updated: 0, errors: 0 };
+
+  // Cachés para no consultar la BD por cada conversación cuando queremos
+  // enlazarla con un Lead/Patient existente por teléfono o igUserId.
+  const leadsByPhone = new Map<string, string>();
+  const leadsByIgUsername = new Map<string, string>();
+  const patientsByPhone = new Map<string, string>();
+  const patientsByIgUsername = new Map<string, string>();
+
+  const [leads, patients] = await Promise.all([
+    prisma.lead.findMany({
+      where: { OR: [{ instagram: { not: null } }, { phone: { not: null } }] },
+      select: { id: true, phone: true, instagram: true },
+    }),
+    prisma.patient.findMany({
+      where: { OR: [{ instagram: { not: null } }, { phone: { not: null } }] },
+      select: { id: true, phone: true, instagram: true },
+    }),
+  ]);
+  for (const l of leads) {
+    const p = normPhone(l.phone);
+    if (p) leadsByPhone.set(p, l.id);
+    const ig = normIg(l.instagram);
+    if (ig) leadsByIgUsername.set(ig, l.id);
+  }
+  for (const p of patients) {
+    const ph = normPhone(p.phone);
+    if (ph) patientsByPhone.set(ph, p.id);
+    const ig = normIg(p.instagram);
+    if (ig) patientsByIgUsername.set(ig, p.id);
+  }
+
+  const today = new Date();
+  for (let i = 0; i < days; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const date = d.toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
+    try {
+      const dtos = await findStartedOnDate(date, tzOffset);
+      for (const dto of dtos) {
+        // Intentamos enlazar con un Lead/Patient existente por teléfono
+        // (más fiable) o igUsername.
+        const phoneKey = normPhone(dto.customerPhone);
+        const igKey = normIg(dto.igUsername);
+        const leadId = (phoneKey && leadsByPhone.get(phoneKey)) ??
+                       (igKey && leadsByIgUsername.get(igKey)) ??
+                       null;
+        const patientId = leadId ? null : (
+          (phoneKey && patientsByPhone.get(phoneKey)) ??
+          (igKey && patientsByIgUsername.get(igKey)) ??
+          null
+        );
+        try {
+          const r = await upsertConversation(dto, { leadId, patientId });
+          if (r === "created") stats.created++;
+          else stats.updated++;
+        } catch (err) {
+          stats.errors++;
+          console.error("[skalex-forward] upsert error", dto.conversationId, err);
+        }
+      }
+      // Pequeña pausa entre días para no dispararnos con el rate limit si
+      // Skalex tarda en responder (los días con muchas conversaciones podrían
+      // tardar segundos).
+      await new Promise((r) => setTimeout(r, 200));
+    } catch (err) {
+      stats.errors++;
+      console.error("[skalex-forward] día falló", date, err);
+    }
+  }
 
   return stats;
 }

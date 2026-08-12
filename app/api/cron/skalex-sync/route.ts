@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getActiveProfessional } from "@/lib/session";
 import { skalexCredentials } from "@/lib/skalex/client";
-import { runFullSync } from "@/lib/skalex/sync";
+import { runFullSync, runForwardSync } from "@/lib/skalex/sync";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -46,10 +46,21 @@ async function handler(req: NextRequest) {
 
   const t0 = Date.now();
   try {
-    const stats = await runFullSync();
+    // 1) Forward sync: baja TODO lo que ha entrado los últimos 3 días
+    //    (incluidos leads que aún no existen en nuestra BD). Esto pobla el
+    //    embudo del setter antes que el reverse-lookup por identidad.
+    // 2) Reverse sync: recorre nuestros Lead/Patient y actualiza sus
+    //    conversaciones (más granular; captura cambios en leads viejos).
+    const forwardStats = await runForwardSync(3);
+    const reverseStats = await runFullSync();
     const ms = Date.now() - t0;
-    console.log("[skalex-sync] OK", { ...stats, ms });
-    return NextResponse.json({ ok: true, ...stats, durationMs: ms });
+    console.log("[skalex-sync] OK", { forward: forwardStats, reverse: reverseStats, ms });
+    return NextResponse.json({
+      ok: true,
+      forward: forwardStats,
+      reverse: reverseStats,
+      durationMs: ms,
+    });
   } catch (err: any) {
     console.error("[skalex-sync] FAIL", err);
     return NextResponse.json(
