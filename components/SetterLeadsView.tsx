@@ -28,6 +28,7 @@ type Lead = {
   source: string | null;
   aiScheduled: boolean;
   callScheduledAt: string;
+  setterNotifiedAt: string | null;
   closer: Pro | null;
   sourceTag: { id: string; label: string; color: string | null } | null;
 };
@@ -241,14 +242,30 @@ export function SetterLeadsView({
                   🤖 {lead.aiScheduled ? "Agendado por IA" : "¿Agendado por IA?"}
                 </button>
                 <div className="flex items-center gap-2 ml-auto">
-                  <span className="text-[11px] text-neutral-500 hidden sm:inline">Cuando avises al closer →</span>
-                  <button
-                    onClick={() => markNotified(lead.id)}
-                    className="text-xs font-medium px-3 py-1.5 rounded-md"
-                    style={{ background: "#0A0A0A", color: "#FAFAFA" }}
-                  >
-                    ✓ Avisado
-                  </button>
+                  {lead.setterNotifiedAt ? (
+                    // Ya se avisó al closer. Dejamos la card visible hasta que
+                    // pase el día de la videollamada (filtro en page.tsx), para
+                    // que la setter pueda editar el resumen si le llega más
+                    // información del lead o corregir algo.
+                    <span
+                      className="text-xs font-medium px-3 py-1.5 rounded-md"
+                      style={{ background: "#DCFCE7", color: "#166534", border: "1px solid #86EFAC" }}
+                      title={`Avisado el ${new Date(lead.setterNotifiedAt).toLocaleDateString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`}
+                    >
+                      ✓ Avisado
+                    </span>
+                  ) : (
+                    <>
+                      <span className="text-[11px] text-neutral-500 hidden sm:inline">Cuando avises al closer →</span>
+                      <button
+                        onClick={() => markNotified(lead.id)}
+                        className="text-xs font-medium px-3 py-1.5 rounded-md"
+                        style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+                      >
+                        ✓ Avisado
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </article>

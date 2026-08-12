@@ -28,10 +28,20 @@ export default async function LeadsPage({
   // Tab activo: por defecto "all" (todos los closers); o un closer específico
   const activeFilter = searchParams.closer ?? "all";
 
-  // El setter solo ve los leads pendientes de avisar al closer: status "scheduled"
-  // y aún sin marcar como avisados. Al pulsar "✓ Avisado", el lead desaparece de
-  // su panel y queda solo en el de llamadas del closer.
-  const where: any = { status: "scheduled", setterNotifiedAt: null };
+  // El setter ve leads con status "scheduled" que aún NO haya pasado el día
+  // de la videollamada, o que aún no haya marcado como avisado. Al marcar
+  // "avisado" la card queda visible con un chip verde, pero el lead sigue
+  // accesible por si Niki necesita editar el resumen o corregir algo. Cuando
+  // pasa el día de la llamada, desaparece del panel (queda en el del closer).
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const where: any = {
+    status: "scheduled",
+    OR: [
+      { setterNotifiedAt: null },
+      { callScheduledAt: { gte: startOfToday } },
+    ],
+  };
   if (activeFilter !== "all") {
     where.closerId = activeFilter;
   }
@@ -45,14 +55,20 @@ export default async function LeadsPage({
     orderBy: { callScheduledAt: "asc" },
   });
 
-  // Counts por closer (solo pendientes de avisar)
-  const allPending = await prisma.lead.findMany({
-    where: { status: "scheduled", setterNotifiedAt: null },
+  // Counts por closer con el mismo criterio.
+  const allActive = await prisma.lead.findMany({
+    where: {
+      status: "scheduled",
+      OR: [
+        { setterNotifiedAt: null },
+        { callScheduledAt: { gte: startOfToday } },
+      ],
+    },
     select: { closerId: true },
   });
-  const counts: Record<string, number> = { all: allPending.length };
+  const counts: Record<string, number> = { all: allActive.length };
   for (const c of closers) {
-    counts[c.id] = allPending.filter((l) => l.closerId === c.id).length;
+    counts[c.id] = allActive.filter((l) => l.closerId === c.id).length;
   }
 
   // Análisis IA de Skalex (Zapp) por lead, para pintarlo en cada card.
@@ -80,6 +96,7 @@ export default async function LeadsPage({
         source: l.source,
         aiScheduled: l.aiScheduled,
         callScheduledAt: l.callScheduledAt.toISOString(),
+        setterNotifiedAt: l.setterNotifiedAt?.toISOString() ?? null,
         closer: l.closer,
         sourceTag: l.sourceTag,
       }))}
