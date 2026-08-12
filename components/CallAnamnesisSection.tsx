@@ -2,18 +2,25 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { CallClinicalNotesBlock, type CallClinicalData } from "@/components/CallClinicalNotesBlock";
 
 /**
  * Bloque desplegable "Llamada Anamnesis" en la pestaña Formularios del
  * paciente. Texto libre, autoguardado debounced 1s tras la última pulsación.
  * Persiste en Patient.anamnesisCallNotes.
+ *
+ * Si el lead que originó al paciente tiene un CallSummary generado por IA,
+ * mostramos su parte clínica en un bloque arriba como referencia (no lo
+ * autopoblamos en el textarea: el fisio decide si copiarlo o escribir el suyo).
  */
 export function CallAnamnesisSection({
   patientId,
   initialText,
+  clinicalNotes,
 }: {
   patientId: string;
   initialText: string | null;
+  clinicalNotes?: CallClinicalData | null;
 }) {
   const router = useRouter();
   const [text, setText] = useState(initialText ?? "");
@@ -59,6 +66,7 @@ export function CallAnamnesisSection({
         </summary>
 
         <div className="mt-3 border-t border-neutral-100 pt-3">
+          <CallClinicalNotesBlock data={clinicalNotes} />
           <textarea
             value={text}
             onChange={onChange}

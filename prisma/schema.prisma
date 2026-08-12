@@ -3355,9 +3355,18 @@ model CallSummary {
   // llamar a Meet API si mejoramos el prompt en el futuro).
   transcriptText String?
 
-  // Resumen ejecutivo generado por Sonnet 4.6.
+  // Resumen ejecutivo generado por Sonnet 4.6. Dos versiones sobre la
+  // misma transcripción: una comercial (para el equipo de venta) y una
+  // clínica (para el fisio, se muestra sobre las notas de anamnesis).
+  salesSummary       String?
+  salesKeyPoints     String?  // JSON { motivations, objections, nextSteps }
+  clinicalSummary    String?
+  clinicalKeyPoints  String?  // JSON { mainComplaint, symptoms, history, contextLifestyle, goals, redFlags }
+
+  // Legacy: v1 devolvía un único resumen mixto (comercial + clínico).
+  // Se conservan por si algún registro antiguo aún los usa; el generador
+  // v2 los ignora y rellena sales* y clinical*.
   summary        String?
-  // JSON: { motivations: [...], objections: [...], nextSteps: [...], … }
   keyPoints      String?
   // "won" | "lost" | "rescheduled" | "unclear" según la IA
   outcome        String?

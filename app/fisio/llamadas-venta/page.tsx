@@ -127,14 +127,14 @@ export default async function LlamadasVentaPage({
   const { getSkalexAiForLeads } = await import("@/lib/skalex/summaries");
   const skalexAiByLeadId = await getSkalexAiForLeads(leads.map((l) => l.id));
 
-  // Resumen IA de la videollamada (Meet transcript → Claude). Solo se
-  // muestra si el registro CallSummary ya está generado.
+  // Resumen COMERCIAL IA de la videollamada (Meet transcript → Claude).
+  // El resumen clínico va en la ficha del paciente, no aquí.
   const callSummariesRaw = await prisma.callSummary.findMany({
     where: { leadId: { in: leads.map((l) => l.id) } },
     select: {
       leadId: true,
-      summary: true,
-      keyPoints: true,
+      salesSummary: true,
+      salesKeyPoints: true,
       outcome: true,
       noTranscript: true,
       errorMessage: true,
@@ -142,8 +142,8 @@ export default async function LlamadasVentaPage({
     },
   });
   const callSummaryByLeadId: Record<string, {
-    summary: string | null;
-    keyPoints: string | null;
+    salesSummary: string | null;
+    salesKeyPoints: string | null;
     outcome: string | null;
     noTranscript: boolean;
     errorMessage: string | null;
@@ -151,8 +151,8 @@ export default async function LlamadasVentaPage({
   }> = {};
   for (const c of callSummariesRaw) {
     callSummaryByLeadId[c.leadId] = {
-      summary: c.summary,
-      keyPoints: c.keyPoints,
+      salesSummary: c.salesSummary,
+      salesKeyPoints: c.salesKeyPoints,
       outcome: c.outcome,
       noTranscript: c.noTranscript,
       errorMessage: c.errorMessage,

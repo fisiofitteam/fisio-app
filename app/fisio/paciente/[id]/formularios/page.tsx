@@ -12,6 +12,31 @@ export default async function PatientFormsTab({ params }: { params: { id: string
   const patient = await prisma.patient.findUnique({ where: { id: params.id } });
   if (!patient) notFound();
 
+  // Lead que originó al paciente + su CallSummary (si Meet publicó
+  // transcript se muestra el resumen clínico IA sobre el textarea de notas).
+  const sourceLead = await prisma.lead.findFirst({
+    where: { convertedPatientId: params.id, meetingUrl: { not: null } },
+    orderBy: { callScheduledAt: "desc" },
+    select: {
+      callSummary: {
+        select: {
+          clinicalSummary: true,
+          clinicalKeyPoints: true,
+          noTranscript: true,
+          errorMessage: true,
+        },
+      },
+    },
+  });
+  const clinicalNotes = sourceLead?.callSummary
+    ? {
+        clinicalSummary: sourceLead.callSummary.clinicalSummary,
+        clinicalKeyPoints: sourceLead.callSummary.clinicalKeyPoints,
+        noTranscript: sourceLead.callSummary.noTranscript,
+        errorMessage: sourceLead.callSummary.errorMessage,
+      }
+    : null;
+
   // ── Valoración inicial (anamnesis del onboarding) ──────────────────────────
   let anamnesis: Record<string, any> = {};
   try {
@@ -151,8 +176,12 @@ export default async function PatientFormsTab({ params }: { params: { id: string
         )}
       </section>
 
-      {/* ── Llamada Anamnesis (texto manual) ───────────────────────────── */}
-      <CallAnamnesisSection patientId={patient.id} initialText={patient.anamnesisCallNotes ?? null} />
+      {/* ── Llamada Anamnesis (texto manual + resumen clínico IA) ───────── */}
+      <CallAnamnesisSection
+        patientId={patient.id}
+        initialText={patient.anamnesisCallNotes ?? null}
+        clinicalNotes={clinicalNotes}
+      />
 
       {/* ── Formularios de sesión ───────────────────────────────────────── */}
       <section>

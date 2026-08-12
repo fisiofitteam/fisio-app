@@ -1,15 +1,16 @@
 /**
- * Generación del resumen ejecutivo de una videollamada de venta.
+ * Generación de resúmenes ejecutivos de una videollamada de venta.
  *
- * Flujo:
- *   1. Cargar Lead con meetingUrl.
- *   2. Bajar la transcripción con lib/googleMeet.ts (Meet REST API).
- *   3. Pasar el texto a Claude Sonnet 4.6 con un prompt que devuelve
- *      un JSON estructurado (summary, keyPoints, outcome).
- *   4. Guardar/actualizar el CallSummary del Lead.
+ * Sobre la misma transcripción se producen DOS versiones distintas:
+ *   - Sales    → para la card verde en /fisio/llamadas-venta. Solo lo
+ *                comercial (motivaciones, objeciones, próximos pasos).
+ *   - Clinical → para la ficha del paciente en la pestaña Formularios,
+ *                encima del textarea "Notas de la llamada de anamnesis".
+ *                Contiene motivo de consulta, síntomas, historial, etc.
  *
- * Idempotente: al llamar de nuevo actualiza el registro existente. Los
- * casos donde Meet aún no expone transcript se marcan con
+ * Ambas van en el mismo registro CallSummary (columnas sales_* y clinical_*).
+ * Idempotente: si `salesSummary` ya existe no regenera salvo `force`.
+ * Los casos donde Meet aún no expone transcript se marcan con
  * `noTranscript = true` para no reintentar en cada tick del cron.
  */
 import Anthropic from "@anthropic-ai/sdk";
@@ -17,7 +18,7 @@ import { prisma } from "@/lib/prisma";
 import { fetchTranscriptForMeetingUrl, MeetApiError } from "@/lib/googleMeet";
 
 const MODEL = "claude-sonnet-4-6";
-const MAX_OUTPUT_TOKENS = 1500;
+const MAX_OUTPUT_TOKENS = 2500;
 
 let _client: Anthropic | null = null;
 function client(): Anthropic {
@@ -28,21 +29,40 @@ function client(): Anthropic {
   return _client;
 }
 
-const PROMPT_SYSTEM = `Eres el asistente comercial de FisioFit Team. Analizas
-transcripciones de videollamadas de venta entre un closer y un lead
-interesado en programas de fisioterapia deportiva (RECUPERA / CONSOLIDA /
-ADVANCE / PREVENTION). Tu objetivo es dejar un resumen ejecutivo útil para
-que el equipo pueda hacer follow-up con contexto.
+const PROMPT_SYSTEM = `Eres el asistente de FisioFit Team. Analizas transcripciones
+de videollamadas de venta entre un closer y un lead interesado en programas de
+fisioterapia deportiva (RECUPERA / CONSOLIDA / ADVANCE / PREVENTION).
+
+Debes producir DOS resúmenes distintos de la misma llamada, con enfoques
+completamente separados:
+
+- SALES (comercial): solo lo relevante para el equipo de venta / follow-up.
+  Motivaciones de compra, objeciones, contexto de decisión, próximos pasos
+  comerciales, cierre. NO incluyas detalles clínicos.
+
+- CLINICAL (clínico): solo lo relevante para el fisio que va a atender al
+  paciente. Motivo de consulta, síntomas, historial médico y quirúrgico,
+  contexto de vida (trabajo, entrenamiento, sueño), objetivos deportivos,
+  banderas rojas. NO incluyas precios, objeciones de venta ni detalles de
+  pago.
 
 Devuelves SIEMPRE JSON válido con esta forma exacta (sin markdown, sin
 comillas de código, solo el objeto):
 {
-  "summary": "resumen ejecutivo en 4-8 frases",
-  "keyPoints": {
-    "motivations": ["motivación 1", "motivación 2"],
-    "objections": ["objeción 1", "objeción 2"],
-    "context": ["contexto clínico o vital relevante"],
-    "nextSteps": ["próximo paso acordado 1", "próximo paso 2"]
+  "sales": {
+    "summary": "resumen comercial ejecutivo en 3-6 frases",
+    "motivations": ["motivación de compra 1", "motivación 2"],
+    "objections": ["objeción comercial 1", "objeción 2"],
+    "nextSteps": ["próximo paso comercial acordado 1", "próximo paso 2"]
+  },
+  "clinical": {
+    "summary": "resumen clínico ejecutivo en 4-8 frases",
+    "mainComplaint": "motivo principal de consulta en una frase",
+    "symptoms": ["síntoma 1", "síntoma 2"],
+    "history": ["antecedente relevante 1", "antecedente 2"],
+    "contextLifestyle": ["contexto vital relevante (trabajo, sueño, entreno)"],
+    "goals": ["objetivo deportivo/funcional 1", "objetivo 2"],
+    "redFlags": ["señal de alerta clínica si la hay"]
   },
   "outcome": "won" | "lost" | "rescheduled" | "unclear"
 }
@@ -52,9 +72,10 @@ Reglas:
 - "lost"         → no interesado, precio, sin decisión, se pierde el lead.
 - "rescheduled"  → hay que volver a llamar / pidió tiempo para pensarlo.
 - "unclear"      → transcripción corta o ambigua.
-- Habla en español neutro. No inventes cifras ni objeciones que no salgan
-  en la transcripción. Si algo no está claro, no lo pongas.
+- Habla en español neutro. No inventes datos que no salgan en la
+  transcripción. Si algo no está claro, deja el array vacío.
 - Cada bullet, breve y accionable.
+- Si un campo array no tiene contenido real, devuelve [] (nunca null).
 `;
 
 function buildUserPrompt(input: { patientName: string; transcript: string }): string {
@@ -64,26 +85,58 @@ function buildUserPrompt(input: { patientName: string; transcript: string }): st
 ${input.transcript}
 <<<FIN>>>
 
-Genera el JSON con el resumen. Solo el objeto JSON, nada más.`;
+Genera el JSON con los dos resúmenes (sales + clinical) y el outcome. Solo el objeto JSON, nada más.`;
 }
 
-type ParsedSummary = {
+type SalesSection = {
   summary: string;
-  keyPoints: any;
+  motivations: string[];
+  objections: string[];
+  nextSteps: string[];
+};
+type ClinicalSection = {
+  summary: string;
+  mainComplaint: string;
+  symptoms: string[];
+  history: string[];
+  contextLifestyle: string[];
+  goals: string[];
+  redFlags: string[];
+};
+type ParsedSummary = {
+  sales: SalesSection;
+  clinical: ClinicalSection;
   outcome: string;
 };
 
+function asStringArray(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  return v.map((x) => String(x)).filter((s) => s.trim().length > 0);
+}
+
 function parseSummary(text: string): ParsedSummary {
-  // Claude puede devolver el JSON pelado o dentro de un bloque de código;
-  // buscamos el primer '{' y el último '}' para extraerlo.
   const first = text.indexOf("{");
   const last = text.lastIndexOf("}");
   if (first < 0 || last < 0) throw new Error("Claude no devolvió JSON.");
-  const json = text.slice(first, last + 1);
-  const obj = JSON.parse(json);
+  const obj = JSON.parse(text.slice(first, last + 1));
+  const s = obj.sales ?? {};
+  const c = obj.clinical ?? {};
   return {
-    summary: String(obj.summary ?? "").trim(),
-    keyPoints: obj.keyPoints ?? null,
+    sales: {
+      summary: String(s.summary ?? "").trim(),
+      motivations: asStringArray(s.motivations),
+      objections: asStringArray(s.objections),
+      nextSteps: asStringArray(s.nextSteps),
+    },
+    clinical: {
+      summary: String(c.summary ?? "").trim(),
+      mainComplaint: String(c.mainComplaint ?? "").trim(),
+      symptoms: asStringArray(c.symptoms),
+      history: asStringArray(c.history),
+      contextLifestyle: asStringArray(c.contextLifestyle),
+      goals: asStringArray(c.goals),
+      redFlags: asStringArray(c.redFlags),
+    },
     outcome: String(obj.outcome ?? "unclear").trim(),
   };
 }
@@ -96,8 +149,10 @@ export type GenerateResult = {
 };
 
 /**
- * Genera (o regenera) el resumen para un Lead concreto. Idempotente:
- * si ya existe CallSummary NO reintentamos salvo que se pase `force`.
+ * Genera (o regenera) los resúmenes para un Lead concreto. Idempotente:
+ * si `salesSummary` ya existe NO reintentamos salvo `force`. Los registros
+ * v1 (solo `summary` legacy) se regeneran automáticamente porque
+ * `salesSummary` está vacío en ellos.
  */
 export async function generateSummaryForLead(
   leadId: string,
@@ -112,7 +167,7 @@ export async function generateSummaryForLead(
 
   const existing = await prisma.callSummary.findUnique({ where: { leadId } });
   if (existing && !opts.force) {
-    if (existing.summary || existing.noTranscript) {
+    if (existing.salesSummary || existing.noTranscript) {
       return { ok: true, reason: "already_processed", callSummaryId: existing.id };
     }
   }
@@ -139,7 +194,6 @@ export async function generateSummaryForLead(
     return { ok: false, reason: "no_transcript", callSummaryId: saved.id };
   }
 
-  // Sonnet 4.6
   const msg = await client().messages.create({
     model: MODEL,
     max_tokens: MAX_OUTPUT_TOKENS,
@@ -177,6 +231,20 @@ export async function generateSummaryForLead(
     return { ok: false, reason: "error", detail: `Claude devolvió inválido: ${raw.slice(0, 200)}`, callSummaryId: saved.id };
   }
 
+  const salesKeyPoints = {
+    motivations: parsed.sales.motivations,
+    objections: parsed.sales.objections,
+    nextSteps: parsed.sales.nextSteps,
+  };
+  const clinicalKeyPoints = {
+    mainComplaint: parsed.clinical.mainComplaint,
+    symptoms: parsed.clinical.symptoms,
+    history: parsed.clinical.history,
+    contextLifestyle: parsed.clinical.contextLifestyle,
+    goals: parsed.clinical.goals,
+    redFlags: parsed.clinical.redFlags,
+  };
+
   const ms = Date.now() - t0;
   const saved = await prisma.callSummary.upsert({
     where: { leadId },
@@ -184,8 +252,10 @@ export async function generateSummaryForLead(
       leadId,
       transcriptText: transcript.transcriptText,
       transcriptCharCount: transcript.charCount,
-      summary: parsed.summary,
-      keyPoints: parsed.keyPoints ? JSON.stringify(parsed.keyPoints) : null,
+      salesSummary: parsed.sales.summary,
+      salesKeyPoints: JSON.stringify(salesKeyPoints),
+      clinicalSummary: parsed.clinical.summary,
+      clinicalKeyPoints: JSON.stringify(clinicalKeyPoints),
       outcome: parsed.outcome,
       noTranscript: false,
       errorMessage: null,
@@ -194,8 +264,10 @@ export async function generateSummaryForLead(
     update: {
       transcriptText: transcript.transcriptText,
       transcriptCharCount: transcript.charCount,
-      summary: parsed.summary,
-      keyPoints: parsed.keyPoints ? JSON.stringify(parsed.keyPoints) : null,
+      salesSummary: parsed.sales.summary,
+      salesKeyPoints: JSON.stringify(salesKeyPoints),
+      clinicalSummary: parsed.clinical.summary,
+      clinicalKeyPoints: JSON.stringify(clinicalKeyPoints),
       outcome: parsed.outcome,
       noTranscript: false,
       errorMessage: null,

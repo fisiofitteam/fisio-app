@@ -3,9 +3,9 @@
 import { useState } from "react";
 
 export type CallSummaryData = {
-  summary: string | null;
-  keyPoints: string | null; // JSON stringified
-  outcome: string | null;   // "won" | "lost" | "rescheduled" | "unclear"
+  salesSummary: string | null;
+  salesKeyPoints: string | null; // JSON { motivations, objections, nextSteps }
+  outcome: string | null;        // "won" | "lost" | "rescheduled" | "unclear"
   noTranscript: boolean;
   errorMessage: string | null;
   generatedAt: string;
@@ -19,9 +19,9 @@ const OUTCOME_META: Record<string, { label: string; color: string; bg: string; b
 };
 
 /**
- * Bloque compacto con el resumen IA de una videollamada. Se renderiza en
- * la card de /fisio/llamadas-venta y en la ficha del paciente.
- * Silencioso (null) si el CallSummary no existe o no tiene contenido útil.
+ * Bloque con el resumen COMERCIAL de una videollamada. Se renderiza en la
+ * card de /fisio/llamadas-venta. El resumen clínico (patología, síntomas,
+ * historial) sale en otro bloque distinto sobre las notas de anamnesis.
  */
 export function CallSummaryBlock({ summary }: { summary: CallSummaryData | null | undefined }) {
   const [expanded, setExpanded] = useState(false);
@@ -38,7 +38,7 @@ export function CallSummaryBlock({ summary }: { summary: CallSummaryData | null 
       </div>
     );
   }
-  if (!summary.summary) {
+  if (!summary.salesSummary) {
     return summary.errorMessage ? (
       <div
         className="mt-2 rounded-md px-2.5 py-2 text-[11px]"
@@ -52,12 +52,12 @@ export function CallSummaryBlock({ summary }: { summary: CallSummaryData | null 
 
   const outcome = summary.outcome && OUTCOME_META[summary.outcome] ? OUTCOME_META[summary.outcome] : null;
   let keyPoints: any = null;
-  if (summary.keyPoints) {
-    try { keyPoints = JSON.parse(summary.keyPoints); } catch { keyPoints = null; }
+  if (summary.salesKeyPoints) {
+    try { keyPoints = JSON.parse(summary.salesKeyPoints); } catch { keyPoints = null; }
   }
 
-  const isLong = summary.summary.length > 240;
-  const shown = expanded || !isLong ? summary.summary : summary.summary.slice(0, 240).trimEnd() + "…";
+  const isLong = summary.salesSummary.length > 240;
+  const shown = expanded || !isLong ? summary.salesSummary : summary.salesSummary.slice(0, 240).trimEnd() + "…";
 
   return (
     <div
@@ -67,7 +67,7 @@ export function CallSummaryBlock({ summary }: { summary: CallSummaryData | null 
     >
       <div className="flex items-center gap-1.5 mb-1 flex-wrap">
         <span className="text-[13px]">🎯</span>
-        <span className="font-semibold">Resumen de la llamada</span>
+        <span className="font-semibold">Análisis comercial de la venta</span>
         {outcome && (
           <span
             className="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded ml-1"
@@ -93,8 +93,7 @@ export function CallSummaryBlock({ summary }: { summary: CallSummaryData | null 
         <div className="mt-2 space-y-1.5">
           <KeyList label="Motivaciones" items={keyPoints.motivations} />
           <KeyList label="Objeciones" items={keyPoints.objections} />
-          <KeyList label="Contexto" items={keyPoints.context} />
-          <KeyList label="Próximos pasos" items={keyPoints.nextSteps} />
+          <KeyList label="Próximos pasos comerciales" items={keyPoints.nextSteps} />
         </div>
       )}
     </div>

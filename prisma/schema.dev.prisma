@@ -3120,6 +3120,12 @@ model CallSummary {
   lead           Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   transcriptText String?
+
+  salesSummary       String?
+  salesKeyPoints     String?
+  clinicalSummary    String?
+  clinicalKeyPoints  String?
+
   summary        String?
   keyPoints      String?
   outcome        String?
