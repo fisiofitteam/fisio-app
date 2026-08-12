@@ -11,13 +11,47 @@ export type CallSummaryData = {
   generatedAt: string;
 };
 
-const OUTCOME_META: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  won:         { label: "Ganada",        color: "#065F46", bg: "#DCFCE7", border: "#86EFAC" },
-  lost:        { label: "Perdida",       color: "#7F1D1D", bg: "#FEE2E2", border: "#FCA5A5" },
-  rescheduled: { label: "Reagenda",      color: "#78350F", bg: "#FEF3C7", border: "#FCD34D" },
-  unclear:     { label: "Sin conclusión",color: "#374151", bg: "#F3F4F6", border: "#D1D5DB" },
-  followup:    { label: "Seguimiento",   color: "#1E3A8A", bg: "#DBEAFE", border: "#93C5FD" },
+// Metadatos del outcome: color del badge Y del bloque entero.
+// - won  → verde   (ganada)
+// - lost → rojo    (perdida)
+// - followup → azul (seguimiento activo)
+// - rescheduled → ámbar (reagendada)
+// - unclear → gris
+const OUTCOME_META: Record<string, {
+  label: string;
+  badgeColor: string; badgeBg: string; badgeBorder: string;
+  boxColor: string;   boxBg: string;   boxBorder: string;
+}> = {
+  won: {
+    label: "Ganada",
+    badgeColor: "#065F46", badgeBg: "#DCFCE7", badgeBorder: "#86EFAC",
+    boxColor:   "#065F46", boxBg:   "#ECFDF5", boxBorder:   "#86EFAC",
+  },
+  lost: {
+    label: "Perdida",
+    badgeColor: "#7F1D1D", badgeBg: "#FEE2E2", badgeBorder: "#FCA5A5",
+    boxColor:   "#7F1D1D", boxBg:   "#FEF2F2", boxBorder:   "#FCA5A5",
+  },
+  rescheduled: {
+    label: "Reagenda",
+    badgeColor: "#78350F", badgeBg: "#FEF3C7", badgeBorder: "#FCD34D",
+    boxColor:   "#78350F", boxBg:   "#FFFBEB", boxBorder:   "#FCD34D",
+  },
+  unclear: {
+    label: "Sin conclusión",
+    badgeColor: "#374151", badgeBg: "#F3F4F6", badgeBorder: "#D1D5DB",
+    boxColor:   "#374151", boxBg:   "#F9FAFB", boxBorder:   "#D1D5DB",
+  },
+  followup: {
+    label: "Seguimiento",
+    badgeColor: "#1E3A8A", badgeBg: "#DBEAFE", badgeBorder: "#93C5FD",
+    boxColor:   "#1E3A8A", boxBg:   "#EFF6FF", boxBorder:   "#93C5FD",
+  },
 };
+
+// Fallback (sin outcome reconocido): neutro gris, no forzamos verde para no
+// mentir sobre el resultado.
+const BOX_FALLBACK = { boxColor: "#374151", boxBg: "#F9FAFB", boxBorder: "#D1D5DB" };
 
 /**
  * Bloque con el resumen COMERCIAL de una videollamada. Se renderiza en la
@@ -61,6 +95,9 @@ export function CallSummaryBlock({
 
   const outcomeKey = outcomeOverride ?? summary.outcome ?? "";
   const outcome = outcomeKey && OUTCOME_META[outcomeKey] ? OUTCOME_META[outcomeKey] : null;
+  const box = outcome
+    ? { boxColor: outcome.boxColor, boxBg: outcome.boxBg, boxBorder: outcome.boxBorder }
+    : BOX_FALLBACK;
   let keyPoints: any = null;
   if (summary.salesKeyPoints) {
     try { keyPoints = JSON.parse(summary.salesKeyPoints); } catch { keyPoints = null; }
@@ -72,7 +109,7 @@ export function CallSummaryBlock({
   return (
     <div
       className="mt-2 rounded-md px-2.5 py-2 text-xs"
-      style={{ background: "#ECFDF5", border: "1px solid #86EFAC", color: "#065F46" }}
+      style={{ background: box.boxBg, border: `1px solid ${box.boxBorder}`, color: box.boxColor }}
       onClick={(e) => e.stopPropagation()}
     >
       <div className="flex items-center gap-1.5 mb-1 flex-wrap">
@@ -81,7 +118,7 @@ export function CallSummaryBlock({
         {outcome && (
           <span
             className="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded ml-1"
-            style={{ background: outcome.bg, color: outcome.color, border: `1px solid ${outcome.border}` }}
+            style={{ background: outcome.badgeBg, color: outcome.badgeColor, border: `1px solid ${outcome.badgeBorder}` }}
           >
             {outcome.label.toUpperCase()}
           </span>

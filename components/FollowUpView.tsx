@@ -152,10 +152,10 @@ export function FollowUpView({
                           href={waHref}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="font-medium text-emerald-700 hover:underline"
+                          className="font-medium text-neutral-900 underline underline-offset-2 hover:text-neutral-700"
                           title="Abrir WhatsApp"
                         >
-                          💬 {lead.fullName}
+                          {lead.fullName}
                         </a>
                       ) : (
                         <span className="font-medium">{lead.fullName}</span>
