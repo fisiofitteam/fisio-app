@@ -60,7 +60,7 @@ async function handler(req: NextRequest) {
       id: true,
       fullName: true,
       callSummary: {
-        select: { id: true, summary: true, noTranscript: true, updatedAt: true },
+        select: { id: true, salesSummary: true, noTranscript: true, updatedAt: true },
       },
     },
     orderBy: { callScheduledAt: "desc" },
@@ -74,7 +74,7 @@ async function handler(req: NextRequest) {
   const targets = leads.filter((l) => {
     const s = l.callSummary;
     if (!s) return true; // nunca procesado
-    if (s.summary) return false; // ya listo
+    if (s.salesSummary) return false; // ya listo con prompt v2
     if (s.noTranscript) {
       // Marcado como sin transcript: reintentamos si han pasado >6h desde
       // el último intento (por si Meet lo publicó tarde). Después de eso,
