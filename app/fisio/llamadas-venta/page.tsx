@@ -156,6 +156,7 @@ export default async function LlamadasVentaPage({
         impactoCrossfit: l.impactoCrossfit,
         meetingUrl: l.meetingUrl,
         source: l.source,
+        country: l.country ?? null,
         setterNotifiedAt: l.setterNotifiedAt?.toISOString() ?? null,
         closerContactedAt: l.closerContactedAt?.toISOString() ?? null,
         reminderSentAt: l.reminderSentAt?.toISOString() ?? null,

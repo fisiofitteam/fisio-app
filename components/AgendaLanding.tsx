@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { AgendaLandingCopy } from "@/lib/landing-content";
-import { COUNTRIES, DEFAULT_COUNTRY } from "@/lib/countries";
+import { COUNTRIES, DEFAULT_COUNTRY, countryFlag, findCountry } from "@/lib/countries";
 
 type Slot = {
   startISO: string;
@@ -55,7 +55,7 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [country, setCountry] = useState<string>(DEFAULT_COUNTRY);
+  const [country, setCountry] = useState<string>(DEFAULT_COUNTRY.label);
   const [instagram, setInstagram] = useState("");
   const [motivo, setMotivo] = useState("");
   const [tratamientosPrevios, setTratamientosPrevios] = useState("");
@@ -202,13 +202,27 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
           utmContent: p.get("utm_content") || undefined,
         };
       })();
+      // Componemos el teléfono completo con el prefijo del país seleccionado.
+      // Si el país tiene dialCode (todos menos "Otro") y el usuario aún no lo
+      // metió, se lo anteponemos. Para "Otro" mandamos lo que haya escrito
+      // tal cual (le pedimos que incluya el prefijo internacional).
+      const selectedCountry = findCountry(country);
+      const rawPhone = phone.trim();
+      const composedPhone = (() => {
+        if (!selectedCountry || !selectedCountry.dialCode) return rawPhone;
+        // Si ya empieza con "+", asumimos que trae prefijo — no duplicamos.
+        if (rawPhone.startsWith("+")) return rawPhone;
+        const digitsOnly = rawPhone.replace(/[^\d]/g, "");
+        return `${selectedCountry.dialCode}${digitsOnly}`;
+      })();
+
       const res = await fetch("/api/agenda/book", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fullName: fullName.trim(),
           email: email.trim(),
-          phone: phone.trim(),
+          phone: composedPhone,
           country: country.trim(),
           instagram: instagram.trim(),
           motivo: motivo.trim(),
@@ -392,21 +406,45 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
                   <label className="text-xs block mb-1.5" style={{ color: "#A3A3A3" }}>
                     Teléfono *
                   </label>
-                  <input
-                    type="tel"
-                    className="w-full px-3 py-2.5 rounded-lg text-sm"
-                    style={{
-                      background: "#1F1F1F",
-                      border: `1px solid ${fieldErrors.phone ? "#DC2626" : "#404040"}`,
-                      color: "#FAFAFA",
-                    }}
-                    placeholder="+34 600 000 000"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                  />
+                  {(() => {
+                    const c = findCountry(country);
+                    const hasDial = !!(c && c.dialCode);
+                    return (
+                      <div
+                        className="flex items-stretch rounded-lg overflow-hidden"
+                        style={{
+                          background: "#1F1F1F",
+                          border: `1px solid ${fieldErrors.phone ? "#DC2626" : "#404040"}`,
+                        }}
+                      >
+                        {hasDial && (
+                          <span
+                            className="flex items-center gap-1 px-3 text-sm select-none"
+                            style={{ background: "#2A2A2A", color: "#A3A3A3", borderRight: "1px solid #404040" }}
+                          >
+                            <span>{countryFlag(c!.iso2)}</span>
+                            <span className="tabular-nums">{c!.dialCode}</span>
+                          </span>
+                        )}
+                        <input
+                          type="tel"
+                          className="flex-1 px-3 py-2.5 text-sm bg-transparent outline-none"
+                          style={{ color: "#FAFAFA" }}
+                          placeholder={hasDial ? "600 000 000" : "+XX 000 000 000"}
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value)}
+                        />
+                      </div>
+                    );
+                  })()}
                   {fieldErrors.phone && (
                     <p className="text-xs mt-1" style={{ color: "#FCA5A5" }}>{fieldErrors.phone}</p>
                   )}
+                  <p className="text-[11px] mt-1" style={{ color: "#737373" }}>
+                    {findCountry(country)?.dialCode
+                      ? "Solo el número sin prefijo — nosotros lo añadimos según tu país."
+                      : "Incluye el prefijo internacional (ej. +351 91…)."}
+                  </p>
                 </div>
               </div>
 
@@ -446,7 +484,10 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
                     onChange={(e) => setCountry(e.target.value)}
                   >
                     {COUNTRIES.map((c) => (
-                      <option key={c} value={c}>{c}</option>
+                      <option key={c.label} value={c.label}>
+                        {countryFlag(c.iso2)} {c.label}
+                        {c.dialCode ? ` (${c.dialCode})` : ""}
+                      </option>
                     ))}
                   </select>
                   {fieldErrors.country && (

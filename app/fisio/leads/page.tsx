@@ -97,6 +97,7 @@ export default async function LeadsPage({
         aiScheduled: l.aiScheduled,
         callScheduledAt: l.callScheduledAt.toISOString(),
         setterNotifiedAt: l.setterNotifiedAt?.toISOString() ?? null,
+        country: l.country ?? null,
         closer: l.closer,
         sourceTag: l.sourceTag,
       }))}

@@ -8,6 +8,7 @@ import { SendDirectButton } from "@/components/SendDirectButton";
 import { SendAppLinkButton } from "@/components/SendAppLinkButton";
 import { ManualSaleButton } from "@/components/ManualSaleButton";
 import { LeadAiSummaryBlock } from "@/components/LeadAiSummaryBlock";
+import { countryFlag, findCountry } from "@/lib/countries";
 import {
   datetimeLocalInputToUtcIso,
   utcIsoToDatetimeLocalInput,
@@ -45,6 +46,7 @@ type Lead = {
   impactoCrossfit: string | null;
   meetingUrl: string | null;
   source: string | null;
+  country: string | null;
   // Workflow comercial (v55)
   setterNotifiedAt: string | null;
   closerContactedAt: string | null;
@@ -365,6 +367,18 @@ function CallRow({
       <div className="flex justify-between items-start gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
+            {lead.country && (() => {
+              const c = findCountry(lead.country);
+              if (!c) return null;
+              return (
+                <span
+                  className="text-base leading-none"
+                  title={`${c.label}${c.dialCode ? ` · ${c.dialCode}` : ""}`}
+                >
+                  {countryFlag(c.iso2)}
+                </span>
+              );
+            })()}
             <span className="font-medium">{lead.fullName}</span>
             {lead.source === "landing" && (
               <span className="text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded" style={{ background: "#DBEAFE", color: "#1E40AF" }}>

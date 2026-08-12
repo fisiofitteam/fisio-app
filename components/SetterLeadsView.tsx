@@ -10,6 +10,7 @@ import {
 } from "@/lib/datetime-local";
 import { LeadSourceTagPicker, LeadSourceTagChip } from "@/components/LeadSourceTagPicker";
 import { LeadAiSummaryBlock } from "@/components/LeadAiSummaryBlock";
+import { countryFlag, findCountry } from "@/lib/countries";
 
 type Pro = { id: string; fullName: string; role: string };
 
@@ -29,6 +30,7 @@ type Lead = {
   aiScheduled: boolean;
   callScheduledAt: string;
   setterNotifiedAt: string | null;
+  country: string | null;
   closer: Pro | null;
   sourceTag: { id: string; label: string; color: string | null } | null;
 };
@@ -143,6 +145,18 @@ export function SetterLeadsView({
                   className="flex-1 min-w-0 text-left -m-2 p-2 rounded hover:bg-neutral-50 transition-colors"
                 >
                   <div className="flex items-center gap-2 flex-wrap">
+                    {lead.country && (() => {
+                      const c = findCountry(lead.country);
+                      if (!c) return null;
+                      return (
+                        <span
+                          className="text-base leading-none"
+                          title={`${c.label}${c.dialCode ? ` · ${c.dialCode}` : ""}`}
+                        >
+                          {countryFlag(c.iso2)}
+                        </span>
+                      );
+                    })()}
                     <span className="font-medium">{lead.fullName}</span>
                     {lead.source === "landing" && (
                       <span className="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded" style={{ background: "#15803D", color: "#FFFFFF" }}>
