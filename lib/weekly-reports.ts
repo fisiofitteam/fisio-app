@@ -504,21 +504,24 @@ export async function runWeeklyReportsForWeek(monday: Date, opts?: { force?: boo
   }
 
   // Procesamos por lotes en paralelo para no tardar N * (llamada Sonnet)
-  // segundos. Sonnet 4.6 admite muchas requests concurrentes; 5 en paralelo
-  // deja margen para el rate limit y multiplica x8 la velocidad del cron.
+  // segundos. Sonnet 4.6 admite muchas requests concurrentes; 10 en paralelo
+  // deja margen para el rate limit y minimiza el tiempo total del cron.
   //
   // Antes: 40 pacientes * 4-6s cada uno = 160-240s solo en RECUPERA/CONSOLIDA,
-  // + otro tanto en ADVANCE, + el card global. Se pasaba de los 300s del
-  // maxDuration y Vercel disparaba 504. Con batches de 8 baja a ~30s totales.
-  const CONCURRENCY = 8;
-  async function processInBatches(patients: Patient[], notifyFisio: boolean) {
+  // + otro tanto en ADVANCE, + el card global. Con batches de 10 baja a
+  // ~20-25s totales por rama. Logs con duración para ver regresiones.
+  const CONCURRENCY = 10;
+  async function processInBatches(label: string, patients: Patient[], notifyFisio: boolean) {
+    if (patients.length === 0) return;
+    const t0 = Date.now();
     for (let i = 0; i < patients.length; i += CONCURRENCY) {
       const slice = patients.slice(i, i + CONCURRENCY);
       await Promise.all(slice.map((p) => processOne(p, 2, notifyFisio)));
     }
+    console.log(`[weekly-reports] ${label}: ${patients.length} pacientes en ${Date.now() - t0}ms`);
   }
-  await processInBatches(Array.from(rehabByPatient.values()), true);
-  await processInBatches(Array.from(advanceByPatient.values()), false);
+  await processInBatches("REHAB", Array.from(rehabByPatient.values()), true);
+  await processInBatches("ADVANCE", Array.from(advanceByPatient.values()), false);
 
   if (perFisio.size > 0) {
     await notifyFisiosAggregated(perFisio, monday);
