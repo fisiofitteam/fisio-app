@@ -5,6 +5,12 @@ import { useState } from "react";
 export type CallCoachingData = {
   coachingSummary: string | null;
   coachingKeyPoints: string | null; // JSON { strengths, weaknesses, improvements }
+  outcome?: string | null;          // "won" | "lost" (para colorear el badge)
+};
+
+const OUTCOME_BADGE: Record<string, { label: string; color: string; bg: string; border: string }> = {
+  won:  { label: "Ganada",  color: "#065F46", bg: "#DCFCE7", border: "#86EFAC" },
+  lost: { label: "Perdida", color: "#7F1D1D", bg: "#FEE2E2", border: "#FCA5A5" },
 };
 
 /**
@@ -37,6 +43,18 @@ export function CallCoachingBlock({ data }: { data: CallCoachingData | null | un
       <div className="flex items-center gap-1.5 mb-1 flex-wrap">
         <span className="text-[13px]">🎓</span>
         <span className="font-semibold">Coaching del closer</span>
+        {data.outcome && OUTCOME_BADGE[data.outcome] && (
+          <span
+            className="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded ml-1"
+            style={{
+              background: OUTCOME_BADGE[data.outcome].bg,
+              color: OUTCOME_BADGE[data.outcome].color,
+              border: `1px solid ${OUTCOME_BADGE[data.outcome].border}`,
+            }}
+          >
+            {OUTCOME_BADGE[data.outcome].label.toUpperCase()}
+          </span>
+        )}
       </div>
       <p className="leading-relaxed">{shown}</p>
       {(isLong || kp) && (

@@ -527,12 +527,18 @@ function CallRow({
         </div>
       </div>
       {aiSummary && aiSummary.analysis && <LeadAiSummaryBlock summary={aiSummary} />}
-      {callSummary && <CallSummaryBlock summary={callSummary} />}
-      {callSummary && (callSummary.outcome === "won" || callSummary.outcome === "lost") && (
-        <CallCoachingBlock data={{
-          coachingSummary: callSummary.coachingSummary ?? null,
-          coachingKeyPoints: callSummary.coachingKeyPoints ?? null,
-        }} />
+      {callSummary && (
+        // En won/lost mostramos el coaching (entrenamiento del closer) en
+        // lugar del análisis comercial: el equipo ya sabe cómo fue la venta,
+        // lo útil ahora es aprender de la llamada. En rescheduled/unclear
+        // seguimos mostrando el comercial (todavía es un lead vivo).
+        (callSummary.outcome === "won" || callSummary.outcome === "lost")
+          ? <CallCoachingBlock data={{
+              coachingSummary: callSummary.coachingSummary ?? null,
+              coachingKeyPoints: callSummary.coachingKeyPoints ?? null,
+              outcome: callSummary.outcome,
+            }} />
+          : <CallSummaryBlock summary={callSummary} />
       )}
     </button>
   );
