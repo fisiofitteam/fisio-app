@@ -59,6 +59,7 @@ async function handler(req: NextRequest) {
     select: {
       id: true,
       fullName: true,
+      status: true,
       callSummary: {
         select: { id: true, salesSummary: true, coachingSummary: true, outcome: true, noTranscript: true, updatedAt: true },
       },
@@ -75,9 +76,13 @@ async function handler(req: NextRequest) {
     const s = l.callSummary;
     if (!s) return true; // nunca procesado
     if (s.salesSummary) {
-      // v2 sin coaching y outcome concluyente → reprocesar para añadir coaching v3
-      const isConclusive = s.outcome === "won" || s.outcome === "lost";
-      if (isConclusive && !s.coachingSummary) return true;
+      // El status del lead manda: si es won/lost pero el summary no lo
+      // refleja (outcome distinto o falta coaching), reprocesamos.
+      const leadIsConclusive = l.status === "won" || l.status === "lost";
+      if (leadIsConclusive) {
+        if (s.outcome !== l.status) return true;   // desincronizado
+        if (!s.coachingSummary) return true;       // falta coaching
+      }
       return false; // ya listo
     }
     if (s.noTranscript) {

@@ -92,14 +92,23 @@ Reglas:
   tener áreas de mejora, y una perdida puede haber tenido buenos momentos.
 `;
 
-function buildUserPrompt(input: { patientName: string; transcript: string }): string {
+function buildUserPrompt(input: {
+  patientName: string;
+  transcript: string;
+  /** Estado final decidido por el equipo (won/lost) si ya está confirmado.
+   *  Cuando lo pasamos, el modelo debe generar coaching sí o sí. */
+  confirmedOutcome?: "won" | "lost" | null;
+}): string {
+  const outcomeHint = input.confirmedOutcome
+    ? `\n\nIMPORTANTE: el equipo ya ha confirmado que esta llamada terminó como "${input.confirmedOutcome}". Ese es el outcome definitivo — ignora tu propia intuición si difiere y genera coaching completo (fortalezas, debilidades, mejoras) analizando por qué acabó así.\n`
+    : "";
   return `Transcripción de la videollamada de venta con ${input.patientName}:
 
 <<<TRANSCRIPCION>>>
 ${input.transcript}
-<<<FIN>>>
+<<<FIN>>>${outcomeHint}
 
-Genera el JSON con los dos resúmenes (sales + clinical) y el outcome. Solo el objeto JSON, nada más.`;
+Genera el JSON con los tres resúmenes (sales + clinical + coaching) y el outcome. Solo el objeto JSON, nada más.`;
 }
 
 type SalesSection = {
@@ -188,21 +197,30 @@ export async function generateSummaryForLead(
 ): Promise<GenerateResult> {
   const lead = await prisma.lead.findUnique({
     where: { id: leadId },
-    select: { id: true, fullName: true, meetingUrl: true },
+    select: { id: true, fullName: true, meetingUrl: true, status: true },
   });
   if (!lead) return { ok: false, reason: "error", detail: "Lead no encontrado" };
   if (!lead.meetingUrl) return { ok: false, reason: "no_meeting_url" };
 
+  // El status del LEAD manda sobre el outcome que decida el IA. Si el closer
+  // ya marcó won/lost, ese es el desenlace real. El IA puede haber leído
+  // "déjame pensarlo" y clasificado como rescheduled, pero si luego ghosteó
+  // y el closer lo marcó lost, el bloque de coaching debe existir como PERDIDA.
+  const confirmedOutcome = lead.status === "won" || lead.status === "lost"
+    ? (lead.status as "won" | "lost")
+    : null;
+
   const existing = await prisma.callSummary.findUnique({ where: { leadId } });
   if (existing && !opts.force) {
     // Consideramos "listo" solo si:
-    //  - salesSummary ya existe (v2+)
-    //  - Y si es won/lost, coachingSummary también existe (v3+)
-    // Los registros v2 sin coaching para won/lost se reprocesan
-    // automáticamente para añadirles el análisis del closer.
-    const isConclusive = existing.outcome === "won" || existing.outcome === "lost";
-    const readyForOutcome = isConclusive ? !!existing.coachingSummary : true;
-    if ((existing.salesSummary && readyForOutcome) || existing.noTranscript) {
+    //  - salesSummary ya existe
+    //  - Y outcome del summary coincide con el status del lead (si won/lost)
+    //  - Y si es won/lost, coachingSummary también existe
+    // Reprocesamos automáticamente los desincronizados (ej. IA dijo
+    // rescheduled pero el closer marcó lost después).
+    const outcomeInSync = confirmedOutcome ? existing.outcome === confirmedOutcome : true;
+    const readyForOutcome = confirmedOutcome ? !!existing.coachingSummary : true;
+    if ((existing.salesSummary && outcomeInSync && readyForOutcome) || existing.noTranscript) {
       return { ok: true, reason: "already_processed", callSummaryId: existing.id };
     }
   }
@@ -236,7 +254,11 @@ export async function generateSummaryForLead(
     messages: [
       {
         role: "user",
-        content: buildUserPrompt({ patientName: lead.fullName, transcript: transcript.transcriptText }),
+        content: buildUserPrompt({
+          patientName: lead.fullName,
+          transcript: transcript.transcriptText,
+          confirmedOutcome,
+        }),
       },
     ],
   });
@@ -279,9 +301,11 @@ export async function generateSummaryForLead(
     goals: parsed.clinical.goals,
     redFlags: parsed.clinical.redFlags,
   };
-  // El coaching solo tiene sentido para outcomes concluyentes. Si el modelo
-  // devolvió algo para rescheduled/unclear, lo descartamos.
-  const isConclusive = parsed.outcome === "won" || parsed.outcome === "lost";
+  // El outcome final es el que dice el LEAD (status del equipo). Solo si el
+  // equipo aún no ha decidido (scheduled) usamos lo que dijo el IA.
+  const finalOutcome = confirmedOutcome ?? parsed.outcome;
+  // El coaching solo tiene sentido para outcomes concluyentes.
+  const isConclusive = finalOutcome === "won" || finalOutcome === "lost";
   const coachingSummary = isConclusive ? parsed.coaching.summary || null : null;
   const coachingKeyPoints = isConclusive && parsed.coaching.summary
     ? JSON.stringify({
@@ -304,7 +328,7 @@ export async function generateSummaryForLead(
       clinicalKeyPoints: JSON.stringify(clinicalKeyPoints),
       coachingSummary,
       coachingKeyPoints,
-      outcome: parsed.outcome,
+      outcome: finalOutcome,
       noTranscript: false,
       errorMessage: null,
       generationMs: ms,
@@ -318,7 +342,7 @@ export async function generateSummaryForLead(
       clinicalKeyPoints: JSON.stringify(clinicalKeyPoints),
       coachingSummary,
       coachingKeyPoints,
-      outcome: parsed.outcome,
+      outcome: finalOutcome,
       noTranscript: false,
       errorMessage: null,
       generationMs: ms,
