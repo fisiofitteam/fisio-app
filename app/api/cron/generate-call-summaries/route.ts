@@ -86,14 +86,23 @@ async function handler(req: NextRequest) {
     return true; // errores previos → retry
   });
 
+  // Procesamos en paralelo (concurrencia 4) para no llegar al techo de 300s.
+  // Anthropic aguanta bien 4 concurrent; Meet API también.
+  const CONCURRENCY = 4;
   const results: Array<{ leadId: string; ok: boolean; reason?: string; detail?: string }> = [];
-  for (const l of targets) {
-    try {
-      const r = await generateSummaryForLead(l.id);
-      results.push({ leadId: l.id, ok: r.ok, reason: r.reason, detail: r.detail });
-    } catch (e: any) {
-      results.push({ leadId: l.id, ok: false, reason: "exception", detail: e?.message ?? "unknown" });
-    }
+  for (let i = 0; i < targets.length; i += CONCURRENCY) {
+    const chunk = targets.slice(i, i + CONCURRENCY);
+    const chunkResults = await Promise.all(
+      chunk.map(async (l) => {
+        try {
+          const r = await generateSummaryForLead(l.id);
+          return { leadId: l.id, ok: r.ok, reason: r.reason, detail: r.detail };
+        } catch (e: any) {
+          return { leadId: l.id, ok: false, reason: "exception", detail: e?.message ?? "unknown" };
+        }
+      }),
+    );
+    results.push(...chunkResults);
   }
 
   const ok = results.filter((r) => r.ok).length;
