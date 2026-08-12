@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RescheduleLinkButton } from "@/components/RescheduleLinkButton";
+import { CallSummaryBlock, type CallSummaryData } from "@/components/CallSummaryBlock";
 
 type Pro = { id: string; fullName: string; role: string };
 
@@ -11,6 +12,7 @@ type Lead = {
   fullName: string;
   contactType: string;
   contactValue: string;
+  phone: string | null;
   aiSummary: string | null;
   followUpNote: string | null;
   callScheduledAt: string;
@@ -57,12 +59,14 @@ export function FollowUpView({
   currentUser,
   closers,
   leads,
+  callSummaryByLeadId,
   embedded = false,
 }: {
   activeCloserId: string;
   currentUser: { id: string; role: string };
   closers: Pro[];
   leads: Lead[];
+  callSummaryByLeadId?: Record<string, CallSummaryData>;
   embedded?: boolean;
 }) {
   const router = useRouter();
@@ -132,13 +136,38 @@ export function FollowUpView({
               </tr>
             </thead>
             <tbody>
-              {leads.map((lead) => (
-                <tr key={lead.id} className="border-b border-neutral-100 hover:bg-neutral-50">
+              {leads.map((lead) => {
+                // El teléfono canónico está en Lead.phone (nueva columna con
+                // prefijo). Fallback: contactValue si contactType === "phone".
+                const phoneForWa = lead.phone ?? (lead.contactType === "phone" ? lead.contactValue : null);
+                const waHref = phoneForWa ? `https://wa.me/${phoneForWa.replace(/[^0-9+]/g, "")}` : null;
+                const summary = callSummaryByLeadId?.[lead.id];
+                return (
+                <Fragment key={lead.id}>
+                <tr className="border-b border-neutral-100 hover:bg-neutral-50">
                   <td className="py-3 px-2 align-top">
-                    <button onClick={() => setEditing(lead)} className="text-left">
-                      <div className="font-medium hover:underline">{lead.fullName}</div>
+                    <div className="flex flex-col">
+                      {waHref ? (
+                        <a
+                          href={waHref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium text-emerald-700 hover:underline"
+                          title="Abrir WhatsApp"
+                        >
+                          💬 {lead.fullName}
+                        </a>
+                      ) : (
+                        <span className="font-medium">{lead.fullName}</span>
+                      )}
                       <div className="text-[11px] text-neutral-500 mt-0.5">{CONTACT_ICON[lead.contactType] ?? "·"} {lead.contactValue}</div>
-                    </button>
+                      <button
+                        onClick={() => setEditing(lead)}
+                        className="text-[11px] text-neutral-500 hover:text-neutral-900 underline underline-offset-2 mt-1 self-start"
+                      >
+                        ✏️ Editar
+                      </button>
+                    </div>
                   </td>
                   <td className="py-3 px-2 align-top">
                     <div className="text-xs text-neutral-700 line-clamp-3">{lead.followUpNote || lead.aiSummary || "—"}</div>
@@ -148,7 +177,16 @@ export function FollowUpView({
                   <CheckCell date={lead.followUp30dDate} done={lead.followUp30dDone} onToggle={() => toggleCheck(lead.id, "followUp30dDone", !lead.followUp30dDone)} />
                   <CheckCell date={lead.followUp90dDate} done={lead.followUp90dDone} onToggle={() => toggleCheck(lead.id, "followUp90dDone", !lead.followUp90dDone)} />
                 </tr>
-              ))}
+                {summary && (
+                  <tr className="border-b border-neutral-100">
+                    <td colSpan={6} className="px-2 pb-3">
+                      <CallSummaryBlock summary={summary} outcomeOverride="followup" />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </section>

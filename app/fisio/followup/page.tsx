@@ -27,6 +27,38 @@ export default async function FollowUpPage({
     orderBy: [{ followUpStartedAt: "desc" }, { decidedAt: "desc" }],
   });
 
+  // Resumen comercial IA (Meet transcript → Claude) por lead.
+  const fuSummariesRaw = await prisma.callSummary.findMany({
+    where: { leadId: { in: leads.map((l) => l.id) } },
+    select: {
+      leadId: true,
+      salesSummary: true,
+      salesKeyPoints: true,
+      outcome: true,
+      noTranscript: true,
+      errorMessage: true,
+      generatedAt: true,
+    },
+  });
+  const callSummaryByLeadId: Record<string, {
+    salesSummary: string | null;
+    salesKeyPoints: string | null;
+    outcome: string | null;
+    noTranscript: boolean;
+    errorMessage: string | null;
+    generatedAt: string;
+  }> = {};
+  for (const c of fuSummariesRaw) {
+    callSummaryByLeadId[c.leadId] = {
+      salesSummary: c.salesSummary,
+      salesKeyPoints: c.salesKeyPoints,
+      outcome: c.outcome,
+      noTranscript: c.noTranscript,
+      errorMessage: c.errorMessage,
+      generatedAt: c.generatedAt.toISOString(),
+    };
+  }
+
   return (
     <FollowUpView
       activeCloserId={activeCloserId}
@@ -37,6 +69,7 @@ export default async function FollowUpPage({
         fullName: l.fullName,
         contactType: l.contactType,
         contactValue: l.contactValue,
+        phone: l.phone,
         aiSummary: l.aiSummary,
         followUpNote: l.followUpNote,
         callScheduledAt: l.callScheduledAt.toISOString(),
@@ -52,6 +85,7 @@ export default async function FollowUpPage({
         followUp90dDone: l.followUp90dDone,
         closer: l.closer,
       }))}
+      callSummaryByLeadId={callSummaryByLeadId}
     />
   );
 }

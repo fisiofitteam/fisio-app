@@ -16,6 +16,7 @@ const OUTCOME_META: Record<string, { label: string; color: string; bg: string; b
   lost:        { label: "Perdida",       color: "#7F1D1D", bg: "#FEE2E2", border: "#FCA5A5" },
   rescheduled: { label: "Reagenda",      color: "#78350F", bg: "#FEF3C7", border: "#FCD34D" },
   unclear:     { label: "Sin conclusión",color: "#374151", bg: "#F3F4F6", border: "#D1D5DB" },
+  followup:    { label: "Seguimiento",   color: "#1E3A8A", bg: "#DBEAFE", border: "#93C5FD" },
 };
 
 /**
@@ -23,7 +24,15 @@ const OUTCOME_META: Record<string, { label: string; color: string; bg: string; b
  * card de /fisio/llamadas-venta. El resumen clínico (patología, síntomas,
  * historial) sale en otro bloque distinto sobre las notas de anamnesis.
  */
-export function CallSummaryBlock({ summary }: { summary: CallSummaryData | null | undefined }) {
+export function CallSummaryBlock({
+  summary,
+  outcomeOverride,
+}: {
+  summary: CallSummaryData | null | undefined;
+  /** Fuerza un badge distinto al outcome real. Útil en vistas donde el
+   *  contexto ya es específico (ej. Follow-up → "Seguimiento"). */
+  outcomeOverride?: string;
+}) {
   const [expanded, setExpanded] = useState(false);
 
   if (!summary) return null;
@@ -50,7 +59,8 @@ export function CallSummaryBlock({ summary }: { summary: CallSummaryData | null 
     ) : null;
   }
 
-  const outcome = summary.outcome && OUTCOME_META[summary.outcome] ? OUTCOME_META[summary.outcome] : null;
+  const outcomeKey = outcomeOverride ?? summary.outcome ?? "";
+  const outcome = outcomeKey && OUTCOME_META[outcomeKey] ? OUTCOME_META[outcomeKey] : null;
   let keyPoints: any = null;
   if (summary.salesKeyPoints) {
     try { keyPoints = JSON.parse(summary.salesKeyPoints); } catch { keyPoints = null; }

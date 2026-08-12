@@ -45,6 +45,38 @@ export default async function LlamadasVentaPage({
       include: { closer: { select: { id: true, fullName: true, role: true } } },
       orderBy: [{ followUpStartedAt: "desc" }, { decidedAt: "desc" }],
     });
+    // Resumen comercial IA de cada lead (mismo prompt que en Ganadas/Perdidas)
+    // para tener el contexto de la llamada al hacer el follow-up.
+    const fuSummariesRaw = await prisma.callSummary.findMany({
+      where: { leadId: { in: fuLeads.map((l) => l.id) } },
+      select: {
+        leadId: true,
+        salesSummary: true,
+        salesKeyPoints: true,
+        outcome: true,
+        noTranscript: true,
+        errorMessage: true,
+        generatedAt: true,
+      },
+    });
+    const fuCallSummaryByLeadId: Record<string, {
+      salesSummary: string | null;
+      salesKeyPoints: string | null;
+      outcome: string | null;
+      noTranscript: boolean;
+      errorMessage: string | null;
+      generatedAt: string;
+    }> = {};
+    for (const c of fuSummariesRaw) {
+      fuCallSummaryByLeadId[c.leadId] = {
+        salesSummary: c.salesSummary,
+        salesKeyPoints: c.salesKeyPoints,
+        outcome: c.outcome,
+        noTranscript: c.noTranscript,
+        errorMessage: c.errorMessage,
+        generatedAt: c.generatedAt.toISOString(),
+      };
+    }
     return (
       <FollowUpView
         embedded
@@ -56,6 +88,7 @@ export default async function LlamadasVentaPage({
           fullName: l.fullName,
           contactType: l.contactType,
           contactValue: l.contactValue,
+          phone: l.phone,
           aiSummary: l.aiSummary,
           followUpNote: l.followUpNote,
           callScheduledAt: l.callScheduledAt.toISOString(),
@@ -71,6 +104,7 @@ export default async function LlamadasVentaPage({
           followUp90dDone: l.followUp90dDone,
           closer: l.closer,
         }))}
+        callSummaryByLeadId={fuCallSummaryByLeadId}
       />
     );
   }
