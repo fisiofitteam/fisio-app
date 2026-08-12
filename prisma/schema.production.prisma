@@ -421,6 +421,9 @@ model Lead {
   sourceTagId     String?
   sourceTag       LeadSourceTag? @relation(fields: [sourceTagId], references: [id], onDelete: SetNull)
 
+  // Resumen IA de la videollamada (Meet transcript → Claude Sonnet).
+  callSummary     CallSummary?
+
   @@index([status])
   @@index([callScheduledAt])
   @@index([closerId])
@@ -3329,5 +3332,48 @@ model SkalexSyncState {
   lastUpdated     Int      @default(0)
 
   updatedAt       DateTime @updatedAt
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CALL SUMMARY · Resumen IA de la videollamada de venta con Google Meet
+// ═══════════════════════════════════════════════════════════════════════════
+// Cuando termina la videollamada (Lead.meetingUrl → Google Meet), un cron
+// consulta la Meet REST API para bajarse la transcripción, la pasa por
+// Claude Sonnet y guarda aquí el resumen ejecutivo. Se muestra en la card
+// de /fisio/llamadas-venta y en la ficha del paciente si el lead se
+// convierte.
+//
+// leadId es @unique (una llamada = un resumen). Si la transcripción no
+// existe (no se activó, aún se está generando, o Meet no la expone) el
+// registro guarda noTranscript=true y no reintentamos infinito.
+model CallSummary {
+  id             String   @id @default(cuid())
+  leadId         String   @unique
+  lead           Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  // Transcripción cruda (para poder regenerar el resumen sin volver a
+  // llamar a Meet API si mejoramos el prompt en el futuro).
+  transcriptText String?
+
+  // Resumen ejecutivo generado por Sonnet 4.6.
+  summary        String?
+  // JSON: { motivations: [...], objections: [...], nextSteps: [...], … }
+  keyPoints      String?
+  // "won" | "lost" | "rescheduled" | "unclear" según la IA
+  outcome        String?
+
+  // Indica que Meet no expone transcript (no se activó, sesión demasiado
+  // corta, permisos, etc). Cuando true no reintentamos.
+  noTranscript   Boolean  @default(false)
+  errorMessage   String?
+
+  // Métricas para depurar
+  transcriptCharCount Int?
+  generationMs        Int?
+
+  generatedAt    DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([generatedAt])
 }
 

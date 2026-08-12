@@ -59,6 +59,10 @@
     {
       "path": "/api/cron/skalex-sync",
       "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/generate-call-summaries",
+      "schedule": "*/30 * * * *"
     }
   ]
 }

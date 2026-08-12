@@ -7,6 +7,12 @@
  * Scopes que pedimos:
  *  - userinfo.email + userinfo.profile: para identificar la cuenta conectada
  *  - calendar + calendar.events: para leer y crear eventos en Calendar
+ *  - meetings.space.readonly: para leer conferenceRecords + transcripts de
+ *    Google Meet (necesario para generar el resumen IA de la llamada de venta).
+ *  - drive.readonly: fallback para leer los archivos .txt/.docx de transcripción
+ *    que Meet sube a Drive del organizador cuando la sesión termina.
+ *
+ * Al ampliar scopes se requiere que el CEO re-autorice desde Ajustes.
  */
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -18,6 +24,8 @@ const SCOPES = [
   "https://www.googleapis.com/auth/userinfo.profile",
   "https://www.googleapis.com/auth/calendar",
   "https://www.googleapis.com/auth/calendar.events",
+  "https://www.googleapis.com/auth/meetings.space.readonly",
+  "https://www.googleapis.com/auth/drive.readonly",
 ];
 
 function requireEnv(key: string): string {

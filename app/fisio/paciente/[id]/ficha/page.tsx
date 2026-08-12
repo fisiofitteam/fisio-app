@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ClinicalFile } from "@/components/ClinicalFile";
+import { CallSummaryBlock } from "@/components/CallSummaryBlock";
 import { getActiveProfessional } from "@/lib/session";
 import { summarizeBodyZone } from "@/lib/onboarding-content";
 
@@ -38,7 +39,38 @@ export default async function PatientFichaTab({ params }: { params: { id: string
     patient.shippingPostalCode
   );
 
+  // Si el paciente vino de un Lead con videollamada, buscamos el resumen IA
+  // (Meet transcript → Claude) para mostrarlo debajo de la ficha clínica.
+  const sourceLead = await prisma.lead.findFirst({
+    where: { convertedPatientId: params.id, meetingUrl: { not: null } },
+    orderBy: { callScheduledAt: "desc" },
+    select: {
+      id: true,
+      callSummary: {
+        select: {
+          summary: true,
+          keyPoints: true,
+          outcome: true,
+          noTranscript: true,
+          errorMessage: true,
+          generatedAt: true,
+        },
+      },
+    },
+  });
+  const callSummaryForSection = sourceLead?.callSummary
+    ? {
+        summary: sourceLead.callSummary.summary,
+        keyPoints: sourceLead.callSummary.keyPoints,
+        outcome: sourceLead.callSummary.outcome,
+        noTranscript: sourceLead.callSummary.noTranscript,
+        errorMessage: sourceLead.callSummary.errorMessage,
+        generatedAt: sourceLead.callSummary.generatedAt.toISOString(),
+      }
+    : null;
+
   return (
+    <>
     <ClinicalFile
       isManager={user.isManager}
       isCeo={user.role === "ceo"}
@@ -74,5 +106,12 @@ export default async function PatientFichaTab({ params }: { params: { id: string
         hasFiscalAddress,
       }}
     />
+    {callSummaryForSection && (
+      <div className="mt-4 max-w-3xl mx-auto px-4">
+        <h3 className="text-sm font-semibold mb-1 text-gray-700">Resumen de la llamada de venta</h3>
+        <CallSummaryBlock summary={callSummaryForSection} />
+      </div>
+    )}
+    </>
   );
 }

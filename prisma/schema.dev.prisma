@@ -399,6 +399,8 @@ model Lead {
   sourceTagId     String?
   sourceTag       LeadSourceTag? @relation(fields: [sourceTagId], references: [id], onDelete: SetNull)
 
+  callSummary     CallSummary?
+
   @@index([status])
   @@index([callScheduledAt])
   @@index([closerId])
@@ -3110,6 +3112,28 @@ model SkalexLabel {
   @@unique([conversationId, name])
   @@index([name, addedAt])
   @@index([addedAt])
+}
+
+model CallSummary {
+  id             String   @id @default(cuid())
+  leadId         String   @unique
+  lead           Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  transcriptText String?
+  summary        String?
+  keyPoints      String?
+  outcome        String?
+
+  noTranscript   Boolean  @default(false)
+  errorMessage   String?
+
+  transcriptCharCount Int?
+  generationMs        Int?
+
+  generatedAt    DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([generatedAt])
 }
 
 model SkalexSyncState {
