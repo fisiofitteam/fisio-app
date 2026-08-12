@@ -9,6 +9,7 @@ import { SendAppLinkButton } from "@/components/SendAppLinkButton";
 import { ManualSaleButton } from "@/components/ManualSaleButton";
 import { LeadAiSummaryBlock } from "@/components/LeadAiSummaryBlock";
 import { CallSummaryBlock, type CallSummaryData } from "@/components/CallSummaryBlock";
+import { CallCoachingBlock } from "@/components/CallCoachingBlock";
 import { countryFlag, findCountry } from "@/lib/countries";
 import {
   datetimeLocalInputToUtcIso,
@@ -527,6 +528,12 @@ function CallRow({
       </div>
       {aiSummary && aiSummary.analysis && <LeadAiSummaryBlock summary={aiSummary} />}
       {callSummary && <CallSummaryBlock summary={callSummary} />}
+      {callSummary && (callSummary.outcome === "won" || callSummary.outcome === "lost") && (
+        <CallCoachingBlock data={{
+          coachingSummary: callSummary.coachingSummary ?? null,
+          coachingKeyPoints: callSummary.coachingKeyPoints ?? null,
+        }} />
+      )}
     </button>
   );
 }

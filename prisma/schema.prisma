@@ -3362,6 +3362,10 @@ model CallSummary {
   salesKeyPoints     String?  // JSON { motivations, objections, nextSteps }
   clinicalSummary    String?
   clinicalKeyPoints  String?  // JSON { mainComplaint, symptoms, history, contextLifestyle, goals, redFlags }
+  // Coaching del closer: qué hizo bien, qué hizo mal, propuestas de mejora.
+  // Solo se rellena para outcomes concluyentes (won/lost); en el resto queda null.
+  coachingSummary    String?
+  coachingKeyPoints  String?  // JSON { strengths, weaknesses, improvements }
 
   // Legacy: v1 devolvía un único resumen mixto (comercial + clínico).
   // Se conservan por si algún registro antiguo aún los usa; el generador

@@ -3125,6 +3125,8 @@ model CallSummary {
   salesKeyPoints     String?
   clinicalSummary    String?
   clinicalKeyPoints  String?
+  coachingSummary    String?
+  coachingKeyPoints  String?
 
   summary        String?
   keyPoints      String?

@@ -18,7 +18,7 @@ import { prisma } from "@/lib/prisma";
 import { fetchTranscriptForMeetingUrl, MeetApiError } from "@/lib/googleMeet";
 
 const MODEL = "claude-sonnet-4-6";
-const MAX_OUTPUT_TOKENS = 2500;
+const MAX_OUTPUT_TOKENS = 3500;
 
 let _client: Anthropic | null = null;
 function client(): Anthropic {
@@ -33,7 +33,7 @@ const PROMPT_SYSTEM = `Eres el asistente de FisioFit Team. Analizas transcripcio
 de videollamadas de venta entre un closer y un lead interesado en programas de
 fisioterapia deportiva (RECUPERA / CONSOLIDA / ADVANCE / PREVENTION).
 
-Debes producir DOS resúmenes distintos de la misma llamada, con enfoques
+Debes producir TRES resúmenes distintos de la misma llamada, con enfoques
 completamente separados:
 
 - SALES (comercial): solo lo relevante para el equipo de venta / follow-up.
@@ -45,6 +45,12 @@ completamente separados:
   contexto de vida (trabajo, entrenamiento, sueño), objetivos deportivos,
   banderas rojas. NO incluyas precios, objeciones de venta ni detalles de
   pago.
+
+- COACHING (entrenamiento del closer): SOLO si el outcome es "won" o "lost".
+  Análisis del rendimiento del closer en esta llamada, para que la use como
+  material de mejora. Sé concreto y accionable: menciona momentos concretos,
+  frases o técnicas, no genéricos. Si el outcome es "rescheduled" o "unclear",
+  deja summary="" y todos los arrays vacíos.
 
 Devuelves SIEMPRE JSON válido con esta forma exacta (sin markdown, sin
 comillas de código, solo el objeto):
@@ -64,6 +70,12 @@ comillas de código, solo el objeto):
     "goals": ["objetivo deportivo/funcional 1", "objetivo 2"],
     "redFlags": ["señal de alerta clínica si la hay"]
   },
+  "coaching": {
+    "summary": "análisis global del desempeño del closer en 3-5 frases",
+    "strengths": ["momento concreto en que el closer lo hizo bien 1", "..."],
+    "weaknesses": ["error/oportunidad perdida concreta 1", "..."],
+    "improvements": ["propuesta accionable para próximas llamadas 1", "..."]
+  },
   "outcome": "won" | "lost" | "rescheduled" | "unclear"
 }
 
@@ -76,6 +88,8 @@ Reglas:
   transcripción. Si algo no está claro, deja el array vacío.
 - Cada bullet, breve y accionable.
 - Si un campo array no tiene contenido real, devuelve [] (nunca null).
+- En coaching sé honesto pero constructivo: incluso una llamada ganada puede
+  tener áreas de mejora, y una perdida puede haber tenido buenos momentos.
 `;
 
 function buildUserPrompt(input: { patientName: string; transcript: string }): string {
@@ -103,9 +117,16 @@ type ClinicalSection = {
   goals: string[];
   redFlags: string[];
 };
+type CoachingSection = {
+  summary: string;
+  strengths: string[];
+  weaknesses: string[];
+  improvements: string[];
+};
 type ParsedSummary = {
   sales: SalesSection;
   clinical: ClinicalSection;
+  coaching: CoachingSection;
   outcome: string;
 };
 
@@ -121,6 +142,7 @@ function parseSummary(text: string): ParsedSummary {
   const obj = JSON.parse(text.slice(first, last + 1));
   const s = obj.sales ?? {};
   const c = obj.clinical ?? {};
+  const co = obj.coaching ?? {};
   return {
     sales: {
       summary: String(s.summary ?? "").trim(),
@@ -136,6 +158,12 @@ function parseSummary(text: string): ParsedSummary {
       contextLifestyle: asStringArray(c.contextLifestyle),
       goals: asStringArray(c.goals),
       redFlags: asStringArray(c.redFlags),
+    },
+    coaching: {
+      summary: String(co.summary ?? "").trim(),
+      strengths: asStringArray(co.strengths),
+      weaknesses: asStringArray(co.weaknesses),
+      improvements: asStringArray(co.improvements),
     },
     outcome: String(obj.outcome ?? "unclear").trim(),
   };
@@ -167,7 +195,14 @@ export async function generateSummaryForLead(
 
   const existing = await prisma.callSummary.findUnique({ where: { leadId } });
   if (existing && !opts.force) {
-    if (existing.salesSummary || existing.noTranscript) {
+    // Consideramos "listo" solo si:
+    //  - salesSummary ya existe (v2+)
+    //  - Y si es won/lost, coachingSummary también existe (v3+)
+    // Los registros v2 sin coaching para won/lost se reprocesan
+    // automáticamente para añadirles el análisis del closer.
+    const isConclusive = existing.outcome === "won" || existing.outcome === "lost";
+    const readyForOutcome = isConclusive ? !!existing.coachingSummary : true;
+    if ((existing.salesSummary && readyForOutcome) || existing.noTranscript) {
       return { ok: true, reason: "already_processed", callSummaryId: existing.id };
     }
   }
@@ -244,6 +279,17 @@ export async function generateSummaryForLead(
     goals: parsed.clinical.goals,
     redFlags: parsed.clinical.redFlags,
   };
+  // El coaching solo tiene sentido para outcomes concluyentes. Si el modelo
+  // devolvió algo para rescheduled/unclear, lo descartamos.
+  const isConclusive = parsed.outcome === "won" || parsed.outcome === "lost";
+  const coachingSummary = isConclusive ? parsed.coaching.summary || null : null;
+  const coachingKeyPoints = isConclusive && parsed.coaching.summary
+    ? JSON.stringify({
+        strengths: parsed.coaching.strengths,
+        weaknesses: parsed.coaching.weaknesses,
+        improvements: parsed.coaching.improvements,
+      })
+    : null;
 
   const ms = Date.now() - t0;
   const saved = await prisma.callSummary.upsert({
@@ -256,6 +302,8 @@ export async function generateSummaryForLead(
       salesKeyPoints: JSON.stringify(salesKeyPoints),
       clinicalSummary: parsed.clinical.summary,
       clinicalKeyPoints: JSON.stringify(clinicalKeyPoints),
+      coachingSummary,
+      coachingKeyPoints,
       outcome: parsed.outcome,
       noTranscript: false,
       errorMessage: null,
@@ -268,6 +316,8 @@ export async function generateSummaryForLead(
       salesKeyPoints: JSON.stringify(salesKeyPoints),
       clinicalSummary: parsed.clinical.summary,
       clinicalKeyPoints: JSON.stringify(clinicalKeyPoints),
+      coachingSummary,
+      coachingKeyPoints,
       outcome: parsed.outcome,
       noTranscript: false,
       errorMessage: null,

@@ -9,6 +9,10 @@ export type CallSummaryData = {
   noTranscript: boolean;
   errorMessage: string | null;
   generatedAt: string;
+  // Coaching se sirve dentro del mismo mapa por comodidad (los renderiza
+  // CallCoachingBlock, no este componente). Solo se rellena en won/lost.
+  coachingSummary?: string | null;
+  coachingKeyPoints?: string | null; // JSON { strengths, weaknesses, improvements }
 };
 
 // Metadatos del outcome: color del badge Y del bloque entero.
