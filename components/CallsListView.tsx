@@ -905,6 +905,26 @@ function CallEditModal({
             </div>
           </div>
 
+          {/* País del lead (declarado en la landing). Solo lectura: bandera + nombre + prefijo,
+              para que el equipo sepa desde dónde llama y evite mala interpretación del móvil. */}
+          {lead.country && (() => {
+            const c = findCountry(lead.country);
+            const flag = c ? countryFlag(c.iso2) : "🌍";
+            const label = c?.label ?? lead.country;
+            const dial = c?.dialCode ?? "";
+            return (
+              <div className="rounded-lg px-3 py-2 flex items-center gap-2" style={{ background: "#F9FAFB", border: "1px solid #E5E7EB" }}>
+                <span className="text-lg leading-none">{flag}</span>
+                <div className="text-xs">
+                  <div className="text-neutral-500">País</div>
+                  <div className="font-medium">
+                    {label}{dial && <span className="text-neutral-500 ml-1 tabular-nums">({dial})</span>}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           <div>
             <label className="text-xs text-neutral-500 block mb-1">Resumen de la conversación</label>
             <textarea className="input text-sm" rows={3} value={aiSummary} onChange={(e) => setAiSummary(e.target.value)} />

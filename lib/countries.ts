@@ -17,21 +17,50 @@ export type Country = {
   dialCode: string; // "+34", "+54"…
 };
 
+// Orden: España primero (default). Después todos los hispanohablantes en
+// alfabético, luego el resto de países frecuentes (Europa/EEUU), y "Otro" al
+// final como catch-all. La bandera y el prefijo se derivan del iso2/dialCode.
 export const COUNTRIES: readonly Country[] = [
   { label: "España", iso2: "ES", dialCode: "+34" },
-  { label: "Andorra", iso2: "AD", dialCode: "+376" },
+
+  // ── Países hispanohablantes ────────────────────────────────────────────
   { label: "Argentina", iso2: "AR", dialCode: "+54" },
+  { label: "Bolivia", iso2: "BO", dialCode: "+591" },
   { label: "Chile", iso2: "CL", dialCode: "+56" },
   { label: "Colombia", iso2: "CO", dialCode: "+57" },
-  { label: "Estados Unidos", iso2: "US", dialCode: "+1" },
-  { label: "Francia", iso2: "FR", dialCode: "+33" },
-  { label: "Italia", iso2: "IT", dialCode: "+39" },
+  { label: "Costa Rica", iso2: "CR", dialCode: "+506" },
+  { label: "Cuba", iso2: "CU", dialCode: "+53" },
+  { label: "Ecuador", iso2: "EC", dialCode: "+593" },
+  { label: "El Salvador", iso2: "SV", dialCode: "+503" },
+  { label: "Guatemala", iso2: "GT", dialCode: "+502" },
+  { label: "Guinea Ecuatorial", iso2: "GQ", dialCode: "+240" },
+  { label: "Honduras", iso2: "HN", dialCode: "+504" },
   { label: "México", iso2: "MX", dialCode: "+52" },
+  { label: "Nicaragua", iso2: "NI", dialCode: "+505" },
+  { label: "Panamá", iso2: "PA", dialCode: "+507" },
+  { label: "Paraguay", iso2: "PY", dialCode: "+595" },
   { label: "Perú", iso2: "PE", dialCode: "+51" },
-  { label: "Portugal", iso2: "PT", dialCode: "+351" },
-  { label: "Reino Unido", iso2: "GB", dialCode: "+44" },
+  { label: "Puerto Rico", iso2: "PR", dialCode: "+1" },
+  { label: "República Dominicana", iso2: "DO", dialCode: "+1" },
   { label: "Uruguay", iso2: "UY", dialCode: "+598" },
   { label: "Venezuela", iso2: "VE", dialCode: "+58" },
+
+  // ── Resto de países frecuentes ─────────────────────────────────────────
+  { label: "Alemania", iso2: "DE", dialCode: "+49" },
+  { label: "Andorra", iso2: "AD", dialCode: "+376" },
+  { label: "Bélgica", iso2: "BE", dialCode: "+32" },
+  { label: "Brasil", iso2: "BR", dialCode: "+55" },
+  { label: "Canadá", iso2: "CA", dialCode: "+1" },
+  { label: "Estados Unidos", iso2: "US", dialCode: "+1" },
+  { label: "Francia", iso2: "FR", dialCode: "+33" },
+  { label: "Irlanda", iso2: "IE", dialCode: "+353" },
+  { label: "Italia", iso2: "IT", dialCode: "+39" },
+  { label: "Marruecos", iso2: "MA", dialCode: "+212" },
+  { label: "Países Bajos", iso2: "NL", dialCode: "+31" },
+  { label: "Portugal", iso2: "PT", dialCode: "+351" },
+  { label: "Reino Unido", iso2: "GB", dialCode: "+44" },
+  { label: "Suiza", iso2: "CH", dialCode: "+41" },
+
   // Catch-all: si el lead elige "Otro" mostramos el input de teléfono con
   // placeholder que pide meter el prefijo internacional dentro del número.
   { label: "Otro", iso2: "", dialCode: "" },
