@@ -46,11 +46,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     },
   });
   if (!sale) return NextResponse.json({ error: "Venta no encontrada" }, { status: 404 });
-  if (sale.refundedAt) return NextResponse.json({ error: "Esta venta ya está marcada como devuelta" }, { status: 409 });
+  // Si el sale ya está marcado como refundeado, permitimos re-ejecutar para
+  // aplicar cualquier efecto que faltase (p.ej. terminar renewals añadido
+  // después). Todos los pasos siguientes son idempotentes.
+  const alreadyRefunded = !!sale.refundedAt;
 
   // ── Paso 1: PayPal ───────────────────────────────────────────────────────
   const paypalReport: { refund?: any; cancel?: any; skipped?: boolean } = {};
-  if (mode === "paypal_and_mark") {
+  // Si el sale ya estaba marcado, no reintentamos PayPal aunque el user
+  // hubiese pedido paypal_and_mark: es reprocesado de efectos secundarios.
+  if (mode === "paypal_and_mark" && !alreadyRefunded) {
     if (sale.paypalCaptureId) {
       paypalReport.refund = await refundCapture(sale.paypalCaptureId, reason);
       if (!paypalReport.refund.ok) {
@@ -74,16 +79,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   // ── Paso 2: Marcar Sale como refunded ────────────────────────────────────
-  await prisma.sale.update({
-    where: { id: sale.id },
-    data: {
-      status: "refunded",
-      refundedAt: new Date(),
-      refundReason: reason,
-      refundedByProfessionalId: user.id,
-      refundedManually: mode === "mark_only",
-    },
-  });
+  // Si ya estaba marcado, no pisamos refundedAt/reason/by (audit trail).
+  if (!alreadyRefunded) {
+    await prisma.sale.update({
+      where: { id: sale.id },
+      data: {
+        status: "refunded",
+        refundedAt: new Date(),
+        refundReason: reason,
+        refundedByProfessionalId: user.id,
+        refundedManually: mode === "mark_only",
+      },
+    });
+  }
 
   // ── Paso 3: Paciente → isTest ────────────────────────────────────────────
   if (sale.patientId) {
@@ -102,11 +110,26 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     deletedTx = del.count;
   }
 
+  // ── Paso 5: Terminar renovaciones activas/programadas ──────────────────
+  // Sin esto, activePatientCondition() sigue considerando "activo" al paciente
+  // porque tiene un SubscriptionRenewal con status=active y endDate futuro.
+  // Marcarlo como ended con endDate=hoy lo saca del panel del fisio,
+  // notificaciones, alertas y "programa a punto de terminar".
+  let endedRenewals = 0;
+  if (sale.patientId) {
+    const upd = await prisma.subscriptionRenewal.updateMany({
+      where: { patientId: sale.patientId, status: { in: ["active", "scheduled"] } },
+      data: { status: "ended", endDate: new Date() },
+    });
+    endedRenewals = upd.count;
+  }
+
   return NextResponse.json({
     ok: true,
     mode,
     paypal: paypalReport,
     deletedTransactions: deletedTx,
+    endedRenewals,
     patientMarkedAsTest: !!sale.patientId,
   });
 }

@@ -119,6 +119,7 @@ export function RefundSaleButton({
                 <li>El paciente pasará a modo TEST (fuera de métricas)</li>
                 <li>Se quitará esta venta de la comisión del closer</li>
                 <li>Se borrarán las transacciones de ingreso del paciente</li>
+                <li>Se terminarán sus renovaciones activas → el paciente sale del panel del fisio</li>
               </ul>
             </div>
 
