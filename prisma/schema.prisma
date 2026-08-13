@@ -255,6 +255,7 @@ model Professional {
   closingShifts     ClosingShift[]       @relation("ClosingShifts")
   defaultShifts     DefaultClosingShift[]
   salesAsCloser     Sale[]               @relation("SaleByCloser")
+  salesRefunded     Sale[]               @relation("SaleRefundedBy")
   compensation      Compensation?
   communityFeedPosts     CommunityFeedPost[] @relation("FeedPostAuthor")
   communityFeedComments  CommunityComment[]  @relation("FeedCommentAuthor")
@@ -2157,6 +2158,19 @@ model Sale {
   // "expired"  → token expiró sin pago
   status      String   @default("pending")
   paidAt      DateTime?
+
+  // ─── Refund (devolución) ────────────────────────────────────────────────
+  // Cuando el CEO devuelve un pago desde la ficha del paciente:
+  //  - refundedAt: momento en que se marcó devuelto en nuestra BD
+  //  - refundReason: motivo interno (obligatorio)
+  //  - refundedByProfessionalId: quién lo ejecutó (audit trail)
+  //  - refundedManually: true si el CEO ya lo había devuelto en PayPal a mano
+  //    y sólo queríamos marcar en la BD (no se llamó a la API de PayPal)
+  refundedAt                DateTime?
+  refundReason              String?
+  refundedByProfessionalId  String?
+  refundedBy                Professional? @relation("SaleRefundedBy", fields: [refundedByProfessionalId], references: [id])
+  refundedManually          Boolean  @default(false)
 
   // ─── Token único para la landing ────────────────────────────────────────
   // El cliente recibe URL del tipo /pagar/[paymentToken]

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ClinicalFile } from "@/components/ClinicalFile";
+import { RefundSaleButton } from "@/components/RefundSaleButton";
 import { getActiveProfessional } from "@/lib/session";
 import { summarizeBodyZone } from "@/lib/onboarding-content";
 
@@ -38,7 +39,26 @@ export default async function PatientFichaTab({ params }: { params: { id: string
     patient.shippingPostalCode
   );
 
+  // Última venta pagada del paciente (solo CEO): permite devolver el pago
+  // con el botón de la zona admin. Si ya está refunded no mostramos botón.
+  const isCeo = user.role === "ceo";
+  const lastSale = isCeo
+    ? await prisma.sale.findFirst({
+        where: { patientId: params.id, status: "paid" },
+        orderBy: { paidAt: "desc" },
+        select: {
+          id: true,
+          amountCents: true,
+          paidAt: true,
+          paymentMethod: true,
+          paypalCaptureId: true,
+          paypalSubscriptionId: true,
+        },
+      })
+    : null;
+
   return (
+    <>
     <ClinicalFile
       isManager={user.isManager}
       isCeo={user.role === "ceo"}
@@ -74,5 +94,25 @@ export default async function PatientFichaTab({ params }: { params: { id: string
         hasFiscalAddress,
       }}
     />
+    {isCeo && lastSale && (
+      <div className="mt-4 max-w-3xl mx-auto px-4">
+        <div className="rounded-xl p-3 flex items-center justify-between gap-3" style={{ background: "#FAFAFA", border: "1px dashed #D4D4D4" }}>
+          <div className="text-xs text-neutral-600">
+            <div className="font-semibold text-neutral-900 mb-0.5">Zona CEO · Gestión de pago</div>
+            Última venta pagada: {(lastSale.amountCents / 100).toFixed(2)} €
+            {lastSale.paidAt && <> · {new Date(lastSale.paidAt).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })}</>}
+          </div>
+          <RefundSaleButton
+            saleId={lastSale.id}
+            amount={lastSale.amountCents / 100}
+            paidAt={lastSale.paidAt ? lastSale.paidAt.toISOString() : null}
+            paymentMethod={lastSale.paymentMethod ?? null}
+            hasPayPalCapture={!!lastSale.paypalCaptureId}
+            hasPayPalSubscription={!!lastSale.paypalSubscriptionId}
+          />
+        </div>
+      </div>
+    )}
+    </>
   );
 }
