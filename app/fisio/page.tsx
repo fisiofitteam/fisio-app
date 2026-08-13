@@ -221,14 +221,18 @@ export default async function FisioPanelPage({
   }
   const nowStart = new Date();
   nowStart.setHours(0, 0, 0, 0);
-  const withRenewal = Array.from(byPatient.values())
+  // Ojo: el KPI "Renuevan en 30d" se cuenta sobre TODOS los que caen en
+  // ventana; el listado visual se recorta a los 5 más próximos después.
+  // Antes se hacía el slice antes del count y el KPI se quedaba clavado
+  // en un máximo de 5 aunque hubiese más pacientes por renovar.
+  const withRenewalAll = Array.from(byPatient.values())
     .map(({ patient, endDate }) => ({
       patient,
       days: Math.round((endDate.getTime() - nowStart.getTime()) / 86400000),
     }))
-    .sort((a, b) => a.days - b.days)
-    .slice(0, 5);
-  const renewalsIn30 = withRenewal.filter((x) => x.days >= 0 && x.days <= 30).length;
+    .sort((a, b) => a.days - b.days);
+  const renewalsIn30 = withRenewalAll.filter((x) => x.days >= 0 && x.days <= 30).length;
+  const withRenewal = withRenewalAll.slice(0, 5);
 
   // Programas asignados a punto de terminar (≤7 días) → recuadro + campanita
   const programEndings = await getProgramEndingsForProfessional(user.id);
