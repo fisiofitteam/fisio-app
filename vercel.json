@@ -63,6 +63,10 @@
     {
       "path": "/api/cron/generate-call-summaries",
       "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/process-pauses",
+      "schedule": "0 4 * * *"
     }
   ]
 }

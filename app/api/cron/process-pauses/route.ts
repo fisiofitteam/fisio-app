@@ -20,11 +20,16 @@ import { sendEmail } from "@/lib/email";
 import { applyLeaveBonus } from "@/app/api/professional-leaves/route";
 
 export async function POST(req: NextRequest) {
-  // Protección con secreto si está configurado
+  // Protección con secreto si está configurado. Aceptamos ambos formatos:
+  //  - Authorization: Bearer $CRON_SECRET (Vercel Cron manda esto)
+  //  - x-cron-secret: $CRON_SECRET (compat con llamadas antiguas)
   const expected = process.env.CRON_SECRET;
   if (expected) {
-    const got = req.headers.get("x-cron-secret");
-    if (got !== expected) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const bearer = req.headers.get("authorization") ?? "";
+    const legacy = req.headers.get("x-cron-secret") ?? "";
+    const okBearer = bearer === `Bearer ${expected}`;
+    const okLegacy = legacy === expected;
+    if (!okBearer && !okLegacy) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const today = new Date();
