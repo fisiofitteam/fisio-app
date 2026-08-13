@@ -18,13 +18,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { applyLeaveBonus } from "@/app/api/professional-leaves/route";
+import { getActiveProfessional } from "@/lib/session";
 
 export async function POST(req: NextRequest) {
-  // Protección con secreto si está configurado. Aceptamos ambos formatos:
-  //  - Authorization: Bearer $CRON_SECRET (Vercel Cron manda esto)
-  //  - x-cron-secret: $CRON_SECRET (compat con llamadas antiguas)
+  // Protección: Bearer/x-cron-secret desde Vercel Cron, o ?manual=1 con
+  // sesión CEO abierta (útil para disparar desde el navegador).
   const expected = process.env.CRON_SECRET;
-  if (expected) {
+  const url = new URL(req.url);
+  const isManual = url.searchParams.get("manual") === "1";
+  if (isManual) {
+    const user = await getActiveProfessional();
+    if (!user || user.role !== "ceo") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+  } else if (expected) {
     const bearer = req.headers.get("authorization") ?? "";
     const legacy = req.headers.get("x-cron-secret") ?? "";
     const okBearer = bearer === `Bearer ${expected}`;
