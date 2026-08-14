@@ -18,7 +18,10 @@ import { prisma } from "@/lib/prisma";
 import { fetchTranscriptForMeetingUrl, MeetApiError } from "@/lib/googleMeet";
 
 const MODEL = "claude-sonnet-4-6";
-const MAX_OUTPUT_TOKENS = 3500;
+// 3 secciones (sales + clinical + coaching) con transcripciones largas dejan
+// las respuestas cerca de 9-10k chars → truncaba a mitad JSON. Con 8000 tokens
+// tenemos margen para conversaciones densas sin cortar la última llave.
+const MAX_OUTPUT_TOKENS = 8000;
 
 let _client: Anthropic | null = null;
 function client(): Anthropic {
