@@ -850,7 +850,7 @@ function CallEditModal({
     // El backend detecta si meetingUrl cambia y regenera el resumen IA al
     // vuelo (~15-30s si tiene transcript). No hacemos fetch aparte para
     // evitar que se cancele al cerrar el modal.
-    await fetch("/api/leads", {
+    const res = await fetch("/api/leads", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -869,6 +869,19 @@ function CallEditModal({
         aiScheduled,
       }),
     });
+    // Diagnóstico visual: si el meetingUrl cambió, el backend devuelve
+    // _regenerated con el resultado. Lo mostramos por alert() para que se
+    // vea el estado (transcript OK, no_transcript, error de Meet, etc).
+    try {
+      const data = await res.json();
+      const r = data?._regenerated;
+      if (r?.attempted) {
+        if (r.ok) alert("✓ Resumen IA regenerado con el nuevo Meet. Cerrando…");
+        else if (r.reason === "no_transcript") alert("Meet aún no ha publicado la transcripción de esa videollamada. Se reintentará automáticamente en la próxima corrida del cron.");
+        else if (r.error) alert("Error al regenerar el resumen: " + r.error);
+        else if (r.reason) alert("Resumen no generado: " + r.reason + (r.detail ? " — " + r.detail : ""));
+      }
+    } catch {}
     onSaved();
   }
 

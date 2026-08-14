@@ -143,7 +143,10 @@ export async function PATCH(req: NextRequest) {
   // reseteamos el CallSummary y disparamos generateSummaryForLead con force.
   // Es await'ed → el modal se queda en "Guardando..." unos 15-30s pero al
   // volver ya ves el resumen. Es honesto y funciona siempre.
-  if (meetingUrlChanged && rest.meetingUrl !== previousMeetingUrl) {
+  const shouldRegenerate = meetingUrlChanged && rest.meetingUrl !== previousMeetingUrl;
+  let regenerated: { attempted: boolean; ok?: boolean; reason?: string; detail?: string; error?: string } = { attempted: shouldRegenerate };
+  console.log("[leads.patch] meetingUrl regen check", { id, shouldRegenerate, previousMeetingUrl, newMeetingUrl: rest.meetingUrl });
+  if (shouldRegenerate) {
     try {
       await prisma.callSummary.updateMany({
         where: { leadId: id },
@@ -159,15 +162,16 @@ export async function PATCH(req: NextRequest) {
         },
       });
       const { generateSummaryForLead } = await import("@/lib/call-summaries");
-      await generateSummaryForLead(id, { force: true });
-    } catch (err) {
-      // No bloqueamos el guardado del lead si Claude/Meet falla — el usuario
-      // puede reintentar volviendo a guardar el mismo URL.
+      const r = await generateSummaryForLead(id, { force: true });
+      regenerated = { attempted: true, ok: r.ok, reason: r.reason, detail: r.detail };
+      console.log("[leads.patch] regen result", regenerated);
+    } catch (err: any) {
+      regenerated = { attempted: true, ok: false, error: err?.message ?? String(err) };
       console.error("[leads.patch] fallo al regenerar resumen tras cambio de meetingUrl", err);
     }
   }
 
-  return NextResponse.json(lead);
+  return NextResponse.json({ ...lead, _regenerated: regenerated });
 }
 
 export async function DELETE(req: NextRequest) {
