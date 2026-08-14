@@ -847,7 +847,9 @@ function CallEditModal({
 
   async function save() {
     setSaving(true);
-    const meetingUrlChanged = (meetingUrl || "") !== (lead.meetingUrl ?? "");
+    // El backend detecta si meetingUrl cambia y regenera el resumen IA al
+    // vuelo (~15-30s si tiene transcript). No hacemos fetch aparte para
+    // evitar que se cancele al cerrar el modal.
     await fetch("/api/leads", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -867,12 +869,6 @@ function CallEditModal({
         aiScheduled,
       }),
     });
-    // Si el link de Meet cambió, invalidamos el resumen anterior para que el
-    // próximo tick del cron (o un manual=1) baje el transcript del Meet nuevo.
-    // Solo pedimos regeneración forzada; el propio endpoint la ejecuta al vuelo.
-    if (meetingUrlChanged && meetingUrl.includes("meet.google.com")) {
-      fetch(`/api/admin/leads/${lead.id}/fix-meeting-url?url=${encodeURIComponent(meetingUrl.trim())}`, { method: "POST" }).catch(() => {});
-    }
     onSaved();
   }
 

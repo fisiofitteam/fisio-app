@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 
+// El PATCH puede acabar generando resumen IA de la llamada si el CEO
+// cambia el meetingUrl (fetch a Meet + Sonnet ~15-30s). Elevamos el
+// timeout a 60s para que no se corte a los 10s por defecto de Vercel.
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -118,7 +123,50 @@ export async function PATCH(req: NextRequest) {
     if (rest[f] !== undefined) updateData[f] = rest[f] ? new Date(rest[f]) : null;
   }
 
+  // Si el meetingUrl cambia y apunta a un Meet válido, hay que regenerar el
+  // resumen IA con la nueva transcripción (útil cuando el paciente agendó
+  // dos veces y el Meet real es otro).
+  const meetingUrlChanged =
+    rest.meetingUrl !== undefined &&
+    (rest.meetingUrl || null) !== null &&
+    typeof rest.meetingUrl === "string" &&
+    rest.meetingUrl.includes("meet.google.com");
+  let previousMeetingUrl: string | null = null;
+  if (meetingUrlChanged) {
+    const prev = await prisma.lead.findUnique({ where: { id }, select: { meetingUrl: true } });
+    previousMeetingUrl = prev?.meetingUrl ?? null;
+  }
+
   const lead = await prisma.lead.update({ where: { id }, data: updateData });
+
+  // Ejecución server-side (no depende del cliente): si cambió el Meet URL,
+  // reseteamos el CallSummary y disparamos generateSummaryForLead con force.
+  // Es await'ed → el modal se queda en "Guardando..." unos 15-30s pero al
+  // volver ya ves el resumen. Es honesto y funciona siempre.
+  if (meetingUrlChanged && rest.meetingUrl !== previousMeetingUrl) {
+    try {
+      await prisma.callSummary.updateMany({
+        where: { leadId: id },
+        data: {
+          noTranscript: false,
+          errorMessage: null,
+          salesSummary: null,
+          salesKeyPoints: null,
+          clinicalSummary: null,
+          clinicalKeyPoints: null,
+          coachingSummary: null,
+          coachingKeyPoints: null,
+        },
+      });
+      const { generateSummaryForLead } = await import("@/lib/call-summaries");
+      await generateSummaryForLead(id, { force: true });
+    } catch (err) {
+      // No bloqueamos el guardado del lead si Claude/Meet falla — el usuario
+      // puede reintentar volviendo a guardar el mismo URL.
+      console.error("[leads.patch] fallo al regenerar resumen tras cambio de meetingUrl", err);
+    }
+  }
+
   return NextResponse.json(lead);
 }
 
