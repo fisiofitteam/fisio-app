@@ -146,12 +146,34 @@ export async function POST(req: NextRequest) {
     leavesApplied++;
   }
 
+  // 5) Limpieza de notificaciones caducadas del home del paciente:
+  //    - Las que tienen expiresAt < now (ya se filtran en la query pero las
+  //      marcamos como leídas para no revisar cada día).
+  //    - Las leave_bonus antiguas sin expiresAt (backfill: creadas antes del
+  //      deploy que introdujo expiresAt): si createdAt < now - 7d, damos por
+  //      supuesto que la vacación ya acabó y las marcamos leídas.
+  const dismissed = await prisma.patientNotification.updateMany({
+    where: {
+      readAt: null,
+      OR: [
+        { expiresAt: { lt: today } },
+        {
+          type: "leave_bonus",
+          expiresAt: null,
+          createdAt: { lt: new Date(today.getTime() - 7 * 86400000) },
+        },
+      ],
+    },
+    data: { readAt: today },
+  });
+
   return NextResponse.json({
     ok: true,
     activated: toActivate.length,
     ended: toEnd.length,
     renewalsActivated: renewalsToActivate.length,
     leavesApplied,
+    dismissedNotifications: dismissed.count,
     emailsSent: emailsSent.length,
   });
 }

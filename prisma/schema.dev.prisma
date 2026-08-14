@@ -1764,6 +1764,7 @@ model PatientNotification {
 
   readAt      DateTime?                       // null = aún no leída
   createdAt   DateTime @default(now())
+  expiresAt   DateTime?
 
   @@index([patientId])
   @@index([readAt])

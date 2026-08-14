@@ -68,13 +68,16 @@ async function applyLeaveBonus(leaveId: string): Promise<number> {
     });
     affected++;
 
-    // Crear notificación para el paciente
+    // Crear notificación para el paciente. expiresAt = fin de las vacaciones:
+    // en cuanto acabe, el home la esconde automáticamente aunque el paciente
+    // no la haya cerrado con el botón OK.
     await prisma.patientNotification.create({
       data: {
         patientId: p.id,
         type: "leave_bonus",
         title: `Tu fisio ${fisioName} está de vacaciones`,
         body: `Tu suscripción se ha alargado +${days} días gratis. Tu próxima renovación pasa al ${newEnd.toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })}. Disfrútalo.`,
+        expiresAt: leave.endDate,
       },
     }).catch(() => {}); // no fallar si la tabla no existe aún o cualquier otra cosa
   }

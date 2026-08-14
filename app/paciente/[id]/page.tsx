@@ -461,9 +461,16 @@ export default async function PatientHome({ params }: { params: { id: string } }
   // Si hay una pausa programada (futura), avisamos en el dashboard
   const upcomingPause = pauseSnapshot.upcomingPause;
 
-  // Notificaciones persistentes (vacaciones de fisio, etc)
+  // Notificaciones persistentes (vacaciones de fisio, etc). Filtramos las
+  // que ya caducaron (expiresAt < now) — el paciente no las verá aunque no
+  // las haya cerrado con el botón OK. Con expiresAt null nunca caducan.
+  const _now = new Date();
   const notifications = await prisma.patientNotification.findMany({
-    where: { patientId: patient.id, readAt: null },
+    where: {
+      patientId: patient.id,
+      readAt: null,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: _now } }],
+    },
     orderBy: { createdAt: "asc" },
   });
 

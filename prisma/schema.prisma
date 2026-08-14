@@ -1881,6 +1881,10 @@ model PatientNotification {
 
   readAt      DateTime?                       // null = aún no leída
   createdAt   DateTime @default(now())
+  // Notificaciones con caducidad natural (ej. "tu fisio está de vacaciones"):
+  // cuando expiresAt < now, la app las oculta automáticamente aunque el
+  // paciente no las haya cerrado. null = no expira.
+  expiresAt   DateTime?
 
   @@index([patientId])
   @@index([readAt])
