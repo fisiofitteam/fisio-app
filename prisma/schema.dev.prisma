@@ -2037,7 +2037,7 @@ model Sale {
   // ─── Stripe ─────────────────────────────────────────────────────────────
   stripeSessionId         String?  @unique
   stripePaymentIntentId   String?
-  stripePriceId           String                        // price_xxx de Stripe
+  stripePriceId           String?                       // price_xxx de Stripe (null si duración custom)
   amountCents             Int                           // en céntimos (60000 = 600€)
   currency                String   @default("eur")
   paymentMethod           String?                       // "card" | "klarna" | "paypal" | "paypal_paylater" | null

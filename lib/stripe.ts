@@ -18,49 +18,51 @@ export const stripe = secretKey
 
 /**
  * Mapeo entre el productCode interno y el Price ID de Stripe.
- * Los Price IDs vienen de variables de entorno para no acoplar el código.
+ *
+ * Solo 4M y 6M tienen Price ID configurado en Stripe (venta habitual). Las
+ * demás duraciones (1,2,3,5,7,8,9,10,11,12) son válidas pero requieren que
+ * el CEO teclee el importe al generar el link — no hay precio "sugerido"
+ * que consultar. Cualquier duración de 1 a 12 meses es aceptable.
  */
-export type ProductCode = "RECUPERA_4M" | "RECUPERA_6M" | "CONSOLIDA_4M" | "CONSOLIDA_6M";
+export type ProgramTypeCode = "RECUPERA" | "CONSOLIDA";
+export type DurationMonths = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
+export type ProductCode = `${ProgramTypeCode}_${DurationMonths}M`;
 
-export const PRODUCT_CONFIG: Record<ProductCode, {
-  programType: "RECUPERA" | "CONSOLIDA";
-  durationMonths: 4 | 6;
+export const ALL_DURATIONS: DurationMonths[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+type ProductConfigEntry = {
+  programType: ProgramTypeCode;
+  durationMonths: DurationMonths;
   label: string;
-  priceEnvKey: string;
-}> = {
-  RECUPERA_4M: {
-    programType: "RECUPERA",
-    durationMonths: 4,
-    label: "Programa RECUPERA · 4 meses",
-    priceEnvKey: "STRIPE_PRICE_RECUPERA_4M",
-  },
-  RECUPERA_6M: {
-    programType: "RECUPERA",
-    durationMonths: 6,
-    label: "Programa RECUPERA · 6 meses",
-    priceEnvKey: "STRIPE_PRICE_RECUPERA_6M",
-  },
-  CONSOLIDA_4M: {
-    programType: "CONSOLIDA",
-    durationMonths: 4,
-    label: "Programa CONSOLIDA · 4 meses",
-    priceEnvKey: "STRIPE_PRICE_CONSOLIDA_4M",
-  },
-  CONSOLIDA_6M: {
-    programType: "CONSOLIDA",
-    durationMonths: 6,
-    label: "Programa CONSOLIDA · 6 meses",
-    priceEnvKey: "STRIPE_PRICE_CONSOLIDA_6M",
-  },
+  priceEnvKey: string | null;
 };
+
+function buildProductConfig(): Record<ProductCode, ProductConfigEntry> {
+  const out = {} as Record<ProductCode, ProductConfigEntry>;
+  for (const program of ["RECUPERA", "CONSOLIDA"] as const) {
+    for (const months of ALL_DURATIONS) {
+      const code = `${program}_${months}M` as ProductCode;
+      out[code] = {
+        programType: program,
+        durationMonths: months,
+        label: `Programa ${program} · ${months} ${months === 1 ? "mes" : "meses"}`,
+        // Solo 4M y 6M tienen priceId fijo en Stripe; el resto usa precio custom del CEO.
+        priceEnvKey: months === 4 || months === 6 ? `STRIPE_PRICE_${program}_${months}M` : null,
+      };
+    }
+  }
+  return out;
+}
+
+export const PRODUCT_CONFIG = buildProductConfig();
 
 /**
  * Obtiene el Stripe Price ID para un productCode dado desde env vars.
- * Devuelve null si no está configurado.
+ * Devuelve null si no está configurado (duraciones custom sin priceId fijo).
  */
 export function getPriceIdForProduct(code: ProductCode): string | null {
   const config = PRODUCT_CONFIG[code];
-  if (!config) return null;
+  if (!config || !config.priceEnvKey) return null;
   return process.env[config.priceEnvKey] || null;
 }
 

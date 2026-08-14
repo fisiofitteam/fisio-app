@@ -33,8 +33,13 @@ type ActiveSale = {
 };
 
 type ProgramType = "RECUPERA" | "CONSOLIDA" | "PREVENTION";
-type Duration = 4 | 6;
+type Duration = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
 type PreventionPlan = "quarterly" | "semiannual" | "annual";
+
+// Todas las duraciones que ofrecemos en el wizard. Solo 4 y 6 tienen precio
+// sugerido en Stripe; el resto requiere que el CEO teclee el importe en el
+// paso siguiente.
+const AVAILABLE_DURATIONS: Duration[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
 const PREVENTION_PLAN_LABELS: Record<PreventionPlan, string> = {
   quarterly: "3 meses",
@@ -425,18 +430,18 @@ export function PaymentLinkModal({
             <p className="text-sm text-neutral-700">
               Programa: <strong>{program}</strong>. ¿Qué duración?
             </p>
-            <div className="grid grid-cols-2 gap-2">
-              {[4, 6].map((d) => (
+            <div className="grid grid-cols-3 gap-2">
+              {AVAILABLE_DURATIONS.map((d) => (
                 <button
                   key={d}
-                  onClick={() => setDuration(d as Duration)}
-                  className={`px-4 py-3 rounded-lg border font-medium ${
+                  onClick={() => setDuration(d)}
+                  className={`px-3 py-2.5 rounded-lg border text-sm font-medium ${
                     duration === d
                       ? "bg-neutral-900 text-white border-neutral-900"
                       : "bg-white border-neutral-200 hover:bg-neutral-50"
                   }`}
                 >
-                  {d} meses
+                  {d} {d === 1 ? "mes" : "meses"}
                 </button>
               ))}
             </div>
