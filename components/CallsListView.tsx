@@ -831,6 +831,8 @@ function CallEditModal({
   const [phone, setPhone] = useState(lead.phone ?? "");
   const [aiSummary, setAiSummary] = useState(lead.aiSummary ?? "");
   const [meetingUrl, setMeetingUrl] = useState(lead.meetingUrl ?? "");
+  const [regenerating, setRegenerating] = useState(false);
+  const [regenerateResult, setRegenerateResult] = useState<string | null>(null);
   const [callScheduledAt, setCallScheduledAt] = useState(
     utcIsoToDatetimeLocalInput(lead.callScheduledAt)
   );
@@ -950,9 +952,10 @@ function CallEditModal({
             <textarea className="input text-sm" rows={3} value={aiSummary} onChange={(e) => setAiSummary(e.target.value)} />
           </div>
 
-          {/* Link de Google Meet editable. Si el paciente agendó dos veces o
-              hubo lío con el calendar y el resumen IA salió como "sin transcripción",
-              cambia aquí el link al Meet correcto y al guardar se regenera. */}
+          {/* Link de Google Meet editable + botón regenerar in-place. Si el
+              paciente agendó dos veces o hubo lío con el calendar, pega aquí
+              el link correcto y pulsa "Regenerar resumen" para probarlo al
+              instante sin necesidad de guardar todo el lead. */}
           <div>
             <label className="text-xs text-neutral-500 block mb-1 flex items-center justify-between">
               <span>🎥 Link de Google Meet</span>
@@ -974,9 +977,53 @@ function CallEditModal({
               onChange={(e) => setMeetingUrl(e.target.value)}
               placeholder="https://meet.google.com/xxx-xxxx-xxx"
             />
-            <p className="text-[10px] text-neutral-500 mt-1">
-              Al guardar con un link nuevo se regenera el resumen IA con la transcripción de ese Meet.
-            </p>
+            <div className="flex items-center gap-2 mt-1.5">
+              <button
+                type="button"
+                disabled={!meetingUrl.includes("meet.google.com") || regenerating}
+                onClick={async () => {
+                  setRegenerating(true);
+                  setRegenerateResult(null);
+                  try {
+                    const r = await fetch(`/api/admin/leads/${lead.id}/fix-meeting-url?url=${encodeURIComponent(meetingUrl.trim())}`, { method: "POST" });
+                    const data = await r.json();
+                    if (!r.ok) {
+                      setRegenerateResult(`⚠ ${data?.error ?? "Error"}`);
+                    } else if (data?.regenerated?.ok) {
+                      setRegenerateResult("✓ Resumen generado. Cierra el modal y verás la card.");
+                    } else if (data?.regenerated?.reason === "no_transcript") {
+                      setRegenerateResult("Meet no expone transcripción para esta llamada (no se activó grabación/transcripción, o el organizador es otra cuenta).");
+                    } else if (data?.regenerated?.detail) {
+                      setRegenerateResult(`⚠ ${data.regenerated.detail}`);
+                    } else {
+                      setRegenerateResult(`⚠ Estado: ${data?.regenerated?.reason ?? "desconocido"}`);
+                    }
+                  } catch (e: any) {
+                    setRegenerateResult(`⚠ Error de red: ${e?.message ?? "?"}`);
+                  } finally {
+                    setRegenerating(false);
+                  }
+                }}
+                className="text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-40"
+                style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+              >
+                {regenerating ? "Regenerando… (15-30s)" : "🔄 Regenerar resumen"}
+              </button>
+              <span className="text-[10px] text-neutral-500">
+                Prueba el link antes de guardar todo el lead.
+              </span>
+            </div>
+            {regenerateResult && (
+              <p
+                className="text-[11px] mt-1.5 px-2 py-1 rounded"
+                style={{
+                  background: regenerateResult.startsWith("✓") ? "#DCFCE7" : "#FEF3C7",
+                  color: regenerateResult.startsWith("✓") ? "#065F46" : "#78350F",
+                }}
+              >
+                {regenerateResult}
+              </p>
+            )}
           </div>
 
           {/* Cuestionario rellenado en la landing (solo lectura) */}
