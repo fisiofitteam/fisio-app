@@ -218,7 +218,7 @@ function FieldInput({
 
       {field.type === "textarea" && (
         <textarea
-          className="input text-sm"
+          className="input text-sm text-neutral-900 bg-white"
           rows={3}
           value={strVal}
           placeholder={field.placeholder}
@@ -228,7 +228,7 @@ function FieldInput({
 
       {field.type === "text" && (
         <input
-          className="input text-sm"
+          className="input text-sm text-neutral-900 bg-white"
           value={strVal}
           placeholder={field.placeholder}
           onChange={(e) => onChange(e.target.value)}
@@ -238,7 +238,7 @@ function FieldInput({
       {field.type === "number" && (
         <input
           type="number"
-          className="input text-sm"
+          className="input text-sm text-neutral-900 bg-white"
           value={strVal}
           placeholder={field.placeholder}
           onChange={(e) => onChange(e.target.value)}
@@ -248,14 +248,14 @@ function FieldInput({
       {field.type === "date" && (
         <input
           type="date"
-          className="input text-sm"
+          className="input text-sm text-neutral-900 bg-white"
           value={strVal}
           onChange={(e) => onChange(e.target.value)}
         />
       )}
 
       {field.type === "select" && (
-        <select className="input text-sm" value={strVal} onChange={(e) => onChange(e.target.value)}>
+        <select className="input text-sm text-neutral-900 bg-white" value={strVal} onChange={(e) => onChange(e.target.value)}>
           <option value="">Selecciona...</option>
           {field.options?.map((o) => (
             <option key={o} value={o}>
@@ -379,7 +379,7 @@ function ContractSign({ contractText, onDone }: { contractText: string; onDone: 
               DNI / NIE <span className="text-red-500">*</span>
             </label>
             <input
-              className="input text-sm font-mono uppercase"
+              className="input text-sm text-neutral-900 bg-white font-mono uppercase"
               value={dni}
               onChange={(e) => setDni(e.target.value.toUpperCase())}
               placeholder="12345678A"
