@@ -869,17 +869,19 @@ function CallEditModal({
         aiScheduled,
       }),
     });
-    // Diagnóstico visual: si el meetingUrl cambió, el backend devuelve
-    // _regenerated con el resultado. Lo mostramos por alert() para que se
-    // vea el estado (transcript OK, no_transcript, error de Meet, etc).
+    // Si el backend reseteó el CallSummary, disparamos la regeneración desde
+    // el navegador con keepalive:true. keepalive garantiza que el fetch se
+    // completa aunque cerremos el modal, algo que un fetch normal no asegura.
+    // La regeneración tarda 15-30s en el servidor pero al usuario le da igual:
+    // ya ha pulsado Guardar y solo tiene que refrescar para ver el resultado.
     try {
       const data = await res.json();
-      const r = data?._regenerated;
-      if (r?.attempted) {
-        if (r.ok) alert("✓ Resumen IA regenerado con el nuevo Meet. Cerrando…");
-        else if (r.reason === "no_transcript") alert("Meet aún no ha publicado la transcripción de esa videollamada. Se reintentará automáticamente en la próxima corrida del cron.");
-        else if (r.error) alert("Error al regenerar el resumen: " + r.error);
-        else if (r.reason) alert("Resumen no generado: " + r.reason + (r.detail ? " — " + r.detail : ""));
+      if (data?._regenerationQueued && meetingUrl.includes("meet.google.com")) {
+        fetch(`/api/admin/leads/${lead.id}/fix-meeting-url?url=${encodeURIComponent(meetingUrl.trim())}`, {
+          method: "POST",
+          keepalive: true,
+        }).catch(() => {});
+        alert("Cambio guardado. El resumen IA está regenerándose en background — refresca la página en 30-60 segundos para verlo.");
       }
     } catch {}
     onSaved();
