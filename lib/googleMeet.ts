@@ -107,7 +107,34 @@ export async function getTranscriptTextForRecord(conferenceRecordName: string): 
     `/${conferenceRecordName}/transcripts`,
   );
   const list = transcripts.transcripts ?? [];
-  const ready = list.find((t) => t.state === "FILE_GENERATED") ?? list[0];
+  // Priorizamos transcripts LISTOS ("FILE_GENERATED"). Si hay varios listos
+  // (por ejemplo, doble activación de Gemini Notes en la misma reunión), los
+  // exploramos uno a uno y nos quedamos con el que tenga más entries — así
+  // evitamos coger uno vacío o parcial cuando hay otro mejor disponible.
+  const readyOnes = list.filter((t) => t.state === "FILE_GENERATED");
+  const candidates = readyOnes.length > 0 ? readyOnes : list;
+  if (candidates.length === 0) {
+    throw new MeetApiError(404, null, "El conferenceRecord no tiene ningún transcript aún.");
+  }
+  let bestTranscript: { name: string; state?: string } | null = null;
+  let bestEntriesCount = -1;
+  if (candidates.length === 1) {
+    bestTranscript = candidates[0];
+  } else {
+    for (const t of candidates) {
+      try {
+        const firstPage = await meetFetch<{ transcriptEntries?: any[] }>(`/${t.name}/entries?pageSize=100`);
+        const count = (firstPage.transcriptEntries ?? []).length;
+        if (count > bestEntriesCount) {
+          bestTranscript = t;
+          bestEntriesCount = count;
+        }
+      } catch {
+        // Sigue con los demás candidatos
+      }
+    }
+  }
+  const ready = bestTranscript ?? candidates[0];
   if (!ready) {
     throw new MeetApiError(404, null, "El conferenceRecord no tiene ningún transcript aún.");
   }
