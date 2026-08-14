@@ -77,6 +77,7 @@ export async function PATCH(req: NextRequest) {
   if (rest.aiScheduled !== undefined) updateData.aiScheduled = !!rest.aiScheduled;
   if (rest.instagram !== undefined) updateData.instagram = rest.instagram || null;
   if (rest.sourceTagId !== undefined) updateData.sourceTagId = rest.sourceTagId || null;
+  if (rest.meetingUrl !== undefined) updateData.meetingUrl = rest.meetingUrl || null;
 
   // Si marcamos inFollowUp=true y todavía no se había iniciado, autocalculamos las 4 fechas
   if (rest.inFollowUp === true) {

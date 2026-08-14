@@ -830,6 +830,7 @@ function CallEditModal({
   const [email, setEmail] = useState(lead.email ?? "");
   const [phone, setPhone] = useState(lead.phone ?? "");
   const [aiSummary, setAiSummary] = useState(lead.aiSummary ?? "");
+  const [meetingUrl, setMeetingUrl] = useState(lead.meetingUrl ?? "");
   const [callScheduledAt, setCallScheduledAt] = useState(
     utcIsoToDatetimeLocalInput(lead.callScheduledAt)
   );
@@ -846,6 +847,7 @@ function CallEditModal({
 
   async function save() {
     setSaving(true);
+    const meetingUrlChanged = (meetingUrl || "") !== (lead.meetingUrl ?? "");
     await fetch("/api/leads", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -855,6 +857,7 @@ function CallEditModal({
         email,
         phone,
         aiSummary,
+        meetingUrl: meetingUrl.trim() || null,
         callScheduledAt: datetimeLocalInputToUtcIso(callScheduledAt),
         closerId: closerId || null,
         status,
@@ -864,6 +867,12 @@ function CallEditModal({
         aiScheduled,
       }),
     });
+    // Si el link de Meet cambió, invalidamos el resumen anterior para que el
+    // próximo tick del cron (o un manual=1) baje el transcript del Meet nuevo.
+    // Solo pedimos regeneración forzada; el propio endpoint la ejecuta al vuelo.
+    if (meetingUrlChanged && meetingUrl.includes("meet.google.com")) {
+      fetch(`/api/admin/leads/${lead.id}/fix-meeting-url?url=${encodeURIComponent(meetingUrl.trim())}`, { method: "POST" }).catch(() => {});
+    }
     onSaved();
   }
 
@@ -928,6 +937,35 @@ function CallEditModal({
           <div>
             <label className="text-xs text-neutral-500 block mb-1">Resumen de la conversación</label>
             <textarea className="input text-sm" rows={3} value={aiSummary} onChange={(e) => setAiSummary(e.target.value)} />
+          </div>
+
+          {/* Link de Google Meet editable. Si el paciente agendó dos veces o
+              hubo lío con el calendar y el resumen IA salió como "sin transcripción",
+              cambia aquí el link al Meet correcto y al guardar se regenera. */}
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1 flex items-center justify-between">
+              <span>🎥 Link de Google Meet</span>
+              {meetingUrl && (
+                <a
+                  href={meetingUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[10px] font-medium underline text-emerald-700"
+                >
+                  Abrir
+                </a>
+              )}
+            </label>
+            <input
+              type="url"
+              className="input text-sm"
+              value={meetingUrl}
+              onChange={(e) => setMeetingUrl(e.target.value)}
+              placeholder="https://meet.google.com/xxx-xxxx-xxx"
+            />
+            <p className="text-[10px] text-neutral-500 mt-1">
+              Al guardar con un link nuevo se regenera el resumen IA con la transcripción de ese Meet.
+            </p>
           </div>
 
           {/* Cuestionario rellenado en la landing (solo lectura) */}
