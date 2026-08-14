@@ -1212,7 +1212,9 @@ function ConvertModal({
               <label className="text-xs text-neutral-500 block mb-1">Duración (meses)</label>
               <select className="input text-sm w-full" value={subscriptionPeriodMonths} onChange={(e) => setSubscriptionPeriodMonths(e.target.value)}>
                 <option value="1">1 mes</option><option value="2">2 meses</option><option value="3">3 meses</option>
-                <option value="4">4 meses</option><option value="6">6 meses</option><option value="12">12 meses</option>
+                <option value="4">4 meses</option><option value="5">5 meses</option><option value="6">6 meses</option>
+                <option value="7">7 meses</option><option value="8">8 meses</option><option value="9">9 meses</option>
+                <option value="10">10 meses</option><option value="11">11 meses</option><option value="12">12 meses</option>
               </select>
             </div>
             <div>
