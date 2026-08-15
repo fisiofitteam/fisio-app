@@ -22,10 +22,11 @@ type Block = { heading: string; body: string; exercises: string[] };
 type Session = { title: string; description: string | null; blocks: Block[] };
 type Meta = { model: string; kind: string; exampleIds: string[]; inputTokens: number; outputTokens: number; elapsedMs: number };
 
+type WorkDay = 1 | 2 | 3 | 4 | 5;
 type CellStatus = "idle" | "loading" | "ready" | "error";
 type Cell = {
   weekNumber: 1 | 2 | 3 | 4;
-  dayOfWeek: 1 | 2 | 3 | 5;   // L, M, X, V (J es descanso activo fijo)
+  dayOfWeek: WorkDay;         // L-V, uno de ellos es el descanso activo (restDay)
   status: CellStatus;
   session?: Session;
   meta?: Meta;
@@ -39,14 +40,14 @@ const WEEK_ROLE: Record<1|2|3|4, string> = {
   3: "Pico",
   4: "Descarga",
 };
-const DAY_LABELS: Record<1|2|3|4|5, string> = {
+const DAY_LABELS: Record<WorkDay, string> = {
   1: "Lunes",
   2: "Martes",
   3: "Miércoles",
   4: "Jueves",
   5: "Viernes",
 };
-const WORK_DAYS: Array<1|2|3|5> = [1, 2, 3, 5];
+const ALL_WEEKDAYS: WorkDay[] = [1, 2, 3, 4, 5];
 
 // Plantilla FIJA de descanso activo del jueves. El CEO puede editarla en
 // código si quiere. Se aplica a las 4 semanas por igual.
@@ -89,10 +90,14 @@ export function AiGenerateMesocycleModal({
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [progress, setProgress] = useState<{ week: number; day: number } | null>(null);
+  // Día de descanso activo (por defecto jueves). El fisio lo puede cambiar
+  // antes de generar. Los otros 4 días L-V son sesiones de trabajo IA.
+  const [restDay, setRestDay] = useState<WorkDay>(4);
+  const workDays = ALL_WEEKDAYS.filter((d) => d !== restDay) as WorkDay[];
   const [cells, setCells] = useState<Cell[]>(() => {
     const arr: Cell[] = [];
     for (const w of [1, 2, 3, 4] as const) {
-      for (const d of WORK_DAYS) {
+      for (const d of ALL_WEEKDAYS.filter((x) => x !== 4)) {
         arr.push({ weekNumber: w, dayOfWeek: d, status: "idle" });
       }
     }
@@ -100,11 +105,30 @@ export function AiGenerateMesocycleModal({
   });
   const [err, setErr] = useState<string | null>(null);
 
+  // Cuando el fisio cambia el día de descanso reseteamos las celdas — los
+  // días de trabajo son otros y no tiene sentido conservar generaciones que
+  // ya no encajan en la semana.
+  function changeRestDay(newDay: WorkDay) {
+    if (newDay === restDay) return;
+    if (cells.some((c) => c.status === "ready" || c.status === "loading")) {
+      if (!confirm("Ya hay sesiones generadas. Cambiar el día de descanso las eliminará. ¿Continuar?")) return;
+    }
+    setRestDay(newDay);
+    const newWork = ALL_WEEKDAYS.filter((d) => d !== newDay);
+    const arr: Cell[] = [];
+    for (const w of [1, 2, 3, 4] as const) {
+      for (const d of newWork) {
+        arr.push({ weekNumber: w, dayOfWeek: d, status: "idle" });
+      }
+    }
+    setCells(arr);
+  }
+
   const kind = defaultKind;
   const kindNiceLabel = kindLabel ?? kind;
 
   // Helpers
-  function updateCell(w: 1|2|3|4, d: 1|2|3|5, patch: Partial<Cell>) {
+  function updateCell(w: 1|2|3|4, d: WorkDay, patch: Partial<Cell>) {
     setCells((prev) => prev.map((c) => (c.weekNumber === w && c.dayOfWeek === d ? { ...c, ...patch } : c)));
   }
 
@@ -113,7 +137,7 @@ export function AiGenerateMesocycleModal({
   }
 
   /** Contexto acumulado para pasar a la IA: sesiones anteriores del mesociclo. */
-  function buildContext(currentWeek: 1|2|3|4, currentDay: 1|2|3|5): string {
+  function buildContext(currentWeek: 1|2|3|4, currentDay: WorkDay): string {
     const phaseHint: Record<1|2|3|4, string> = {
       1: "Es la SEMANA 1 (introducción). Introduce el estímulo con volumen medio, técnica prioritaria, evita cargas máximas.",
       2: "Es la SEMANA 2 (progresión). Sube ~10% de volumen o intensidad respecto a la semana 1. Familias de ejercicios similares para consolidar patrones.",
@@ -145,9 +169,11 @@ export function AiGenerateMesocycleModal({
       parts.push("Evita repetir la misma familia de ejercicios más de 2-3 veces en las 16 sesiones totales. Varía el estímulo entre días.");
     }
 
+    const restLabel = DAY_LABELS[restDay];
+    const workLabels = workDays.map((d) => DAY_LABELS[d].slice(0, 3)).join("/");
     parts.push(
-      `El jueves de cada semana es DESCANSO ACTIVO fijo (rodaje aeróbico Z2 + movilidad, 25-35 min) — no lo programes tú, se añade aparte.\n` +
-      `IMPLICACIÓN IMPORTANTE: como el trabajo Z2 continuo YA está cubierto en jueves, NO metas otro día de rodaje continuo aeróbico en L/M/X/V. ` +
+      `El ${restLabel} de cada semana es DESCANSO ACTIVO fijo (rodaje aeróbico Z2 + movilidad, 25-35 min) — no lo programes tú, se añade aparte.\n` +
+      `IMPLICACIÓN IMPORTANTE: como el trabajo Z2 continuo YA está cubierto en ${restLabel.toLowerCase()}, NO metas otro día de rodaje continuo aeróbico en ${workLabels}. ` +
       `Los 4 días de trabajo deben priorizar fuerza, potencia, velocidad e intervalos (HIIT, EMOM, AMRAP, tempo runs, sprints, series cortas Z4-Z5). ` +
       `Si el estilo del programa incluye trabajo cardiovascular, hazlo con intervalos, no con rodaje. Un buen reparto típico sería fuerza pesada en un día y trabajo con intervalos/metcon en otro.`
     );
@@ -155,7 +181,7 @@ export function AiGenerateMesocycleModal({
     return parts.join("\n\n");
   }
 
-  async function generateOne(w: 1|2|3|4, d: 1|2|3|5): Promise<void> {
+  async function generateOne(w: 1|2|3|4, d: WorkDay): Promise<void> {
     updateCell(w, d, { status: "loading", error: undefined });
     try {
       const res = await fetch("/api/ai/generate-session", {
@@ -183,7 +209,7 @@ export function AiGenerateMesocycleModal({
     setErr(null);
     try {
       for (const w of [1, 2, 3, 4] as const) {
-        for (const d of WORK_DAYS) {
+        for (const d of workDays) {
           setProgress({ week: w, day: d });
           await generateOne(w, d);
         }
@@ -249,14 +275,14 @@ export function AiGenerateMesocycleModal({
         }
       }
 
-      // Jueves = descanso activo fijo en las 4 semanas
+      // Día de descanso activo elegido por el fisio (default jueves) en las 4 semanas
       for (const w of [1, 2, 3, 4] as const) {
         await fetch("/api/rolling-tasks/from-session", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             weekId: weekIds[w],
-            dayOfWeek: 4,
+            dayOfWeek: restDay,
             session: REST_ACTIVE_TEMPLATE,
           }),
         });
@@ -307,6 +333,37 @@ export function AiGenerateMesocycleModal({
           />
         </div>
 
+        {/* Selector del día de descanso activo */}
+        <div className="mb-3 rounded-lg p-2.5" style={{ background: "#F0FDFA", border: "1px solid #99F6E4" }}>
+          <div className="flex items-center flex-wrap gap-2">
+            <span className="text-xs font-semibold" style={{ color: "#0F766E" }}>🧘 Día de descanso activo:</span>
+            <div className="flex gap-1 flex-wrap">
+              {ALL_WEEKDAYS.map((d) => {
+                const active = restDay === d;
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => changeRestDay(d)}
+                    disabled={busy || saving}
+                    className="text-xs px-2.5 py-1 rounded-full border transition disabled:opacity-40"
+                    style={{
+                      background: active ? "#0F766E" : "#FFFFFF",
+                      color: active ? "#FFFFFF" : "#134E4A",
+                      borderColor: active ? "#0F766E" : "#99F6E4",
+                    }}
+                  >
+                    {DAY_LABELS[d]}
+                  </button>
+                );
+              })}
+            </div>
+            <span className="text-[10px]" style={{ color: "#134E4A" }}>
+              (los otros 4 días se generarán con IA · Sáb/Dom descanso total)
+            </span>
+          </div>
+        </div>
+
         <div className="flex gap-2 items-center justify-between flex-wrap mb-3">
           <div className="text-[11px] text-neutral-500 italic">
             ⏱ Duración por sesión: {durationForKind(kind)} min · 💡 Va semana a semana con contexto acumulado (~1-2 min total).
@@ -318,7 +375,7 @@ export function AiGenerateMesocycleModal({
             style={{ background: "#0A0A0A", color: "#FAFAFA" }}
           >
             {busy
-              ? progress ? `Generando S${progress.week} · ${DAY_LABELS[progress.day as 1|2|3|5]}…` : "Generando…"
+              ? progress ? `Generando S${progress.week} · ${DAY_LABELS[progress.day as WorkDay]}…` : "Generando…"
               : readyCount > 0 ? "🔄 Regenerar todo" : "✨ Generar 16 sesiones"}
           </button>
         </div>
@@ -337,21 +394,24 @@ export function AiGenerateMesocycleModal({
           </div>
         )}
 
-        {/* Tabla 4x4 (+ columna J descanso activo) */}
+        {/* Tabla 4x5 (L-V) con la columna del día de descanso destacada */}
         <div className="overflow-x-auto -mx-2 px-2">
           <table className="w-full text-xs border-separate" style={{ borderSpacing: "6px 6px" }}>
             <thead>
               <tr>
                 <th className="text-left text-[10px] font-semibold text-neutral-500 uppercase tracking-wider"></th>
-                {[1, 2, 3].map((d) => (
-                  <th key={d} className="text-center text-[10px] font-semibold text-neutral-500 uppercase tracking-wider">
-                    {DAY_LABELS[d as 1|2|3].slice(0, 3)}
-                  </th>
-                ))}
-                <th className="text-center text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#0F766E" }}>
-                  Jue · Rest activo
-                </th>
-                <th className="text-center text-[10px] font-semibold text-neutral-500 uppercase tracking-wider">Vie</th>
+                {ALL_WEEKDAYS.map((d) => {
+                  const isRest = d === restDay;
+                  return (
+                    <th
+                      key={d}
+                      className="text-center text-[10px] font-semibold uppercase tracking-wider"
+                      style={{ color: isRest ? "#0F766E" : "#6B7280" }}
+                    >
+                      {isRest ? `${DAY_LABELS[d].slice(0, 3)} · Rest activo` : DAY_LABELS[d].slice(0, 3)}
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
@@ -361,23 +421,23 @@ export function AiGenerateMesocycleModal({
                     <div>{WEEK_LABELS[w - 1]}</div>
                     <div className="text-[9px] font-medium text-neutral-400 mt-0.5">{WEEK_ROLE[w]}</div>
                   </td>
-                  {[1, 2, 3].map((d) => (
+                  {ALL_WEEKDAYS.map((d) => (
                     <td key={d} className="align-top" style={{ minWidth: 120 }}>
-                      <SessionCell cell={cells.find((c) => c.weekNumber === w && c.dayOfWeek === d)!}
-                        onRegenerate={() => generateOne(w, d as 1|2|3)} busy={busy} />
+                      {d === restDay ? (
+                        <div className="rounded-lg p-2 h-full border" style={{ background: "#F0FDFA", borderColor: "#99F6E4" }}>
+                          <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#0F766E" }}>Fijo</div>
+                          <div className="text-[11px] font-medium mt-1" style={{ color: "#134E4A" }}>{REST_ACTIVE_TEMPLATE.title}</div>
+                          <div className="text-[9px] mt-0.5" style={{ color: "#0F766E" }}>Aeróbico + movilidad</div>
+                        </div>
+                      ) : (
+                        <SessionCell
+                          cell={cells.find((c) => c.weekNumber === w && c.dayOfWeek === d)!}
+                          onRegenerate={() => generateOne(w, d)}
+                          busy={busy}
+                        />
+                      )}
                     </td>
                   ))}
-                  <td className="align-top" style={{ minWidth: 120 }}>
-                    <div className="rounded-lg p-2 h-full border" style={{ background: "#F0FDFA", borderColor: "#99F6E4" }}>
-                      <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#0F766E" }}>Fijo</div>
-                      <div className="text-[11px] font-medium mt-1" style={{ color: "#134E4A" }}>{REST_ACTIVE_TEMPLATE.title}</div>
-                      <div className="text-[9px] mt-0.5" style={{ color: "#0F766E" }}>Aeróbico + movilidad</div>
-                    </div>
-                  </td>
-                  <td className="align-top" style={{ minWidth: 120 }}>
-                    <SessionCell cell={cells.find((c) => c.weekNumber === w && c.dayOfWeek === 5)!}
-                      onRegenerate={() => generateOne(w, 5)} busy={busy} />
-                  </td>
                 </tr>
               ))}
             </tbody>
