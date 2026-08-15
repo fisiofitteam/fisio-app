@@ -89,6 +89,22 @@ export default async function AjustesPage() {
             </div>
           </Link>
         )}
+
+        {isManager && (
+          <Link
+            href="/fisio/ajustes/banners"
+            className="block rounded-lg p-3 hover:bg-neutral-50 bg-white border border-neutral-200"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-xl">📢</span>
+              <div className="flex-1">
+                <div className="font-medium text-sm">Avisos a pacientes</div>
+                <div className="text-xs text-neutral-500">Banners programables que salen en el home según programa</div>
+              </div>
+              <span className="text-neutral-400">→</span>
+            </div>
+          </Link>
+        )}
       </div>
 
       {/* Cerrar sesión — separado al final, con estilo de "destructivo suave".

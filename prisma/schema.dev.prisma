@@ -185,6 +185,7 @@ model Patient {
   communityReactions CommunityReaction[]
   communityFeedPosts CommunityFeedPost[] @relation("FeedPostPatientAuthor")
   communityLessonProgress CommunityLessonProgress[]
+  bannerDismissals   PatientBannerDismiss[]
 }
 
 // ============================================================================
@@ -240,6 +241,7 @@ model Professional {
   defaultShifts     DefaultClosingShift[]
   salesAsCloser     Sale[]               @relation("SaleByCloser")
   salesRefunded     Sale[]               @relation("SaleRefundedBy")
+  bannersCreated    PatientBanner[]      @relation("BannerCreatedBy")
   compensation      Compensation?
   communityFeedPosts     CommunityFeedPost[] @relation("FeedPostAuthor")
   communityFeedComments  CommunityComment[]  @relation("FeedCommentAuthor")
@@ -2869,6 +2871,37 @@ model FisioAiBrief {
   updatedById String?
   updatedAt   DateTime @updatedAt
   createdAt   DateTime @default(now())
+}
+
+model PatientBanner {
+  id                       String   @id @default(cuid())
+  title                    String
+  body                     String
+  variant                  String   @default("info")
+  targetProgramTypes       String
+  startsAt                 DateTime
+  endsAt                   DateTime
+  dismissible              Boolean  @default(true)
+  createdByProfessionalId  String?
+  createdBy                Professional? @relation("BannerCreatedBy", fields: [createdByProfessionalId], references: [id], onDelete: SetNull)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  dismissals               PatientBannerDismiss[]
+
+  @@index([startsAt, endsAt])
+}
+
+model PatientBannerDismiss {
+  id          String   @id @default(cuid())
+  bannerId    String
+  banner      PatientBanner @relation(fields: [bannerId], references: [id], onDelete: Cascade)
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  dismissedAt DateTime @default(now())
+
+  @@unique([bannerId, patientId])
+  @@index([patientId])
 }
 
 model FisioAiAgent {

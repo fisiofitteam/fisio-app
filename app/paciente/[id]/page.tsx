@@ -474,6 +474,32 @@ export default async function PatientHome({ params }: { params: { id: string } }
     orderBy: { createdAt: "asc" },
   });
 
+  // Banners del CEO: activos ahora (startsAt <= now <= endsAt) que apliquen
+  // al programa del paciente (o públicos = target vacío) y que el paciente
+  // no haya descartado ya.
+  const bannersRaw = await (prisma as any).patientBanner.findMany({
+    where: {
+      startsAt: { lte: _now },
+      endsAt: { gt: _now },
+      NOT: { dismissals: { some: { patientId: patient.id } } },
+    },
+    orderBy: { startsAt: "desc" },
+  });
+  const activeBanners = bannersRaw
+    .filter((b: any) => {
+      let programs: string[] = [];
+      try { programs = JSON.parse(b.targetProgramTypes) || []; } catch {}
+      if (programs.length === 0) return true; // público (todos los programas)
+      return patient.programType && programs.includes(patient.programType);
+    })
+    .map((b: any) => ({
+      id: b.id,
+      title: b.title,
+      body: b.body,
+      variant: b.variant,
+      dismissible: !!b.dismissible,
+    }));
+
   // Mensaje de bienvenida (editable por CEO, varía por programa y semanas en programa)
   const welcomeStart = patient.subscriptionStartDate ?? patient.programStartDate ?? patient.startedAt;
   const daysInProgram = welcomeStart
@@ -606,6 +632,7 @@ export default async function PatientHome({ params }: { params: { id: string } }
         title: n.title,
         body: n.body,
       }))}
+      banners={activeBanners}
       pendingForms={pendingForms}
     />
   );

@@ -83,6 +83,7 @@ export function PatientHomeDark({
   adherence,
   upcomingPause,
   notifications,
+  banners = [],
   welcomeLine1 = "Lo difícil era empezar.",
   welcomeLine2 = "Ya estás aquí.",
   assignmentIndexEntries = [],
@@ -95,6 +96,7 @@ export function PatientHomeDark({
   adherence: Adherence | null;
   upcomingPause?: { startDate: string; endDate: string } | null;
   notifications?: { id: string; type: string; title: string; body: string }[];
+  banners?: { id: string; title: string; body: string; variant: string; dismissible: boolean }[];
   welcomeLine1?: string;
   welcomeLine2?: string;
   /** Pares [assignmentId, index] para pintar cada sesión con el color
@@ -127,6 +129,19 @@ export function PatientHomeDark({
     }).catch(() => {});
   }
 
+  // Banners CEO (independientes de las notificaciones — otro modelo, otro endpoint).
+  const [dismissedBanners, setDismissedBanners] = useState<Set<string>>(new Set());
+  const visibleBanners = banners.filter((b) => !dismissedBanners.has(b.id));
+  async function dismissBanner(id: string) {
+    setDismissedBanners((prev) => new Set([...prev, id]));
+    fetch(`/api/patient-banners/${id}/dismiss`, { method: "POST" }).catch(() => {});
+  }
+  const BANNER_STYLES: Record<string, { bg: string; border: string; color: string; icon: string }> = {
+    info:    { bg: "#DBEAFE", border: "#93C5FD", color: "#1E3A8A", icon: "ℹ️" },
+    warning: { bg: "#FEF3C7", border: "#FCD34D", color: "#78350F", icon: "⚠️" },
+    success: { bg: "#DCFCE7", border: "#86EFAC", color: "#065F46", icon: "🎉" },
+  };
+
   return (
     <main className="min-h-screen text-white" style={{ color: "var(--p-text)" }}>
       <div className="relative max-w-md mx-auto px-5 py-7 pb-28">
@@ -135,6 +150,39 @@ export function PatientHomeDark({
             <PendingFormsBanner patientId={patient.id} pending={pendingForms} variant="dark" />
           </div>
         )}
+
+        {/* Banners publicados por el CEO (info/warning/success). Se filtran
+            server-side por programa + fecha + no descartados. */}
+        {visibleBanners.map((b) => {
+          const s = BANNER_STYLES[b.variant] ?? BANNER_STYLES.info;
+          return (
+            <div
+              key={b.id}
+              className="mb-3 rounded-xl px-4 py-3 text-sm"
+              style={{ background: s.bg, border: `1px solid ${s.border}`, color: s.color }}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1">
+                  <div className="font-medium mb-1 flex items-center gap-1.5">
+                    <span>{s.icon}</span>
+                    <span>{b.title}</span>
+                  </div>
+                  <div className="text-xs leading-relaxed whitespace-pre-wrap">{b.body}</div>
+                </div>
+                {b.dismissible && (
+                  <button
+                    onClick={() => dismissBanner(b.id)}
+                    className="text-xs px-2 py-1 rounded shrink-0"
+                    style={{ background: s.border, color: s.color }}
+                  >
+                    OK
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+
         {/* Notificaciones persistentes (vacaciones del fisio, etc) */}
         {visibleNotifications.map((n) => (
           <div
