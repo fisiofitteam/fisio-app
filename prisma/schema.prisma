@@ -3096,6 +3096,11 @@ model FisioAiAgent {
   brief              String
   order              Int      @default(0)
   usesPatientContext Boolean  @default(false)
+  // Lista de roles con acceso a este agente. JSON stringified array de
+  // "ceo" | "head_success" | "fisio" | "setter" | "closer". Si es null o
+  // string vacío, el agente es visible para TODOS los miembros del equipo
+  // (comportamiento por defecto tras habilitar Fisio IA en todo el equipo).
+  allowedRoles       String?
   updatedById        String?
   updatedAt          DateTime @updatedAt
   createdAt          DateTime @default(now())

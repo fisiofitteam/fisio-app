@@ -35,6 +35,14 @@ export async function PUT(req: NextRequest, { params }: { params: { slug: string
   if (typeof b?.icon === "string" && b.icon.trim()) data.icon = b.icon.trim();
   if (typeof b?.brief === "string") data.brief = b.brief;
   if (typeof b?.usesPatientContext === "boolean") data.usesPatientContext = b.usesPatientContext;
+  // allowedRoles: null = todos, array = solo esos. Aceptamos ambos.
+  if (b?.allowedRoles === null) {
+    data.allowedRoles = null;
+  } else if (Array.isArray(b?.allowedRoles)) {
+    const valid = ["ceo", "head_success", "fisio", "setter", "closer"];
+    const clean = b.allowedRoles.filter((r: any) => valid.includes(r));
+    data.allowedRoles = clean.length > 0 ? JSON.stringify(clean) : null;
+  }
 
   const updated = await (prisma as any).fisioAiAgent.update({
     where: { slug: params.slug },

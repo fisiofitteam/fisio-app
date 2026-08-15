@@ -2,7 +2,7 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
-import { ensureDefaultAgents } from "@/lib/fisio-ai-agents";
+import { ensureDefaultAgents, canAccessAgent, parseAllowedRoles } from "@/lib/fisio-ai-agents";
 import { FisioAiAgentChat } from "@/components/FisioAiAgentChat";
 
 export const dynamic = "force-dynamic";
@@ -10,11 +10,14 @@ export const dynamic = "force-dynamic";
 export default async function FisioIaAgentPage({ params }: { params: { slug: string } }) {
   const user = await getActiveProfessional();
   if (!user) redirect("/login");
-  if (user.role !== "ceo") redirect("/fisio");
 
   await ensureDefaultAgents();
   const agent = await (prisma as any).fisioAiAgent.findUnique({ where: { slug: params.slug } });
   if (!agent) notFound();
+  // Chequeo de permisos: si el rol no está en la lista, fuera. CEO siempre.
+  if (!canAccessAgent(user.role, agent.allowedRoles)) redirect("/fisio/fisio-ia");
+
+  const allowedRoles = parseAllowedRoles(agent.allowedRoles);
 
   return (
     <main className="p-4">
@@ -37,6 +40,8 @@ export default async function FisioIaAgentPage({ params }: { params: { slug: str
         initialDescription={agent.description}
         initialIcon={agent.icon}
         usesPatientContext={!!agent.usesPatientContext}
+        isCeo={user.role === "ceo"}
+        initialAllowedRoles={allowedRoles}
       />
     </main>
   );

@@ -22,7 +22,6 @@ type ChatMessage = { role: "user" | "assistant"; content: string };
 export async function POST(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (user.role !== "ceo") return NextResponse.json({ error: "Forbidden — solo CEO por ahora" }, { status: 403 });
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -44,6 +43,13 @@ export async function POST(req: NextRequest) {
   }
 
   const agent = await (prisma as any).fisioAiAgent.findUnique({ where: { slug: agentSlug } });
+  // Verificamos permisos: el usuario debe estar en allowedRoles (o CEO, o público).
+  if (agent) {
+    const { canAccessAgent } = await import("@/lib/fisio-ai-agents");
+    if (!canAccessAgent(user.role, agent.allowedRoles)) {
+      return NextResponse.json({ error: "No tienes acceso a este agente" }, { status: 403 });
+    }
+  }
   let systemPrompt = (agent?.brief ?? "").trim() ||
     "Eres Fisio IA, asistente para el equipo de FisioFit. Responde en español, breve y directo, con foco práctico.";
 

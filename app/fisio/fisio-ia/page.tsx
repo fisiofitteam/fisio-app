@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
-import { ensureDefaultAgents } from "@/lib/fisio-ai-agents";
+import { ensureDefaultAgents, canAccessAgent } from "@/lib/fisio-ai-agents";
 import { FisioAiLanding } from "@/components/FisioAiLanding";
 
 export const dynamic = "force-dynamic";
@@ -9,37 +9,41 @@ export const dynamic = "force-dynamic";
 export default async function FisioIaLandingPage() {
   const user = await getActiveProfessional();
   if (!user) redirect("/login");
-  // Beta cerrada al CEO mientras afinamos briefs y flujos.
-  if (user.role !== "ceo") redirect("/fisio");
 
   await ensureDefaultAgents();
-  const agents = await (prisma as any).fisioAiAgent.findMany({
+  const allAgents = await (prisma as any).fisioAiAgent.findMany({
     orderBy: [{ order: "asc" }, { name: "asc" }],
   });
+  // Filtramos por permisos: cada agente puede tener allowedRoles null (todos)
+  // o un array de roles. CEO siempre lo ve todo.
+  const agents = allAgents.filter((a: any) => canAccessAgent(user.role, a.allowedRoles));
 
   return (
     <main className="p-6">
       <header className="max-w-4xl mx-auto mb-6">
-        <div className="text-[10px] uppercase tracking-widest font-bold text-amber-600 mb-1">
-          BETA · Solo CEO
-        </div>
         <h1 className="text-3xl font-bold flex items-center gap-2">🧠 Fisio IA</h1>
         <p className="text-sm text-neutral-500 mt-1">
-          Elige un agente para empezar. Cada uno tiene su propio brief que puedes editar
-          desde su vista de chat.
+          Elige un agente para empezar. Cada uno tiene su propio brief; el CEO puede
+          personalizarlos y decidir quién de tu equipo tiene acceso.
         </p>
       </header>
 
       <div className="max-w-4xl mx-auto">
-        <FisioAiLanding
-          initialAgents={agents.map((a: any) => ({
-            id: a.id,
-            slug: a.slug,
-            name: a.name,
-            description: a.description,
-            icon: a.icon,
-          }))}
-        />
+        {agents.length === 0 ? (
+          <div className="rounded-xl p-6 text-center text-sm text-neutral-500" style={{ background: "#FAFAFA", border: "1px dashed #D4D4D4" }}>
+            Aún no tienes ningún agente asignado. Habla con el CEO para que te dé acceso a alguno.
+          </div>
+        ) : (
+          <FisioAiLanding
+            initialAgents={agents.map((a: any) => ({
+              id: a.id,
+              slug: a.slug,
+              name: a.name,
+              description: a.description,
+              icon: a.icon,
+            }))}
+          />
+        )}
       </div>
     </main>
   );

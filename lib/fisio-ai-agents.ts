@@ -112,3 +112,40 @@ export async function ensureDefaultAgents(): Promise<void> {
     }
   }
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// Permisos de agentes por rol
+// ────────────────────────────────────────────────────────────────────────────
+
+export type TeamRole = "ceo" | "head_success" | "fisio" | "setter" | "closer";
+
+export const TEAM_ROLES: { value: TeamRole; label: string }[] = [
+  { value: "ceo", label: "CEO" },
+  { value: "head_success", label: "Head-Success" },
+  { value: "fisio", label: "Fisios" },
+  { value: "setter", label: "Setters" },
+  { value: "closer", label: "Closers" },
+];
+
+/**
+ * Parsea el campo `allowedRoles` (JSON string) del agente. Devuelve la lista
+ * de roles con acceso, o null si el agente es público (todos pueden verlo).
+ */
+export function parseAllowedRoles(raw: string | null | undefined): TeamRole[] | null {
+  if (!raw) return null;
+  try {
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr) || arr.length === 0) return null;
+    return arr.filter((r) => typeof r === "string") as TeamRole[];
+  } catch {
+    return null;
+  }
+}
+
+/** True si el usuario (por rol) tiene acceso al agente. CEO siempre. */
+export function canAccessAgent(userRole: string, allowedRolesRaw: string | null | undefined): boolean {
+  if (userRole === "ceo") return true;
+  const roles = parseAllowedRoles(allowedRolesRaw);
+  if (!roles) return true; // agente público
+  return roles.includes(userRole as TeamRole);
+}
