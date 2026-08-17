@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getActiveProfessional } from "@/lib/session";
 import { generateSession } from "@/lib/ai-generate-session";
 import { isBriefKind } from "@/lib/ai-training-brief";
+import { buildPatientBrief } from "@/lib/patient-brief";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -38,13 +39,25 @@ export async function POST(req: NextRequest) {
     ? Number(body.durationMin) : null;
   const extraContext = typeof body?.extraContext === "string" ? body.extraContext.slice(0, 2000) : null;
 
+  // Si viene patientId, cargamos la ficha del paciente (anamnesis, adaptaciones,
+  // diagnóstico, últimas métricas) y la anteponemos al extraContext para que
+  // la sesión salga personalizada. Silencioso si falla — no bloquea la generación.
+  let extraContextWithPatient = extraContext ?? "";
+  const patientId = typeof body?.patientId === "string" ? body.patientId : null;
+  if (patientId) {
+    const patientBrief = await buildPatientBrief(patientId).catch(() => null);
+    if (patientBrief) {
+      extraContextWithPatient = `FICHA DEL PACIENTE:\n${patientBrief}\n\n${extraContextWithPatient}`.trim();
+    }
+  }
+
   try {
     const result = await generateSession({
       kind: body.kind,
       prompt,
       dayOfWeek,
       durationMin,
-      extraContext,
+      extraContext: extraContextWithPatient || null,
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (e: any) {

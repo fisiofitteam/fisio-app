@@ -19,6 +19,7 @@ import { WorkoutTaskEditor } from "./tasks/WorkoutTaskEditor";
 import { VideoTaskEditor } from "./tasks/VideoTaskEditor";
 import { FormTaskEditor } from "./tasks/FormTaskEditor";
 import { EvolutionTaskEditor } from "./tasks/EvolutionTaskEditor";
+import { AiCalendarPlannerModal } from "./AiCalendarPlannerModal";
 import { colorForSession, colorForTask, buildAssignmentIndexMap } from "@/lib/session-colors";
 
 type Session = {
@@ -142,6 +143,7 @@ export function CalendarMonth({
   const [dragging, setDragging] = useState<Session | null>(null);
   const [dropAction, setDropAction] = useState<{ session: Session; targetKey: string } | null>(null);
   const [moveToDateSession, setMoveToDateSession] = useState<Session | null>(null);
+  const [aiPlannerOpen, setAiPlannerOpen] = useState(false);
 
   // Auto-avance al mantener el arrastre sobre las flechas de prev/next mes.
   // Mantenemos un timer y la "zona" sobre la que está el drag para arrancarlo
@@ -447,7 +449,16 @@ export function CalendarMonth({
         <div className="mt-3 text-xs text-neutral-500 italic">
           💡 Click en día vacío → crea sesión o asigna programa · Arrastra entre días para mover/duplicar (las ✓ completadas siempre se duplican) · Mantén el arrastre sobre ← o → para cambiar de mes · Usa el botón ↗ del chip para saltar a cualquier fecha
         </div>
-        <div className="mt-2 text-right">
+        <div className="mt-2 flex justify-between items-center flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setAiPlannerOpen(true)}
+            className="text-xs font-medium px-3 py-1.5 rounded-lg"
+            style={{ background: "#4C1D95", color: "#FAFAFA" }}
+            title="Genera y agenda sesiones directamente en el calendario del paciente"
+          >
+            🧠 Programador IA
+          </button>
           <button
             type="button"
             onClick={toggleWeekends}
@@ -458,6 +469,14 @@ export function CalendarMonth({
           </button>
         </div>
       </section>
+
+      {aiPlannerOpen && (
+        <AiCalendarPlannerModal
+          patientId={patientId}
+          onClose={() => setAiPlannerOpen(false)}
+          onSaved={() => { setAiPlannerOpen(false); router.refresh(); }}
+        />
+      )}
 
       {selectedDay && (
         <DayDetail
