@@ -47,7 +47,10 @@ export async function POST(req: NextRequest) {
   if (patientId) {
     const patientBrief = await buildPatientBrief(patientId).catch(() => null);
     if (patientBrief) {
-      extraContextWithPatient = `FICHA DEL PACIENTE:\n${patientBrief}\n\n${extraContextWithPatient}`.trim();
+      // Cap total del contexto para no petar el context window del modelo.
+      // 8000 chars ≈ 2000 tokens, suficientemente denso pero manejable.
+      const brief = patientBrief.slice(0, 8000);
+      extraContextWithPatient = `FICHA DEL PACIENTE:\n${brief}\n\n${extraContextWithPatient}`.trim().slice(0, 12000);
     }
   }
 

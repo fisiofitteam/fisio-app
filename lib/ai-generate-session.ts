@@ -16,7 +16,10 @@ import { prisma } from "@/lib/prisma";
 import { getAiTrainingBrief, type BriefKind } from "@/lib/ai-training-brief";
 
 const MODEL = "claude-opus-4-7";
-const MAX_OUTPUT_TOKENS = 4000;
+// 4000 se quedaba corto con extraContext largos (ficha completa del paciente)
+// + few-shot examples + tool schema: Claude cortaba a mitad y raw.blocks
+// llegaba sin cerrar → 'Salida sin title o blocks'. 8000 da margen suficiente.
+const MAX_OUTPUT_TOKENS = 8000;
 
 let _client: Anthropic | null = null;
 function client(): Anthropic {
