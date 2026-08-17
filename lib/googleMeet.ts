@@ -175,19 +175,28 @@ export async function getTranscriptTextForRecord(conferenceRecordName: string): 
   };
 }
 
+export type FetchTranscriptResult =
+  | { kind: "found"; transcript: MeetTranscriptResult }
+  | { kind: "no_url" }
+  | { kind: "no_conference" }   // Meet REST no ve la conference (organizador es otra cuenta)
+  | { kind: "no_transcript" };  // Existe la conference pero aún no hay transcript FILE_GENERATED
+
 /**
- * Atajo: dado el meetingUrl de un Lead, devuelve la transcripción o null
- * si no está disponible aún.
+ * Atajo: dado el meetingUrl de un Lead, devuelve el estado y (si aplica) la
+ * transcripción. Distingue "no_conference" (la cuenta OAuth no ve esa Meet
+ * porque el organizador es otra cuenta / no fue participante) de
+ * "no_transcript" (sí ve la Meet pero aún no publicó transcript).
  */
-export async function fetchTranscriptForMeetingUrl(meetingUrl: string | null | undefined): Promise<MeetTranscriptResult | null> {
+export async function fetchTranscriptForMeetingUrl(meetingUrl: string | null | undefined): Promise<FetchTranscriptResult> {
   const code = extractMeetCode(meetingUrl);
-  if (!code) return null;
+  if (!code) return { kind: "no_url" };
   const record = await findConferenceRecordForCode(code);
-  if (!record) return null;
+  if (!record) return { kind: "no_conference" };
   try {
-    return await getTranscriptTextForRecord(record.name);
+    const transcript = await getTranscriptTextForRecord(record.name);
+    return { kind: "found", transcript };
   } catch (e) {
-    if (e instanceof MeetApiError && e.status === 404) return null;
+    if (e instanceof MeetApiError && e.status === 404) return { kind: "no_transcript" };
     throw e;
   }
 }

@@ -992,7 +992,7 @@ function CallEditModal({
                     } else if (data?.regenerated?.ok) {
                       setRegenerateResult("✓ Resumen generado. Cierra el modal y verás la card.");
                     } else if (data?.regenerated?.reason === "no_transcript") {
-                      setRegenerateResult("Meet no expone transcripción para esta llamada (no se activó grabación/transcripción, o el organizador es otra cuenta).");
+                      setRegenerateResult(data?.regenerated?.detail ?? "Meet no expone transcripción para esta llamada.");
                     } else if (data?.regenerated?.detail) {
                       setRegenerateResult(`⚠ ${data.regenerated.detail}`);
                     } else {

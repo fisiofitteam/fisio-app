@@ -229,9 +229,9 @@ export async function generateSummaryForLead(
   }
 
   const t0 = Date.now();
-  let transcript;
+  let fetchResult;
   try {
-    transcript = await fetchTranscriptForMeetingUrl(lead.meetingUrl);
+    fetchResult = await fetchTranscriptForMeetingUrl(lead.meetingUrl);
   } catch (e: any) {
     const msg = e instanceof MeetApiError ? e.message : e?.message ?? "unknown";
     const saved = await prisma.callSummary.upsert({
@@ -241,7 +241,32 @@ export async function generateSummaryForLead(
     });
     return { ok: false, reason: "error", detail: msg, callSummaryId: saved.id };
   }
-  if (!transcript || !transcript.transcriptText) {
+  if (fetchResult.kind !== "found") {
+    // Diferenciamos: no_conference (la cuenta OAuth no ve la Meet — organizador
+    // es otra cuenta) de no_transcript (sí la ve pero aún no publicó archivo).
+    // La primera es permanente; la segunda se puede reintentar más tarde.
+    const detailByKind: Record<typeof fetchResult.kind, string> = {
+      no_url: "El lead no tiene meetingUrl configurado.",
+      no_conference: "La cuenta de Google conectada (videoconsultas@fisiofitteam.com) NO ve esta reunión en Meet. Suele pasar cuando el organizador es otra cuenta (Ales personal, por ejemplo). Solución: la reunión debe crearse desde la cuenta de videoconsultas para que Meet exponga la transcripción por API.",
+      no_transcript: "Meet aún no ha publicado el archivo del transcript. Suele tardar 5-30 min tras terminar la llamada. Reintenta más tarde.",
+    };
+    const detail = detailByKind[fetchResult.kind];
+    const saved = await prisma.callSummary.upsert({
+      where: { leadId },
+      create: {
+        leadId,
+        noTranscript: fetchResult.kind !== "no_conference", // no_conference no se reintenta
+        errorMessage: fetchResult.kind === "no_conference" ? detail : null,
+      },
+      update: {
+        noTranscript: fetchResult.kind !== "no_conference",
+        errorMessage: fetchResult.kind === "no_conference" ? detail : null,
+      },
+    });
+    return { ok: false, reason: "no_transcript", detail, callSummaryId: saved.id };
+  }
+  const transcript = fetchResult.transcript;
+  if (!transcript.transcriptText) {
     const saved = await prisma.callSummary.upsert({
       where: { leadId },
       create: { leadId, noTranscript: true },

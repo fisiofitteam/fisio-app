@@ -299,7 +299,7 @@ function FollowUpEditModal({ lead, onClose, onSaved }: { lead: Lead; onClose: ()
                     } else if (data?.regenerated?.ok) {
                       setRegenerateResult("✓ Resumen generado. Cierra el modal y verás la card.");
                     } else if (data?.regenerated?.reason === "no_transcript") {
-                      setRegenerateResult("Meet aún no expone transcripción (no se activó grabación o el organizador es otra cuenta).");
+                      setRegenerateResult(data?.regenerated?.detail ?? "Meet aún no expone transcripción.");
                     } else if (data?.regenerated?.detail) {
                       setRegenerateResult(`⚠ ${data.regenerated.detail}`);
                     } else {
