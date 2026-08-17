@@ -14,24 +14,17 @@ import { useState } from "react";
 import { durationForKind } from "@/components/AiGenerateSessionModal";
 
 type Mode = "session" | "week" | "mesocycle";
-type WorkDay = 1 | 2 | 3 | 4 | 5;
+// 1..7 (1=Lunes, 7=Domingo) — el fisio puede programar cualquier día de la semana.
+type Weekday = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 type Block = { heading: string; body: string; exercises: string[] };
 type Session = { title: string; description: string | null; blocks: Block[] };
 
-const DAY_LABELS: Record<WorkDay, string> = {
-  1: "Lunes", 2: "Martes", 3: "Miércoles", 4: "Jueves", 5: "Viernes",
+const DAY_LABELS: Record<Weekday, string> = {
+  1: "Lunes", 2: "Martes", 3: "Miércoles", 4: "Jueves", 5: "Viernes", 6: "Sábado", 7: "Domingo",
 };
-const ALL_WEEKDAYS: WorkDay[] = [1, 2, 3, 4, 5];
+const ALL_WEEKDAYS: Weekday[] = [1, 2, 3, 4, 5, 6, 7];
 const WEEK_ROLE: Record<1|2|3|4, string> = {
   1: "Introducción", 2: "Progresión", 3: "Pico", 4: "Descarga",
-};
-const REST_ACTIVE_TEMPLATE: Session = {
-  title: "Descanso activo",
-  description: "Recuperación entre sesiones — mantén el cuerpo despierto sin fatigar.",
-  blocks: [
-    { heading: "Aeróbico suave · 25-35 min", body: "Trote muy suave, bici easy o remo continuo a RPE 5-6. Deberías poder hablar con frases completas.", exercises: [] },
-    { heading: "Movilidad global · 10-15 min", body: "Cat-camel x8 · 90/90 hip cada lado 5 respiraciones · Pigeon stretch cada lado 60s · Wall slide banded x10 · Puente glúteo x15.", exercises: [] },
-  ],
 };
 
 function sessionToTasksSnapshot(s: Session): any[] {
@@ -81,15 +74,26 @@ export function AiCalendarPlannerModal({
   const [prompt, setPrompt] = useState("");
   const [dateStr, setDateStr] = useState(todayLocalDate());
   const [mondayStr, setMondayStr] = useState(nextMondayLocal());
-  const [restDay, setRestDay] = useState<WorkDay>(4);
+  // Días de la semana con entreno. Default: L,M,X,V (jueves descanso).
+  // El fisio puede seleccionar cualquier combinación L-D.
+  const [workDays, setWorkDays] = useState<Set<Weekday>>(() => new Set<Weekday>([1, 2, 3, 5]));
   const [progress, setProgress] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
 
-  const workDays = ALL_WEEKDAYS.filter((d) => d !== restDay) as WorkDay[];
+  const workDaysSorted = ALL_WEEKDAYS.filter((d) => workDays.has(d));
 
-  async function generateOne(dayOfWeek: WorkDay, extraContext?: string): Promise<Session> {
+  function toggleWorkDay(d: Weekday) {
+    setWorkDays((prev) => {
+      const next = new Set(prev);
+      if (next.has(d)) next.delete(d);
+      else next.add(d);
+      return next;
+    });
+  }
+
+  async function generateOne(dayOfWeek: Weekday, extraContext?: string): Promise<Session> {
     const r = await fetch("/api/ai/generate-session", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -133,6 +137,10 @@ export function AiCalendarPlannerModal({
 
   async function run() {
     if (!prompt.trim()) { setError("Escribe el foco/prompt del programa"); return; }
+    if ((mode === "week" || mode === "mesocycle") && workDaysSorted.length === 0) {
+      setError("Selecciona al menos un día con entreno");
+      return;
+    }
     setBusy(true);
     setError(null);
     setOk(null);
@@ -140,15 +148,15 @@ export function AiCalendarPlannerModal({
       if (mode === "session") {
         setProgress("Generando sesión con IA…");
         const d = new Date(dateStr + "T09:00:00");
-        const dow = (d.getDay() === 0 ? 7 : d.getDay()) as WorkDay;
-        const s = await generateOne(dow > 5 ? 5 : dow);
+        const dow = (d.getDay() === 0 ? 7 : d.getDay()) as Weekday;
+        const s = await generateOne(dow);
         setProgress("Agendando…");
         await saveSessionAtDate(d, s);
         setOk("✓ Sesión agendada en el calendario.");
       } else if (mode === "week") {
         const monday = mondayOf(mondayStr);
-        const generated: Array<{ dow: WorkDay; session: Session }> = [];
-        for (const dow of workDays) {
+        const generated: Array<{ dow: Weekday; session: Session }> = [];
+        for (const dow of workDaysSorted) {
           setProgress(`Generando ${DAY_LABELS[dow]}…`);
           const s = await generateOne(dow);
           generated.push({ dow, session: s });
@@ -159,16 +167,13 @@ export function AiCalendarPlannerModal({
           day.setDate(monday.getDate() + (dow - 1));
           await saveSessionAtDate(day, session);
         }
-        // Día de descanso activo (fijo, no IA)
-        const restDate = new Date(monday);
-        restDate.setDate(monday.getDate() + (restDay - 1));
-        await saveSessionAtDate(restDate, REST_ACTIVE_TEMPLATE);
-        setOk(`✓ Semana agendada: ${workDays.length} sesiones IA + descanso activo el ${DAY_LABELS[restDay].toLowerCase()}.`);
+        setOk(`✓ Semana agendada: ${generated.length} sesiones IA (${workDaysSorted.map((d) => DAY_LABELS[d].slice(0, 3)).join(", ")}).`);
       } else {
         // Mesociclo 4 semanas
         const baseMonday = mondayOf(mondayStr);
-        const generatedAll: Array<{ w: 1|2|3|4; dow: WorkDay; session: Session }> = [];
+        const generatedAll: Array<{ w: 1|2|3|4; dow: Weekday; session: Session }> = [];
         const previousSummary: string[] = [];
+        const restDaysLabels = ALL_WEEKDAYS.filter((d) => !workDays.has(d)).map((d) => DAY_LABELS[d]).join(", ") || "ninguno";
         for (const w of [1, 2, 3, 4] as const) {
           const phaseHint: Record<1|2|3|4, string> = {
             1: "SEMANA 1 (introducción). Volumen medio, técnica prioritaria, sin cargas máximas.",
@@ -176,11 +181,11 @@ export function AiCalendarPlannerModal({
             3: "SEMANA 3 (pico). Máxima carga del bloque.",
             4: "SEMANA 4 (descarga). -30-40% volumen vs semana 3.",
           };
-          for (const dow of workDays) {
+          for (const dow of workDaysSorted) {
             setProgress(`Semana ${w} · ${DAY_LABELS[dow]}…`);
             const context = [
               `MESOCICLO DE 4 SEMANAS. ${phaseHint[w]}`,
-              `El ${DAY_LABELS[restDay].toLowerCase()} es descanso activo (rodaje Z2 + movilidad) — no incluyas otro día de rodaje continuo en las sesiones de trabajo.`,
+              `Días con entreno esta semana: ${workDaysSorted.map((d) => DAY_LABELS[d]).join(", ")}. Días de descanso total: ${restDaysLabels}.`,
               previousSummary.length > 0 ? `Sesiones previas: ${previousSummary.slice(-8).join(" · ")}` : "",
             ].filter(Boolean).join("\n\n");
             const s = await generateOne(dow, context);
@@ -188,19 +193,13 @@ export function AiCalendarPlannerModal({
             previousSummary.push(`S${w}${DAY_LABELS[dow].slice(0,1)}: ${s.title}`);
           }
         }
-        setProgress("Agendando 20 sesiones…");
+        setProgress(`Agendando ${generatedAll.length} sesiones…`);
         for (const { w, dow, session } of generatedAll) {
           const day = new Date(baseMonday);
           day.setDate(baseMonday.getDate() + (w - 1) * 7 + (dow - 1));
           await saveSessionAtDate(day, session);
         }
-        // Descanso activo × 4 semanas
-        for (const w of [1, 2, 3, 4] as const) {
-          const day = new Date(baseMonday);
-          day.setDate(baseMonday.getDate() + (w - 1) * 7 + (restDay - 1));
-          await saveSessionAtDate(day, REST_ACTIVE_TEMPLATE);
-        }
-        setOk(`✓ Mesociclo de 4 semanas agendado: ${generatedAll.length} sesiones IA + ${4} descansos activos.`);
+        setOk(`✓ Mesociclo de 4 semanas agendado: ${generatedAll.length} sesiones IA.`);
       }
       // Refresca el calendario tras un pequeño delay para que el usuario vea el "OK"
       setTimeout(onSaved, 800);
@@ -296,28 +295,39 @@ export function AiCalendarPlannerModal({
           )}
         </div>
 
-        {/* Selector día de descanso — solo en semana/mesociclo */}
+        {/* Selector de días con entreno (multi-select) — solo semana/mesociclo */}
         {(mode === "week" || mode === "mesocycle") && (
-          <div className="mb-3 rounded-lg p-2.5" style={{ background: "#F0FDFA", border: "1px solid #99F6E4" }}>
-            <span className="text-xs font-semibold" style={{ color: "#0F766E" }}>🧘 Día de descanso activo:</span>
-            <div className="flex gap-1 flex-wrap mt-1.5">
-              {ALL_WEEKDAYS.map((d) => (
-                <button
-                  key={d}
-                  type="button"
-                  onClick={() => setRestDay(d)}
-                  disabled={busy}
-                  className="text-xs px-2.5 py-1 rounded-full border transition disabled:opacity-40"
-                  style={{
-                    background: restDay === d ? "#0F766E" : "#FFFFFF",
-                    color: restDay === d ? "#FFFFFF" : "#134E4A",
-                    borderColor: restDay === d ? "#0F766E" : "#99F6E4",
-                  }}
-                >
-                  {DAY_LABELS[d]}
-                </button>
-              ))}
+          <div className="mb-3 rounded-lg p-2.5" style={{ background: "#EEF2FF", border: "1px solid #C7D2FE" }}>
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <span className="text-xs font-semibold" style={{ color: "#3730A3" }}>
+                🗓 Días con entreno {mode === "mesocycle" ? "(cada semana del mesociclo)" : ""}
+              </span>
+              <span className="text-[10px]" style={{ color: "#4338CA" }}>{workDaysSorted.length} d/sem</span>
             </div>
+            <div className="flex gap-1 flex-wrap">
+              {ALL_WEEKDAYS.map((d) => {
+                const active = workDays.has(d);
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => toggleWorkDay(d)}
+                    disabled={busy}
+                    className="text-xs px-2.5 py-1 rounded-full border transition disabled:opacity-40"
+                    style={{
+                      background: active ? "#4F46E5" : "#FFFFFF",
+                      color: active ? "#FFFFFF" : "#3730A3",
+                      borderColor: active ? "#4F46E5" : "#C7D2FE",
+                    }}
+                  >
+                    {DAY_LABELS[d]}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[10px] mt-1.5" style={{ color: "#4338CA" }}>
+              Los días no marcados quedan como descanso total (sin sesión).
+            </p>
           </div>
         )}
 

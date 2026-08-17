@@ -25,11 +25,14 @@ function truncate(s: string | null | undefined, max: number): string {
 export async function buildPatientBrief(patientId: string): Promise<string | null> {
   const patient = await prisma.patient.findUnique({
     where: { id: patientId },
-    include: { appliedLevel: { include: { profile: true } } },
+    include: {
+      appliedLevel: { include: { profile: true } },
+      assignedProfessional: { select: { fullName: true, role: true } },
+    },
   });
   if (!patient) return null;
 
-  const [adaptations, wodLogs, metrics, activeAssignments, prs, clinicalCase, sessions, sessionsWithNotes] = await Promise.all([
+  const [adaptations, wodLogs, metrics, activeAssignments, prs, clinicalCase, sessions, sessionsWithNotes, pauses, recentAlerts, latestWeeklyReport] = await Promise.all([
     prisma.patientAdaptation.findMany({
       where: { patientId, state: { not: "OK" } },
       include: { movement: { include: { category: true } } },
@@ -70,6 +73,19 @@ export async function buildPatientBrief(patientId: string): Promise<string | nul
       orderBy: { completedAt: "desc" },
       take: 8,
     }).catch(() => [] as any[]),
+    prisma.programPause.findMany({
+      where: { patientId, status: { in: ["scheduled", "active"] } },
+      orderBy: { startDate: "asc" },
+    }).catch(() => [] as any[]),
+    prisma.patientAlert.findMany({
+      where: { patientId, dismissedAt: null },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+    }).catch(() => [] as any[]),
+    prisma.patientWeeklyReport.findFirst({
+      where: { patientId },
+      orderBy: { weekStartDate: "desc" },
+    }).catch(() => null),
   ]);
 
   const lines: string[] = [];
@@ -82,8 +98,19 @@ export async function buildPatientBrief(patientId: string): Promise<string | nul
   if (basics.length) lines.push(basics.join(" · "));
   if (patient.diagnosis) lines.push(`Diagnóstico: ${truncate(patient.diagnosis, 400)}`);
   if (patient.bodyZone) lines.push(`Zona afectada: ${patient.bodyZone}`);
+  if (patient.assignedProfessional) {
+    lines.push(`Fisio asignado: ${patient.assignedProfessional.fullName}`);
+  }
   if (patient.subscriptionStartDate) {
     lines.push(`Alta: ${fDate(patient.subscriptionStartDate)} · ${patient.subscriptionPeriodMonths} meses contratados`);
+  }
+
+  // Notas manuales de la llamada de anamnesis (el fisio pega aquí lo que
+  // habló en la videollamada). Suele tener info clave que no está estructurada.
+  if (patient.anamnesisCallNotes) {
+    lines.push("");
+    lines.push("## Notas de la llamada de anamnesis");
+    lines.push(truncate(patient.anamnesisCallNotes, 1500));
   }
 
   // Anamnesis (resumen de campos rellenados)
@@ -172,6 +199,30 @@ export async function buildPatientBrief(patientId: string): Promise<string | nul
     if (cc.situation) lines.push(`Situación: ${truncate(cc.situation, 400)}`);
     if (cc.proposedSolutions) lines.push(`Propuestas: ${truncate(cc.proposedSolutions, 400)}`);
     if (cc.consensusSolution) lines.push(`Consenso: ${truncate(cc.consensusSolution, 400)}`);
+  }
+
+  if (pauses && pauses.length > 0) {
+    lines.push("");
+    lines.push("## Pausas programadas / activas");
+    for (const p of pauses as any[]) {
+      lines.push(`- ${fDate(p.startDate)} → ${fDate(p.endDate)} [${p.status}]${p.reason ? ` · motivo: ${truncate(p.reason, 120)}` : ""}`);
+    }
+  }
+
+  if (recentAlerts && recentAlerts.length > 0) {
+    lines.push("");
+    lines.push("## Alertas recientes sin resolver");
+    for (const a of recentAlerts as any[]) {
+      lines.push(`- ${fDate(a.createdAt)} [${a.severity ?? "?"}] ${truncate(a.summary ?? a.kind ?? "", 200)}`);
+    }
+  }
+
+  if (latestWeeklyReport) {
+    lines.push("");
+    lines.push("## Último resumen semanal IA");
+    const w: any = latestWeeklyReport;
+    lines.push(`Semana del ${fDate(w.weekStartDate)}`);
+    if (w.summary) lines.push(truncate(w.summary, 800));
   }
 
   return lines.join("\n");
