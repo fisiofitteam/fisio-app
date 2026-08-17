@@ -13,6 +13,7 @@ type Lead = {
   contactType: string;
   contactValue: string;
   phone: string | null;
+  meetingUrl: string | null;
   aiSummary: string | null;
   followUpNote: string | null;
   callScheduledAt: string;
@@ -217,6 +218,12 @@ function FollowUpEditModal({ lead, onClose, onSaved }: { lead: Lead; onClose: ()
   const [d90, setD90] = useState(toLocalInput(lead.followUp90dDate));
   const [lostReason, setLostReason] = useState(lead.lostReason ?? "precio");
   const [saving, setSaving] = useState(false);
+  // Editor del meetingUrl + regenerar resumen: mismo patrón que en el modal
+  // de llamadas-venta. Útil cuando el summary quedó como "sin transcripción"
+  // porque el cron corrió antes de que Meet publicase el transcript.
+  const [meetingUrl, setMeetingUrl] = useState(lead.meetingUrl ?? "");
+  const [regenerating, setRegenerating] = useState(false);
+  const [regenerateResult, setRegenerateResult] = useState<string | null>(null);
 
   async function patch(extra: any) {
     setSaving(true);
@@ -256,6 +263,71 @@ function FollowUpEditModal({ lead, onClose, onSaved }: { lead: Lead; onClose: ()
             <label className="text-xs text-neutral-500 block mb-1">Situación / objeciones</label>
             <textarea className="input text-sm" rows={3} value={note} onChange={(e) => setNote(e.target.value)}
               placeholder="¿Qué objeciones tiene? ¿Qué necesita para cerrar?" />
+          </div>
+
+          {/* Link de Meet + regenerar. Si el cron guardó "sin transcripción"
+              antes de que Meet la publicase, pega el link (o vuelve a pegarlo)
+              y pulsa "Regenerar resumen" — tarda 15-30s y aparece la card. */}
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1 flex items-center justify-between">
+              <span>🎥 Link de Google Meet</span>
+              {meetingUrl && (
+                <a href={meetingUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] font-medium underline text-emerald-700">
+                  Abrir
+                </a>
+              )}
+            </label>
+            <input
+              type="url"
+              className="input text-sm"
+              value={meetingUrl}
+              onChange={(e) => setMeetingUrl(e.target.value)}
+              placeholder="https://meet.google.com/xxx-xxxx-xxx"
+            />
+            <div className="flex items-center gap-2 mt-1.5">
+              <button
+                type="button"
+                disabled={!meetingUrl.includes("meet.google.com") || regenerating}
+                onClick={async () => {
+                  setRegenerating(true);
+                  setRegenerateResult(null);
+                  try {
+                    const r = await fetch(`/api/admin/leads/${lead.id}/fix-meeting-url?url=${encodeURIComponent(meetingUrl.trim())}`, { method: "POST" });
+                    const data = await r.json();
+                    if (!r.ok) {
+                      setRegenerateResult(`⚠ ${data?.error ?? "Error"}`);
+                    } else if (data?.regenerated?.ok) {
+                      setRegenerateResult("✓ Resumen generado. Cierra el modal y verás la card.");
+                    } else if (data?.regenerated?.reason === "no_transcript") {
+                      setRegenerateResult("Meet aún no expone transcripción (no se activó grabación o el organizador es otra cuenta).");
+                    } else if (data?.regenerated?.detail) {
+                      setRegenerateResult(`⚠ ${data.regenerated.detail}`);
+                    } else {
+                      setRegenerateResult(`⚠ Estado: ${data?.regenerated?.reason ?? "desconocido"}`);
+                    }
+                  } catch (e: any) {
+                    setRegenerateResult(`⚠ Error de red: ${e?.message ?? "?"}`);
+                  } finally {
+                    setRegenerating(false);
+                  }
+                }}
+                className="text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-40"
+                style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+              >
+                {regenerating ? "Regenerando… (15-30s)" : "🔄 Regenerar resumen"}
+              </button>
+            </div>
+            {regenerateResult && (
+              <p
+                className="text-[11px] mt-1.5 px-2 py-1 rounded"
+                style={{
+                  background: regenerateResult.startsWith("✓") ? "#DCFCE7" : "#FEF3C7",
+                  color: regenerateResult.startsWith("✓") ? "#065F46" : "#78350F",
+                }}
+              >
+                {regenerateResult}
+              </p>
+            )}
           </div>
 
           <div>

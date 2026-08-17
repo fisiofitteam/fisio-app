@@ -89,6 +89,7 @@ export default async function LlamadasVentaPage({
           contactType: l.contactType,
           contactValue: l.contactValue,
           phone: l.phone,
+          meetingUrl: l.meetingUrl,
           aiSummary: l.aiSummary,
           followUpNote: l.followUpNote,
           callScheduledAt: l.callScheduledAt.toISOString(),
