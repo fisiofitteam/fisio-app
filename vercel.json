@@ -38,11 +38,23 @@
     },
     {
       "path": "/api/cron/generate-weekly-reports",
+      "schedule": "30 3 * * 1"
+    },
+    {
+      "path": "/api/cron/generate-weekly-reports",
       "schedule": "0 6 * * 1"
     },
     {
       "path": "/api/cron/generate-weekly-reports",
+      "schedule": "0 8 * * 1"
+    },
+    {
+      "path": "/api/cron/generate-weekly-reports",
       "schedule": "0 10 * * 1"
+    },
+    {
+      "path": "/api/cron/generate-weekly-reports",
+      "schedule": "0 14 * * 1"
     },
     {
       "path": "/api/cron/patient-calls-scheduler",
