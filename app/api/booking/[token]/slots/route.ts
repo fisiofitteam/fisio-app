@@ -1,0 +1,91 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { fetchBusyBlocks } from "@/lib/googleFreeBusy";
+import { computeFreeSlots } from "@/lib/patient-call-slots";
+
+/**
+ * GET /api/booking/[token]/slots?from=ISO&to=ISO
+ *
+ * Endpoint PÚBLICO (sin sesión). Valida el token del PatientCall, consulta
+ * FreeBusy del fisio para la ventana pedida y devuelve la lista de huecos
+ * libres para esa duración. La landing muestra estos slots al paciente.
+ *
+ * Contrato de "from/to": obligatorio, ISO. Recomendado ventana de <=14 días.
+ */
+export async function GET(req: NextRequest, { params }: { params: { token: string } }) {
+  const url = new URL(req.url);
+  const fromStr = url.searchParams.get("from");
+  const toStr = url.searchParams.get("to");
+  if (!fromStr || !toStr) {
+    return NextResponse.json({ error: "from y to obligatorios" }, { status: 400 });
+  }
+  const from = new Date(fromStr);
+  const to = new Date(toStr);
+  if (isNaN(from.getTime()) || isNaN(to.getTime()) || to <= from) {
+    return NextResponse.json({ error: "from/to inválidos" }, { status: 400 });
+  }
+  const spanMs = to.getTime() - from.getTime();
+  if (spanMs > 30 * 24 * 3600 * 1000) {
+    return NextResponse.json({ error: "Ventana máxima 30 días" }, { status: 400 });
+  }
+
+  const call = await prisma.patientCall.findUnique({
+    where: { bookingToken: params.token },
+    select: {
+      id: true,
+      status: true,
+      tokenExpiresAt: true,
+      professionalId: true,
+      durationMin: true,
+      type: true,
+    },
+  });
+  if (!call) return NextResponse.json({ error: "Token inválido" }, { status: 404 });
+  if (call.status !== "pending") {
+    return NextResponse.json({ error: "Este link ya fue usado", status: call.status }, { status: 409 });
+  }
+  if (call.tokenExpiresAt < new Date()) {
+    return NextResponse.json({ error: "Link caducado" }, { status: 410 });
+  }
+
+  const [availability, settings] = await Promise.all([
+    prisma.professionalCallAvailability.findMany({
+      where: { professionalId: call.professionalId },
+      select: { dayOfWeek: true, startTime: true, endTime: true },
+    }),
+    prisma.professionalCallSettings.findUnique({
+      where: { professionalId: call.professionalId },
+      select: { optimizationDurationMin: true, renewalDurationMin: true },
+    }),
+  ]);
+
+  const durationMin = call.durationMin
+    ?? (call.type === "optimization"
+      ? settings?.optimizationDurationMin ?? 45
+      : settings?.renewalDurationMin ?? 45);
+
+  let busy: Awaited<ReturnType<typeof fetchBusyBlocks>> = [];
+  try {
+    busy = await fetchBusyBlocks({ professionalId: call.professionalId, from, to });
+  } catch (err: any) {
+    // Si falla FreeBusy no arriesgamos ofrecer huecos que colapsen con
+    // otra cita. Mejor fallar visible al paciente para que el fisio lo vea.
+    return NextResponse.json(
+      { error: "No se pudo consultar el calendario del fisio", detail: err?.message ?? "unknown" },
+      { status: 502 },
+    );
+  }
+
+  const slots = computeFreeSlots({
+    availability,
+    busy,
+    from,
+    to,
+    durationMin,
+  });
+
+  return NextResponse.json({
+    durationMin,
+    slots: slots.map((d) => d.toISOString()),
+  });
+}
