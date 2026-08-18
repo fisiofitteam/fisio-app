@@ -13,6 +13,22 @@ import { useEffect, useState } from "react";
 
 type CallType = "optimization" | "renewal";
 
+type CallSummary = {
+  id: string;
+  clinicalSummary: string | null;
+  clinicalKeyPoints: string | null;   // JSON
+  coachingSummary: string | null;
+  coachingKeyPoints: string | null;   // JSON
+  salesSummary: string | null;        // renewalContext.summary si type=renewal
+  salesKeyPoints: string | null;      // JSON renewalContext
+  outcome: string | null;
+  noTranscript: boolean;
+  errorMessage: string | null;
+  transcriptCharCount: number | null;
+  generatedAt: string;
+  updatedAt: string;
+};
+
 type PatientCall = {
   id: string;
   type: CallType;
@@ -23,6 +39,8 @@ type PatientCall = {
   meetingUrl: string | null;
   fisioNote: string | null;
   createdAt: string;
+  durationMin: number | null;
+  callSummary: CallSummary | null;
 };
 
 const TYPE_LABEL: Record<CallType, string> = {
@@ -108,8 +126,11 @@ export function PatientCallLinksCard({
     return `https://wa.me/${phone.replace(/^\+/, "")}?text=${encodeURIComponent(text)}`;
   }
 
-  const activeCalls = calls.filter((c) => c.status === "pending" || c.status === "scheduled");
-  const doneCalls = calls.filter((c) => c.status === "completed" || c.status === "cancelled");
+  // Muestro pending/scheduled/completed en la lista principal (los completed
+  // con resumen son la joya del panel). Solo colapsamos cancelled dentro del
+  // histórico corto.
+  const activeCalls = calls.filter((c) => c.status !== "cancelled");
+  const doneCalls = calls.filter((c) => c.status === "cancelled");
 
   return (
     <section className="mt-4 max-w-3xl mx-auto px-4">
@@ -162,6 +183,12 @@ export function PatientCallLinksCard({
                     >
                       Abrir Google Meet
                     </a>
+                  )}
+                  {c.status === "scheduled" && c.scheduledAt && new Date(c.scheduledAt) < new Date(Date.now() - 15 * 60_000) && !c.callSummary?.clinicalSummary && (
+                    <SummaryPendingChip call={c} onRegenerated={loadCalls} />
+                  )}
+                  {c.callSummary?.clinicalSummary && (
+                    <PatientCallSummaryPanel call={c} onRegenerated={loadCalls} />
                   )}
 
                   {c.status === "pending" && (
@@ -227,4 +254,177 @@ export function PatientCallLinksCard({
       </div>
     </section>
   );
+}
+
+/**
+ * Chip que se muestra cuando una llamada ya pasó (>15 min desde scheduledAt)
+ * pero aún no tiene resumen. El cron corre cada 30 min; ofrecemos un botón
+ * "Reintentar ahora" que llama al endpoint de regeneración para adelantarlo.
+ */
+function SummaryPendingChip({ call, onRegenerated }: { call: PatientCall; onRegenerated: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+
+  const errMsg = call.callSummary?.errorMessage ?? null;
+  const noTranscript = !!call.callSummary?.noTranscript;
+
+  async function retry() {
+    setBusy(true);
+    setFeedback(null);
+    const r = await fetch(`/api/patient-calls/${call.id}/regenerate`, { method: "POST" });
+    const d = await r.json().catch(() => ({}));
+    setBusy(false);
+    if (r.ok && d.ok) {
+      setFeedback("Resumen generado ✅");
+      onRegenerated();
+    } else {
+      setFeedback(d.detail ?? d.error ?? "No se pudo generar");
+    }
+  }
+
+  return (
+    <div className="mt-2 rounded-md p-2 text-[11px]" style={{ background: "#FEF3C7", color: "#78350F", border: "1px solid #FCD34D" }}>
+      <div className="font-medium mb-0.5">🤖 Esperando transcripción</div>
+      <div>
+        Google Meet suele tardar 5-30 min tras terminar la llamada. El cron
+        reintenta cada 30 min.
+      </div>
+      {(errMsg || noTranscript) && (
+        <div className="mt-1 text-neutral-700 italic">{errMsg ?? "Meet aún no publicó el transcript."}</div>
+      )}
+      <button
+        onClick={retry}
+        disabled={busy}
+        className="mt-1.5 text-[11px] font-medium px-2 py-1 rounded-md disabled:opacity-40"
+        style={{ background: "#78350F", color: "#FFFBEB" }}
+      >
+        {busy ? "Comprobando…" : "🔄 Reintentar ahora"}
+      </button>
+      {feedback && <div className="mt-1 text-neutral-700">{feedback}</div>}
+    </div>
+  );
+}
+
+/**
+ * Panel expandible con el resumen IA de una llamada terminada. Muestra
+ * clinical (evolución del paciente) + renewalContext si type=renewal +
+ * coaching (feedback al fisio) + acción regenerar.
+ */
+function PatientCallSummaryPanel({ call, onRegenerated }: { call: PatientCall; onRegenerated: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+  const s = call.callSummary;
+  if (!s) return null;
+
+  const clinicalKp = safeParse(s.clinicalKeyPoints);
+  const coachingKp = safeParse(s.coachingKeyPoints);
+  const renewalKp = call.type === "renewal" ? safeParse(s.salesKeyPoints) : null;
+
+  async function regen() {
+    if (!confirm("¿Regenerar el resumen desde la transcripción? Sobrescribirá el actual.")) return;
+    setRegenerating(true);
+    const r = await fetch(`/api/patient-calls/${call.id}/regenerate`, { method: "POST" });
+    setRegenerating(false);
+    if (r.ok) onRegenerated();
+  }
+
+  return (
+    <div className="mt-3 rounded-md" style={{ background: "#F9FAFB", border: "1px solid #E5E7EB" }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-3 py-2 text-left"
+      >
+        <span className="text-xs font-semibold">🤖 Resumen IA {open ? "▾" : "▸"}</span>
+        <span className="text-[10px] text-neutral-500">
+          {s.transcriptCharCount ? `${s.transcriptCharCount.toLocaleString("es-ES")} chars` : ""}
+        </span>
+      </button>
+      {open && (
+        <div className="px-3 pb-3 space-y-3 text-[12px]">
+          {/* Clinical */}
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500 mb-1">
+              Evolución clínica
+            </div>
+            <p className="text-neutral-800 leading-relaxed">{s.clinicalSummary}</p>
+            <KpList label="Síntomas actuales" items={clinicalKp?.currentSymptoms} />
+            <KpList label="Adherencia" items={clinicalKp?.adherence} />
+            <KpList label="Ajustes acordados" items={clinicalKp?.planAdjustments} />
+            <KpList label="Objetivos actualizados" items={clinicalKp?.goalsUpdated} />
+            <KpList label="⚠️ Banderas rojas" items={clinicalKp?.redFlags} highlight />
+          </div>
+
+          {/* Renewal context (solo si type=renewal) */}
+          {call.type === "renewal" && s.salesSummary && (
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500 mb-1">
+                Cierre de renovación
+              </div>
+              <p className="text-neutral-800 leading-relaxed">{s.salesSummary}</p>
+              {renewalKp?.programProposed && (
+                <div className="text-[11px] text-neutral-700 mt-1">
+                  <b>Propuesta:</b> {renewalKp.programProposed}
+                  {renewalKp?.priceDiscussed ? ` · ${renewalKp.priceDiscussed}` : ""}
+                </div>
+              )}
+              {renewalKp?.decision && (
+                <div className="text-[11px] text-neutral-700 mt-0.5">
+                  <b>Decisión:</b> {renewalKp.decision}
+                </div>
+              )}
+              <KpList label="Objeciones" items={renewalKp?.objections} />
+            </div>
+          )}
+
+          {/* Coaching (feedback al fisio) */}
+          {s.coachingSummary && (
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500 mb-1">
+                🎯 Feedback para el fisio
+              </div>
+              <p className="text-neutral-800 leading-relaxed">{s.coachingSummary}</p>
+              <KpList label="👍 Puntos fuertes" items={coachingKp?.strengths} />
+              <KpList label="👀 Oportunidades" items={coachingKp?.weaknesses} />
+              <KpList label="💡 Para la próxima" items={coachingKp?.improvements} />
+            </div>
+          )}
+
+          <div className="flex items-center justify-between pt-2 border-t" style={{ borderColor: "#E5E7EB" }}>
+            <span className="text-[10px] text-neutral-500">
+              Generado {formatDateTime(s.updatedAt)}
+            </span>
+            <button
+              onClick={regen}
+              disabled={regenerating}
+              className="text-[11px] font-medium px-2 py-1 rounded-md disabled:opacity-40"
+              style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+            >
+              {regenerating ? "Regenerando…" : "🔄 Regenerar"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function KpList({ label, items, highlight }: { label: string; items?: string[]; highlight?: boolean }) {
+  if (!items || items.length === 0) return null;
+  return (
+    <div className="mt-1">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">{label}</div>
+      <ul className="list-disc pl-5 mt-0.5 space-y-0.5">
+        {items.map((it, i) => (
+          <li key={i} className={highlight ? "text-red-700 font-medium" : "text-neutral-700"}>
+            {it}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function safeParse(json: string | null | undefined): any {
+  if (!json) return null;
+  try { return JSON.parse(json); } catch { return null; }
 }

@@ -39,8 +39,14 @@ export class MeetApiError extends Error {
   }
 }
 
-async function meetFetch<T>(path: string): Promise<T> {
-  const token = await getValidAccessToken();
+/**
+ * Auth flexible: por defecto usa la conexión ORGANIZACIONAL (videoconsultas@,
+ * la que ve las Meet de venta). Pasando `professionalId` usa la conexión
+ * PERSONAL de ese fisio — necesario para las llamadas de paciente donde el
+ * organizador es la propia cuenta @fisiofitteam.com del fisio.
+ */
+async function meetFetch<T>(path: string, opts: { professionalId?: string } = {}): Promise<T> {
+  const token = await getValidAccessToken(opts.professionalId ? { professionalId: opts.professionalId } : undefined);
   const res = await fetch(`${MEET_API_BASE}${path}`, {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -90,10 +96,11 @@ export function extractMeetCode(url: string | null | undefined): string | null {
  * El caller (fetchTranscriptForMeetingUrl) itera esta lista hasta encontrar
  * una con transcript válido.
  */
-export async function findConferenceRecordsForCode(meetingCode: string): Promise<Array<{ name: string; startTime: string; endTime?: string }>> {
+export async function findConferenceRecordsForCode(meetingCode: string, opts: { professionalId?: string } = {}): Promise<Array<{ name: string; startTime: string; endTime?: string }>> {
   const filter = encodeURIComponent(`space.meeting_code="${meetingCode}"`);
   const data = await meetFetch<{ conferenceRecords?: Array<{ name: string; startTime: string; endTime?: string }> }>(
     `/conferenceRecords?filter=${filter}`,
+    opts,
   );
   const list = data.conferenceRecords ?? [];
   function durationMs(r: { startTime: string; endTime?: string }): number {
@@ -122,9 +129,10 @@ export async function findConferenceRecordForCode(meetingCode: string): Promise<
  * plano ("Speaker: what they said\n\n"). Lanza si el record no tiene
  * transcript disponible (aún se está generando o no se activó).
  */
-export async function getTranscriptTextForRecord(conferenceRecordName: string): Promise<MeetTranscriptResult> {
+export async function getTranscriptTextForRecord(conferenceRecordName: string, opts: { professionalId?: string } = {}): Promise<MeetTranscriptResult> {
   const transcripts = await meetFetch<{ transcripts?: Array<{ name: string; state?: string }> }>(
     `/${conferenceRecordName}/transcripts`,
+    opts,
   );
   const list = transcripts.transcripts ?? [];
   // Priorizamos transcripts LISTOS ("FILE_GENERATED"). Si hay varios listos
@@ -143,7 +151,7 @@ export async function getTranscriptTextForRecord(conferenceRecordName: string): 
   } else {
     for (const t of candidates) {
       try {
-        const firstPage = await meetFetch<{ transcriptEntries?: any[] }>(`/${t.name}/entries?pageSize=100`);
+        const firstPage = await meetFetch<{ transcriptEntries?: any[] }>(`/${t.name}/entries?pageSize=100`, opts);
         const count = (firstPage.transcriptEntries ?? []).length;
         if (count > bestEntriesCount) {
           bestTranscript = t;
@@ -166,6 +174,7 @@ export async function getTranscriptTextForRecord(conferenceRecordName: string): 
     const qs = pageToken ? `?pageSize=1000&pageToken=${encodeURIComponent(pageToken)}` : "?pageSize=1000";
     const page = await meetFetch<{ transcriptEntries?: any[]; nextPageToken?: string }>(
       `/${ready.name}/entries${qs}`,
+      opts,
     );
     if (page.transcriptEntries) allEntries.push(...page.transcriptEntries);
     pageToken = page.nextPageToken;
@@ -207,10 +216,10 @@ export type FetchTranscriptResult =
  * porque el organizador es otra cuenta / no fue participante) de
  * "no_transcript" (sí ve la Meet pero aún no publicó transcript).
  */
-export async function fetchTranscriptForMeetingUrl(meetingUrl: string | null | undefined): Promise<FetchTranscriptResult> {
+export async function fetchTranscriptForMeetingUrl(meetingUrl: string | null | undefined, opts: { professionalId?: string } = {}): Promise<FetchTranscriptResult> {
   const code = extractMeetCode(meetingUrl);
   if (!code) return { kind: "no_url" };
-  const records = await findConferenceRecordsForCode(code);
+  const records = await findConferenceRecordsForCode(code, opts);
   if (records.length === 0) return { kind: "no_conference" };
   // Un Meet puede tener varias conference records (la gente reabre por error,
   // sesiones de segundos, etc). Probamos cada una en orden de duración desc
@@ -219,7 +228,7 @@ export async function fetchTranscriptForMeetingUrl(meetingUrl: string | null | u
   let lastError: unknown = null;
   for (const rec of records) {
     try {
-      const transcript = await getTranscriptTextForRecord(rec.name);
+      const transcript = await getTranscriptTextForRecord(rec.name, opts);
       if (transcript.transcriptText) return { kind: "found", transcript };
       // Sin texto → probamos la siguiente conference
     } catch (e) {

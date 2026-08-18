@@ -3178,8 +3178,11 @@ model SkalexLabel {
 
 model CallSummary {
   id             String   @id @default(cuid())
-  leadId         String   @unique
-  lead           Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  leadId         String?  @unique
+  lead           Lead?    @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  patientCallId  String?  @unique
+  patientCall    PatientCall? @relation("CallSummaryPatientCall", fields: [patientCallId], references: [id], onDelete: Cascade)
 
   transcriptText String?
 
@@ -3238,7 +3241,7 @@ model PatientCall {
   googleEventId  String?
 
   fisioNote      String?
-  callSummaryId  String?  @unique
+  callSummary    CallSummary? @relation("CallSummaryPatientCall")
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt

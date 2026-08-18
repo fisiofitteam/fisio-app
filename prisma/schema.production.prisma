@@ -1980,9 +1980,9 @@ model PatientCall {
   // Notas del fisio antes de la llamada (opcional)
   fisioNote      String?
 
-  // Al procesar transcript, se enlaza con el CallSummary (reutilizamos ese modelo).
-  // Distinguimos por PatientCall.id vs Lead.id en el generador para no mezclar.
-  callSummaryId  String?  @unique
+  // Resumen IA de la transcripción de Meet. La relación vive en el modelo
+  // CallSummary (campo patientCallId?), que es el que aloja la FK.
+  callSummary    CallSummary? @relation("CallSummaryPatientCall")
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -3521,8 +3521,14 @@ model SkalexSyncState {
 // registro guarda noTranscript=true y no reintentamos infinito.
 model CallSummary {
   id             String   @id @default(cuid())
-  leadId         String   @unique
-  lead           Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  // Un CallSummary pertenece o bien a un Lead (llamada de venta) o bien a
+  // un PatientCall (llamada de seguimiento con paciente). Exactamente UNO
+  // de los dos debe estar seteado — el generador lo garantiza en código.
+  leadId         String?  @unique
+  lead           Lead?    @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  patientCallId  String?  @unique
+  patientCall    PatientCall? @relation("CallSummaryPatientCall", fields: [patientCallId], references: [id], onDelete: Cascade)
 
   // Transcripción cruda (para poder regenerar el resumen sin volver a
   // llamar a Meet API si mejoramos el prompt en el futuro).

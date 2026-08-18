@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { getOnboardingConfig } from "@/lib/onboarding-config";
 import { CallAnamnesisSection } from "@/components/CallAnamnesisSection";
+import { PatientCallLinksCard } from "@/components/PatientCallLinksCard";
 
 function fDate(d: Date | string): string {
   return new Date(d).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
@@ -11,6 +13,12 @@ function fDate(d: Date | string): string {
 export default async function PatientFormsTab({ params }: { params: { id: string } }) {
   const patient = await prisma.patient.findUnique({ where: { id: params.id } });
   if (!patient) notFound();
+
+  // baseUrl para armar el link público de reserva que la card copia / manda por WhatsApp.
+  const hdrs = headers();
+  const host = hdrs.get("host") ?? "app.fisiofit.team";
+  const proto = hdrs.get("x-forwarded-proto") ?? "https";
+  const callsBaseUrl = `${proto}://${host}`;
 
   // Lead que originó al paciente + su CallSummary (si Meet publicó
   // transcript se muestra el resumen clínico IA sobre el textarea de notas).
@@ -176,11 +184,19 @@ export default async function PatientFormsTab({ params }: { params: { id: string
         )}
       </section>
 
-      {/* ── Llamada Anamnesis (texto manual + resumen clínico IA) ───────── */}
+      {/* ── Llamada Anamnesis (texto manual + resumen clínico IA de la llamada de venta) ── */}
       <CallAnamnesisSection
         patientId={patient.id}
         initialText={patient.anamnesisCallNotes ?? null}
         clinicalNotes={clinicalNotes}
+      />
+
+      {/* ── Llamadas de seguimiento del fisio (optimización / renovación) ── */}
+      <PatientCallLinksCard
+        patientId={patient.id}
+        patientPhone={patient.phone ?? patient.shippingPhone ?? null}
+        patientFirstName={patient.fullName.split(" ")[0] ?? patient.fullName}
+        baseUrl={callsBaseUrl}
       />
 
       {/* ── Formularios de sesión ───────────────────────────────────────── */}

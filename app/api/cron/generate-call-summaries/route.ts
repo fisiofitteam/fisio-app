@@ -1,10 +1,12 @@
 /**
  * GET/POST /api/cron/generate-call-summaries
  *
- * Cron cada 30 min. Recorre los Leads cuya videollamada ya haya ocurrido
- * (callScheduledAt < ahora - 15 min) y aún no tengan CallSummary con
- * summary o noTranscript. Para cada uno intenta bajar la transcripción de
- * Meet y generar el resumen con Claude Sonnet.
+ * Cron cada 30 min. Procesa dos fuentes en la misma corrida:
+ *   1) Leads con Meet cuya llamada de venta ya ocurrió → genera CallSummary
+ *      vinculado a leadId con secciones sales + clinical + coaching.
+ *   2) PatientCalls con Meet cuya llamada de seguimiento ya ocurrió → genera
+ *      CallSummary vinculado a patientCallId con secciones clinical + coaching
+ *      (+ renewalContext si type=renewal).
  *
  * Margen de 15 min tras el final de la llamada: Meet suele tardar 5-10 min
  * en publicar el transcript. Los que aún no tengan transcript se marcan
@@ -15,6 +17,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateSummaryForLead } from "@/lib/call-summaries";
+import { generateSummaryForPatientCall } from "@/lib/patient-call-summaries";
 import { isCronAuthorized, logCronRun } from "@/lib/cron-utils";
 
 export const dynamic = "force-dynamic";
@@ -88,7 +91,7 @@ async function handler(req: NextRequest) {
   // Procesamos en paralelo (concurrencia 4) para no llegar al techo de 300s.
   // Anthropic aguanta bien 4 concurrent; Meet API también.
   const CONCURRENCY = 4;
-  const results: Array<{ leadId: string; ok: boolean; reason?: string; detail?: string }> = [];
+  const leadResults: Array<{ leadId: string; ok: boolean; reason?: string; detail?: string }> = [];
   for (let i = 0; i < targets.length; i += CONCURRENCY) {
     const chunk = targets.slice(i, i + CONCURRENCY);
     const chunkResults = await Promise.all(
@@ -101,26 +104,89 @@ async function handler(req: NextRequest) {
         }
       }),
     );
-    results.push(...chunkResults);
+    leadResults.push(...chunkResults);
   }
 
-  const ok = results.filter((r) => r.ok).length;
-  const skip = results.filter((r) => r.reason === "already_processed" || r.reason === "no_transcript").length;
-  const fail = results.filter((r) => !r.ok && r.reason !== "already_processed" && r.reason !== "no_transcript").length;
+  // === PatientCalls (llamadas de seguimiento fisio↔paciente) ===
+  // Mismo criterio: la hora programada ya pasó con margen de 15 min y no
+  // hay resumen listo. Usamos scheduledAt como referencia de "cuándo ocurrió".
+  const patientCalls = await prisma.patientCall.findMany({
+    where: {
+      meetingUrl: { not: null },
+      scheduledAt: { gte: fortnight, lte: cutoff },
+      status: { in: ["scheduled", "completed"] },
+    },
+    select: {
+      id: true,
+      status: true,
+      callSummary: {
+        select: { id: true, clinicalSummary: true, noTranscript: true, updatedAt: true },
+      },
+    },
+    orderBy: { scheduledAt: "desc" },
+    take: 15,
+  });
+  const patientTargets = patientCalls.filter((c) => {
+    const s = c.callSummary;
+    if (!s) return true;
+    if (s.clinicalSummary) return false; // ya listo
+    if (s.noTranscript) {
+      const hoursSince = (Date.now() - s.updatedAt.getTime()) / 3_600_000;
+      return hoursSince > 6;
+    }
+    return true; // errores previos → retry
+  });
+  const patientResults: Array<{ patientCallId: string; ok: boolean; reason?: string; detail?: string }> = [];
+  for (let i = 0; i < patientTargets.length; i += CONCURRENCY) {
+    const chunk = patientTargets.slice(i, i + CONCURRENCY);
+    const chunkResults = await Promise.all(
+      chunk.map(async (c) => {
+        try {
+          const r = await generateSummaryForPatientCall(c.id);
+          return { patientCallId: c.id, ok: r.ok, reason: r.reason, detail: r.detail };
+        } catch (e: any) {
+          return { patientCallId: c.id, ok: false, reason: "exception", detail: e?.message ?? "unknown" };
+        }
+      }),
+    );
+    patientResults.push(...chunkResults);
+  }
+
+  function tally(rs: Array<{ ok: boolean; reason?: string }>) {
+    const ok = rs.filter((r) => r.ok).length;
+    const skip = rs.filter((r) => r.reason === "already_processed" || r.reason === "no_transcript").length;
+    const fail = rs.filter((r) => !r.ok && r.reason !== "already_processed" && r.reason !== "no_transcript").length;
+    return { ok, skip, fail };
+  }
+  const leadStats = tally(leadResults);
+  const patientStats = tally(patientResults);
 
   await logCronRun(CRON_PATH, {
     ok: true,
-    data: { authVia: authRes.via, candidates: targets.length, generated: ok, skipped: skip, failed: fail },
+    data: {
+      authVia: authRes.via,
+      lead: { candidates: targets.length, ...leadStats },
+      patient: { candidates: patientTargets.length, ...patientStats },
+    },
   });
 
   return NextResponse.json({
     checkedAt: now.toISOString(),
     authVia: authRes.via,
-    candidates: targets.length,
-    ok,
-    skipped: skip,
-    failed: fail,
-    results,
+    lead: {
+      candidates: targets.length,
+      ok: leadStats.ok,
+      skipped: leadStats.skip,
+      failed: leadStats.fail,
+      results: leadResults,
+    },
+    patient: {
+      candidates: patientTargets.length,
+      ok: patientStats.ok,
+      skipped: patientStats.skip,
+      failed: patientStats.fail,
+      results: patientResults,
+    },
   });
 }
 

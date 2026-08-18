@@ -54,6 +54,23 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       fisioNote: true,
       createdAt: true,
       durationMin: true,
+      callSummary: {
+        select: {
+          id: true,
+          clinicalSummary: true,
+          clinicalKeyPoints: true,
+          coachingSummary: true,
+          coachingKeyPoints: true,
+          salesSummary: true,
+          salesKeyPoints: true,
+          outcome: true,
+          noTranscript: true,
+          errorMessage: true,
+          transcriptCharCount: true,
+          generatedAt: true,
+          updatedAt: true,
+        },
+      },
     },
   });
   return NextResponse.json({

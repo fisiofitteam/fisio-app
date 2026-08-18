@@ -36,9 +36,9 @@ const SECTIONS = [
   },
   {
     id: "formularios",
-    label: "Formularios",
+    label: "Resúmenes y formularios",
     icon: "📝",
-    desc: "Cuestionarios rellenados",
+    desc: "Resúmenes IA de llamadas y cuestionarios",
   },
   {
     id: "wods",

@@ -1,8 +1,6 @@
 import { notFound } from "next/navigation";
-import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { ClinicalFile } from "@/components/ClinicalFile";
-import { PatientCallLinksCard } from "@/components/PatientCallLinksCard";
 import { RefundSaleButton } from "@/components/RefundSaleButton";
 import { getActiveProfessional } from "@/lib/session";
 import { summarizeBodyZone } from "@/lib/onboarding-content";
@@ -59,16 +57,6 @@ export default async function PatientFichaTab({ params }: { params: { id: string
       })
     : null;
 
-  // baseUrl para armar el link público que se copia/manda por WhatsApp.
-  // Preferimos el host real que llegó en el request para que en previews de
-  // Vercel salga el link del preview y no el de producción.
-  const hdrs = headers();
-  const host = hdrs.get("host") ?? "app.fisiofit.team";
-  const proto = hdrs.get("x-forwarded-proto") ?? "https";
-  const baseUrl = `${proto}://${host}`;
-
-  const firstName = patient.fullName.split(" ")[0] ?? patient.fullName;
-
   return (
     <>
     <ClinicalFile
@@ -105,12 +93,6 @@ export default async function PatientFichaTab({ params }: { params: { id: string
         hasTaxId: !!patient.contractDNI,
         hasFiscalAddress,
       }}
-    />
-    <PatientCallLinksCard
-      patientId={patient.id}
-      patientPhone={patient.phone ?? null}
-      patientFirstName={firstName}
-      baseUrl={baseUrl}
     />
     {isCeo && lastSale && (
       <div className="mt-4 max-w-3xl mx-auto px-4">
