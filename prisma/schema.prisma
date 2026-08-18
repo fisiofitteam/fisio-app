@@ -3081,6 +3081,21 @@ model ContentStoryTemplate {
   @@index([createdById, updatedAt])
 }
 
+// Estado del último run de cada cron. Se actualiza al final de cada
+// ejecución con lastRunAt/lastOk/lastError/lastResultJson. El CEO lo
+// puede ver en /api/admin/cron-state para saber si Vercel Cron está
+// disparando o no (típico caso: CRON_SECRET no configurado → Vercel
+// llama pero recibe 403 y ni se ve el intento en logs).
+model CronRunState {
+  id              String   @id           // path del cron, ej. "/api/cron/generate-weekly-reports"
+  lastRunAt       DateTime @updatedAt
+  lastOk          Boolean
+  lastError       String?
+  lastResultJson  String?                 // JSON stringified con la respuesta útil
+  totalRuns       Int      @default(0)
+  totalOk         Int      @default(0)
+}
+
 model FisioAiBrief {
   id          String   @id @default(cuid())
   content     String

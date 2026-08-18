@@ -14,8 +14,8 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getActiveProfessional } from "@/lib/session";
 import { generateSummaryForLead } from "@/lib/call-summaries";
+import { isCronAuthorized, logCronRun } from "@/lib/cron-utils";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -23,22 +23,11 @@ export const runtime = "nodejs";
 // pueden ser 100-200s. Margen: 300s (límite Vercel Pro).
 export const maxDuration = 300;
 
-async function isAuthorized(req: NextRequest): Promise<boolean> {
-  const cronSecret = process.env.CRON_SECRET;
-  const auth = req.headers.get("authorization") ?? "";
-  const isLocal = process.env.NODE_ENV !== "production";
-  if (cronSecret && auth === `Bearer ${cronSecret}`) return true;
-  if (isLocal) return true;
-  const url = new URL(req.url);
-  if (url.searchParams.get("manual") === "1") {
-    const user = await getActiveProfessional();
-    if (user && (user.role === "ceo" || user.role === "head_success")) return true;
-  }
-  return false;
-}
+const CRON_PATH = "/api/cron/generate-call-summaries";
 
 async function handler(req: NextRequest) {
-  if (!(await isAuthorized(req))) {
+  const authRes = await isCronAuthorized(req);
+  if (!authRes.ok) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -119,8 +108,14 @@ async function handler(req: NextRequest) {
   const skip = results.filter((r) => r.reason === "already_processed" || r.reason === "no_transcript").length;
   const fail = results.filter((r) => !r.ok && r.reason !== "already_processed" && r.reason !== "no_transcript").length;
 
+  await logCronRun(CRON_PATH, {
+    ok: true,
+    data: { authVia: authRes.via, candidates: targets.length, generated: ok, skipped: skip, failed: fail },
+  });
+
   return NextResponse.json({
     checkedAt: now.toISOString(),
+    authVia: authRes.via,
     candidates: targets.length,
     ok,
     skipped: skip,

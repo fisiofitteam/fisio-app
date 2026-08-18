@@ -2865,6 +2865,16 @@ model ContentStoryTemplate {
   @@index([createdById, updatedAt])
 }
 
+model CronRunState {
+  id              String   @id
+  lastRunAt       DateTime @updatedAt
+  lastOk          Boolean
+  lastError       String?
+  lastResultJson  String?
+  totalRuns       Int      @default(0)
+  totalOk         Int      @default(0)
+}
+
 model FisioAiBrief {
   id          String   @id @default(cuid())
   content     String

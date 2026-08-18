@@ -20,6 +20,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getActiveProfessional } from "@/lib/session";
 import { runWeeklyReportsForWeek, weekStartUtc } from "@/lib/weekly-reports";
+import { isCronAuthorized, logCronRun } from "@/lib/cron-utils";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -30,23 +31,23 @@ export const runtime = "nodejs";
 // ~60-90s reales, así que 300s deja margen amplio.
 export const maxDuration = 300;
 
-async function handler(req: NextRequest) {
-  const cronSecret = process.env.CRON_SECRET;
-  const auth = req.headers.get("authorization") ?? "";
-  const isLocal = process.env.NODE_ENV !== "production";
-  const isTest = req.nextUrl.searchParams.get("test") === "1";
-  const weekParam = req.nextUrl.searchParams.get("week");
+const CRON_PATH = "/api/cron/generate-weekly-reports";
 
-  // Si viene ?week=..., permitimos que CEO/head_success lo lance a mano
-  // desde el navegador logueado (mas comodo que curl con secret).
+async function handler(req: NextRequest) {
+  const weekParam = req.nextUrl.searchParams.get("week");
+  // Si viene ?week=... permitimos que CEO/head_success lo lance a mano
+  // desde el navegador logueado (más cómodo que curl con secret).
   const isAdminManual = !!weekParam;
+  let authVia: string = "manual";
   if (isAdminManual) {
     const user = await getActiveProfessional();
     if (!user || (user.role !== "ceo" && user.role !== "head_success")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-  } else if (cronSecret && auth !== `Bearer ${cronSecret}` && !(isTest && isLocal)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } else {
+    const authRes = await isCronAuthorized(req);
+    if (!authRes.ok) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    authVia = authRes.via;
   }
 
   // Semana a procesar: si viene ?week=YYYY-MM-DD, esa; si no, la semana
@@ -62,8 +63,14 @@ async function handler(req: NextRequest) {
   }
 
   const force = req.nextUrl.searchParams.get("force") === "1";
-  const result = await runWeeklyReportsForWeek(monday, { force });
-  return NextResponse.json(result);
+  try {
+    const result = await runWeeklyReportsForWeek(monday, { force });
+    await logCronRun(CRON_PATH, { ok: true, data: { authVia, ...result, mondayIso: monday.toISOString() } });
+    return NextResponse.json({ ...result, authVia });
+  } catch (err: any) {
+    await logCronRun(CRON_PATH, { ok: false, error: err?.message ?? String(err), data: { authVia, monday: monday.toISOString() } });
+    throw err;
+  }
 }
 
 export async function GET(req: NextRequest) { return handler(req); }
