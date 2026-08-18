@@ -4,17 +4,22 @@ import { getActiveProfessional } from "@/lib/session";
 import { getAuthUrl } from "@/lib/googleOAuth";
 
 /**
- * GET /api/google/connect
+ * GET /api/google/connect[?mode=personal]
  *
- * Inicia el flujo OAuth: genera un state aleatorio, lo guarda en cookie
- * (HttpOnly, SameSite=Lax) y redirige al usuario a Google.
+ * Inicia el flujo OAuth. Guarda en cookie el state + el modo (organizational/personal):
+ *  - organizational (default): la conexión compartida videoconsultas@fisiofitteam.com.
+ *    Solo CEO/head_success pueden hacerla.
+ *  - personal: la conexión propia del fisio logueado, se guarda con
+ *    professionalId=<user.id>. Cualquier miembro con rol activo puede.
  *
- * Solo accesible para CEO / Head_success.
+ * El callback lee el modo desde la cookie y decide dónde guardar el registro.
  */
 export async function GET(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.redirect(new URL("/login", req.url));
-  if (!(user.role === "ceo" || user.role === "head_success")) {
+
+  const mode = req.nextUrl.searchParams.get("mode") === "personal" ? "personal" : "organizational";
+  if (mode === "organizational" && !(user.role === "ceo" || user.role === "head_success")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -23,8 +28,14 @@ export async function GET(req: NextRequest) {
   const authUrl = getAuthUrl(state);
 
   const response = NextResponse.redirect(authUrl);
-  // Guardamos el state en cookie para validarlo en el callback (5 min TTL)
   response.cookies.set("google_oauth_state", state, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    maxAge: 60 * 5,
+    path: "/",
+  });
+  response.cookies.set("google_oauth_mode", mode, {
     httpOnly: true,
     secure: true,
     sameSite: "lax",

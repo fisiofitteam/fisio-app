@@ -186,6 +186,7 @@ model Patient {
   communityFeedPosts CommunityFeedPost[] @relation("FeedPostPatientAuthor")
   communityLessonProgress CommunityLessonProgress[]
   bannerDismissals   PatientBannerDismiss[]
+  patientCalls       PatientCall[]     @relation("PatientCallsPatient")
 }
 
 // ============================================================================
@@ -242,6 +243,10 @@ model Professional {
   salesAsCloser     Sale[]               @relation("SaleByCloser")
   salesRefunded     Sale[]               @relation("SaleRefundedBy")
   bannersCreated    PatientBanner[]      @relation("BannerCreatedBy")
+  myGoogleConnection GoogleCalendarConnection? @relation("MyGoogleConnection")
+  patientCallsAsFisio PatientCall[]      @relation("PatientCallsFisio")
+  callAvailability  ProfessionalCallAvailability[] @relation("CallAvailability")
+  callSettings      ProfessionalCallSettings? @relation("CallSettings")
   compensation      Compensation?
   communityFeedPosts     CommunityFeedPost[] @relation("FeedPostAuthor")
   communityFeedComments  CommunityComment[]  @relation("FeedCommentAuthor")
@@ -1807,6 +1812,10 @@ model GoogleCalendarConnection {
   googleEmail     String   @unique
   googleName      String?
 
+  // Null = conexión organizacional. Con id = conexión personal del fisio.
+  professionalId  String?  @unique
+  professional    Professional? @relation("MyGoogleConnection", fields: [professionalId], references: [id], onDelete: Cascade)
+
   // Quién hizo la conexión inicial (CEO o Head_success)
   connectedById   String?
 
@@ -3208,4 +3217,58 @@ model SkalexSyncState {
   lastUpdated     Int      @default(0)
 
   updatedAt       DateTime @updatedAt
+}
+
+model PatientCall {
+  id             String   @id @default(cuid())
+  patientId      String
+  patient        Patient  @relation("PatientCallsPatient", fields: [patientId], references: [id], onDelete: Cascade)
+
+  professionalId String
+  professional   Professional @relation("PatientCallsFisio", fields: [professionalId], references: [id])
+
+  type           String
+  bookingToken   String   @unique
+  tokenExpiresAt DateTime
+
+  status         String   @default("pending")
+  scheduledAt    DateTime?
+  durationMin    Int?
+  meetingUrl     String?
+  googleEventId  String?
+
+  fisioNote      String?
+  callSummaryId  String?  @unique
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([professionalId, status])
+  @@index([patientId, type])
+  @@index([bookingToken])
+}
+
+model ProfessionalCallAvailability {
+  id             String   @id @default(cuid())
+  professionalId String
+  professional   Professional @relation("CallAvailability", fields: [professionalId], references: [id], onDelete: Cascade)
+
+  dayOfWeek      Int
+  startTime      String
+  endTime        String
+
+  createdAt      DateTime @default(now())
+
+  @@index([professionalId, dayOfWeek])
+}
+
+model ProfessionalCallSettings {
+  id                       String   @id @default(cuid())
+  professionalId           String   @unique
+  professional             Professional @relation("CallSettings", fields: [professionalId], references: [id], onDelete: Cascade)
+
+  optimizationDurationMin  Int      @default(45)
+  renewalDurationMin       Int      @default(45)
+
+  updatedAt                DateTime @updatedAt
 }

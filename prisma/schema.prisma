@@ -202,6 +202,7 @@ model Patient {
   communityFeedPosts CommunityFeedPost[] @relation("FeedPostPatientAuthor")
   communityLessonProgress CommunityLessonProgress[]
   bannerDismissals   PatientBannerDismiss[]
+  patientCalls       PatientCall[]     @relation("PatientCallsPatient")
 }
 
 // ============================================================================
@@ -258,6 +259,10 @@ model Professional {
   salesAsCloser     Sale[]               @relation("SaleByCloser")
   salesRefunded     Sale[]               @relation("SaleRefundedBy")
   bannersCreated    PatientBanner[]      @relation("BannerCreatedBy")
+  myGoogleConnection GoogleCalendarConnection? @relation("MyGoogleConnection")
+  patientCallsAsFisio PatientCall[]      @relation("PatientCallsFisio")
+  callAvailability  ProfessionalCallAvailability[] @relation("CallAvailability")
+  callSettings      ProfessionalCallSettings? @relation("CallSettings")
   compensation      Compensation?
   communityFeedPosts     CommunityFeedPost[] @relation("FeedPostAuthor")
   communityFeedComments  CommunityComment[]  @relation("FeedCommentAuthor")
@@ -1910,6 +1915,14 @@ model GoogleCalendarConnection {
   googleEmail     String   @unique
   googleName      String?
 
+  // Si es null → conexión ORGANIZACIONAL (videoconsultas — la que usan las
+  // llamadas de venta y todo lo compartido).
+  // Si no es null → conexión PERSONAL de ese profesional. Se usa para
+  // bajar transcripts de sus llamadas de optimización/renovación y consultar
+  // freeBusy de su calendario para las landings de reserva.
+  professionalId  String?  @unique
+  professional    Professional? @relation("MyGoogleConnection", fields: [professionalId], references: [id], onDelete: Cascade)
+
   // Quién hizo la conexión inicial (CEO o Head_success)
   connectedById   String?
 
@@ -1928,6 +1941,83 @@ model GoogleCalendarConnection {
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+}
+
+// ============================================================================
+// LLAMADAS OPTIMIZACIÓN / RENOVACIÓN (fisio ↔ paciente actual)
+// ============================================================================
+// Cada fisio genera un link único por paciente ("optimización" o "renovación").
+// El paciente entra al link y reserva un slot en el calendario del fisio.
+// Al reservar: crea evento Google + Meet y guarda la fila con meetingUrl.
+// Después, un cron genera resumen IA (comercial + clínico) usando el token
+// OAuth del fisio, similar a las llamadas de venta.
+// ============================================================================
+model PatientCall {
+  id             String   @id @default(cuid())
+  patientId      String
+  patient        Patient  @relation("PatientCallsPatient", fields: [patientId], references: [id], onDelete: Cascade)
+
+  professionalId String
+  professional   Professional @relation("PatientCallsFisio", fields: [professionalId], references: [id])
+
+  // "optimization" (revisión mensual) | "renewal" (cierre de renovación)
+  type           String
+
+  // Token único para el link público de reserva. Cuando el paciente lo
+  // consume (reserva), se marca scheduledAt y meetingUrl.
+  bookingToken   String   @unique
+  tokenExpiresAt DateTime
+
+  // Estado: pending (link generado, sin reservar) | scheduled (paciente
+  // reservó) | completed (transcript procesado) | cancelled
+  status         String   @default("pending")
+
+  scheduledAt    DateTime?
+  durationMin    Int?
+  meetingUrl     String?
+  googleEventId  String?
+
+  // Notas del fisio antes de la llamada (opcional)
+  fisioNote      String?
+
+  // Al procesar transcript, se enlaza con el CallSummary (reutilizamos ese modelo).
+  // Distinguimos por PatientCall.id vs Lead.id en el generador para no mezclar.
+  callSummaryId  String?  @unique
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([professionalId, status])
+  @@index([patientId, type])
+  @@index([bookingToken])
+}
+
+// Plantilla semanal del fisio: qué horas de qué días acepta llamadas de
+// optimización/renovación. Puede haber varias filas por día (mañana + tarde).
+model ProfessionalCallAvailability {
+  id             String   @id @default(cuid())
+  professionalId String
+  professional   Professional @relation("CallAvailability", fields: [professionalId], references: [id], onDelete: Cascade)
+
+  dayOfWeek      Int      // 1..7 (1=Lun, 7=Dom)
+  startTime      String   // "HH:mm" en zona Madrid (Europe/Madrid)
+  endTime        String   // "HH:mm"
+
+  createdAt      DateTime @default(now())
+
+  @@index([professionalId, dayOfWeek])
+}
+
+// Preferencias del fisio para las llamadas: duración de cada tipo, buffer, etc.
+model ProfessionalCallSettings {
+  id                       String   @id @default(cuid())
+  professionalId           String   @unique
+  professional             Professional @relation("CallSettings", fields: [professionalId], references: [id], onDelete: Cascade)
+
+  optimizationDurationMin  Int      @default(45)
+  renewalDurationMin       Int      @default(45)
+
+  updatedAt                DateTime @updatedAt
 }
 
 // ============================================================================

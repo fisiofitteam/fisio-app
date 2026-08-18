@@ -15,17 +15,25 @@ const CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3";
 const TOKEN_EXPIRY_MARGIN_MS = 60_000;
 
 /**
- * Obtiene un access_token válido (refresca si expiró) de la primera
- * conexión Google guardada en BD.
+ * Obtiene un access_token válido (refresca si expiró) para el ámbito indicado:
+ *  - undefined u "organizational" → conexión compartida videoconsultas
+ *    (professionalId = null en BD).
+ *  - un professionalId concreto → conexión personal de ese fisio.
  *
- * Lanza un error si no hay conexión activa (la app no está conectada).
+ * Lanza un error si no hay conexión disponible para el ámbito pedido.
  */
-export async function getValidAccessToken(): Promise<string> {
+export async function getValidAccessToken(scope?: { professionalId?: string | null }): Promise<string> {
+  const professionalId = scope?.professionalId ?? null;
   const conn = await prisma.googleCalendarConnection.findFirst({
+    where: { professionalId },
     orderBy: { createdAt: "desc" },
   });
   if (!conn) {
-    throw new Error("No hay Google Calendar conectado. Conéctalo en Ajustes → Integraciones.");
+    throw new Error(
+      professionalId
+        ? "Este fisio no tiene su Google Calendar conectado (Ajustes → Integraciones → Mi cuenta personal)."
+        : "No hay Google Calendar conectado. Conéctalo en Ajustes → Integraciones.",
+    );
   }
 
   const now = Date.now();
@@ -70,7 +78,11 @@ export async function getValidAccessToken(): Promise<string> {
  * que se conectó (que debería ser videoconsultas@fisiofitteam.com).
  */
 async function getCalendarId(): Promise<string> {
+  // Siempre la organizacional para operaciones legacy (creación de eventos
+  // de venta, etc.). Nuevas funciones que necesiten calendarId de un fisio
+  // concreto deben pasar { professionalId } y usar el email correspondiente.
   const conn = await prisma.googleCalendarConnection.findFirst({
+    where: { professionalId: null },
     orderBy: { createdAt: "desc" },
   });
   if (!conn) throw new Error("No hay conexión Google");

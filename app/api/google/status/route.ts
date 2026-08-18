@@ -5,24 +5,28 @@ import { decrypt } from "@/lib/encryption";
 import { revokeToken } from "@/lib/googleOAuth";
 
 /**
- * GET /api/google/status
+ * GET /api/google/status[?scope=personal]
  *
- * Devuelve si hay conexión activa con Google Calendar y datos básicos.
+ * Devuelve estado de la conexión Google. Por defecto la organizacional
+ * (videoconsultas). Con ?scope=personal, la del profesional logueado.
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ connected: false });
 
+  const scope = req.nextUrl.searchParams.get("scope") === "personal" ? "personal" : "organizational";
+
   const conn = await prisma.googleCalendarConnection.findFirst({
+    where: scope === "personal"
+      ? { professionalId: user.id }
+      : { professionalId: null },
     orderBy: { createdAt: "desc" },
-    include: { },
   });
 
   if (!conn) {
-    return NextResponse.json({ connected: false });
+    return NextResponse.json({ connected: false, scope });
   }
 
-  // Buscar quién hizo la conexión (si aún existe)
   let connectedBy: { id: string; fullName: string } | null = null;
   if (conn.connectedById) {
     const p = await prisma.professional.findUnique({
@@ -34,6 +38,7 @@ export async function GET() {
 
   return NextResponse.json({
     connected: true,
+    scope,
     googleEmail: conn.googleEmail,
     googleName: conn.googleName,
     tokenExpiresAt: conn.tokenExpiresAt.toISOString(),
@@ -45,31 +50,36 @@ export async function GET() {
 }
 
 /**
- * DELETE /api/google/status
+ * DELETE /api/google/status[?scope=personal]
  *
- * Desconecta: revoca el token en Google y borra la conexión de la BD.
- * Solo CEO / Head_success.
+ * Desconecta y revoca. Por defecto la organizacional (solo CEO/head_success).
+ * Con ?scope=personal, cualquier usuario logueado desconecta la suya.
  */
-export async function DELETE() {
+export async function DELETE(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  if (!(user.role === "ceo" || user.role === "head_success")) {
+
+  const scope = req.nextUrl.searchParams.get("scope") === "personal" ? "personal" : "organizational";
+
+  if (scope === "organizational" && !(user.role === "ceo" || user.role === "head_success")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const conn = await prisma.googleCalendarConnection.findFirst({
+    where: scope === "personal"
+      ? { professionalId: user.id }
+      : { professionalId: null },
     orderBy: { createdAt: "desc" },
   });
   if (!conn) {
     return NextResponse.json({ ok: true, note: "No había conexión" });
   }
 
-  // Intentar revocar el token en Google (no fallar si Google ya lo revocó)
   try {
     const accessToken = decrypt(conn.accessTokenEnc);
     await revokeToken(accessToken);
   } catch {
-    // Ignoramos errores aquí; lo importante es borrar de nuestra BD
+    // Ignoramos errores; lo importante es borrar de nuestra BD
   }
 
   await prisma.googleCalendarConnection.delete({ where: { id: conn.id } });

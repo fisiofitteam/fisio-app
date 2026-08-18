@@ -13,7 +13,12 @@ import { encrypt } from "@/lib/encryption";
 export async function GET(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.redirect(new URL("/login", req.url));
-  if (!(user.role === "ceo" || user.role === "head_success")) {
+
+  const modeCookie = req.cookies.get("google_oauth_mode")?.value;
+  const mode: "organizational" | "personal" = modeCookie === "personal" ? "personal" : "organizational";
+
+  // Organizational solo CEO/head_success. Personal cualquier miembro logueado.
+  if (mode === "organizational" && !(user.role === "ceo" || user.role === "head_success")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -57,34 +62,76 @@ export async function GET(req: NextRequest) {
     const accessTokenEnc = encrypt(tokens.access_token);
     const refreshTokenEnc = tokens.refresh_token ? encrypt(tokens.refresh_token) : null;
 
-    // Upsert: si ya existe una conexión con este email, la actualiza
-    await prisma.googleCalendarConnection.upsert({
-      where: { googleEmail: userInfo.email },
-      create: {
-        googleEmail: userInfo.email,
-        googleName: userInfo.name,
-        connectedById: user.id,
-        accessTokenEnc,
-        refreshTokenEnc,
-        tokenExpiresAt: expiresAt,
-        scopes: tokens.scope,
-      },
-      update: {
-        googleName: userInfo.name,
-        connectedById: user.id,
-        accessTokenEnc,
-        // Solo actualizamos refresh_token si Google nos dio uno nuevo
-        ...(refreshTokenEnc && { refreshTokenEnc }),
-        tokenExpiresAt: expiresAt,
-        scopes: tokens.scope,
-      },
-    });
+    // Upsert por tipo de conexión:
+    //  - personal → clave = professionalId (una por fisio)
+    //  - organizational → clave = googleEmail (la global, sin professionalId)
+    if (mode === "personal") {
+      // Si el fisio ya tenía conexión personal previa, la reemplazamos.
+      // Si no, la creamos. Nunca colisiona con la organizacional porque
+      // esta última tiene professionalId=null.
+      const existing = await prisma.googleCalendarConnection.findFirst({
+        where: { professionalId: user.id },
+        select: { id: true },
+      });
+      if (existing) {
+        await prisma.googleCalendarConnection.update({
+          where: { id: existing.id },
+          data: {
+            googleEmail: userInfo.email,
+            googleName: userInfo.name,
+            accessTokenEnc,
+            ...(refreshTokenEnc && { refreshTokenEnc }),
+            tokenExpiresAt: expiresAt,
+            scopes: tokens.scope,
+          },
+        });
+      } else {
+        // Si el email ya está tomado por la organizacional o por otro fisio,
+        // no podemos crear otro con el mismo email (googleEmail es @unique).
+        // Ese caso se resuelve pidiendo al fisio que use su cuenta personal.
+        await prisma.googleCalendarConnection.create({
+          data: {
+            googleEmail: userInfo.email,
+            googleName: userInfo.name,
+            professionalId: user.id,
+            connectedById: user.id,
+            accessTokenEnc,
+            refreshTokenEnc,
+            tokenExpiresAt: expiresAt,
+            scopes: tokens.scope,
+          },
+        });
+      }
+    } else {
+      // organizational: comportamiento clásico (una por email).
+      await prisma.googleCalendarConnection.upsert({
+        where: { googleEmail: userInfo.email },
+        create: {
+          googleEmail: userInfo.email,
+          googleName: userInfo.name,
+          connectedById: user.id,
+          accessTokenEnc,
+          refreshTokenEnc,
+          tokenExpiresAt: expiresAt,
+          scopes: tokens.scope,
+        },
+        update: {
+          googleName: userInfo.name,
+          connectedById: user.id,
+          accessTokenEnc,
+          ...(refreshTokenEnc && { refreshTokenEnc }),
+          tokenExpiresAt: expiresAt,
+          scopes: tokens.scope,
+        },
+      });
+    }
 
-    // 5. Limpiar cookie y redirigir a ajustes con éxito
+    // 5. Limpiar cookies y redirigir a ajustes con éxito
     const response = NextResponse.redirect(
-      new URL("/fisio/ajustes/integraciones?connected=1", req.url)
+      new URL(`/fisio/ajustes/integraciones?connected=1&mode=${mode}`, req.url)
     );
     response.cookies.delete("google_oauth_state");
+    response.cookies.delete("google_oauth_mode");
     return response;
   } catch (e: any) {
     console.error("Google OAuth callback error:", e);

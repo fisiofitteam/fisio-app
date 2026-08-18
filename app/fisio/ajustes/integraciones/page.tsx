@@ -7,26 +7,34 @@ import { IntegracionesView } from "@/components/IntegracionesView";
 export default async function IntegracionesPage({
   searchParams,
 }: {
-  searchParams: { connected?: string; error?: string };
+  searchParams: { connected?: string; error?: string; mode?: string };
 }) {
   const user = await getActiveProfessional();
   if (!user) redirect("/login");
-  if (!(user.role === "ceo" || user.role === "head_success")) {
-    redirect("/fisio");
-  }
 
-  // Cargar conexión Google si existe
-  const conn = await prisma.googleCalendarConnection.findFirst({
+  const isManager = user.role === "ceo" || user.role === "head_success";
+
+  // Conexión organizacional (solo CEO/head_success la ven)
+  const orgConn = isManager
+    ? await prisma.googleCalendarConnection.findFirst({
+        where: { professionalId: null },
+        orderBy: { createdAt: "desc" },
+      })
+    : null;
+
+  // Conexión personal del usuario logueado
+  const myConn = await prisma.googleCalendarConnection.findFirst({
+    where: { professionalId: user.id },
     orderBy: { createdAt: "desc" },
   });
 
-  let connectedBy: { fullName: string } | null = null;
-  if (conn?.connectedById) {
+  let orgConnectedBy: { fullName: string } | null = null;
+  if (orgConn?.connectedById) {
     const p = await prisma.professional.findUnique({
-      where: { id: conn.connectedById },
+      where: { id: orgConn.connectedById },
       select: { fullName: true },
     });
-    if (p) connectedBy = p;
+    if (p) orgConnectedBy = p;
   }
 
   return (
@@ -39,17 +47,28 @@ export default async function IntegracionesPage({
       </header>
 
       <IntegracionesView
-        googleConnection={
-          conn
+        showOrganizational={isManager}
+        organizationalConnection={
+          orgConn
             ? {
-                googleEmail: conn.googleEmail,
-                googleName: conn.googleName,
-                connectedByName: connectedBy?.fullName ?? null,
-                createdAt: conn.createdAt.toISOString(),
+                googleEmail: orgConn.googleEmail,
+                googleName: orgConn.googleName,
+                connectedByName: orgConnectedBy?.fullName ?? null,
+                createdAt: orgConn.createdAt.toISOString(),
+              }
+            : null
+        }
+        personalConnection={
+          myConn
+            ? {
+                googleEmail: myConn.googleEmail,
+                googleName: myConn.googleName,
+                createdAt: myConn.createdAt.toISOString(),
               }
             : null
         }
         flashSuccess={searchParams.connected === "1"}
+        flashMode={searchParams.mode ?? null}
         flashError={searchParams.error || null}
       />
 
