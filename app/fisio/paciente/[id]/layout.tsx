@@ -11,13 +11,12 @@ import { PatientNotesButton } from "@/components/PatientNotesButton";
 import { PatientAccessLinkButton } from "@/components/PatientAccessLinkButton";
 import { SendLoginCodeButton } from "@/components/SendLoginCodeButton";
 import { MarkAsLegacyButton } from "@/components/MarkAsLegacyButton";
-import { PatientAgendaButton } from "@/components/PatientAgendaButton";
+import { AgendarLlamadaButton } from "@/components/AgendarLlamadaButton";
 import { PatientAlertsCard } from "@/components/PatientAlertsCard";
 import { MetricAlertsPatientButton } from "@/components/MetricAlertsPatientButton";
 import { PatientTestModeToggle } from "@/components/PatientTestModeToggle";
 import { calculateAdherence } from "@/lib/adherence";
 import { getActiveProfessional } from "@/lib/session";
-import { parseTargetRoles, templateVisibleFor, type ResourceRole } from "@/lib/resource-roles";
 import { getSubscriptionProgress } from "@/lib/subscription-progress";
 
 export default async function PatientLayout({
@@ -63,25 +62,8 @@ export default async function PatientLayout({
   ]);
   const classroomPct = classroomLessons > 0 ? Math.round((classroomDone / classroomLessons) * 100) : null;
 
-  // Plantillas de "envío rápido" para el fisio: cualquier MessageTemplate con
-  // actionType de tipo directo (agenda, recordatorio cita) visible para su rol.
-  // El botón solo aparece si hay alguna.
-  // También cargamos la propia closerIntro del usuario logueado para que
-  // {closer.intro} se interpole correctamente cuando envía desde aquí.
-  const userRole = user.role as ResourceRole;
-  const [actionTemplatesRaw, currentUserFull] = await Promise.all([
-    prisma.messageTemplate.findMany({
-      where: { actionType: { in: ["send_agenda", "send_meeting_reminder"] } },
-      select: { id: true, name: true, body: true, targetRoles: true, actionType: true },
-    }),
-    prisma.professional.findUnique({
-      where: { id: user.id },
-      select: { closerIntro: true },
-    }),
-  ]);
-  const patientActionTemplates = actionTemplatesRaw
-    .filter((t) => templateVisibleFor(parseTargetRoles(t.targetRoles), userRole))
-    .map((t) => ({ id: t.id, name: t.name, body: t.body, actionType: t.actionType! as any }));
+  // Nombre corto del paciente para el mensaje precargado del botón "Agendar llamada".
+  const patientFirstName = patient.fullName.split(" ")[0] ?? patient.fullName;
 
   return (
     <div>
@@ -125,12 +107,10 @@ export default async function PatientLayout({
               initialNotes={patient.fisioNotes ?? null}
             />
             <GoToPatient />
-            <PatientAgendaButton
-              templates={patientActionTemplates}
-              patientName={patient.fullName}
-              patientPhone={patient.shippingPhone}
-              fisioFullName={user.fullName}
-              fisioIntro={currentUserFull?.closerIntro ?? null}
+            <AgendarLlamadaButton
+              patientId={patient.id}
+              patientPhone={patient.phone ?? patient.shippingPhone ?? null}
+              patientFirstName={patientFirstName}
             />
             <WhatsAppButton url={patient.whatsappGroupUrl} size="md" />
             {patient.subscriptionStartDate && (

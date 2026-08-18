@@ -3,12 +3,12 @@
 import { useEffect, useState } from "react";
 
 /**
- * Card en la ficha del paciente para que el fisio:
- *  - Genere links de reserva para optimización / renovación.
- *  - Copie el link al portapapeles o lo abra en WhatsApp con un mensaje ya redactado.
- *  - Vea el histórico corto (pending / scheduled / completed).
+ * Card en la ficha del paciente que MUESTRA el estado de los últimos links
+ * de reserva (pending / scheduled / completed / cancelled) y permite copiar
+ * un link pendiente o mandarlo por WhatsApp.
  *
- * No hay botón visible para el paciente — el link se pasa manualmente por chat.
+ * La CREACIÓN de nuevos links se hace desde el botón "🎥 Agendar llamada"
+ * del header del paciente (visible en todas las tabs del expediente).
  */
 
 type CallType = "optimization" | "renewal";
@@ -66,10 +66,6 @@ export function PatientCallLinksCard({
 }) {
   const [calls, setCalls] = useState<PatientCall[]>([]);
   const [loading, setLoading] = useState(true);
-  const [modalType, setModalType] = useState<CallType | null>(null);
-  const [note, setNote] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   async function loadCalls() {
@@ -84,34 +80,16 @@ export function PatientCallLinksCard({
 
   useEffect(() => {
     loadCalls();
+    // Sincronía con el botón "Agendar llamada" del header: al crear un link,
+    // se dispara este evento y recargamos la lista sin recargar la página.
+    function onCreated(e: Event) {
+      const detail = (e as CustomEvent).detail;
+      if (!detail || detail.patientId === patientId) loadCalls();
+    }
+    window.addEventListener("patient-call-created", onCreated);
+    return () => window.removeEventListener("patient-call-created", onCreated);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patientId]);
-
-  function openModal(type: CallType) {
-    setModalType(type);
-    setNote("");
-    setError(null);
-  }
-
-  async function submitCreate() {
-    if (!modalType) return;
-    setCreating(true);
-    setError(null);
-    const r = await fetch(`/api/patients/${patientId}/call-link`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: modalType, fisioNote: note || null }),
-    });
-    const d = await r.json();
-    if (!r.ok) {
-      setError(d?.error ?? "No se pudo generar el link");
-      setCreating(false);
-      return;
-    }
-    setModalType(null);
-    setCreating(false);
-    await loadCalls();
-  }
 
   function copyLink(call: PatientCall) {
     const url = `${baseUrl}/agendar-fisio/${call.bookingToken}`;
@@ -140,26 +118,9 @@ export function PatientCallLinksCard({
           <div>
             <h3 className="font-semibold text-sm">🎥 Llamadas de seguimiento</h3>
             <p className="text-xs text-neutral-500 mt-0.5">
-              Genera un link de reserva y pásaselo al paciente por chat.
+              Estado de los links generados. Usa <b>Agendar llamada</b> arriba para crear uno nuevo.
             </p>
           </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2 mb-4">
-          <button
-            onClick={() => openModal("optimization")}
-            className="text-sm font-medium px-3 py-2 rounded-lg"
-            style={{ background: "#EEF2FF", color: "#3730A3", border: "1px solid #C7D2FE" }}
-          >
-            🔧 Programar optimización
-          </button>
-          <button
-            onClick={() => openModal("renewal")}
-            className="text-sm font-medium px-3 py-2 rounded-lg"
-            style={{ background: "#FEF3C7", color: "#78350F", border: "1px solid #FDE68A" }}
-          >
-            🔁 Programar renovación
-          </button>
         </div>
 
         {/* Lista de links activos */}
@@ -264,56 +225,6 @@ export function PatientCallLinksCard({
           </div>
         )}
       </div>
-
-      {/* Modal crear link */}
-      {modalType && (
-        <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
-          style={{ background: "rgba(0,0,0,0.5)" }}
-          onClick={() => !creating && setModalType(null)}
-        >
-          <div
-            className="w-full max-w-md rounded-xl p-5"
-            style={{ background: "#FFFFFF" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="font-semibold text-base mb-1">
-              Programar {TYPE_LABEL[modalType].toLowerCase()}
-            </h3>
-            <p className="text-xs text-neutral-500 mb-3">
-              Genera un link único. El paciente elegirá el hueco cuando lo abra.
-            </p>
-            <label className="text-xs text-neutral-500 block mb-1">Nota para el paciente (opcional)</label>
-            <textarea
-              className="w-full text-sm p-2 rounded-lg mb-3"
-              style={{ border: "1px solid #E5E5E5", minHeight: 80 }}
-              placeholder="Ej. Quiero revisar el bloque de hombro y ajustar la carga esta semana."
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              maxLength={2000}
-            />
-            {error && <div className="text-xs text-red-600 mb-2">{error}</div>}
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setModalType(null)}
-                disabled={creating}
-                className="text-xs font-medium px-3 py-1.5 rounded-lg"
-                style={{ background: "#F5F5F5", color: "#171717" }}
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={submitCreate}
-                disabled={creating}
-                className="text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-40"
-                style={{ background: "#0A0A0A", color: "#FAFAFA" }}
-              >
-                {creating ? "Generando…" : "Generar link"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </section>
   );
 }

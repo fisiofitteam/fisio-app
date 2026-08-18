@@ -19,6 +19,26 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
+  const patient = await prisma.patient.findUnique({
+    where: { id: params.id },
+    select: { assignedProfessionalId: true },
+  });
+
+  // Duraciones por defecto configuradas por el fisio asignado — si no hay
+  // asignado o no tiene settings, devolvemos 45/45.
+  let optimizationDurationMin = 45;
+  let renewalDurationMin = 45;
+  if (patient?.assignedProfessionalId) {
+    const settings = await prisma.professionalCallSettings.findUnique({
+      where: { professionalId: patient.assignedProfessionalId },
+      select: { optimizationDurationMin: true, renewalDurationMin: true },
+    });
+    if (settings) {
+      optimizationDurationMin = settings.optimizationDurationMin;
+      renewalDurationMin = settings.renewalDurationMin;
+    }
+  }
+
   const calls = await prisma.patientCall.findMany({
     where: { patientId: params.id },
     orderBy: { createdAt: "desc" },
@@ -33,9 +53,13 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       meetingUrl: true,
       fisioNote: true,
       createdAt: true,
+      durationMin: true,
     },
   });
-  return NextResponse.json({ calls });
+  return NextResponse.json({
+    calls,
+    defaults: { optimizationDurationMin, renewalDurationMin },
+  });
 }
 
 /**
@@ -56,6 +80,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const body = await req.json().catch(() => ({}));
   const type = String(body?.type ?? "");
   const fisioNote = typeof body?.fisioNote === "string" ? body.fisioNote.trim().slice(0, 2000) : null;
+  // Override opcional de duración desde el modal; si no viene o es inválido
+  // se cae al default guardado en ProfessionalCallSettings.
+  const durationOverride = Number.isFinite(Number(body?.durationMin))
+    ? Math.round(Number(body.durationMin))
+    : null;
+  if (durationOverride !== null && (durationOverride < 5 || durationOverride > 240)) {
+    return NextResponse.json({ error: "durationMin debe estar entre 5 y 240" }, { status: 400 });
+  }
 
   if (!CALL_TYPES.includes(type as any)) {
     return NextResponse.json({ error: "type debe ser optimization o renewal" }, { status: 400 });
@@ -115,9 +147,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const tokenExpiresAt = new Date();
   tokenExpiresAt.setDate(tokenExpiresAt.getDate() + TOKEN_VALIDITY_DAYS);
 
-  const durationMin = type === "optimization"
-    ? settings?.optimizationDurationMin ?? 45
-    : settings?.renewalDurationMin ?? 45;
+  const durationMin = durationOverride
+    ?? (type === "optimization"
+      ? settings?.optimizationDurationMin ?? 45
+      : settings?.renewalDurationMin ?? 45);
 
   const call = await prisma.patientCall.create({
     data: {
