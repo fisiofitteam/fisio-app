@@ -263,6 +263,7 @@ model Professional {
   patientCallsAsFisio PatientCall[]      @relation("PatientCallsFisio")
   callAvailability  ProfessionalCallAvailability[] @relation("CallAvailability")
   callAvailabilityOneOff ProfessionalCallAvailabilityOneOff[] @relation("CallAvailabilityOneOff")
+  callExceptions    ProfessionalCallException[]    @relation("CallException")
   callSettings      ProfessionalCallSettings? @relation("CallSettings")
   compensation      Compensation?
   communityFeedPosts     CommunityFeedPost[] @relation("FeedPostAuthor")
@@ -2021,6 +2022,25 @@ model ProfessionalCallAvailabilityOneOff {
 
   date           DateTime // día concreto (00:00 Europe/Madrid como referencia)
   startTime      String   // "HH:mm" Europe/Madrid
+  endTime        String
+
+  createdAt      DateTime @default(now())
+
+  @@index([professionalId, date])
+}
+
+// Excepción a la plantilla: una fecha concreta en la que una franja de la
+// plantilla NO debe aparecer (equivalente a "borrar solo esta semana un
+// chip gris" en la vista Por semana). Se identifica por (date, startTime,
+// endTime). Si el fisio cambia después la plantilla y ya no existe una
+// franja con esas horas, la excepción queda huérfana pero no molesta.
+model ProfessionalCallException {
+  id             String   @id @default(cuid())
+  professionalId String
+  professional   Professional @relation("CallException", fields: [professionalId], references: [id], onDelete: Cascade)
+
+  date           DateTime // día concreto (00:00 UTC como marca del día YYYY-MM-DD)
+  startTime      String   // "HH:mm" — debe coincidir exactamente con la franja de plantilla
   endTime        String
 
   createdAt      DateTime @default(now())

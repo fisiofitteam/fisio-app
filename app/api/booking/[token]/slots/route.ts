@@ -48,7 +48,7 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
     return NextResponse.json({ error: "Link caducado" }, { status: 410 });
   }
 
-  const [availability, oneOffs, settings] = await Promise.all([
+  const [availability, oneOffs, exceptions, settings] = await Promise.all([
     prisma.professionalCallAvailability.findMany({
       where: { professionalId: call.professionalId },
       select: { dayOfWeek: true, startTime: true, endTime: true },
@@ -57,6 +57,16 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
     // margen de 1 día por cada lado para no perder ninguno por el offset
     // horario Madrid vs UTC (00:00 Madrid = 22:00/23:00 UTC del día previo).
     prisma.professionalCallAvailabilityOneOff.findMany({
+      where: {
+        professionalId: call.professionalId,
+        date: {
+          gte: new Date(from.getTime() - 86_400_000),
+          lte: new Date(to.getTime() + 86_400_000),
+        },
+      },
+      select: { date: true, startTime: true, endTime: true },
+    }),
+    prisma.professionalCallException.findMany({
       where: {
         professionalId: call.professionalId,
         date: {
@@ -89,17 +99,23 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
     );
   }
 
-  // Convertir cada one-off a la clave YYYY-MM-DD en zona Madrid (el mismo
-  // formato que usa el helper computeFreeSlots internamente).
+  // Convertir cada one-off / excepción a la clave YYYY-MM-DD en zona Madrid
+  // (el mismo formato que usa el helper computeFreeSlots internamente).
   const oneOffRows = oneOffs.map((o) => ({
     dateKey: o.date.toLocaleDateString("sv-SE", { timeZone: "Europe/Madrid" }),
     startTime: o.startTime,
     endTime: o.endTime,
   }));
+  const exceptionRows = exceptions.map((e) => ({
+    dateKey: e.date.toLocaleDateString("sv-SE", { timeZone: "Europe/Madrid" }),
+    startTime: e.startTime,
+    endTime: e.endTime,
+  }));
 
   const slots = computeFreeSlots({
     availability,
     oneOffs: oneOffRows,
+    exceptions: exceptionRows,
     busy,
     from,
     to,

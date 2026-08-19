@@ -16,13 +16,17 @@ export default async function MiAgendaPage() {
   const todayStart = new Date();
   todayStart.setUTCHours(0, 0, 0, 0);
 
-  const [settings, availability, oneOffs, googleConn] = await Promise.all([
+  const [settings, availability, oneOffs, exceptions, googleConn] = await Promise.all([
     (prisma as any).professionalCallSettings.findUnique({ where: { professionalId: user.id } }),
     (prisma as any).professionalCallAvailability.findMany({
       where: { professionalId: user.id },
       orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
     }),
     (prisma as any).professionalCallAvailabilityOneOff.findMany({
+      where: { professionalId: user.id, date: { gte: todayStart } },
+      orderBy: [{ date: "asc" }, { startTime: "asc" }],
+    }),
+    (prisma as any).professionalCallException.findMany({
       where: { professionalId: user.id, date: { gte: todayStart } },
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
     }),
@@ -55,6 +59,12 @@ export default async function MiAgendaPage() {
           date: o.date.toISOString().slice(0, 10),
           startTime: o.startTime,
           endTime: o.endTime,
+        }))}
+        initialExceptions={exceptions.map((e: any) => ({
+          id: e.id,
+          date: e.date.toISOString().slice(0, 10),
+          startTime: e.startTime,
+          endTime: e.endTime,
         }))}
       />
     </main>

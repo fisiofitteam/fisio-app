@@ -9,6 +9,7 @@ import { Settings2, Calendar, ChevronLeft, ChevronRight, Plus, X } from "lucide-
 // ============================================================================
 type Slot = { id: string; dayOfWeek: number; startTime: string; endTime: string };
 type OneOff = { id: string; date: string; startTime: string; endTime: string };
+type Exception = { id: string; date: string; startTime: string; endTime: string };
 type Settings = { optimizationDurationMin: number; renewalDurationMin: number };
 type SubTab = "template" | "week";
 
@@ -57,14 +58,17 @@ export function MiAgendaView({
   initialSettings,
   initialAvailability,
   initialOneOffs,
+  initialExceptions,
 }: {
   googleConnected: boolean;
   initialSettings: Settings;
   initialAvailability: Slot[];
   initialOneOffs?: OneOff[];
+  initialExceptions?: Exception[];
 }) {
   const [slots, setSlots] = useState<Slot[]>(initialAvailability);
   const [oneOffs, setOneOffs] = useState<OneOff[]>(initialOneOffs ?? []);
+  const [exceptions, setExceptions] = useState<Exception[]>(initialExceptions ?? []);
   const [subTab, setSubTab] = useState<SubTab>("template");
 
   return (
@@ -96,7 +100,13 @@ export function MiAgendaView({
       {subTab === "template" ? (
         <TemplateView slots={slots} setSlots={setSlots} />
       ) : (
-        <WeekView slots={slots} setSlots={setSlots} oneOffs={oneOffs} setOneOffs={setOneOffs} />
+        <WeekView
+          slots={slots}
+          oneOffs={oneOffs}
+          setOneOffs={setOneOffs}
+          exceptions={exceptions}
+          setExceptions={setExceptions}
+        />
       )}
     </div>
   );
@@ -228,7 +238,19 @@ function TemplateView({ slots, setSlots }: { slots: Slot[]; setSlots: React.Disp
 // ============================================================================
 // VISTA: Por semana (plantilla + one-offs de la semana visible)
 // ============================================================================
-function WeekView({ slots, setSlots, oneOffs, setOneOffs }: { slots: Slot[]; setSlots: React.Dispatch<React.SetStateAction<Slot[]>>; oneOffs: OneOff[]; setOneOffs: React.Dispatch<React.SetStateAction<OneOff[]>> }) {
+function WeekView({
+  slots,
+  oneOffs,
+  setOneOffs,
+  exceptions,
+  setExceptions,
+}: {
+  slots: Slot[];
+  oneOffs: OneOff[];
+  setOneOffs: React.Dispatch<React.SetStateAction<OneOff[]>>;
+  exceptions: Exception[];
+  setExceptions: React.Dispatch<React.SetStateAction<Exception[]>>;
+}) {
   const [weekStart, setWeekStart] = useState<Date>(weekStartMondayLocal(new Date()));
 
   const isCurrentWeek = weekStart.getTime() === weekStartMondayLocal(new Date()).getTime();
@@ -238,6 +260,10 @@ function WeekView({ slots, setSlots, oneOffs, setOneOffs }: { slots: Slot[]; set
     const dateKeys = new Set(weekDates.map(isoDate));
     return oneOffs.filter((o) => dateKeys.has(o.date));
   }, [weekDates, oneOffs]);
+  const weekExceptions = useMemo(() => {
+    const dateKeys = new Set(weekDates.map(isoDate));
+    return exceptions.filter((e) => dateKeys.has(e.date));
+  }, [weekDates, exceptions]);
 
   async function addOneOff(date: string, startTime: string, endTime: string) {
     const r = await fetch("/api/my-call-agenda/one-off", {
@@ -256,23 +282,31 @@ function WeekView({ slots, setSlots, oneOffs, setOneOffs }: { slots: Slot[]; set
   }
 
   /**
-   * Borrar una franja de la PLANTILLA desde la vista por semana.
-   * Cuidado: aplica a todas las semanas. Se confirma explícitamente
-   * porque no queremos accidentes.
+   * "Borrar" un chip de plantilla en la vista por semana = crear una
+   * excepción para ESA fecha concreta. La plantilla no se toca; el
+   * helper de slots la descarta solo ese día.
    */
-  async function removeTemplate(id: string, dowLabel: string, timeLabel: string) {
-    const ok = confirm(
-      `Vas a eliminar la franja "${timeLabel}" de todos los ${dowLabel}. Esta franja se aplica a TODAS las semanas.\n\n¿Continuar?`,
-    );
-    if (!ok) return;
-    const r = await fetch(`/api/my-call-agenda/slot?id=${id}`, { method: "DELETE" });
-    if (r.ok) setSlots((prev) => prev.filter((s) => s.id !== id));
+  async function addException(date: string, startTime: string, endTime: string) {
+    const r = await fetch("/api/my-call-agenda/exception", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date, startTime, endTime }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d?.error ?? "Error");
+    setExceptions((prev) => [...prev, { id: d.exception.id, date, startTime, endTime }]);
+  }
+
+  /** Deshacer la excepción → la franja de plantilla vuelve a aparecer ese día. */
+  async function removeException(id: string) {
+    const r = await fetch(`/api/my-call-agenda/exception?id=${id}`, { method: "DELETE" });
+    if (r.ok) setExceptions((prev) => prev.filter((e) => e.id !== id));
   }
 
   return (
     <div>
       <div className="rounded-lg p-3 text-xs mb-3" style={{ background: "#FEFCE8", color: "#78350F", border: "1px solid #FDE68A" }}>
-        <b>Por semana.</b> Añade franjas puntuales verdes solo para esta semana. También puedes borrar chips grises de la plantilla desde aquí (te pediremos confirmación porque afectan a todas las semanas). Para <b>bloquear</b> una franja concreta puntualmente, pon un evento en tu Google Calendar y la app la esconderá sola — doble seguridad.
+        <b>Por semana.</b> Añade franjas puntuales verdes o quita un chip gris de plantilla <b>solo para esta semana</b> (la plantilla base se mantiene intacta). Los chips atenuados con ↩ son franjas que has quitado — pulsa para restaurarlas. Para bloqueos puntuales también puedes usar Google Calendar como doble seguridad.
       </div>
 
       {/* Navegador de semana */}
@@ -305,16 +339,31 @@ function WeekView({ slots, setSlots, oneOffs, setOneOffs }: { slots: Slot[]; set
           const date = weekDates[idx - 1];
           const dateKey = isoDate(date);
           const dow = dowLocal(date);
-          const templateItems = slots
-            .filter((s) => s.dayOfWeek === dow)
+          const dayExceptions = weekExceptions.filter((e) => e.date === dateKey);
+          const dayTemplate = slots.filter((s) => s.dayOfWeek === dow);
+          // Separamos: chips de plantilla activos (no ocultos por excepción)
+          // y chips "removidos" (excepciones activas) que se muestran atenuados
+          // con acción restaurar.
+          const templateActive = dayTemplate
+            .filter((s) => !dayExceptions.some((e) => e.startTime === s.startTime && e.endTime === s.endTime))
             .map((s) => ({
               id: `tpl-${s.id}`,
               startTime: s.startTime,
               endTime: s.endTime,
-              onDelete: () => removeTemplate(s.id, DAY_LONG[dow] + "s", `${s.startTime}–${s.endTime}`),
+              onDelete: () => addException(dateKey, s.startTime, s.endTime),
+              onRestore: null,
               chip: { bg: "#F5F5F5", border: "#D4D4D4", text: "#525252", dot: "#A3A3A3" },
               label: "plantilla",
             }));
+          const templateRemoved = dayExceptions.map((e) => ({
+            id: `exc-${e.id}`,
+            startTime: e.startTime,
+            endTime: e.endTime,
+            onDelete: null,
+            onRestore: () => removeException(e.id),
+            chip: { bg: "#FAFAFA", border: "#E5E5E5", text: "#A3A3A3", dot: "#D4D4D4" },
+            label: "quitada",
+          }));
           const oneOffItems = weekOneOffs
             .filter((o) => o.date === dateKey)
             .map((o) => ({
@@ -322,10 +371,11 @@ function WeekView({ slots, setSlots, oneOffs, setOneOffs }: { slots: Slot[]; set
               startTime: o.startTime,
               endTime: o.endTime,
               onDelete: () => removeOneOff(o.id),
+              onRestore: null,
               chip: { bg: "#DCFCE7", border: "#86EFAC", text: "#065F46", dot: "#22C55E" },
               label: "puntual",
             }));
-          return [...templateItems, ...oneOffItems].sort((a, b) => a.startTime.localeCompare(b.startTime));
+          return [...templateActive, ...templateRemoved, ...oneOffItems].sort((a, b) => a.startTime.localeCompare(b.startTime));
         }}
         onAdd={async (idx, start, end) => {
           const date = isoDate(weekDates[idx - 1]);
@@ -345,6 +395,7 @@ type ColItem = {
   startTime: string;
   endTime: string;
   onDelete: (() => void) | null;
+  onRestore?: (() => void) | null;   // solo para chips "quitados" (excepciones)
   chip: { bg: string; border: string; text: string; dot: string };
   label?: string;
 };
@@ -403,17 +454,27 @@ function DayColumns({
                 <div
                   key={it.id}
                   className="rounded-md px-2 py-1.5 text-xs flex items-center justify-between gap-1"
-                  style={{ background: it.chip.bg, border: `1px solid ${it.chip.border}`, color: it.chip.text }}
+                  style={{
+                    background: it.chip.bg,
+                    border: `1px dashed ${it.chip.border}`.replace("dashed", it.onRestore ? "dashed" : "solid"),
+                    color: it.chip.text,
+                    textDecoration: it.onRestore ? "line-through" : "none",
+                    opacity: it.onRestore ? 0.75 : 1,
+                  }}
                 >
                   <div className="flex flex-col leading-tight">
                     <span className="tabular-nums font-medium">{it.startTime} → {it.endTime}</span>
                     {it.label && <span className="text-[9px] uppercase opacity-60">{it.label}</span>}
                   </div>
-                  {it.onDelete && (
-                    <button onClick={it.onDelete} className="opacity-60 hover:opacity-100 shrink-0" title="Eliminar">
+                  {it.onRestore ? (
+                    <button onClick={it.onRestore} className="opacity-70 hover:opacity-100 shrink-0" title="Restaurar esta franja">
+                      ↩
+                    </button>
+                  ) : it.onDelete ? (
+                    <button onClick={it.onDelete} className="opacity-60 hover:opacity-100 shrink-0" title="Quitar solo esta semana">
                       <X size={12} />
                     </button>
-                  )}
+                  ) : null}
                 </div>
               ))}
             </div>

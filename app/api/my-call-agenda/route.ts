@@ -37,13 +37,17 @@ export async function GET() {
   const todayStart = new Date();
   todayStart.setUTCHours(0, 0, 0, 0);
 
-  const [settings, availability, oneOffs] = await Promise.all([
+  const [settings, availability, oneOffs, exceptions] = await Promise.all([
     (prisma as any).professionalCallSettings.findUnique({ where: { professionalId: g.user.id } }),
     (prisma as any).professionalCallAvailability.findMany({
       where: { professionalId: g.user.id },
       orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
     }),
     (prisma as any).professionalCallAvailabilityOneOff.findMany({
+      where: { professionalId: g.user.id, date: { gte: todayStart } },
+      orderBy: [{ date: "asc" }, { startTime: "asc" }],
+    }),
+    (prisma as any).professionalCallException.findMany({
       where: { professionalId: g.user.id, date: { gte: todayStart } },
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
     }),
@@ -60,6 +64,12 @@ export async function GET() {
       date: o.date.toISOString().slice(0, 10),
       startTime: o.startTime,
       endTime: o.endTime,
+    })),
+    exceptions: exceptions.map((e: any) => ({
+      id: e.id,
+      date: e.date.toISOString().slice(0, 10),
+      startTime: e.startTime,
+      endTime: e.endTime,
     })),
   });
 }

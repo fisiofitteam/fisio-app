@@ -16,6 +16,11 @@ const DEFAULT_TZ = "Europe/Madrid";
 export type AvailabilityRow = { dayOfWeek: number; startTime: string; endTime: string };
 /** Franja puntual para una fecha concreta (YYYY-MM-DD en zona Madrid). */
 export type OneOffRow = { dateKey: string; startTime: string; endTime: string };
+/**
+ * Excepción a la plantilla para una fecha concreta: SUPRIME una franja de la
+ * plantilla que caiga en ese día. Se identifica por (dateKey, startTime, endTime).
+ */
+export type ExceptionRow = { dateKey: string; startTime: string; endTime: string };
 export type Busy = { start: Date; end: Date };
 
 /**
@@ -78,6 +83,8 @@ export function computeFreeSlots(input: {
   availability: AvailabilityRow[];
   /** Franjas puntuales que se SUMAN a la plantilla del día. Opcional. */
   oneOffs?: OneOffRow[];
+  /** Excepciones que RESTAN una franja de plantilla para esa fecha. Opcional. */
+  exceptions?: ExceptionRow[];
   busy: Busy[];
   from: Date;
   to: Date;
@@ -101,8 +108,14 @@ export function computeFreeSlots(input: {
   for (let day = new Date(startDay); day <= endDay; day = new Date(day.getTime() + 24 * 3600 * 1000)) {
     const dateKey = madridDateKey(day);
     const dow = madridDow(day);
+    // Excepciones aplicables a este día: match por (dateKey, startTime, endTime)
+    // exacto contra las filas de plantilla. Se resta ANTES de sumar one-offs.
+    const dayExceptions = input.exceptions?.filter((e) => e.dateKey === dateKey) ?? [];
+    const templateForDay = input.availability
+      .filter((r) => r.dayOfWeek === dow)
+      .filter((r) => !dayExceptions.some((e) => e.startTime === r.startTime && e.endTime === r.endTime));
     const dayWindows: Array<{ startTime: string; endTime: string }> = [
-      ...input.availability.filter((r) => r.dayOfWeek === dow),
+      ...templateForDay,
       ...(input.oneOffs?.filter((r) => r.dateKey === dateKey) ?? []),
     ];
     for (const row of dayWindows) {
