@@ -67,13 +67,13 @@ export default async function PatientsListPage({
   // pestañas "Todos" / "Por asignar" siguen disponibles si las necesita.
   // CEO: default a "all" como antes.
   const defaultTab = user.role === "head_success" ? "mine" : "all";
-  // Fisios normales solo pueden estar en "mine", "finished" o "derivations".
-  // El resto de tabs son solo-manager.
+  // Fisios normales solo pueden estar en "mine" o "finished". El resto
+  // de tabs son solo-manager.
   const requestedTab = searchParams.tab ?? defaultTab;
   const tab = user.isManager
     ? requestedTab
-    : requestedTab === "finished" || requestedTab === "derivations"
-      ? requestedTab
+    : requestedTab === "finished"
+      ? "finished"
       : "mine";
 
   // Incluimos también al CEO como profesional al que se le pueden asignar
@@ -105,17 +105,26 @@ export default async function PatientsListPage({
   const excludePrevention = { programType: { not: "PREVENTION" } };
   let where: any = { ...excludePrevention };
   if (tab === "mine") {
-    where = { ...excludePrevention, assignedProfessionalId: user.id };
+    // "Míos" incluye tanto los ASIGNADOS al fisio como los DERIVADOS a él
+    // (con badge azul). En la vida real el fisio trata a los dos grupos.
+    where = {
+      ...excludePrevention,
+      OR: [
+        { assignedProfessionalId: user.id },
+        { derivations: { some: { toProfessionalId: user.id } } },
+      ],
+    };
   } else if (tab === "unassigned") {
     where = { ...excludePrevention, assignedProfessionalId: null };
   } else if (tab.startsWith("pro:")) {
+    // Pestaña "de un fisio X": mismo criterio que Míos aplicado al fisio X.
     const proId = tab.slice(4);
-    where = { ...excludePrevention, assignedProfessionalId: proId };
-  } else if (tab === "derivations") {
-    // Pacientes derivados al usuario actual (independiente del asignado).
     where = {
       ...excludePrevention,
-      derivations: { some: { toProfessionalId: user.id } },
+      OR: [
+        { assignedProfessionalId: proId },
+        { derivations: { some: { toProfessionalId: proId } } },
+      ],
     };
   } else if (tab === "finished") {
     // Pacientes terminados: sin ningún SubscriptionRenewal activo con
@@ -141,23 +150,30 @@ export default async function PatientsListPage({
   });
 
   // Contar por pestaña (solo si es manager)
-  let counts: { all: number; unassigned: number; mine: number; finished: number; derivations: number; byPro: Record<string, number> } = {
+  let counts: { all: number; unassigned: number; mine: number; finished: number; byPro: Record<string, number> } = {
     all: 0,
     unassigned: 0,
     mine: 0,
     finished: 0,
-    derivations: 0,
     byPro: {},
   };
 
-  // IDs de pacientes derivados al usuario actual — para marcar isDerived
-  // en el mapeo posterior y también para el count de la pestaña.
-  const myDerivations = await (prisma as any).patientDerivation.findMany({
-    where: { toProfessionalId: user.id },
-    select: { patientId: true },
+  // Derivaciones globales (patientId → set de professionalIds a los que
+  // está derivado). Se usa para (a) marcar el badge azul en el mapeo,
+  // y (b) sumar derivados a "Míos"/"pro:X" para que los counts encajen
+  // con lo que la pestaña muestra.
+  const allDerivations = await (prisma as any).patientDerivation.findMany({
+    select: { patientId: true, toProfessionalId: true },
   });
-  const derivedPatientIds = new Set<string>(myDerivations.map((d: any) => d.patientId));
-  counts.derivations = derivedPatientIds.size;
+  const derivedTo = new Map<string, Set<string>>(); // patientId → toIds
+  const derivedByPro = new Map<string, Set<string>>(); // proId → patientIds
+  for (const d of allDerivations) {
+    if (!derivedTo.has(d.patientId)) derivedTo.set(d.patientId, new Set());
+    derivedTo.get(d.patientId)!.add(d.toProfessionalId);
+    if (!derivedByPro.has(d.toProfessionalId)) derivedByPro.set(d.toProfessionalId, new Set());
+    derivedByPro.get(d.toProfessionalId)!.add(d.patientId);
+  }
+  const derivedPatientIdsForMe = derivedByPro.get(user.id) ?? new Set<string>();
   if (user.isManager) {
     // Contamos SIN los Prevention ni pacientes fantasma (isTest) — coherente
     // con lo que ven las metricas del panel y con la exclusion de KPIs.
@@ -179,17 +195,36 @@ export default async function PatientsListPage({
 
     counts.all = vigentesArr.length;
     counts.unassigned = vigentesArr.filter((p) => p.assignedProfessionalId === null).length;
-    counts.mine = vigentesArr.filter((p) => p.assignedProfessionalId === user.id).length;
+    // Suma asignados + derivados a ese pro (sin duplicar). Un fisio ve en
+    // su pestaña tanto los que trata como titular como los que le han
+    // derivado — coherente con lo que aparece al abrir la pestaña.
+    function countForPro(proId: string): number {
+      let n = 0;
+      for (const p of vigentesArr) {
+        const isAssigned = p.assignedProfessionalId === proId;
+        const isDerived = derivedByPro.get(proId)?.has(p.id) ?? false;
+        if (isAssigned || isDerived) n++;
+      }
+      return n;
+    }
+    counts.mine = countForPro(user.id);
     for (const pro of professionals) {
-      counts.byPro[pro.id] = vigentesArr.filter((p) => p.assignedProfessionalId === pro.id).length;
+      counts.byPro[pro.id] = countForPro(pro.id);
     }
     counts.finished = allEver.length - vigentesArr.length;
   } else {
-    // Fisios normales: contar solo sus terminados para el badge (sin
-    // Prevention ni fantasma).
+    // Fisios normales: "Míos" incluye asignados + derivados. Terminados
+    // solo cuenta los asignados (los derivados no son responsabilidad suya).
     const mine = await prisma.patient.findMany({
-      where: { assignedProfessionalId: user.id, programType: { not: "PREVENTION" }, isTest: false },
-      select: { id: true },
+      where: {
+        OR: [
+          { assignedProfessionalId: user.id },
+          { id: { in: Array.from(derivedPatientIdsForMe) } },
+        ],
+        programType: { not: "PREVENTION" },
+        isTest: false,
+      },
+      select: { id: true, assignedProfessionalId: true },
     });
     const active = await prisma.subscriptionRenewal.findMany({
       where: { patientId: { in: mine.map((p) => p.id) }, status: "active" },
@@ -198,8 +233,9 @@ export default async function PatientsListPage({
     const vigentes = new Set(
       active.filter((r) => r.endDate && r.endDate.getTime() > Date.now()).map((r) => r.patientId)
     );
-    counts.finished = mine.filter((p) => !vigentes.has(p.id)).length;
     counts.mine = mine.filter((p) => vigentes.has(p.id)).length;
+    // Terminados: solo los asignados que ya cerraron (no los derivados).
+    counts.finished = mine.filter((p) => !vigentes.has(p.id) && p.assignedProfessionalId === user.id).length;
   }
 
   const adherences = await Promise.all(patients.map((p) => calculateAdherence(p.id)));
@@ -316,23 +352,29 @@ export default async function PatientsListPage({
       assignedProfessional: p.assignedProfessional
         ? { id: p.assignedProfessional.id, fullName: p.assignedProfessional.fullName, role: p.assignedProfessional.role }
         : null,
-      // El card se pinta en azul cuando el usuario actual es el fisio
-      // derivado (no el asignado). Managers también ven la etiqueta si
-      // están derivados a algún paciente.
-      isDerived: derivedPatientIds.has(p.id) && p.assignedProfessionalId !== user.id,
+      // Se pinta azul cuando este paciente está en la pestaña porque le
+      // fue DERIVADO al fisio de la pestaña actual (no porque lo tiene
+      // asignado). En "Todos" y otras vistas no destacamos porque no hay
+      // un fisio de referencia único.
+      isDerived: (() => {
+        // Pestaña de un fisio concreto: destacamos si le fue derivado a ese fisio.
+        if (tab === "mine") {
+          return derivedByPro.get(user.id)?.has(p.id) === true && p.assignedProfessionalId !== user.id;
+        }
+        if (tab.startsWith("pro:")) {
+          const proId = tab.slice(4);
+          return derivedByPro.get(proId)?.has(p.id) === true && p.assignedProfessionalId !== proId;
+        }
+        return false;
+      })(),
     };
   });
 
   // Aplicar filtro de pestaña "Terminados": solo pacientes con isFinished.
   // En otras pestañas ocultamos los terminados para que no ensucien.
-  // Excepción: "derivations" muestra todos los derivados sin filtrar por
-  // estado — un fisio derivado quiere ver el historial completo aunque el
-  // paciente acabe de terminar.
   const filtered = tab === "finished"
     ? mapped.filter((p) => p.isFinished)
-    : tab === "derivations"
-      ? mapped
-      : mapped.filter((p) => !p.isFinished);
+    : mapped.filter((p) => !p.isFinished);
 
   return (
     <PatientsList

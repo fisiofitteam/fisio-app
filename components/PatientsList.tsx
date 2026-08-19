@@ -70,7 +70,7 @@ export function PatientsList({
   patients: Patient[];
   currentUser: CurrentUser;
   tab: string;
-  counts: { all: number; unassigned: number; mine: number; finished: number; derivations: number; byPro: Record<string, number> };
+  counts: { all: number; unassigned: number; mine: number; finished: number; byPro: Record<string, number> };
   professionals: ProInfo[];
   rollingPrograms: { id: string; name: string }[];
 }) {
@@ -156,43 +156,24 @@ export function PatientsList({
             count={counts.finished}
             onClick={() => switchTab("finished")}
           />
-          {counts.derivations > 0 && (
-            <TabButton
-              active={tab === "derivations"}
-              label="🤝 Derivaciones"
-              count={counts.derivations}
-              onClick={() => switchTab("derivations")}
-            />
-          )}
         </div>
       )}
 
-      {/* Fisios normales: pestañas de Terminados y Derivaciones (si aplican)
-          además de la vista principal. */}
-      {!currentUser.isManager && (counts.finished > 0 || counts.derivations > 0) && (
-        <div className="mb-4 flex gap-1 -mx-4 px-4 flex-wrap">
+      {/* Fisios normales: pestaña Terminados si tienen alguno. */}
+      {!currentUser.isManager && counts.finished > 0 && (
+        <div className="mb-4 flex gap-1 -mx-4 px-4">
           <TabButton
             active={tab === "mine"}
             label="Míos activos"
             count={undefined}
             onClick={() => switchTab("mine")}
           />
-          {counts.derivations > 0 && (
-            <TabButton
-              active={tab === "derivations"}
-              label="🤝 Derivaciones"
-              count={counts.derivations}
-              onClick={() => switchTab("derivations")}
-            />
-          )}
-          {counts.finished > 0 && (
-            <TabButton
-              active={tab === "finished"}
-              label="🏁 Terminados"
-              count={counts.finished}
-              onClick={() => switchTab("finished")}
-            />
-          )}
+          <TabButton
+            active={tab === "finished"}
+            label="🏁 Terminados"
+            count={counts.finished}
+            onClick={() => switchTab("finished")}
+          />
         </div>
       )}
 
