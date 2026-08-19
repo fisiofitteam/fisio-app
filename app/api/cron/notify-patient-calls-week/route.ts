@@ -15,21 +15,21 @@
  *
  * Idempotencia por semana: guardamos la marca con la refKey
  * "patient_calls_week:{YYYY-MM-DD del lunes}:{professionalId}" — si ya
- * hay una notificación con esa refKey no volvemos a crearla. Con eso
- * evitamos duplicar si el cron pasa dos veces el mismo lunes (verano+
- * invierno, retry, etc).
+ * hay una notificación con esa refKey no volvemos a crearla.
  *
- * Protección: Bearer CRON_SECRET. ?test=1 en dev y ?force=1 para saltar
- * la guarda de hora al testear en producción.
+ * Auth flexible vía isCronAuthorized (Bearer secret, UA vercel-cron, o
+ * ?manual=1 con sesión CEO). ?force=1 salta la guarda de hora Madrid.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { notifyProfessional } from "@/lib/notifications";
-import { getActiveProfessional } from "@/lib/session";
+import { isCronAuthorized, logCronRun } from "@/lib/cron-utils";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 60;
+
+const CRON_PATH = "/api/cron/notify-patient-calls-week";
 
 function getMadridParts(d: Date = new Date()) {
   const fmt = new Intl.DateTimeFormat("en-CA", {
@@ -44,7 +44,7 @@ function getMadridParts(d: Date = new Date()) {
     m: Number(get("month")) - 1,
     d: Number(get("day")),
     hour: Number(get("hour")),
-    weekday: get("weekday"), // "Mon", "Tue", ...
+    weekday: get("weekday"),
   };
 }
 
@@ -52,7 +52,6 @@ function getMadridParts(d: Date = new Date()) {
 function mondayMadridUtc(now: Date = new Date()): Date {
   const p = getMadridParts(now);
   const base = new Date(Date.UTC(p.y, p.m, p.d));
-  // getUTCDay: 0=Dom, 1=Lun, ... 6=Sab. Restamos hasta caer en lunes.
   const daysBackToMonday = (base.getUTCDay() + 6) % 7;
   base.setUTCDate(base.getUTCDate() - daysBackToMonday);
   return base;
@@ -65,132 +64,122 @@ function typeLabel(t: string): string {
 }
 
 async function handler(req: NextRequest) {
-  const cronSecret = process.env.CRON_SECRET;
-  const auth = req.headers.get("authorization") ?? "";
-  const isTest = req.nextUrl.searchParams.get("test") === "1";
-  const isLocal = process.env.NODE_ENV !== "production";
-  const isManual = req.nextUrl.searchParams.get("manual") === "1";
-
-  if (isManual) {
-    // Disparo manual desde el navegador (CEO/head_success). Cuando el
-    // fisio pega la URL en la barra de direcciones no envía Bearer.
-    const user = await getActiveProfessional();
-    if (!user || (user.role !== "ceo" && user.role !== "head_success")) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-  } else if (cronSecret && auth !== `Bearer ${cronSecret}` && !(isTest && isLocal)) {
+  const authRes = await isCronAuthorized(req);
+  if (!authRes.ok) {
+    await logCronRun(CRON_PATH, { ok: false, error: "unauthorized" });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // manual=1 implica force=1 (si un humano lo dispara es que quiere
-  // saltarse la guarda de día/hora).
-  const force = isManual || req.nextUrl.searchParams.get("force") === "1";
+  // Guarda de hora Madrid: solo procesamos los lunes a las 7am. ?force=1
+  // (o disparo manual) salta esta comprobación para poder testear.
+  const url = new URL(req.url);
+  const force = url.searchParams.get("force") === "1" || authRes.via === "manual";
   const madrid = getMadridParts();
   if (!force && (madrid.weekday !== "Mon" || madrid.hour !== 7)) {
+    await logCronRun(CRON_PATH, { ok: true, data: { skipped: true, madrid, authVia: authRes.via } });
     return NextResponse.json({ ok: true, skipped: true, madrid });
   }
 
-  const monday = mondayMadridUtc();
-  const weekKey = monday.toISOString().slice(0, 10);
+  try {
+    const monday = mondayMadridUtc();
+    const weekKey = monday.toISOString().slice(0, 10);
 
-  // Notificamos TODAS las llamadas pendientes (completedAt null). Nagging
-  // semanal: si el fisio no las completó ni las agendó, cada lunes le
-  // volvemos a recordar. La refKey por semana evita duplicar el mismo lunes.
-  const calls = await prisma.scheduledCall.findMany({
-    where: {
-      completedAt: null,
-      patient: { isTest: false },
-    },
-    include: {
-      patient: {
-        select: { id: true, fullName: true, assignedProfessionalId: true },
+    const calls = await prisma.scheduledCall.findMany({
+      where: {
+        completedAt: null,
+        patient: { isTest: false },
       },
-    },
-    orderBy: [
-      { scheduledAt: { sort: "asc", nulls: "first" } },
-      { createdAt: "asc" },
-    ],
-  });
-
-  // Agrupamos por fisio asignado del paciente. Si un paciente no tiene
-  // fisio (raro pero posible durante alta), lo agrupamos en la clave
-  // vacía y solo aparece en el resumen del CEO.
-  const byFisio = new Map<string, typeof calls>();
-  for (const c of calls) {
-    const key = c.patient.assignedProfessionalId ?? "__unassigned__";
-    if (!byFisio.has(key)) byFisio.set(key, []);
-    byFisio.get(key)!.push(c);
-  }
-
-  const ceos = await prisma.professional.findMany({
-    where: { role: "ceo", active: true },
-    select: { id: true, fullName: true },
-  });
-
-  const perFisioResults: Array<{ professionalId: string; count: number; skipped?: boolean }> = [];
-
-  for (const [professionalId, list] of byFisio.entries()) {
-    if (professionalId === "__unassigned__") continue;
-    const refKey = `patient_calls_week:${weekKey}:${professionalId}`;
-    const existing = await prisma.teamNotification.findFirst({
-      where: { refKey },
-      select: { id: true },
+      include: {
+        patient: {
+          select: { id: true, fullName: true, assignedProfessionalId: true },
+        },
+      },
+      orderBy: [
+        { scheduledAt: { sort: "asc", nulls: "first" } },
+        { createdAt: "asc" },
+      ],
     });
-    if (existing) {
-      perFisioResults.push({ professionalId, count: list.length, skipped: true });
-      continue;
+
+    const byFisio = new Map<string, typeof calls>();
+    for (const c of calls) {
+      const key = c.patient.assignedProfessionalId ?? "__unassigned__";
+      if (!byFisio.has(key)) byFisio.set(key, []);
+      byFisio.get(key)!.push(c);
     }
-    const optCount = list.filter((c) => c.type === "optimizacion").length;
-    const renCount = list.filter((c) => c.type === "renovacion").length;
-    const detail = list
-      .map((c) => `${typeLabel(c.type)}: ${c.patient.fullName}`)
-      .join(" · ");
-    const parts: string[] = [];
-    if (optCount) parts.push(`${optCount} de optimización`);
-    if (renCount) parts.push(`${renCount} de renovación`);
-    const summary = parts.join(" y ");
-    await notifyProfessional({
-      professionalId,
-      type: "patient_calls_week",
-      title: `📞 Esta semana: ${list.length} llamada${list.length === 1 ? "" : "s"}`,
-      body: `${summary}. ${detail}.`,
-      actionUrl: "/fisio/llamadas",
-      refKey,
-    });
-    perFisioResults.push({ professionalId, count: list.length });
-  }
 
-  // Resumen para cada CEO: todas las llamadas del equipo esta semana.
-  // Idempotencia con refKey también.
-  for (const ceo of ceos) {
-    const refKey = `patient_calls_week_ceo:${weekKey}:${ceo.id}`;
-    const existing = await prisma.teamNotification.findFirst({
-      where: { refKey },
-      select: { id: true },
+    const ceos = await prisma.professional.findMany({
+      where: { role: "ceo", active: true },
+      select: { id: true, fullName: true },
     });
-    if (existing) continue;
-    if (calls.length === 0) continue;
-    const optCount = calls.filter((c) => c.type === "optimizacion").length;
-    const renCount = calls.filter((c) => c.type === "renovacion").length;
-    const parts: string[] = [];
-    if (optCount) parts.push(`${optCount} optimización`);
-    if (renCount) parts.push(`${renCount} renovación`);
-    await notifyProfessional({
-      professionalId: ceo.id,
-      type: "patient_calls_week_ceo",
-      title: `📞 Llamadas del equipo esta semana (${calls.length})`,
-      body: `${parts.join(" · ")}. Ver detalle en /fisio/llamadas.`,
-      actionUrl: "/fisio/llamadas",
-      refKey,
-    });
-  }
 
-  return NextResponse.json({
-    ok: true,
-    weekMonday: weekKey,
-    totalCalls: calls.length,
-    fisios: perFisioResults,
-  });
+    const perFisioResults: Array<{ professionalId: string; count: number; skipped?: boolean }> = [];
+
+    for (const [professionalId, list] of byFisio.entries()) {
+      if (professionalId === "__unassigned__") continue;
+      const refKey = `patient_calls_week:${weekKey}:${professionalId}`;
+      const existing = await prisma.teamNotification.findFirst({
+        where: { refKey },
+        select: { id: true },
+      });
+      if (existing) {
+        perFisioResults.push({ professionalId, count: list.length, skipped: true });
+        continue;
+      }
+      const optCount = list.filter((c) => c.type === "optimizacion").length;
+      const renCount = list.filter((c) => c.type === "renovacion").length;
+      const detail = list
+        .map((c) => `${typeLabel(c.type)}: ${c.patient.fullName}`)
+        .join(" · ");
+      const parts: string[] = [];
+      if (optCount) parts.push(`${optCount} de optimización`);
+      if (renCount) parts.push(`${renCount} de renovación`);
+      const summary = parts.join(" y ");
+      await notifyProfessional({
+        professionalId,
+        type: "patient_calls_week",
+        title: `📞 Esta semana: ${list.length} llamada${list.length === 1 ? "" : "s"}`,
+        body: `${summary}. ${detail}.`,
+        actionUrl: "/fisio/llamadas",
+        refKey,
+      });
+      perFisioResults.push({ professionalId, count: list.length });
+    }
+
+    for (const ceo of ceos) {
+      const refKey = `patient_calls_week_ceo:${weekKey}:${ceo.id}`;
+      const existing = await prisma.teamNotification.findFirst({
+        where: { refKey },
+        select: { id: true },
+      });
+      if (existing) continue;
+      if (calls.length === 0) continue;
+      const optCount = calls.filter((c) => c.type === "optimizacion").length;
+      const renCount = calls.filter((c) => c.type === "renovacion").length;
+      const parts: string[] = [];
+      if (optCount) parts.push(`${optCount} optimización`);
+      if (renCount) parts.push(`${renCount} renovación`);
+      await notifyProfessional({
+        professionalId: ceo.id,
+        type: "patient_calls_week_ceo",
+        title: `📞 Llamadas del equipo esta semana (${calls.length})`,
+        body: `${parts.join(" · ")}. Ver detalle en /fisio/llamadas.`,
+        actionUrl: "/fisio/llamadas",
+        refKey,
+      });
+    }
+
+    const data = {
+      authVia: authRes.via,
+      weekMonday: weekKey,
+      totalCalls: calls.length,
+      fisios: perFisioResults,
+    };
+    await logCronRun(CRON_PATH, { ok: true, data });
+    return NextResponse.json({ ok: true, ...data });
+  } catch (e: any) {
+    await logCronRun(CRON_PATH, { ok: false, error: e?.message ?? "unknown" });
+    return NextResponse.json({ ok: false, error: e?.message ?? "unknown" }, { status: 500 });
+  }
 }
 
 export const GET = handler;
