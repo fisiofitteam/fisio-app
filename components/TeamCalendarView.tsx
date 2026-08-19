@@ -7,12 +7,17 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 
 export type CalendarEventItem = {
   id: string;
-  kind: "call" | "meeting" | "leave" | "slot";
+  // "call"         → llamada de venta (Lead + closer)
+  // "patient_call" → llamada de seguimiento fisio↔paciente (optimización/renovación)
+  // "meeting"      → reunión interna
+  // "leave"        → vacaciones
+  // "slot"         → hueco libre para agendar (solo lo ve setter/managers)
+  kind: "call" | "patient_call" | "meeting" | "leave" | "slot";
   title: string;
   subtitle?: string;
   startISO: string;
   endISO: string;
-  ownerId: string | null;       // profesional al que "pertenece" (closer en calls, pro en leaves)
+  ownerId: string | null;       // profesional al que "pertenece" (closer en calls, fisio en patient_call, pro en leaves)
   href?: string;
   allDay?: boolean;
 };

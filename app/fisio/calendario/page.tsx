@@ -55,6 +55,10 @@ export default async function CalendarioPage({
   const seesAllCalls = isManager || user.role === "setter";
   const seesOwnCalls = user.role === "closer";
   const seesSlots = isManager || user.role === "setter";
+  // Llamadas fisio↔paciente: managers ven todas, fisios solo las suyas,
+  // setter/closer no ven ninguna (son eventos clínicos, no comerciales).
+  const seesAllPatientCalls = isManager;
+  const seesOwnPatientCalls = user.role === "fisio";
   // Sidebar 'Mis calendarios': solo CEO y head-success. La setter ve directamente
   // todos los eventos relevantes sin selector (cierra el ruido de pestaña vacía).
   const showFilterSidebar = isManager;
@@ -91,6 +95,31 @@ export default async function CalendarioPage({
         closer: { select: { id: true, fullName: true } },
       },
       orderBy: { callScheduledAt: "asc" },
+    });
+  }
+
+  // ── Llamadas fisio↔paciente (optimización/renovación) ──────────────────
+  // Se muestran las que ya están reservadas (scheduled) o completadas dentro
+  // de la ventana. Las pending (link generado sin reservar) no salen porque
+  // aún no tienen hora concreta.
+  let patientCalls: any[] = [];
+  if (seesAllPatientCalls || seesOwnPatientCalls) {
+    patientCalls = await prisma.patientCall.findMany({
+      where: {
+        scheduledAt: { gte: weekStart, lt: weekEnd },
+        status: { in: ["scheduled", "completed"] },
+        ...(seesOwnPatientCalls ? { professionalId: user.id } : {}),
+      },
+      select: {
+        id: true,
+        type: true,
+        scheduledAt: true,
+        durationMin: true,
+        meetingUrl: true,
+        patient: { select: { id: true, fullName: true } },
+        professional: { select: { id: true, fullName: true } },
+      },
+      orderBy: { scheduledAt: "asc" },
     });
   }
 
@@ -142,6 +171,22 @@ export default async function CalendarioPage({
       endISO: end.toISOString(),
       ownerId: c.closer?.id ?? null,
       href: "/fisio/llamadas-venta",
+    });
+  }
+
+  for (const pc of patientCalls) {
+    const start = pc.scheduledAt as Date;
+    const end = new Date(start.getTime() + (pc.durationMin ?? 45) * 60 * 1000);
+    const icon = pc.type === "optimization" ? "🔧" : "🔁";
+    events.push({
+      id: `pcall-${pc.id}`,
+      kind: "patient_call",
+      title: `${icon} ${pc.patient.fullName}`,
+      subtitle: pc.professional.fullName.split(" ")[0],
+      startISO: start.toISOString(),
+      endISO: end.toISOString(),
+      ownerId: pc.professional.id,
+      href: `/fisio/paciente/${pc.patient.id}/formularios`,
     });
   }
 
