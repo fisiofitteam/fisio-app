@@ -96,7 +96,7 @@ export function MiAgendaView({
       {subTab === "template" ? (
         <TemplateView slots={slots} setSlots={setSlots} />
       ) : (
-        <WeekView slots={slots} oneOffs={oneOffs} setOneOffs={setOneOffs} />
+        <WeekView slots={slots} setSlots={setSlots} oneOffs={oneOffs} setOneOffs={setOneOffs} />
       )}
     </div>
   );
@@ -228,7 +228,7 @@ function TemplateView({ slots, setSlots }: { slots: Slot[]; setSlots: React.Disp
 // ============================================================================
 // VISTA: Por semana (plantilla + one-offs de la semana visible)
 // ============================================================================
-function WeekView({ slots, oneOffs, setOneOffs }: { slots: Slot[]; oneOffs: OneOff[]; setOneOffs: React.Dispatch<React.SetStateAction<OneOff[]>> }) {
+function WeekView({ slots, setSlots, oneOffs, setOneOffs }: { slots: Slot[]; setSlots: React.Dispatch<React.SetStateAction<Slot[]>>; oneOffs: OneOff[]; setOneOffs: React.Dispatch<React.SetStateAction<OneOff[]>> }) {
   const [weekStart, setWeekStart] = useState<Date>(weekStartMondayLocal(new Date()));
 
   const isCurrentWeek = weekStart.getTime() === weekStartMondayLocal(new Date()).getTime();
@@ -255,10 +255,24 @@ function WeekView({ slots, oneOffs, setOneOffs }: { slots: Slot[]; oneOffs: OneO
     if (r.ok) setOneOffs((prev) => prev.filter((o) => o.id !== id));
   }
 
+  /**
+   * Borrar una franja de la PLANTILLA desde la vista por semana.
+   * Cuidado: aplica a todas las semanas. Se confirma explícitamente
+   * porque no queremos accidentes.
+   */
+  async function removeTemplate(id: string, dowLabel: string, timeLabel: string) {
+    const ok = confirm(
+      `Vas a eliminar la franja "${timeLabel}" de todos los ${dowLabel}. Esta franja se aplica a TODAS las semanas.\n\n¿Continuar?`,
+    );
+    if (!ok) return;
+    const r = await fetch(`/api/my-call-agenda/slot?id=${id}`, { method: "DELETE" });
+    if (r.ok) setSlots((prev) => prev.filter((s) => s.id !== id));
+  }
+
   return (
     <div>
       <div className="rounded-lg p-3 text-xs mb-3" style={{ background: "#FEFCE8", color: "#78350F", border: "1px solid #FDE68A" }}>
-        <b>Por semana.</b> Añade franjas puntuales solo para esta semana sin tocar la plantilla. Las de la plantilla se muestran en gris (no editables aquí). Para <b>bloquear</b> una franja, pon un evento en tu Google Calendar y la app la esconderá sola.
+        <b>Por semana.</b> Añade franjas puntuales verdes solo para esta semana. También puedes borrar chips grises de la plantilla desde aquí (te pediremos confirmación porque afectan a todas las semanas). Para <b>bloquear</b> una franja concreta puntualmente, pon un evento en tu Google Calendar y la app la esconderá sola — doble seguridad.
       </div>
 
       {/* Navegador de semana */}
@@ -297,7 +311,7 @@ function WeekView({ slots, oneOffs, setOneOffs }: { slots: Slot[]; oneOffs: OneO
               id: `tpl-${s.id}`,
               startTime: s.startTime,
               endTime: s.endTime,
-              onDelete: null,   // no editable desde aquí
+              onDelete: () => removeTemplate(s.id, DAY_LONG[dow] + "s", `${s.startTime}–${s.endTime}`),
               chip: { bg: "#F5F5F5", border: "#D4D4D4", text: "#525252", dot: "#A3A3A3" },
               label: "plantilla",
             }));
@@ -391,13 +405,14 @@ function DayColumns({
                   className="rounded-md px-2 py-1.5 text-xs flex items-center justify-between gap-1"
                   style={{ background: it.chip.bg, border: `1px solid ${it.chip.border}`, color: it.chip.text }}
                 >
-                  <span className="tabular-nums font-medium">{it.startTime} → {it.endTime}</span>
-                  {it.onDelete ? (
-                    <button onClick={it.onDelete} className="opacity-60 hover:opacity-100" title="Eliminar">
+                  <div className="flex flex-col leading-tight">
+                    <span className="tabular-nums font-medium">{it.startTime} → {it.endTime}</span>
+                    {it.label && <span className="text-[9px] uppercase opacity-60">{it.label}</span>}
+                  </div>
+                  {it.onDelete && (
+                    <button onClick={it.onDelete} className="opacity-60 hover:opacity-100 shrink-0" title="Eliminar">
                       <X size={12} />
                     </button>
-                  ) : (
-                    <span className="text-[9px] uppercase opacity-60">{it.label}</span>
                   )}
                 </div>
               ))}
