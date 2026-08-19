@@ -262,6 +262,7 @@ model Professional {
   myGoogleConnection GoogleCalendarConnection? @relation("MyGoogleConnection")
   patientCallsAsFisio PatientCall[]      @relation("PatientCallsFisio")
   callAvailability  ProfessionalCallAvailability[] @relation("CallAvailability")
+  callAvailabilityOneOff ProfessionalCallAvailabilityOneOff[] @relation("CallAvailabilityOneOff")
   callSettings      ProfessionalCallSettings? @relation("CallSettings")
   compensation      Compensation?
   communityFeedPosts     CommunityFeedPost[] @relation("FeedPostAuthor")
@@ -2006,6 +2007,25 @@ model ProfessionalCallAvailability {
   createdAt      DateTime @default(now())
 
   @@index([professionalId, dayOfWeek])
+}
+
+// Franjas puntuales que el fisio abre para una FECHA concreta, además de su
+// plantilla semanal. Se usa cuando "esta semana también estoy libre el martes
+// por la tarde" sin tocar la plantilla habitual. Para BLOQUEAR una franja
+// habitual el fisio pone un evento en su Google Calendar y FreeBusy lo tumba
+// automáticamente — no hacen falta overrides negativos.
+model ProfessionalCallAvailabilityOneOff {
+  id             String   @id @default(cuid())
+  professionalId String
+  professional   Professional @relation("CallAvailabilityOneOff", fields: [professionalId], references: [id], onDelete: Cascade)
+
+  date           DateTime // día concreto (00:00 Europe/Madrid como referencia)
+  startTime      String   // "HH:mm" Europe/Madrid
+  endTime        String
+
+  createdAt      DateTime @default(now())
+
+  @@index([professionalId, date])
 }
 
 // Preferencias del fisio para las llamadas: duración de cada tipo, buffer, etc.

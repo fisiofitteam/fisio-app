@@ -246,6 +246,7 @@ model Professional {
   myGoogleConnection GoogleCalendarConnection? @relation("MyGoogleConnection")
   patientCallsAsFisio PatientCall[]      @relation("PatientCallsFisio")
   callAvailability  ProfessionalCallAvailability[] @relation("CallAvailability")
+  callAvailabilityOneOff ProfessionalCallAvailabilityOneOff[] @relation("CallAvailabilityOneOff")
   callSettings      ProfessionalCallSettings? @relation("CallSettings")
   compensation      Compensation?
   communityFeedPosts     CommunityFeedPost[] @relation("FeedPostAuthor")
@@ -3263,6 +3264,20 @@ model ProfessionalCallAvailability {
   createdAt      DateTime @default(now())
 
   @@index([professionalId, dayOfWeek])
+}
+
+model ProfessionalCallAvailabilityOneOff {
+  id             String   @id @default(cuid())
+  professionalId String
+  professional   Professional @relation("CallAvailabilityOneOff", fields: [professionalId], references: [id], onDelete: Cascade)
+
+  date           DateTime
+  startTime      String
+  endTime        String
+
+  createdAt      DateTime @default(now())
+
+  @@index([professionalId, date])
 }
 
 model ProfessionalCallSettings {

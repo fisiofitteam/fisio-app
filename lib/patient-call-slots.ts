@@ -14,6 +14,8 @@
 const DEFAULT_TZ = "Europe/Madrid";
 
 export type AvailabilityRow = { dayOfWeek: number; startTime: string; endTime: string };
+/** Franja puntual para una fecha concreta (YYYY-MM-DD en zona Madrid). */
+export type OneOffRow = { dateKey: string; startTime: string; endTime: string };
 export type Busy = { start: Date; end: Date };
 
 /**
@@ -74,6 +76,8 @@ function madridDow(d: Date): number {
  */
 export function computeFreeSlots(input: {
   availability: AvailabilityRow[];
+  /** Franjas puntuales que se SUMAN a la plantilla del día. Opcional. */
+  oneOffs?: OneOffRow[];
   busy: Busy[];
   from: Date;
   to: Date;
@@ -86,7 +90,8 @@ export function computeFreeSlots(input: {
   const nowLimit = new Date(Date.now() + leadMin * 60_000);
 
   // Recogemos las ventanas de la plantilla para cada día concreto dentro
-  // de [from, to).
+  // de [from, to). Añadimos también las franjas one-off del día (misma
+  // semántica: rango abierto para llamadas).
   const slots: Date[] = [];
   const startDay = new Date(input.from);
   startDay.setUTCHours(0, 0, 0, 0);
@@ -96,8 +101,11 @@ export function computeFreeSlots(input: {
   for (let day = new Date(startDay); day <= endDay; day = new Date(day.getTime() + 24 * 3600 * 1000)) {
     const dateKey = madridDateKey(day);
     const dow = madridDow(day);
-    const rows = input.availability.filter((r) => r.dayOfWeek === dow);
-    for (const row of rows) {
+    const dayWindows: Array<{ startTime: string; endTime: string }> = [
+      ...input.availability.filter((r) => r.dayOfWeek === dow),
+      ...(input.oneOffs?.filter((r) => r.dateKey === dateKey) ?? []),
+    ];
+    for (const row of dayWindows) {
       const windowStart = buildMadridDate(dateKey, row.startTime);
       const windowEnd = buildMadridDate(dateKey, row.endTime);
       let cursor = new Date(windowStart);

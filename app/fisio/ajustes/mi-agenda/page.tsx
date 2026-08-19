@@ -13,11 +13,18 @@ export default async function MiAgendaPage() {
     redirect("/fisio/ajustes");
   }
 
-  const [settings, availability, googleConn] = await Promise.all([
+  const todayStart = new Date();
+  todayStart.setUTCHours(0, 0, 0, 0);
+
+  const [settings, availability, oneOffs, googleConn] = await Promise.all([
     (prisma as any).professionalCallSettings.findUnique({ where: { professionalId: user.id } }),
     (prisma as any).professionalCallAvailability.findMany({
       where: { professionalId: user.id },
       orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
+    }),
+    (prisma as any).professionalCallAvailabilityOneOff.findMany({
+      where: { professionalId: user.id, date: { gte: todayStart } },
+      orderBy: [{ date: "asc" }, { startTime: "asc" }],
     }),
     prisma.googleCalendarConnection.findFirst({ where: { professionalId: user.id } }),
   ]);
@@ -42,6 +49,12 @@ export default async function MiAgendaPage() {
           dayOfWeek: a.dayOfWeek,
           startTime: a.startTime,
           endTime: a.endTime,
+        }))}
+        initialOneOffs={oneOffs.map((o: any) => ({
+          id: o.id,
+          date: o.date.toISOString().slice(0, 10),
+          startTime: o.startTime,
+          endTime: o.endTime,
         }))}
       />
     </main>

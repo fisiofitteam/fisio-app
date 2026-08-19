@@ -32,11 +32,20 @@ export async function GET() {
   const g = await requireStaff();
   if ("error" in g) return NextResponse.json({ error: g.error }, { status: g.status });
 
-  const [settings, availability] = await Promise.all([
+  // One-offs: solo cargamos los del pasado inmediato (hoy) hacia adelante
+  // — los antiguos no aportan a la reserva y sobrecargan la UI.
+  const todayStart = new Date();
+  todayStart.setUTCHours(0, 0, 0, 0);
+
+  const [settings, availability, oneOffs] = await Promise.all([
     (prisma as any).professionalCallSettings.findUnique({ where: { professionalId: g.user.id } }),
     (prisma as any).professionalCallAvailability.findMany({
       where: { professionalId: g.user.id },
       orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
+    }),
+    (prisma as any).professionalCallAvailabilityOneOff.findMany({
+      where: { professionalId: g.user.id, date: { gte: todayStart } },
+      orderBy: [{ date: "asc" }, { startTime: "asc" }],
     }),
   ]);
 
@@ -46,6 +55,12 @@ export async function GET() {
       renewalDurationMin: settings?.renewalDurationMin ?? 45,
     },
     availability,
+    oneOffs: oneOffs.map((o: any) => ({
+      id: o.id,
+      date: o.date.toISOString().slice(0, 10),
+      startTime: o.startTime,
+      endTime: o.endTime,
+    })),
   });
 }
 
