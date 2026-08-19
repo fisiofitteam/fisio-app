@@ -187,6 +187,7 @@ model Patient {
   communityLessonProgress CommunityLessonProgress[]
   bannerDismissals   PatientBannerDismiss[]
   patientCalls       PatientCall[]     @relation("PatientCallsPatient")
+  derivations        PatientDerivation[] @relation("DerivationPatient")
 }
 
 // ============================================================================
@@ -248,6 +249,8 @@ model Professional {
   callAvailability  ProfessionalCallAvailability[] @relation("CallAvailability")
   callAvailabilityOneOff ProfessionalCallAvailabilityOneOff[] @relation("CallAvailabilityOneOff")
   callExceptions    ProfessionalCallException[]    @relation("CallException")
+  derivationsCreated PatientDerivation[]           @relation("DerivationFrom")
+  derivationsReceived PatientDerivation[]          @relation("DerivationTo")
   callSettings      ProfessionalCallSettings? @relation("CallSettings")
   compensation      Compensation?
   communityFeedPosts     CommunityFeedPost[] @relation("FeedPostAuthor")
@@ -3279,6 +3282,24 @@ model ProfessionalCallAvailabilityOneOff {
   createdAt      DateTime @default(now())
 
   @@index([professionalId, date])
+}
+
+model PatientDerivation {
+  id                    String   @id @default(cuid())
+  patientId             String
+  patient               Patient  @relation("DerivationPatient", fields: [patientId], references: [id], onDelete: Cascade)
+
+  fromProfessionalId    String
+  fromProfessional      Professional @relation("DerivationFrom", fields: [fromProfessionalId], references: [id])
+
+  toProfessionalId      String
+  toProfessional        Professional @relation("DerivationTo", fields: [toProfessionalId], references: [id])
+
+  note                  String?
+  createdAt             DateTime @default(now())
+
+  @@unique([patientId, toProfessionalId])
+  @@index([toProfessionalId])
 }
 
 model ProfessionalCallException {

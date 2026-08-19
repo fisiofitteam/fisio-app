@@ -35,9 +35,16 @@ export default async function PatientLayout({
   });
   if (!patient) notFound();
 
-  // Fisios normales solo pueden entrar a SUS pacientes
+  // Fisios normales solo pueden entrar a SUS pacientes, o a los que les
+  // hayan derivado (colaboración puntual sin transferir la titularidad).
   if (!user.isManager && patient.assignedProfessionalId !== user.id) {
-    redirect("/fisio/pacientes");
+    const derivado = await (prisma as any).patientDerivation.findFirst({
+      where: { patientId: patient.id, toProfessionalId: user.id },
+      select: { id: true },
+    });
+    if (!derivado) {
+      redirect("/fisio/pacientes");
+    }
   }
 
   // Progreso teniendo en cuenta pausas + semana actual del atleta.

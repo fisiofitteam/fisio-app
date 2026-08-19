@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ClinicalFile } from "@/components/ClinicalFile";
+import { PatientDerivationsCard } from "@/components/PatientDerivationsCard";
 import { RefundSaleButton } from "@/components/RefundSaleButton";
 import { getActiveProfessional } from "@/lib/session";
 import { summarizeBodyZone } from "@/lib/onboarding-content";
@@ -57,6 +58,20 @@ export default async function PatientFichaTab({ params }: { params: { id: string
       })
     : null;
 
+  // Puede gestionar derivaciones el fisio asignado o managers. El resto
+  // (incluidos fisios derivados) solo verá la lista sin acciones.
+  const canManageDerivations = user.isManager || patient.assignedProfessionalId === user.id;
+  // Selector: fisios activos (rol clínico) excepto el asignado y el propio user.
+  const availableForDerivation = await prisma.professional.findMany({
+    where: {
+      active: true,
+      role: { in: ["fisio", "head_success", "ceo"] },
+      id: { notIn: [patient.assignedProfessionalId, user.id].filter(Boolean) as string[] },
+    },
+    select: { id: true, fullName: true, role: true },
+    orderBy: { fullName: "asc" },
+  });
+
   return (
     <>
     <ClinicalFile
@@ -93,6 +108,11 @@ export default async function PatientFichaTab({ params }: { params: { id: string
         hasTaxId: !!patient.contractDNI,
         hasFiscalAddress,
       }}
+    />
+    <PatientDerivationsCard
+      patientId={patient.id}
+      canManage={canManageDerivations}
+      availableProfessionals={availableForDerivation}
     />
     {isCeo && lastSale && (
       <div className="mt-4 max-w-3xl mx-auto px-4">

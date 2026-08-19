@@ -203,6 +203,7 @@ model Patient {
   communityLessonProgress CommunityLessonProgress[]
   bannerDismissals   PatientBannerDismiss[]
   patientCalls       PatientCall[]     @relation("PatientCallsPatient")
+  derivations        PatientDerivation[] @relation("DerivationPatient")
 }
 
 // ============================================================================
@@ -265,6 +266,8 @@ model Professional {
   callAvailabilityOneOff ProfessionalCallAvailabilityOneOff[] @relation("CallAvailabilityOneOff")
   callExceptions    ProfessionalCallException[]    @relation("CallException")
   callSettings      ProfessionalCallSettings? @relation("CallSettings")
+  derivationsCreated PatientDerivation[]           @relation("DerivationFrom")
+  derivationsReceived PatientDerivation[]          @relation("DerivationTo")
   compensation      Compensation?
   communityFeedPosts     CommunityFeedPost[] @relation("FeedPostAuthor")
   communityFeedComments  CommunityComment[]  @relation("FeedCommentAuthor")
@@ -2027,6 +2030,38 @@ model ProfessionalCallAvailabilityOneOff {
   createdAt      DateTime @default(now())
 
   @@index([professionalId, date])
+}
+
+// Derivación de un paciente: el fisio asignado (fromProfessional) añade a
+// otro fisio (toProfessional) para que pueda VER y EDITAR la ficha de ese
+// paciente. NO cuenta para métricas del receptor — la titularidad
+// (assignedProfessionalId) sigue siendo del fisio original.
+//
+// Uso: colaboración puntual entre fisios (una lesión atípica que otro
+// domina mejor, cobertura durante ausencias, etc.).
+//
+// Hard-delete al revocar: mantenemos la tabla limpia y el unique compuesto
+// simple. Si en algún momento queremos histórico, se cambia a soft-delete
+// con `revokedAt` y quitamos la restricción unique.
+model PatientDerivation {
+  id                    String   @id @default(cuid())
+  patientId             String
+  patient               Patient  @relation("DerivationPatient", fields: [patientId], references: [id], onDelete: Cascade)
+
+  // Fisio que crea la derivación (típicamente = patient.assignedProfessionalId
+  // cuando lo hace un fisio; un manager puede crearla como cualquiera).
+  fromProfessionalId    String
+  fromProfessional      Professional @relation("DerivationFrom", fields: [fromProfessionalId], references: [id])
+
+  // Fisio que gana acceso al paciente.
+  toProfessionalId      String
+  toProfessional        Professional @relation("DerivationTo", fields: [toProfessionalId], references: [id])
+
+  note                  String?
+  createdAt             DateTime @default(now())
+
+  @@unique([patientId, toProfessionalId])
+  @@index([toProfessionalId])
 }
 
 // Excepción a la plantilla: una fecha concreta en la que una franja de la

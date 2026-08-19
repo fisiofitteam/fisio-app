@@ -39,6 +39,9 @@ type Patient = {
   difficulty: string | null;
   isTest?: boolean;
   assignedProfessional: { id: string; fullName: string; role: string } | null;
+  /** True si el usuario actual llegó a este paciente por derivación (no es
+   * el fisio asignado). Marca visualmente el recuadro en azul. */
+  isDerived?: boolean;
 };
 
 type CurrentUser = {
@@ -67,7 +70,7 @@ export function PatientsList({
   patients: Patient[];
   currentUser: CurrentUser;
   tab: string;
-  counts: { all: number; unassigned: number; mine: number; finished: number; byPro: Record<string, number> };
+  counts: { all: number; unassigned: number; mine: number; finished: number; derivations: number; byPro: Record<string, number> };
   professionals: ProInfo[];
   rollingPrograms: { id: string; name: string }[];
 }) {
@@ -153,25 +156,43 @@ export function PatientsList({
             count={counts.finished}
             onClick={() => switchTab("finished")}
           />
+          {counts.derivations > 0 && (
+            <TabButton
+              active={tab === "derivations"}
+              label="🤝 Derivaciones"
+              count={counts.derivations}
+              onClick={() => switchTab("derivations")}
+            />
+          )}
         </div>
       )}
 
-      {/* Fisios normales: mostramos también la pestaña Terminados aunque
-          no vean el resto de tabs. Solo alterna con la vista principal. */}
-      {!currentUser.isManager && counts.finished > 0 && (
-        <div className="mb-4 flex gap-1 -mx-4 px-4">
+      {/* Fisios normales: pestañas de Terminados y Derivaciones (si aplican)
+          además de la vista principal. */}
+      {!currentUser.isManager && (counts.finished > 0 || counts.derivations > 0) && (
+        <div className="mb-4 flex gap-1 -mx-4 px-4 flex-wrap">
           <TabButton
             active={tab === "mine"}
             label="Míos activos"
             count={undefined}
             onClick={() => switchTab("mine")}
           />
-          <TabButton
-            active={tab === "finished"}
-            label="🏁 Terminados"
-            count={counts.finished}
-            onClick={() => switchTab("finished")}
-          />
+          {counts.derivations > 0 && (
+            <TabButton
+              active={tab === "derivations"}
+              label="🤝 Derivaciones"
+              count={counts.derivations}
+              onClick={() => switchTab("derivations")}
+            />
+          )}
+          {counts.finished > 0 && (
+            <TabButton
+              active={tab === "finished"}
+              label="🏁 Terminados"
+              count={counts.finished}
+              onClick={() => switchTab("finished")}
+            />
+          )}
         </div>
       )}
 
@@ -321,12 +342,24 @@ function PatientRow({
   onReassign: () => void;
 }) {
   return (
-    <div className="card flex items-center gap-3 hover:border-neutral-300">
+    <div
+      className="card flex items-center gap-3 hover:border-neutral-300"
+      style={patient.isDerived ? { background: "#EFF6FF", borderColor: "#BFDBFE" } : undefined}
+    >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <Link href={`/fisio/paciente/${patient.id}`} className="font-medium hover:underline">
             {patient.fullName}
           </Link>
+          {patient.isDerived && (
+            <span
+              className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full"
+              style={{ background: "#DBEAFE", color: "#1E3A8A" }}
+              title="Este paciente está derivado a ti — no cuenta para tus métricas"
+            >
+              🤝 Derivación
+            </span>
+          )}
           {patient.isTest && (
             <span
               className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full"
