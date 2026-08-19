@@ -12,7 +12,7 @@ export type CalendarEventItem = {
   // "meeting"      → reunión interna
   // "leave"        → vacaciones
   // "slot"         → hueco libre para agendar (solo lo ve setter/managers)
-  kind: "call" | "patient_call" | "meeting" | "leave" | "slot";
+  kind: "call" | "patient_call" | "meeting" | "leave" | "slot" | "task";
   title: string;
   subtitle?: string;
   startISO: string;
@@ -48,6 +48,7 @@ function colorForKind(kind: CalendarEventItem["kind"]): typeof PALETTE[number] {
   if (kind === "meeting") return { bg: "#E0E7FF", border: "#A5B4FC", text: "#3730A3", dot: "#6366F1" };
   if (kind === "slot")    return { bg: "#CCFBF1", border: "#5EEAD4", text: "#115E59", dot: "#14B8A6" };
   if (kind === "leave")   return { bg: "#FEF3C7", border: "#FCD34D", text: "#92400E", dot: "#F59E0B" };
+  if (kind === "task")    return { bg: "#F0FDF4", border: "#86EFAC", text: "#065F46", dot: "#16A34A" };
   return { bg: "#F5F5F5", border: "#D4D4D4", text: "#404040", dot: "#737373" };
 }
 
@@ -123,6 +124,7 @@ export function TeamCalendarView({
   const [showMeetings, setShowMeetings] = useState(true);
   const [showLeaves, setShowLeaves] = useState(true);
   const [showSlots, setShowSlots] = useState(true);
+  const [showTasks, setShowTasks] = useState(true);
 
   function toggleProf(id: string) {
     setVisiblePros((prev) => {
@@ -156,11 +158,12 @@ export function TeamCalendarView({
       if (ev.kind === "meeting" && !showMeetings) return false;
       if (ev.kind === "leave" && !showLeaves) return false;
       if (ev.kind === "slot" && (!canSeeSlots || !showSlots)) return false;
+      if (ev.kind === "task" && !showTasks) return false;
       // Si el evento tiene owner, respetar visiblePros
       if (ev.ownerId && !visiblePros.has(ev.ownerId)) return false;
       return true;
     });
-  }, [events, showMeetings, showLeaves, showSlots, canSeeSlots, visiblePros]);
+  }, [events, showMeetings, showLeaves, showSlots, showTasks, canSeeSlots, visiblePros]);
 
   // Eventos timed (no allDay) por día
   const timedByDay = useMemo(() => {
@@ -262,6 +265,7 @@ export function TeamCalendarView({
               <div className="space-y-1.5">
                 <CategoryChk label="Reuniones internas" color={colorForKind("meeting").dot} checked={showMeetings} onToggle={() => setShowMeetings((v) => !v)} />
                 <CategoryChk label="Vacaciones" color={colorForKind("leave").dot} checked={showLeaves} onToggle={() => setShowLeaves((v) => !v)} />
+                <CategoryChk label="Tareas puntuales" color={colorForKind("task").dot} checked={showTasks} onToggle={() => setShowTasks((v) => !v)} />
                 {canSeeSlots && (
                   <CategoryChk label="Huecos libres" color={colorForKind("slot").dot} checked={showSlots} onToggle={() => setShowSlots((v) => !v)} />
                 )}

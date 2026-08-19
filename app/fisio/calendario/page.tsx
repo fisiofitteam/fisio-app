@@ -129,6 +129,40 @@ export default async function CalendarioPage({
     orderBy: { date: "asc" },
   });
 
+  // ── Tareas puntuales del equipo (FisioTask) ─────────────────────────────
+  // Solo las NO recurrentes (recurrenceType="none") — el usuario no quiere
+  // ver las semanales que se autogeneran. Se muestran en la fila "todo el
+  // día" del calendario porque el modelo solo tiene fecha, no hora.
+  //
+  // Permisos: managers ven todas; el resto ve solo las asignadas a él
+  // (por `assignedToProfessionalId` — CSV multiasignados se resuelve con
+  // `assignedTo contains` como fallback). Las completadas se ocultan para
+  // no saturar la vista.
+  const taskWhere: any = {
+    dueDate: { gte: weekStart, lt: weekEnd },
+    completedAt: null,
+    recurrenceType: "none",
+  };
+  if (!isManager) {
+    taskWhere.OR = [
+      { assignedToProfessionalId: user.id },
+      { assignedTo: { contains: user.id } },
+    ];
+  }
+  const tasks = await prisma.fisioTask.findMany({
+    where: taskWhere,
+    select: {
+      id: true,
+      title: true,
+      priority: true,
+      dueDate: true,
+      assignedToProfessional: { select: { id: true, fullName: true } },
+      patient: { select: { id: true, fullName: true } },
+      lead: { select: { id: true, fullName: true } },
+    },
+    orderBy: { dueDate: "asc" },
+  });
+
   // ── Vacaciones (que solapen con la semana) ──────────────────────────────
   const leaves = await prisma.professionalLeave.findMany({
     where: {
@@ -202,6 +236,26 @@ export default async function CalendarioPage({
       endISO: end.toISOString(),
       ownerId: null,
       href: "/fisio/reuniones",
+    });
+  }
+
+  for (const t of tasks) {
+    if (!t.dueDate) continue;
+    // Prefijo con paciente/lead si hay contexto, así se lee de un vistazo.
+    const context = t.patient?.fullName ?? t.lead?.fullName ?? null;
+    const priorityIcon = t.priority === "high" ? "🔴" : t.priority === "low" ? "🔵" : "🟡";
+    events.push({
+      id: `task-${t.id}`,
+      kind: "task",
+      title: `${priorityIcon} ${t.title}`,
+      subtitle: context
+        ? `${context}${t.assignedToProfessional ? " · " + t.assignedToProfessional.fullName.split(" ")[0] : ""}`
+        : (t.assignedToProfessional?.fullName.split(" ")[0] ?? ""),
+      startISO: t.dueDate.toISOString(),
+      endISO: new Date(t.dueDate.getTime() + 86_400_000).toISOString(),
+      ownerId: t.assignedToProfessional?.id ?? null,
+      href: "/fisio/tareas",
+      allDay: true,
     });
   }
 
