@@ -71,6 +71,12 @@ export function AiCalendarPlannerModal({
 }) {
   const [mode, setMode] = useState<Mode>("session");
   const [kind, setKind] = useState<"entrenamiento" | "accesorios">("entrenamiento");
+  // Duración editable de las sesiones. Se inicializa con el default por
+  // kind (60min entrenamiento / 15min accesorios) y el fisio puede
+  // ajustarla. Cambiar el kind resetea la duración al default del nuevo
+  // kind (si el fisio no la había tocado a mano).
+  const [durationMin, setDurationMin] = useState<number>(durationForKind("entrenamiento"));
+  const [durationDirty, setDurationDirty] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [dateStr, setDateStr] = useState(todayLocalDate());
   const [mondayStr, setMondayStr] = useState(nextMondayLocal());
@@ -83,6 +89,14 @@ export function AiCalendarPlannerModal({
   const [ok, setOk] = useState<string | null>(null);
 
   const workDaysSorted = ALL_WEEKDAYS.filter((d) => workDays.has(d));
+
+  function selectKind(next: "entrenamiento" | "accesorios") {
+    setKind(next);
+    // Si el fisio aún no había tocado la duración manualmente, la migramos
+    // al default del nuevo kind para que no queden "60 min" en accesorios
+    // por herencia visual.
+    if (!durationDirty) setDurationMin(durationForKind(next));
+  }
 
   function toggleWorkDay(d: Weekday) {
     setWorkDays((prev) => {
@@ -101,7 +115,7 @@ export function AiCalendarPlannerModal({
         kind,
         prompt: prompt.trim(),
         dayOfWeek,
-        durationMin: durationForKind(kind),
+        durationMin,
         patientId,
         extraContext: extraContext ?? "",
       }),
@@ -247,13 +261,13 @@ export function AiCalendarPlannerModal({
           })}
         </div>
 
-        {/* Kind (accesorios / entrenamiento) */}
+        {/* Kind (accesorios / entrenamiento) + duración editable */}
         <div className="mb-3">
           <label className="text-[11px] text-neutral-500 block mb-1">Tipo de sesión</label>
-          <div className="flex gap-2">
+          <div className="flex gap-2 mb-2">
             <button
               type="button"
-              onClick={() => setKind("entrenamiento")}
+              onClick={() => selectKind("entrenamiento")}
               disabled={busy}
               className="text-xs px-3 py-1.5 rounded-lg border disabled:opacity-40"
               style={{
@@ -262,11 +276,11 @@ export function AiCalendarPlannerModal({
                 borderColor: kind === "entrenamiento" ? "#0A0A0A" : "#E5E5E5",
               }}
             >
-              🏋 Entrenamiento (60min)
+              🏋 Entrenamiento
             </button>
             <button
               type="button"
-              onClick={() => setKind("accesorios")}
+              onClick={() => selectKind("accesorios")}
               disabled={busy}
               className="text-xs px-3 py-1.5 rounded-lg border disabled:opacity-40"
               style={{
@@ -275,8 +289,38 @@ export function AiCalendarPlannerModal({
                 borderColor: kind === "accesorios" ? "#0A0A0A" : "#E5E5E5",
               }}
             >
-              🎯 Accesorios (15min)
+              🎯 Accesorios
             </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-[11px] text-neutral-500">⏱ Duración (min)</label>
+            <input
+              type="number"
+              min={5}
+              max={240}
+              step={5}
+              value={durationMin}
+              onChange={(e) => {
+                const n = Math.round(Number(e.target.value));
+                if (Number.isFinite(n)) {
+                  setDurationMin(n);
+                  setDurationDirty(true);
+                }
+              }}
+              disabled={busy}
+              className="input text-sm w-24 tabular-nums"
+            />
+            {durationDirty && (
+              <button
+                type="button"
+                onClick={() => { setDurationMin(durationForKind(kind)); setDurationDirty(false); }}
+                disabled={busy}
+                className="text-[10px] text-neutral-500 underline"
+                title="Volver al default del tipo elegido"
+              >
+                default ({durationForKind(kind)}min)
+              </button>
+            )}
           </div>
         </div>
 
