@@ -112,27 +112,56 @@ export function AgendarLlamadaButton({
     window.dispatchEvent(new CustomEvent("patient-call-created", { detail: { patientId } }));
   }
 
+  const whatsappMessage = generatedUrl
+    ? `Hola ${patientFirstName || ""}! Aquí tienes el link para reservar tu llamada de ${TYPE_LABEL[type].toLowerCase()} conmigo: ${generatedUrl}`
+    : null;
+  const [messageCopied, setMessageCopied] = useState(false);
+
+  /**
+   * Copia texto al portapapeles de forma robusta. Preferimos la API async
+   * (navigator.clipboard) pero caemos a document.execCommand cuando el
+   * navegador la niega (contextos http, iframes, permisos, etc).
+   */
+  async function copyText(text: string): Promise<boolean> {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch {}
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+
   function copyToClipboard() {
     if (!generatedUrl) return;
-    navigator.clipboard.writeText(generatedUrl);
+    copyText(generatedUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 1800);
   }
 
-  const whatsappMessage = generatedUrl
-    ? `Hola ${patientFirstName || ""}! Aquí tienes el link para reservar tu llamada de ${TYPE_LABEL[type].toLowerCase()} conmigo: ${generatedUrl}`
-    : null;
-  const [sentToGroup, setSentToGroup] = useState(false);
+  async function copyMessage() {
+    if (!whatsappMessage) return;
+    await copyText(whatsappMessage);
+    setMessageCopied(true);
+    setTimeout(() => setMessageCopied(false), 2500);
+  }
 
-  function openGroupWithMessage() {
-    if (!whatsappMessage || !patientGroupUrl) return;
-    // Copiamos el mensaje al portapapeles y abrimos el grupo. WhatsApp Web
-    // no acepta prellenar el texto en un chat de grupo por URL, así que la
-    // mejor UX posible es "pegar y enviar".
-    navigator.clipboard.writeText(whatsappMessage).catch(() => {});
+  function openGroup() {
+    if (!patientGroupUrl) return;
     window.open(patientGroupUrl, "_blank", "noopener,noreferrer");
-    setSentToGroup(true);
-    setTimeout(() => setSentToGroup(false), 3000);
   }
 
   return (
@@ -164,28 +193,42 @@ export function AgendarLlamadaButton({
                   Pásaselo al paciente. Podrá elegir el hueco que le venga bien de los que
                   tengas libres en tu Google Calendar.
                 </p>
-                <div
-                  className="text-xs p-2 rounded-lg break-all mb-3 font-mono"
-                  style={{ background: "#F5F5F5", color: "#171717" }}
-                >
-                  {generatedUrl}
-                </div>
+
+                {/* Mensaje preescrito editable — el fisio lo copia y lo pega
+                    en el grupo. WhatsApp no permite prellenar texto en la URL
+                    de grupos, así que el flujo obligado es "copiar → abrir → pegar". */}
+                <label className="text-[11px] text-neutral-500 block mb-1">Mensaje sugerido</label>
+                <textarea
+                  readOnly
+                  value={whatsappMessage ?? ""}
+                  onFocus={(e) => e.currentTarget.select()}
+                  className="w-full text-xs p-2 rounded-lg mb-2 font-mono"
+                  style={{ background: "#F5F5F5", color: "#171717", border: "1px solid #E5E5E5", minHeight: 90, resize: "vertical" }}
+                />
+
                 <div className="flex flex-wrap gap-2 mb-3">
                   <button
-                    onClick={copyToClipboard}
+                    onClick={copyMessage}
                     className="text-xs font-medium px-3 py-2 rounded-lg"
                     style={{ background: "#0A0A0A", color: "#FAFAFA" }}
                   >
-                    {copied ? "✓ Copiado" : "📋 Copiar link"}
+                    {messageCopied ? "✓ Mensaje copiado" : "📋 Copiar mensaje"}
+                  </button>
+                  <button
+                    onClick={copyToClipboard}
+                    className="text-xs font-medium px-3 py-2 rounded-lg"
+                    style={{ background: "#FFFFFF", color: "#0A0A0A", border: "1px solid #E5E5E5" }}
+                  >
+                    {copied ? "✓ Link copiado" : "🔗 Copiar solo el link"}
                   </button>
                   {patientGroupUrl ? (
                     <button
-                      onClick={openGroupWithMessage}
+                      onClick={openGroup}
                       className="text-xs font-medium px-3 py-2 rounded-lg"
                       style={{ background: "#22C55E", color: "#FFFFFF" }}
-                      title="Copia el mensaje al portapapeles y abre el grupo — pega y envía"
+                      title="Abre el grupo de seguimiento — pega el mensaje copiado"
                     >
-                      {sentToGroup ? "✓ Mensaje copiado · pega en el grupo" : "💬 Enviar al grupo de seguimiento"}
+                      💬 Abrir grupo
                     </button>
                   ) : (
                     <span className="text-[11px] text-neutral-400 italic self-center">
@@ -193,9 +236,10 @@ export function AgendarLlamadaButton({
                     </span>
                   )}
                 </div>
+
                 <p className="text-[11px] text-neutral-500 mb-3">
-                  El link caduca en 7 días. Cuando el paciente reserve, se te
-                  añadirá el evento en tu Google Calendar con Meet.
+                  <b>Flujo:</b> pulsa <b>Copiar mensaje</b> → <b>Abrir grupo</b> → pega (Cmd+V) → enviar.
+                  El link caduca en 7 días y al reservar se te añade el evento a tu Google Calendar con Meet.
                 </p>
                 <div className="flex justify-end">
                   <button
