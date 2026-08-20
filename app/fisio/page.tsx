@@ -9,6 +9,7 @@ import { getProgramEndingsForProfessional } from "@/lib/program-endings";
 import { getLoadReviewsForProfessional } from "@/lib/load-reviews";
 import { TeamMetricsBlock } from "@/components/TeamMetricsBlock";
 import { DashboardKpiCard, type KpiDetail } from "@/components/DashboardKpiCard";
+import { RegenerateCallsButton } from "@/components/RegenerateCallsButton";
 import { CEOPanelTabs } from "@/components/CEOPanelTabs";
 import { FisioPanelTabs } from "@/components/FisioPanelTabs";
 import { ProgramEndingsBox } from "@/components/ProgramEndingsBox";
@@ -684,9 +685,12 @@ export default async function FisioPanelPage({
         </section>
 
         <section className="card">
-          <div className="flex justify-between items-center mb-3">
+          <div className="flex justify-between items-center mb-3 gap-3 flex-wrap">
             <h2 className="font-medium text-sm">Próximas llamadas</h2>
-            <Link href="/fisio/llamadas" className="text-xs text-neutral-500 hover:text-neutral-900">Ver todas →</Link>
+            <div className="flex items-center gap-3">
+              {isManager && <RegenerateCallsButton />}
+              <Link href="/fisio/llamadas" className="text-xs text-neutral-500 hover:text-neutral-900">Ver todas →</Link>
+            </div>
           </div>
           {calls.length === 0 ? (
             <p className="text-xs text-neutral-400 py-4 text-center">Sin llamadas programadas</p>
