@@ -107,6 +107,24 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     select: { id: true, scheduledAt: true, meetingUrl: true },
   });
 
+  // Propagar al ScheduledCall enlazado (aviso del panel /fisio/llamadas):
+  // el paciente ya reservó, así que le ponemos scheduledAt y una nota.
+  // Best-effort: si la fila ya no existe (borrada a mano) o no está enlazada,
+  // seguimos adelante.
+  if (call.scheduledCallId) {
+    try {
+      await prisma.scheduledCall.update({
+        where: { id: call.scheduledCallId },
+        data: {
+          scheduledAt: startAt,
+          notes: `Agendada por el paciente vía link · ${typeLabel}`,
+        },
+      });
+    } catch (e) {
+      console.warn("[reserve] no se pudo propagar a ScheduledCall", call.scheduledCallId, e);
+    }
+  }
+
   // Emails de confirmación — best-effort. Si Resend falla no rompemos la
   // reserva; el evento ya está en el calendario del fisio.
   const humanDate = new Intl.DateTimeFormat("es-ES", {

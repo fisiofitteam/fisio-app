@@ -1108,6 +1108,12 @@ model ScheduledCall {
   outcome     String?                                // notas posteriores al cumplir
   createdAt   DateTime @default(now())
 
+  // Cuando el fisio genera un link de reserva desde la ficha (PatientCall),
+  // lo enlazamos aquí para propagar los cambios: reserva → scheduledAt,
+  // transcript listo → completedAt. Así el panel /fisio/llamadas refleja
+  // el estado real sin desalinearse.
+  patientCalls PatientCall[] @relation("PatientCallScheduledCall")
+
   @@index([scheduledAt])
   @@index([patientId])
 }
@@ -1989,12 +1995,18 @@ model PatientCall {
   // CallSummary (campo patientCallId?), que es el que aloja la FK.
   callSummary    CallSummary? @relation("CallSummaryPatientCall")
 
+  // Enlace opcional al ScheduledCall (aviso automático del cron) que dio
+  // origen a esta reserva. Sirve para propagar estado al panel /fisio/llamadas.
+  scheduledCallId String?
+  scheduledCall   ScheduledCall? @relation("PatientCallScheduledCall", fields: [scheduledCallId], references: [id], onDelete: SetNull)
+
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   @@index([professionalId, status])
   @@index([patientId, type])
   @@index([bookingToken])
+  @@index([scheduledCallId])
 }
 
 // Plantilla semanal del fisio: qué horas de qué días acepta llamadas de

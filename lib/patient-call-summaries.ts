@@ -191,6 +191,7 @@ export async function generateSummaryForPatientCall(
       meetingUrl: true,
       fisioNote: true,
       professionalId: true,
+      scheduledCallId: true,
       patient: { select: { fullName: true } },
     },
   });
@@ -361,6 +362,22 @@ export async function generateSummaryForPatientCall(
     where: { id: call.id },
     data: { status: "completed" },
   });
+
+  // Propagar al ScheduledCall enlazado: la llamada del panel /fisio/llamadas
+  // pasa a "completed" con el outcome de la IA como resumen corto.
+  if (call.scheduledCallId) {
+    try {
+      await prisma.scheduledCall.update({
+        where: { id: call.scheduledCallId },
+        data: {
+          completedAt: new Date(),
+          outcome: parsed.clinical.summary?.slice(0, 500) || "Llamada completada · resumen IA disponible en la ficha",
+        },
+      });
+    } catch (e) {
+      console.warn("[patient-call-summaries] no se pudo propagar completed al ScheduledCall", call.scheduledCallId, e);
+    }
+  }
 
   return { ok: true, callSummaryId: saved.id };
 }

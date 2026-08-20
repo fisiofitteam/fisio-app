@@ -1032,6 +1032,8 @@ model ScheduledCall {
   outcome     String?                                // notas posteriores al cumplir
   createdAt   DateTime @default(now())
 
+  patientCalls PatientCall[] @relation("PatientCallScheduledCall")
+
   @@index([scheduledAt])
   @@index([patientId])
 }
@@ -3248,12 +3250,16 @@ model PatientCall {
   fisioNote      String?
   callSummary    CallSummary? @relation("CallSummaryPatientCall")
 
+  scheduledCallId String?
+  scheduledCall   ScheduledCall? @relation("PatientCallScheduledCall", fields: [scheduledCallId], references: [id], onDelete: SetNull)
+
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   @@index([professionalId, status])
   @@index([patientId, type])
   @@index([bookingToken])
+  @@index([scheduledCallId])
 }
 
 model ProfessionalCallAvailability {

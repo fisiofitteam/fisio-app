@@ -169,6 +169,17 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       ? settings?.optimizationDurationMin ?? 45
       : settings?.renewalDurationMin ?? 45);
 
+  // Enlazar con el ScheduledCall pendiente correspondiente (mismo paciente
+  // + mismo tipo). El type entre modelos usa nomenclatura distinta:
+  //   PatientCall.type  → "optimization" | "renewal"
+  //   ScheduledCall.type → "optimizacion" | "renovacion"
+  const scheduledCallType = type === "optimization" ? "optimizacion" : "renovacion";
+  const pendingScheduledCall = await prisma.scheduledCall.findFirst({
+    where: { patientId: patient.id, type: scheduledCallType, completedAt: null },
+    orderBy: { createdAt: "desc" },
+    select: { id: true },
+  });
+
   const call = await prisma.patientCall.create({
     data: {
       patientId: patient.id,
@@ -179,6 +190,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       status: "pending",
       fisioNote,
       durationMin,
+      scheduledCallId: pendingScheduledCall?.id ?? null,
     },
     select: { id: true, bookingToken: true, tokenExpiresAt: true },
   });
