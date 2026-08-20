@@ -2,11 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { AgendarLlamadaButton } from "@/components/AgendarLlamadaButton";
 
 type Call = {
   id: string;
   patientId: string;
   patientName: string;
+  patientFirstName: string;
+  patientGroupUrl: string | null;
   scheduledAt: string | null;
   type: string;
   notes: string;
@@ -141,11 +144,18 @@ function CallRow({ call, onClick, onMarkDone, onDelete }: { call: Call; onClick:
           {call.notes && <div className="text-xs text-neutral-600 mt-1 italic">{call.notes}</div>}
           {call.outcome && <div className="text-xs text-emerald-700 mt-1">→ {call.outcome}</div>}
         </div>
-        <div className="flex gap-2 flex-shrink-0">
+        <div className="flex gap-2 flex-shrink-0 items-center" onClick={(e) => e.stopPropagation()}>
           {!call.completedAt && (
-            <button onClick={(e) => { e.stopPropagation(); onMarkDone(); }} className="text-xs text-emerald-700">✓ Hecha</button>
+            <AgendarLlamadaButton
+              patientId={call.patientId}
+              patientGroupUrl={call.patientGroupUrl}
+              patientFirstName={call.patientFirstName}
+            />
           )}
-          <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="text-xs text-red-600">✕</button>
+          {!call.completedAt && (
+            <button onClick={onMarkDone} className="text-xs text-emerald-700">✓ Hecha</button>
+          )}
+          <button onClick={onDelete} className="text-xs text-red-600">✕</button>
         </div>
       </div>
     </div>
