@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { buildPatientCallMessage } from "@/lib/patient-call-messages";
 
 /**
  * Botón "🎥 Agendar llamada" del header del paciente. Sustituye al viejo
@@ -113,7 +114,7 @@ export function AgendarLlamadaButton({
   }
 
   const whatsappMessage = generatedUrl
-    ? `Hola ${patientFirstName || ""}! Aquí tienes el link para reservar tu llamada de ${TYPE_LABEL[type].toLowerCase()} conmigo: ${generatedUrl}`
+    ? buildPatientCallMessage(type, patientFirstName, generatedUrl)
     : null;
   const [messageCopied, setMessageCopied] = useState(false);
 

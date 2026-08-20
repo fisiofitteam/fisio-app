@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { PatientCallSummaryPanel } from "@/components/PatientCallSummaryPanel";
+import { buildPatientCallMessage } from "@/lib/patient-call-messages";
 
 /**
  * Card en la ficha del paciente que MUESTRA el estado de los últimos links
@@ -124,9 +125,7 @@ export function PatientCallLinksCard({
   function sendToGroup(call: PatientCall) {
     if (!patientGroupUrl) return;
     const url = `${baseUrl}/agendar-fisio/${call.bookingToken}`;
-    const label = TYPE_LABEL[call.type].toLowerCase();
-    const first = patientFirstName || "";
-    const text = `Hola ${first}! Aquí tienes el link para reservar tu llamada de ${label} conmigo: ${url}`;
+    const text = buildPatientCallMessage(call.type, patientFirstName, url);
     navigator.clipboard.writeText(text).catch(() => {});
     window.open(patientGroupUrl, "_blank", "noopener,noreferrer");
   }
