@@ -335,16 +335,16 @@ export default async function FisioPanelPage({
   // vista.
   let extraKpisBlock: React.ReactNode = null;
   if (isManager) {
-    const [unassignedCount, teamAdhs, pendingFormsPool, callsIn7Count] = await Promise.all([
+    // Pacientes candidatos para adherencia: activos, no terminados.
+    const patientsForAdh = patients.filter((p) => (p as any).onboardingStatus !== "finished");
+    const [unassignedCount, adhsWithPatient, pendingFormsPool, callsIn7Count] = await Promise.all([
       prisma.patient.count({
         where: { isTest: false, assignedProfessionalId: null, ...activePatientCondition() },
       }),
-      // Adherencia por paciente (solo pacientes activos y no test). Reutilizamos
-      // los `patients` ya cargados arriba; managers los tienen sin filtro extra.
       Promise.all(
-        patients
-          .filter((p) => (p as any).onboardingStatus !== "finished")
-          .map((p) => calculateAdherence(p.id)),
+        patientsForAdh.map((p) =>
+          calculateAdherence(p.id).then((adh) => ({ patient: p, adh })),
+        ),
       ),
       // Formularios: SQL cuenta sesiones completadas sin revisar, pero muchas
       // no tienen FORM o el paciente no las rellenó. Filtramos en memoria con
@@ -372,13 +372,21 @@ export default async function FisioPanelPage({
       }),
     ]);
     const pendingFormsCount = pendingFormsPool.filter(hasPendingFormReview).length;
-    const validAdhs = teamAdhs.filter((a) => a.total > 0);
+    const validAdhs = adhsWithPatient.filter((x) => x.adh.total > 0);
     const avgAdh = validAdhs.length > 0
-      ? Math.round(validAdhs.reduce((acc, a) => acc + a.percentage, 0) / validAdhs.length)
+      ? Math.round(validAdhs.reduce((acc, x) => acc + x.adh.percentage, 0) / validAdhs.length)
       : null;
-    // "En riesgo" = pacientes con adherencia bajo el 50% (definición
-    // pragmática: si no llega a la mitad de las sesiones, se cae del programa).
-    const atRiskCount = validAdhs.filter((a) => a.percentage < 50).length;
+    // "En riesgo" = adherencia < 30% Y con al menos 3 semanas desde el inicio
+    // del programa. Filtramos a los pacientes nuevos que aún no han tenido
+    // oportunidad de acumular sesiones para no ensuciar el KPI.
+    const THREE_WEEKS_MS = 21 * 86_400_000;
+    const now = Date.now();
+    const atRiskCount = validAdhs.filter((x) => {
+      if (x.adh.percentage >= 30) return false;
+      const start = x.patient.subscriptionStartDate?.getTime();
+      if (!start) return false;
+      return now - start >= THREE_WEEKS_MS;
+    }).length;
 
     extraKpisBlock = (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-5">
