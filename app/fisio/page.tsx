@@ -389,20 +389,6 @@ export default async function FisioPanelPage({
     const avgAdh = validAdhs.length > 0
       ? Math.round(validAdhs.reduce((acc, x) => acc + x.adh.percentage, 0) / validAdhs.length)
       : null;
-    // "En riesgo" = adherencia < 30% Y con al menos 3 semanas desde el inicio
-    // del programa. Filtramos a los pacientes nuevos que aún no han tenido
-    // oportunidad de acumular sesiones para no ensuciar el KPI.
-    const THREE_WEEKS_MS = 21 * 86_400_000;
-    const now = Date.now();
-    const atRiskList = validAdhs
-      .filter((x) => {
-        if (x.adh.percentage >= 30) return false;
-        const start = x.patient.subscriptionStartDate?.getTime();
-        if (!start) return false;
-        return now - start >= THREE_WEEKS_MS;
-      })
-      .sort((a, b) => a.adh.percentage - b.adh.percentage);
-
     // Helpers de formateo para los detalles
     const fmtDate = (d: Date) => d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
     const fmtDateTime = (d: Date) => d.toLocaleDateString("es-ES", { day: "numeric", month: "short" }) +
@@ -470,18 +456,6 @@ export default async function FisioPanelPage({
         metaAccent: x.adh.percentage < 30 ? "danger" : x.adh.percentage < 50 ? "warning" : null,
       })),
     };
-    const detailAtRisk: KpiDetail = {
-      title: "Pacientes en riesgo",
-      description: "Adherencia menor al 30 % y con al menos 3 semanas en programa.",
-      emptyText: "Ningún paciente en riesgo. 🎉",
-      rows: atRiskList.map((x) => ({
-        href: `/fisio/paciente/${x.patient.id}`,
-        title: x.patient.fullName,
-        subtitle: `${x.adh.completed}/${x.adh.total} sesiones`,
-        meta: `${x.adh.percentage}%`,
-        metaAccent: "danger",
-      })),
-    };
     const detailRenewalRate: KpiDetail = {
       title: `Tasa de renovación (${periodLabel})`,
       description: teamRenewals.total > 0
@@ -517,7 +491,6 @@ export default async function FisioPanelPage({
         <DashboardKpiCard label="Renuevan en 30d" value={renewalsIn30} accent={renewalsIn30 > 0 ? "warning" : undefined} detail={detailRenewals} />
         <DashboardKpiCard label="Formularios por revisar" value={pendingFormsCount} accent={pendingFormsCount > 0 ? "warning" : undefined} detail={detailForms} />
         <DashboardKpiCard label="Adherencia media" value={avgAdh !== null ? `${avgAdh}%` : "—"} detail={detailAdherence} />
-        <DashboardKpiCard label="Pacientes en riesgo" value={atRiskList.length} accent={atRiskList.length > 0 ? "danger" : undefined} detail={detailAtRisk} />
         <DashboardKpiCard label="Tasa renovación" value={teamRenewals.rate !== null ? `${teamRenewals.rate}%` : "—"} detail={detailRenewalRate} />
         <DashboardKpiCard label="Llamadas (7 días)" value={callsIn7List.length} detail={detailCalls} />
       </div>
