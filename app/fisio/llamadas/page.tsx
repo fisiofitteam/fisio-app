@@ -17,6 +17,11 @@ export default async function CallsPage() {
     where: { patient: patientFilter },
     include: {
       patient: { select: { id: true, fullName: true, whatsappGroupUrl: true } },
+      patientCalls: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        include: { callSummary: true },
+      },
     },
     orderBy: [
       { completedAt: "asc" },
@@ -32,18 +37,38 @@ export default async function CallsPage() {
         <h1 className="text-xl font-semibold">Llamadas</h1>
       </header>
       <CallsList
-        calls={calls.map((c) => ({
-          id: c.id,
-          patientId: c.patientId,
-          patientName: c.patient.fullName,
-          patientFirstName: c.patient.fullName.split(" ")[0] ?? c.patient.fullName,
-          patientGroupUrl: c.patient.whatsappGroupUrl ?? null,
-          scheduledAt: c.scheduledAt?.toISOString() ?? null,
-          type: c.type,
-          notes: c.notes ?? "",
-          completedAt: c.completedAt?.toISOString() ?? null,
-          outcome: c.outcome ?? "",
-        }))}
+        calls={calls.map((c) => {
+          const pc = c.patientCalls?.[0] ?? null;
+          const sum = pc?.callSummary ?? null;
+          return {
+            id: c.id,
+            patientId: c.patientId,
+            patientName: c.patient.fullName,
+            patientFirstName: c.patient.fullName.split(" ")[0] ?? c.patient.fullName,
+            patientGroupUrl: c.patient.whatsappGroupUrl ?? null,
+            scheduledAt: c.scheduledAt?.toISOString() ?? null,
+            type: c.type,
+            notes: c.notes ?? "",
+            completedAt: c.completedAt?.toISOString() ?? null,
+            outcome: c.outcome ?? "",
+            // PatientCall enlazado (si el fisio agendó vía link). Solo lo
+            // pasamos para poder pintar el resumen IA en las realizadas.
+            patientCallId: pc?.id ?? null,
+            patientCallType: (pc?.type ?? null) as "optimization" | "renewal" | null,
+            summary: sum && sum.clinicalSummary
+              ? {
+                  clinicalSummary: sum.clinicalSummary,
+                  clinicalKeyPoints: sum.clinicalKeyPoints,
+                  coachingSummary: sum.coachingSummary,
+                  coachingKeyPoints: sum.coachingKeyPoints,
+                  salesSummary: sum.salesSummary,
+                  salesKeyPoints: sum.salesKeyPoints,
+                  transcriptCharCount: sum.transcriptCharCount,
+                  updatedAt: sum.updatedAt.toISOString(),
+                }
+              : null,
+          };
+        })}
         patients={patients.map((p) => ({ id: p.id, fullName: p.fullName }))}
       />
     </main>

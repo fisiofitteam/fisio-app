@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { PatientCallSummaryPanel } from "@/components/PatientCallSummaryPanel";
 
 /**
  * Card en la ficha del paciente que MUESTRA el estado de los últimos links
@@ -191,8 +192,22 @@ export function PatientCallLinksCard({
                   {c.status === "scheduled" && c.scheduledAt && new Date(c.scheduledAt) < new Date(Date.now() - 15 * 60_000) && !hasSummary && (
                     <SummaryPendingChip call={c} onRegenerated={loadCalls} />
                   )}
-                  {hasSummary && (
-                    <PatientCallSummaryPanel call={c} onRegenerated={loadCalls} />
+                  {hasSummary && c.callSummary && (
+                    <PatientCallSummaryPanel
+                      callId={c.id}
+                      callType={c.type}
+                      summary={{
+                        clinicalSummary: c.callSummary.clinicalSummary,
+                        clinicalKeyPoints: c.callSummary.clinicalKeyPoints,
+                        coachingSummary: c.callSummary.coachingSummary,
+                        coachingKeyPoints: c.callSummary.coachingKeyPoints,
+                        salesSummary: c.callSummary.salesSummary,
+                        salesKeyPoints: c.callSummary.salesKeyPoints,
+                        transcriptCharCount: c.callSummary.transcriptCharCount,
+                        updatedAt: c.callSummary.updatedAt,
+                      }}
+                      onRegenerated={loadCalls}
+                    />
                   )}
 
                   {isPending && (
@@ -308,128 +323,3 @@ function SummaryPendingChip({ call, onRegenerated }: { call: PatientCall; onRege
   );
 }
 
-/**
- * Panel expandible con el resumen IA de una llamada terminada. Muestra
- * clinical (evolución del paciente) + renewalContext si type=renewal +
- * coaching (feedback al fisio) + acción regenerar.
- */
-function PatientCallSummaryPanel({ call, onRegenerated }: { call: PatientCall; onRegenerated: () => void }) {
-  // Abrimos por defecto: cuando el fisio despliega la llamada quiere ver
-  // el resumen inmediatamente, no un segundo botón que abrir.
-  const [open, setOpen] = useState(true);
-  const [regenerating, setRegenerating] = useState(false);
-  const s = call.callSummary;
-  if (!s) return null;
-
-  const clinicalKp = safeParse(s.clinicalKeyPoints);
-  const coachingKp = safeParse(s.coachingKeyPoints);
-  const renewalKp = call.type === "renewal" ? safeParse(s.salesKeyPoints) : null;
-
-  async function regen() {
-    if (!confirm("¿Regenerar el resumen desde la transcripción? Sobrescribirá el actual.")) return;
-    setRegenerating(true);
-    const r = await fetch(`/api/patient-calls/${call.id}/regenerate`, { method: "POST" });
-    setRegenerating(false);
-    if (r.ok) onRegenerated();
-  }
-
-  return (
-    <div className="mt-3 rounded-md" style={{ background: "#F9FAFB", border: "1px solid #E5E7EB" }}>
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between px-3 py-2 text-left"
-      >
-        <span className="text-xs font-semibold">🤖 Resumen IA {open ? "▾" : "▸"}</span>
-        <span className="text-[10px] text-neutral-500">
-          {s.transcriptCharCount ? `${s.transcriptCharCount.toLocaleString("es-ES")} chars` : ""}
-        </span>
-      </button>
-      {open && (
-        <div className="px-3 pb-3 space-y-3 text-[12px]">
-          {/* Clinical */}
-          <div>
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500 mb-1">
-              Evolución clínica
-            </div>
-            <p className="text-neutral-800 leading-relaxed">{s.clinicalSummary}</p>
-            <KpList label="Síntomas actuales" items={clinicalKp?.currentSymptoms} />
-            <KpList label="Adherencia" items={clinicalKp?.adherence} />
-            <KpList label="Ajustes acordados" items={clinicalKp?.planAdjustments} />
-            <KpList label="Objetivos actualizados" items={clinicalKp?.goalsUpdated} />
-            <KpList label="⚠️ Banderas rojas" items={clinicalKp?.redFlags} highlight />
-          </div>
-
-          {/* Renewal context (solo si type=renewal) */}
-          {call.type === "renewal" && s.salesSummary && (
-            <div>
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500 mb-1">
-                Cierre de renovación
-              </div>
-              <p className="text-neutral-800 leading-relaxed">{s.salesSummary}</p>
-              {renewalKp?.programProposed && (
-                <div className="text-[11px] text-neutral-700 mt-1">
-                  <b>Propuesta:</b> {renewalKp.programProposed}
-                  {renewalKp?.priceDiscussed ? ` · ${renewalKp.priceDiscussed}` : ""}
-                </div>
-              )}
-              {renewalKp?.decision && (
-                <div className="text-[11px] text-neutral-700 mt-0.5">
-                  <b>Decisión:</b> {renewalKp.decision}
-                </div>
-              )}
-              <KpList label="Objeciones" items={renewalKp?.objections} />
-            </div>
-          )}
-
-          {/* Coaching (feedback al fisio) */}
-          {s.coachingSummary && (
-            <div>
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500 mb-1">
-                🎯 Feedback para el fisio
-              </div>
-              <p className="text-neutral-800 leading-relaxed">{s.coachingSummary}</p>
-              <KpList label="👍 Puntos fuertes" items={coachingKp?.strengths} />
-              <KpList label="👀 Oportunidades" items={coachingKp?.weaknesses} />
-              <KpList label="💡 Para la próxima" items={coachingKp?.improvements} />
-            </div>
-          )}
-
-          <div className="flex items-center justify-between pt-2 border-t" style={{ borderColor: "#E5E7EB" }}>
-            <span className="text-[10px] text-neutral-500">
-              Generado {formatDateTime(s.updatedAt)}
-            </span>
-            <button
-              onClick={regen}
-              disabled={regenerating}
-              className="text-[11px] font-medium px-2 py-1 rounded-md disabled:opacity-40"
-              style={{ background: "#0A0A0A", color: "#FAFAFA" }}
-            >
-              {regenerating ? "Regenerando…" : "🔄 Regenerar"}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function KpList({ label, items, highlight }: { label: string; items?: string[]; highlight?: boolean }) {
-  if (!items || items.length === 0) return null;
-  return (
-    <div className="mt-1">
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">{label}</div>
-      <ul className="list-disc pl-5 mt-0.5 space-y-0.5">
-        {items.map((it, i) => (
-          <li key={i} className={highlight ? "text-red-700 font-medium" : "text-neutral-700"}>
-            {it}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function safeParse(json: string | null | undefined): any {
-  if (!json) return null;
-  try { return JSON.parse(json); } catch { return null; }
-}

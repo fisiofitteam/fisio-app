@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AgendarLlamadaButton } from "@/components/AgendarLlamadaButton";
+import { PatientCallSummaryPanel, type PatientCallSummaryData } from "@/components/PatientCallSummaryPanel";
 
 type Call = {
   id: string;
@@ -15,6 +16,9 @@ type Call = {
   notes: string;
   completedAt: string | null;
   outcome: string;
+  patientCallId: string | null;
+  patientCallType: "optimization" | "renewal" | null;
+  summary: PatientCallSummaryData | null;
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -86,9 +90,15 @@ export function CallsList({
       {done.length > 0 && (
         <section>
           <h2 className="text-xs uppercase text-neutral-500 font-medium mb-2">Realizadas</h2>
-          <div className="space-y-2 opacity-70">
+          <div className="space-y-2">
             {done.map((c) => (
-              <CallRow key={c.id} call={c} onClick={() => setEditing(c)} onMarkDone={() => {}} onDelete={() => remove(c.id)} />
+              <DoneCallRow
+                key={c.id}
+                call={c}
+                onEdit={() => setEditing(c)}
+                onDelete={() => remove(c.id)}
+                onRefresh={() => router.refresh()}
+              />
             ))}
           </div>
         </section>
@@ -297,5 +307,76 @@ function CompleteCallModal({ call, onClose, onSaved }: { call: Call; onClose: ()
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Row de llamada "Realizada". Se desplega para mostrar el resumen IA
+ * (clínico + coaching + renewalContext si aplica) cuando el PatientCall
+ * enlazado tiene callSummary generado por el cron de Meet.
+ *
+ * Si la llamada no está enlazada a un PatientCall o el resumen aún no
+ * existe, se muestra en versión compacta con outcome y opciones básicas.
+ */
+function DoneCallRow({
+  call,
+  onEdit,
+  onDelete,
+  onRefresh,
+}: {
+  call: Call;
+  onEdit: () => void;
+  onDelete: () => void;
+  onRefresh: () => void;
+}) {
+  const dateStr = call.completedAt
+    ? new Date(call.completedAt).toLocaleDateString("es-ES", { day: "numeric", month: "short" })
+    : "";
+  const typeChipClass = call.type === "renovacion" ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800";
+  const hasSummary = !!call.summary?.clinicalSummary;
+
+  return (
+    <details className="card !p-3 group opacity-90 hover:opacity-100 transition-opacity">
+      <summary className="flex justify-between items-start gap-2 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-medium text-sm">{call.patientName}</span>
+            <span className={`text-xs px-2 py-0.5 rounded-full ${typeChipClass}`}>
+              {TYPE_LABELS[call.type] ?? call.type}
+            </span>
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+              ✓ Realizada
+            </span>
+            {hasSummary && (
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-neutral-100 text-neutral-700">
+                🤖 Resumen IA
+              </span>
+            )}
+          </div>
+          <div className="text-xs text-neutral-500 mt-0.5">Realizada el {dateStr}</div>
+          {call.outcome && <div className="text-xs text-emerald-700 mt-1 line-clamp-2">→ {call.outcome}</div>}
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+          <button onClick={onEdit} className="text-xs text-neutral-500">✎ Editar</button>
+          <button onClick={onDelete} className="text-xs text-red-600">✕</button>
+          <span className="text-neutral-400 text-xs group-open:rotate-180 transition-transform">▼</span>
+        </div>
+      </summary>
+
+      <div className="mt-3 border-t border-neutral-100 pt-3">
+        {call.summary && call.patientCallId && call.patientCallType ? (
+          <PatientCallSummaryPanel
+            callId={call.patientCallId}
+            callType={call.patientCallType}
+            summary={call.summary}
+            onRegenerated={onRefresh}
+          />
+        ) : (
+          <p className="text-xs text-neutral-500 italic">
+            Aún no hay resumen IA — o esta llamada se agendó fuera del flujo de link (no está enlazada a Meet).
+          </p>
+        )}
+      </div>
+    </details>
   );
 }
