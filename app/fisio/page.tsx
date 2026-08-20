@@ -8,6 +8,7 @@ import { getPeriodRange, calculateFinanceSummary, type Period } from "@/lib/fina
 import { getProgramEndingsForProfessional } from "@/lib/program-endings";
 import { getLoadReviewsForProfessional } from "@/lib/load-reviews";
 import { TeamMetricsBlock } from "@/components/TeamMetricsBlock";
+import { DashboardKpiCard, type KpiDetail } from "@/components/DashboardKpiCard";
 import { CEOPanelTabs } from "@/components/CEOPanelTabs";
 import { FisioPanelTabs } from "@/components/FisioPanelTabs";
 import { ProgramEndingsBox } from "@/components/ProgramEndingsBox";
@@ -337,9 +338,11 @@ export default async function FisioPanelPage({
   if (isManager) {
     // Pacientes candidatos para adherencia: activos, no terminados.
     const patientsForAdh = patients.filter((p) => (p as any).onboardingStatus !== "finished");
-    const [unassignedCount, adhsWithPatient, pendingFormsPool, callsIn7Count] = await Promise.all([
-      prisma.patient.count({
+    const [unassignedList, adhsWithPatient, pendingFormsPool, callsIn7List] = await Promise.all([
+      prisma.patient.findMany({
         where: { isTest: false, assignedProfessionalId: null, ...activePatientCondition() },
+        select: { id: true, fullName: true, programType: true, subscriptionStartDate: true },
+        orderBy: { fullName: "asc" },
       }),
       Promise.all(
         patientsForAdh.map((p) =>
@@ -358,9 +361,13 @@ export default async function FisioPanelPage({
           responses: { not: null },
           assignment: { patient: { isTest: false, ...activePatientCondition() } },
         },
-        select: { id: true, tasksSnapshot: true, responses: true },
+        select: {
+          id: true, tasksSnapshot: true, responses: true, completedAt: true,
+          assignment: { select: { patient: { select: { id: true, fullName: true } } } },
+        },
+        orderBy: { completedAt: "desc" },
       }),
-      prisma.scheduledCall.count({
+      prisma.scheduledCall.findMany({
         where: {
           completedAt: null,
           scheduledAt: {
@@ -369,9 +376,15 @@ export default async function FisioPanelPage({
           },
           patient: { isTest: false, ...activePatientCondition() },
         },
+        select: {
+          id: true, type: true, scheduledAt: true,
+          patient: { select: { id: true, fullName: true } },
+        },
+        orderBy: { scheduledAt: "asc" },
       }),
     ]);
-    const pendingFormsCount = pendingFormsPool.filter(hasPendingFormReview).length;
+    const pendingFormsFiltered = pendingFormsPool.filter(hasPendingFormReview);
+    const pendingFormsCount = pendingFormsFiltered.length;
     const validAdhs = adhsWithPatient.filter((x) => x.adh.total > 0);
     const avgAdh = validAdhs.length > 0
       ? Math.round(validAdhs.reduce((acc, x) => acc + x.adh.percentage, 0) / validAdhs.length)
@@ -381,23 +394,132 @@ export default async function FisioPanelPage({
     // oportunidad de acumular sesiones para no ensuciar el KPI.
     const THREE_WEEKS_MS = 21 * 86_400_000;
     const now = Date.now();
-    const atRiskCount = validAdhs.filter((x) => {
-      if (x.adh.percentage >= 30) return false;
-      const start = x.patient.subscriptionStartDate?.getTime();
-      if (!start) return false;
-      return now - start >= THREE_WEEKS_MS;
-    }).length;
+    const atRiskList = validAdhs
+      .filter((x) => {
+        if (x.adh.percentage >= 30) return false;
+        const start = x.patient.subscriptionStartDate?.getTime();
+        if (!start) return false;
+        return now - start >= THREE_WEEKS_MS;
+      })
+      .sort((a, b) => a.adh.percentage - b.adh.percentage);
+
+    // Helpers de formateo para los detalles
+    const fmtDate = (d: Date) => d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+    const fmtDateTime = (d: Date) => d.toLocaleDateString("es-ES", { day: "numeric", month: "short" }) +
+      " · " + d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+    const callTypeLabel = (t: string) => t === "optimizacion" ? "Optimización" : t === "renovacion" ? "Renovación" : t;
+
+    // Renuevan en 30d: reutilizamos withRenewalAll (ya filtrado 0..30 días)
+    const renewalsIn30List = withRenewalAll.filter((x) => x.days >= 0 && x.days <= 30);
+
+    // Adherencia media: top 5 mejores y bottom 5 peores para dar contexto
+    // sobre por qué el promedio queda como queda.
+    const sortedByAdh = [...validAdhs].sort((a, b) => a.adh.percentage - b.adh.percentage);
+
+    // === DETAILS ===
+    const detailTotal: KpiDetail = {
+      title: "Pacientes totales",
+      description: `${patients.length} activos (excluye Prevention, fantasma y terminados).`,
+      rows: [...patients]
+        .sort((a, b) => a.fullName.localeCompare(b.fullName))
+        .map((p) => ({
+          href: `/fisio/paciente/${p.id}`,
+          title: p.fullName,
+          subtitle: p.programType ?? "—",
+        })),
+    };
+    const detailUnassigned: KpiDetail = {
+      title: "Sin asignar",
+      description: "Pacientes activos sin fisio asignado. Asígnales uno cuanto antes.",
+      emptyText: "Todos los pacientes activos tienen fisio. 🎉",
+      rows: unassignedList.map((p) => ({
+        href: `/fisio/paciente/${p.id}`,
+        title: p.fullName,
+        subtitle: p.programType ?? "—",
+      })),
+    };
+    const detailRenewals: KpiDetail = {
+      title: "Renuevan en 30 días",
+      description: "Ordenados por proximidad de vencimiento.",
+      emptyText: "Nadie vence en los próximos 30 días.",
+      rows: renewalsIn30List.map((x) => ({
+        href: `/fisio/paciente/${x.patient.id}`,
+        title: x.patient.fullName,
+        meta: `en ${x.days}d`,
+        metaAccent: x.days <= 7 ? "danger" : x.days <= 14 ? "warning" : null,
+      })),
+    };
+    const detailForms: KpiDetail = {
+      title: "Formularios por revisar",
+      description: "Sesiones con formulario rellenado por el paciente y sin revisión del fisio.",
+      emptyText: "Ningún formulario pendiente. 🎉",
+      rows: pendingFormsFiltered.slice(0, 50).map((s: any) => ({
+        href: s.assignment?.patient?.id ? `/fisio/paciente/${s.assignment.patient.id}/formularios` : undefined,
+        title: s.assignment?.patient?.fullName ?? "Paciente",
+        subtitle: s.completedAt ? `Completado ${fmtDate(s.completedAt)}` : undefined,
+      })),
+    };
+    const detailAdherence: KpiDetail = {
+      title: "Adherencia media",
+      description: `Promedio del ${avgAdh ?? 0}% entre ${validAdhs.length} pacientes con datos. Los 10 con menor adherencia:`,
+      rows: sortedByAdh.slice(0, 10).map((x) => ({
+        href: `/fisio/paciente/${x.patient.id}`,
+        title: x.patient.fullName,
+        subtitle: `${x.adh.completed}/${x.adh.total} sesiones`,
+        meta: `${x.adh.percentage}%`,
+        metaAccent: x.adh.percentage < 30 ? "danger" : x.adh.percentage < 50 ? "warning" : null,
+      })),
+    };
+    const detailAtRisk: KpiDetail = {
+      title: "Pacientes en riesgo",
+      description: "Adherencia menor al 30 % y con al menos 3 semanas en programa.",
+      emptyText: "Ningún paciente en riesgo. 🎉",
+      rows: atRiskList.map((x) => ({
+        href: `/fisio/paciente/${x.patient.id}`,
+        title: x.patient.fullName,
+        subtitle: `${x.adh.completed}/${x.adh.total} sesiones`,
+        meta: `${x.adh.percentage}%`,
+        metaAccent: "danger",
+      })),
+    };
+    const detailRenewalRate: KpiDetail = {
+      title: `Tasa de renovación (${periodLabel})`,
+      description: teamRenewals.total > 0
+        ? `${teamRenewals.renewed}/${teamRenewals.total} renovaron. Detalle por fisio:`
+        : "Sin oportunidades de renovación en este período.",
+      emptyText: "Sin datos por fisio en este período.",
+      rows: perFisio
+        .filter((f) => (f.renewed + f.lost) > 0)
+        .sort((a, b) => (b.rate ?? -1) - (a.rate ?? -1))
+        .map((f) => ({
+          title: f.fullName,
+          subtitle: `${f.renewed} renov · ${f.lost} perd · ${f.renewed + f.lost} decisiones`,
+          meta: f.rate !== null ? `${f.rate}%` : "—",
+          metaAccent: f.rate !== null && f.rate < 50 ? "danger" : f.rate !== null && f.rate < 70 ? "warning" : null,
+        })),
+    };
+    const detailCalls: KpiDetail = {
+      title: "Llamadas próximas (7 días)",
+      description: "Ordenadas por fecha.",
+      emptyText: "Sin llamadas programadas los próximos 7 días.",
+      rows: callsIn7List.map((c) => ({
+        href: `/fisio/paciente/${c.patient.id}`,
+        title: c.patient.fullName,
+        subtitle: callTypeLabel(c.type),
+        meta: c.scheduledAt ? fmtDateTime(c.scheduledAt) : "sin fecha",
+      })),
+    };
 
     extraKpisBlock = (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-5">
-        <KpiCard label="Pacientes totales" value={patients.length} />
-        <KpiCard label="Sin asignar" value={unassignedCount} accent={unassignedCount > 0 ? "warning" : undefined} />
-        <KpiCard label="Renuevan en 30d" value={renewalsIn30} accent={renewalsIn30 > 0 ? "warning" : undefined} />
-        <KpiCard label="Formularios por revisar" value={pendingFormsCount} accent={pendingFormsCount > 0 ? "warning" : undefined} />
-        <KpiCard label="Adherencia media" value={avgAdh !== null ? `${avgAdh}%` : "—"} />
-        <KpiCard label="Pacientes en riesgo" value={atRiskCount} accent={atRiskCount > 0 ? "danger" : undefined} />
-        <KpiCard label="Tasa renovación" value={teamRenewals.rate !== null ? `${teamRenewals.rate}%` : "—"} />
-        <KpiCard label="Llamadas (7 días)" value={callsIn7Count} />
+        <DashboardKpiCard label="Pacientes totales" value={patients.length} detail={detailTotal} />
+        <DashboardKpiCard label="Sin asignar" value={unassignedList.length} accent={unassignedList.length > 0 ? "warning" : undefined} detail={detailUnassigned} />
+        <DashboardKpiCard label="Renuevan en 30d" value={renewalsIn30} accent={renewalsIn30 > 0 ? "warning" : undefined} detail={detailRenewals} />
+        <DashboardKpiCard label="Formularios por revisar" value={pendingFormsCount} accent={pendingFormsCount > 0 ? "warning" : undefined} detail={detailForms} />
+        <DashboardKpiCard label="Adherencia media" value={avgAdh !== null ? `${avgAdh}%` : "—"} detail={detailAdherence} />
+        <DashboardKpiCard label="Pacientes en riesgo" value={atRiskList.length} accent={atRiskList.length > 0 ? "danger" : undefined} detail={detailAtRisk} />
+        <DashboardKpiCard label="Tasa renovación" value={teamRenewals.rate !== null ? `${teamRenewals.rate}%` : "—"} detail={detailRenewalRate} />
+        <DashboardKpiCard label="Llamadas (7 días)" value={callsIn7List.length} detail={detailCalls} />
       </div>
     );
   }
