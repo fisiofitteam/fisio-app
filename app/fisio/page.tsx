@@ -335,7 +335,7 @@ export default async function FisioPanelPage({
   // vista.
   let extraKpisBlock: React.ReactNode = null;
   if (isManager) {
-    const [unassignedCount, teamAdhs, pendingFormsCount, callsIn7Count] = await Promise.all([
+    const [unassignedCount, teamAdhs, pendingFormsPool, callsIn7Count] = await Promise.all([
       prisma.patient.count({
         where: { isTest: false, assignedProfessionalId: null, ...activePatientCondition() },
       }),
@@ -346,12 +346,19 @@ export default async function FisioPanelPage({
           .filter((p) => (p as any).onboardingStatus !== "finished")
           .map((p) => calculateAdherence(p.id)),
       ),
-      prisma.programSession.count({
+      // Formularios: SQL cuenta sesiones completadas sin revisar, pero muchas
+      // no tienen FORM o el paciente no las rellenó. Filtramos en memoria con
+      // hasPendingFormReview para dar el count REAL. Precargamos solo las
+      // que tienen respuestas guardadas — sin responses no puede haber FORM
+      // rellenado.
+      prisma.programSession.findMany({
         where: {
           completedAt: { not: null },
           formReviewedAt: null,
+          responses: { not: null },
           assignment: { patient: { isTest: false, ...activePatientCondition() } },
         },
+        select: { id: true, tasksSnapshot: true, responses: true },
       }),
       prisma.scheduledCall.count({
         where: {
@@ -364,6 +371,7 @@ export default async function FisioPanelPage({
         },
       }),
     ]);
+    const pendingFormsCount = pendingFormsPool.filter(hasPendingFormReview).length;
     const validAdhs = teamAdhs.filter((a) => a.total > 0);
     const avgAdh = validAdhs.length > 0
       ? Math.round(validAdhs.reduce((acc, a) => acc + a.percentage, 0) / validAdhs.length)
