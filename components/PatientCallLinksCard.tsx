@@ -137,71 +137,72 @@ export function PatientCallLinksCard({
   const doneCalls = calls.filter((c) => c.status === "cancelled");
 
   return (
-    <section className="mt-4 max-w-3xl mx-auto px-4">
-      <div className="rounded-xl p-4" style={{ background: "#FFFFFF", border: "1px solid #E5E5E5" }}>
-        <div className="flex items-center justify-between gap-3 mb-3">
-          <div>
-            <h3 className="font-semibold text-sm">🎥 Llamadas de seguimiento</h3>
-            <p className="text-xs text-neutral-500 mt-0.5">
-              Estado de los links generados. Usa <b>Agendar llamada</b> arriba para crear uno nuevo.
-            </p>
-          </div>
-        </div>
+    <section>
+      <h2 className="font-medium mb-2">🎥 Llamadas de seguimiento</h2>
+      <p className="text-xs text-neutral-500 mb-3">
+        Estado de los links generados. Usa <b>Agendar llamada</b> arriba para crear uno nuevo.
+      </p>
 
-        {/* Lista de links activos */}
-        {loading ? (
-          <div className="text-xs text-neutral-500">Cargando…</div>
-        ) : activeCalls.length === 0 && doneCalls.length === 0 ? (
-          <div className="text-xs text-neutral-500 italic">Sin llamadas aún.</div>
-        ) : (
-          <div className="space-y-2">
-            {activeCalls.map((c) => {
-              const status = STATUS_LABEL[c.status] ?? { label: c.status, color: "#525252", bg: "#F5F5F5" };
-              return (
-                <div key={c.id} className="rounded-lg p-3" style={{ background: "#FAFAFA", border: "1px solid #E5E5E5" }}>
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold">{TYPE_LABEL[c.type]}</span>
-                      <span
-                        className="text-[10px] font-medium px-1.5 py-0.5 rounded-full"
-                        style={{ color: status.color, background: status.bg }}
-                      >
-                        {status.label}
-                      </span>
-                    </div>
-                    <span className="text-[10px] text-neutral-500">Creado {formatDate(c.createdAt)}</span>
+      {/* Lista de links activos */}
+      {loading ? (
+        <div className="text-xs text-neutral-500">Cargando…</div>
+      ) : activeCalls.length === 0 && doneCalls.length === 0 ? (
+        <p className="text-sm text-neutral-500 text-center py-8 card">Sin llamadas aún.</p>
+      ) : (
+        <div className="space-y-2">
+          {activeCalls.map((c) => {
+            const status = STATUS_LABEL[c.status] ?? { label: c.status, color: "#525252", bg: "#F5F5F5" };
+            const hasSummary = !!c.callSummary?.clinicalSummary;
+            const isPending = c.status === "pending";
+            // La llamada nace desplegada si tiene resumen (para que el fisio
+            // lo vea al abrir la pestaña) o si está pending y hay que actuar.
+            return (
+              <details key={c.id} className="card group" open={hasSummary || isPending}>
+                <summary className="flex justify-between items-center gap-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                  <div className="min-w-0 flex items-center gap-2 flex-wrap">
+                    <span className="font-medium text-sm">{TYPE_LABEL[c.type]}</span>
+                    <span
+                      className="text-[10px] font-medium px-1.5 py-0.5 rounded-full"
+                      style={{ color: status.color, background: status.bg }}
+                    >
+                      {status.label}
+                    </span>
+                    {c.status === "scheduled" && c.scheduledAt && (
+                      <span className="text-xs text-neutral-600">📅 {formatDateTime(c.scheduledAt)}</span>
+                    )}
                   </div>
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <span className="text-[10px] text-neutral-500">Creado {formatDate(c.createdAt)}</span>
+                    <span className="text-neutral-400 text-xs group-open:rotate-180 transition-transform">▼</span>
+                  </div>
+                </summary>
 
-                  {c.status === "scheduled" && c.scheduledAt && (
-                    <div className="text-xs text-neutral-700 mb-1">
-                      📅 {formatDateTime(c.scheduledAt)}
-                    </div>
-                  )}
+                <div className="mt-3 border-t border-neutral-100 pt-3 space-y-2">
                   {c.status === "scheduled" && c.meetingUrl && (
                     <a
                       href={c.meetingUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-xs underline text-blue-700"
+                      className="text-xs underline text-blue-700 block"
                     >
                       Abrir Google Meet
                     </a>
                   )}
-                  {c.status === "scheduled" && c.scheduledAt && new Date(c.scheduledAt) < new Date(Date.now() - 15 * 60_000) && !c.callSummary?.clinicalSummary && (
+                  {c.status === "scheduled" && c.scheduledAt && new Date(c.scheduledAt) < new Date(Date.now() - 15 * 60_000) && !hasSummary && (
                     <SummaryPendingChip call={c} onRegenerated={loadCalls} />
                   )}
-                  {c.callSummary?.clinicalSummary && (
+                  {hasSummary && (
                     <PatientCallSummaryPanel call={c} onRegenerated={loadCalls} />
                   )}
 
-                  {c.status === "pending" && (
+                  {isPending && (
                     <>
                       {c.fisioNote && (
-                        <div className="text-[11px] text-neutral-600 italic mb-1 line-clamp-2">
+                        <div className="text-xs text-neutral-600 italic">
                           Nota: {c.fisioNote}
                         </div>
                       )}
-                      <div className="text-[10px] text-neutral-500 mb-2">
+                      <div className="text-[10px] text-neutral-500">
                         Caduca {formatDate(c.tokenExpiresAt)}
                       </div>
                       <div className="flex gap-1.5 flex-wrap">
@@ -226,34 +227,34 @@ export function PatientCallLinksCard({
                     </>
                   )}
                 </div>
-              );
-            })}
-
-            {doneCalls.length > 0 && (
-              <details className="mt-2">
-                <summary className="text-xs text-neutral-500 cursor-pointer">
-                  Histórico ({doneCalls.length})
-                </summary>
-                <div className="space-y-1 mt-2">
-                  {doneCalls.map((c) => (
-                    <div key={c.id} className="text-[11px] text-neutral-600 flex items-center gap-2">
-                      <span className="font-medium">{TYPE_LABEL[c.type]}</span>
-                      <span>·</span>
-                      <span>{STATUS_LABEL[c.status]?.label ?? c.status}</span>
-                      {c.scheduledAt && (
-                        <>
-                          <span>·</span>
-                          <span>{formatDateTime(c.scheduledAt)}</span>
-                        </>
-                      )}
-                    </div>
-                  ))}
-                </div>
               </details>
-            )}
-          </div>
-        )}
-      </div>
+            );
+          })}
+
+          {doneCalls.length > 0 && (
+            <details className="mt-2">
+              <summary className="text-xs text-neutral-500 cursor-pointer">
+                Histórico ({doneCalls.length})
+              </summary>
+              <div className="space-y-1 mt-2">
+                {doneCalls.map((c) => (
+                  <div key={c.id} className="text-[11px] text-neutral-600 flex items-center gap-2">
+                    <span className="font-medium">{TYPE_LABEL[c.type]}</span>
+                    <span>·</span>
+                    <span>{STATUS_LABEL[c.status]?.label ?? c.status}</span>
+                    {c.scheduledAt && (
+                      <>
+                        <span>·</span>
+                        <span>{formatDateTime(c.scheduledAt)}</span>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+        </div>
+      )}
     </section>
   );
 }
@@ -313,7 +314,9 @@ function SummaryPendingChip({ call, onRegenerated }: { call: PatientCall; onRege
  * coaching (feedback al fisio) + acción regenerar.
  */
 function PatientCallSummaryPanel({ call, onRegenerated }: { call: PatientCall; onRegenerated: () => void }) {
-  const [open, setOpen] = useState(false);
+  // Abrimos por defecto: cuando el fisio despliega la llamada quiere ver
+  // el resumen inmediatamente, no un segundo botón que abrir.
+  const [open, setOpen] = useState(true);
   const [regenerating, setRegenerating] = useState(false);
   const s = call.callSummary;
   if (!s) return null;
