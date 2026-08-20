@@ -327,12 +327,68 @@ export default async function FisioPanelPage({
     </header>
   );
 
-  // Solo dejamos los 2 KPIs estables (pacientes y renovaciones). Las tarjetas
-  // de "Tareas pendientes" y "Formularios por revisar" se quitaron porque ya
-  // tienen su propia sección detallada más abajo y duplicaban información.
-  const kpis = (
+  // KPIs superiores. Managers (CEO + head_success) ven una batería amplia
+  // (8 tarjetas); fisios normales solo los 2 estables. Los cálculos
+  // adicionales de "Sin asignar", "Adherencia media", "En riesgo", "Tasa
+  // renovación", "Formularios por revisar" y "Llamadas (7d)" se calculan
+  // aquí para no arrastrar toda la lógica de finance/adherencia hasta la
+  // vista.
+  let extraKpisBlock: React.ReactNode = null;
+  if (isManager) {
+    const [unassignedCount, teamAdhs, pendingFormsCount, callsIn7Count] = await Promise.all([
+      prisma.patient.count({
+        where: { isTest: false, assignedProfessionalId: null, ...activePatientCondition() },
+      }),
+      // Adherencia por paciente (solo pacientes activos y no test). Reutilizamos
+      // los `patients` ya cargados arriba; managers los tienen sin filtro extra.
+      Promise.all(
+        patients
+          .filter((p) => (p as any).onboardingStatus !== "finished")
+          .map((p) => calculateAdherence(p.id)),
+      ),
+      prisma.programSession.count({
+        where: {
+          completedAt: { not: null },
+          formReviewedAt: null,
+          assignment: { patient: { isTest: false, ...activePatientCondition() } },
+        },
+      }),
+      prisma.scheduledCall.count({
+        where: {
+          completedAt: null,
+          scheduledAt: {
+            gte: new Date(),
+            lte: new Date(Date.now() + 7 * 86_400_000),
+          },
+          patient: { isTest: false, ...activePatientCondition() },
+        },
+      }),
+    ]);
+    const validAdhs = teamAdhs.filter((a) => a.total > 0);
+    const avgAdh = validAdhs.length > 0
+      ? Math.round(validAdhs.reduce((acc, a) => acc + a.percentage, 0) / validAdhs.length)
+      : null;
+    // "En riesgo" = pacientes con adherencia bajo el 50% (definición
+    // pragmática: si no llega a la mitad de las sesiones, se cae del programa).
+    const atRiskCount = validAdhs.filter((a) => a.percentage < 50).length;
+
+    extraKpisBlock = (
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-5">
+        <KpiCard label="Pacientes totales" value={patients.length} />
+        <KpiCard label="Sin asignar" value={unassignedCount} accent={unassignedCount > 0 ? "warning" : undefined} />
+        <KpiCard label="Renuevan en 30d" value={renewalsIn30} accent={renewalsIn30 > 0 ? "warning" : undefined} />
+        <KpiCard label="Formularios por revisar" value={pendingFormsCount} accent={pendingFormsCount > 0 ? "warning" : undefined} />
+        <KpiCard label="Adherencia media" value={avgAdh !== null ? `${avgAdh}%` : "—"} />
+        <KpiCard label="Pacientes en riesgo" value={atRiskCount} accent={atRiskCount > 0 ? "danger" : undefined} />
+        <KpiCard label="Tasa renovación" value={teamRenewals.rate !== null ? `${teamRenewals.rate}%` : "—"} />
+        <KpiCard label="Llamadas (7 días)" value={callsIn7Count} />
+      </div>
+    );
+  }
+
+  const kpis = isManager ? extraKpisBlock : (
     <div className="grid grid-cols-2 gap-2 mb-5 max-w-md">
-      <KpiCard label={isManager ? "Pacientes totales" : "Mis pacientes"} value={patients.length} />
+      <KpiCard label="Mis pacientes" value={patients.length} />
       <KpiCard label="Renuevan en 30d" value={renewalsIn30} accent={renewalsIn30 > 0 ? "warning" : undefined} />
     </div>
   );
@@ -574,9 +630,10 @@ type PerFisio = {
   adherence: number | null;
 };
 
-function KpiCard({ label, value, accent }: { label: string; value: number; accent?: "warning" | "info" }) {
+function KpiCard({ label, value, accent }: { label: string; value: number | string; accent?: "warning" | "info" | "danger" }) {
   const accentClass =
     accent === "warning" ? "text-amber-700"
+    : accent === "danger" ? "text-red-600"
     : accent === "info" ? "text-neutral-900"
     : "text-neutral-900";
   return (
