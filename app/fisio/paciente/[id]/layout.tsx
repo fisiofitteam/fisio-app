@@ -116,7 +116,7 @@ export default async function PatientLayout({
             <GoToPatient />
             <AgendarLlamadaButton
               patientId={patient.id}
-              patientPhone={patient.phone ?? patient.shippingPhone ?? null}
+              patientGroupUrl={patient.whatsappGroupUrl ?? null}
               patientFirstName={patientFirstName}
             />
             <WhatsAppButton url={patient.whatsappGroupUrl} size="md" />

@@ -22,11 +22,14 @@ const TYPE_LABEL: Record<CallType, string> = {
 
 export function AgendarLlamadaButton({
   patientId,
-  patientPhone,
+  patientGroupUrl,
   patientFirstName,
 }: {
   patientId: string;
-  patientPhone: string | null;
+  /** URL del grupo de seguimiento de WhatsApp del paciente. Al pulsar el
+   * botón "Enviar por WhatsApp" copiamos el mensaje al portapapeles y
+   * abrimos el grupo en una pestaña nueva — el fisio pega y envía. */
+  patientGroupUrl: string | null;
   patientFirstName: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -116,14 +119,21 @@ export function AgendarLlamadaButton({
     setTimeout(() => setCopied(false), 1800);
   }
 
-  const whatsappUrl = (() => {
-    if (!generatedUrl || !patientPhone) return null;
-    const label = TYPE_LABEL[type].toLowerCase();
-    const first = patientFirstName || "";
-    const text = `Hola ${first}! Aquí tienes el link para reservar tu llamada de ${label} conmigo: ${generatedUrl}`;
-    const phone = patientPhone.replace(/[^\d+]/g, "");
-    return `https://wa.me/${phone.replace(/^\+/, "")}?text=${encodeURIComponent(text)}`;
-  })();
+  const whatsappMessage = generatedUrl
+    ? `Hola ${patientFirstName || ""}! Aquí tienes el link para reservar tu llamada de ${TYPE_LABEL[type].toLowerCase()} conmigo: ${generatedUrl}`
+    : null;
+  const [sentToGroup, setSentToGroup] = useState(false);
+
+  function openGroupWithMessage() {
+    if (!whatsappMessage || !patientGroupUrl) return;
+    // Copiamos el mensaje al portapapeles y abrimos el grupo. WhatsApp Web
+    // no acepta prellenar el texto en un chat de grupo por URL, así que la
+    // mejor UX posible es "pegar y enviar".
+    navigator.clipboard.writeText(whatsappMessage).catch(() => {});
+    window.open(patientGroupUrl, "_blank", "noopener,noreferrer");
+    setSentToGroup(true);
+    setTimeout(() => setSentToGroup(false), 3000);
+  }
 
   return (
     <>
@@ -168,16 +178,19 @@ export function AgendarLlamadaButton({
                   >
                     {copied ? "✓ Copiado" : "📋 Copiar link"}
                   </button>
-                  {whatsappUrl && (
-                    <a
-                      href={whatsappUrl}
-                      target="_blank"
-                      rel="noreferrer"
+                  {patientGroupUrl ? (
+                    <button
+                      onClick={openGroupWithMessage}
                       className="text-xs font-medium px-3 py-2 rounded-lg"
                       style={{ background: "#22C55E", color: "#FFFFFF" }}
+                      title="Copia el mensaje al portapapeles y abre el grupo — pega y envía"
                     >
-                      💬 Enviar por WhatsApp
-                    </a>
+                      {sentToGroup ? "✓ Mensaje copiado · pega en el grupo" : "💬 Enviar al grupo de seguimiento"}
+                    </button>
+                  ) : (
+                    <span className="text-[11px] text-neutral-400 italic self-center">
+                      Sin grupo de WhatsApp asociado al paciente
+                    </span>
                   )}
                 </div>
                 <p className="text-[11px] text-neutral-500 mb-3">

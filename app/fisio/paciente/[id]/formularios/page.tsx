@@ -194,7 +194,7 @@ export default async function PatientFormsTab({ params }: { params: { id: string
       {/* ── Llamadas de seguimiento del fisio (optimización / renovación) ── */}
       <PatientCallLinksCard
         patientId={patient.id}
-        patientPhone={patient.phone ?? patient.shippingPhone ?? null}
+        patientGroupUrl={patient.whatsappGroupUrl ?? null}
         patientFirstName={patient.fullName.split(" ")[0] ?? patient.fullName}
         baseUrl={callsBaseUrl}
       />

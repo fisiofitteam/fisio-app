@@ -72,12 +72,15 @@ function formatDate(iso: string): string {
 
 export function PatientCallLinksCard({
   patientId,
-  patientPhone,
+  patientGroupUrl,
   patientFirstName,
   baseUrl,
 }: {
   patientId: string;
-  patientPhone: string | null;
+  /** URL del grupo de seguimiento de WhatsApp del paciente. Al pulsar el
+   * botón WhatsApp por cada link pendiente, copiamos el mensaje al
+   * portapapeles y abrimos el grupo. */
+  patientGroupUrl: string | null;
   patientFirstName: string;
   /** Origen absoluto para armar la URL pública del link (ej. https://app.fisiofit.team). */
   baseUrl: string;
@@ -116,14 +119,15 @@ export function PatientCallLinksCard({
     setTimeout(() => setCopiedId(null), 1800);
   }
 
-  function whatsappLink(call: PatientCall): string | null {
-    if (!patientPhone) return null;
+  /** Copia el mensaje al portapapeles y abre el grupo del paciente. */
+  function sendToGroup(call: PatientCall) {
+    if (!patientGroupUrl) return;
     const url = `${baseUrl}/agendar-fisio/${call.bookingToken}`;
     const label = TYPE_LABEL[call.type].toLowerCase();
     const first = patientFirstName || "";
     const text = `Hola ${first}! Aquí tienes el link para reservar tu llamada de ${label} conmigo: ${url}`;
-    const phone = patientPhone.replace(/[^\d+]/g, "");
-    return `https://wa.me/${phone.replace(/^\+/, "")}?text=${encodeURIComponent(text)}`;
+    navigator.clipboard.writeText(text).catch(() => {});
+    window.open(patientGroupUrl, "_blank", "noopener,noreferrer");
   }
 
   // Muestro pending/scheduled/completed en la lista principal (los completed
@@ -153,7 +157,6 @@ export function PatientCallLinksCard({
           <div className="space-y-2">
             {activeCalls.map((c) => {
               const status = STATUS_LABEL[c.status] ?? { label: c.status, color: "#525252", bg: "#F5F5F5" };
-              const wa = whatsappLink(c);
               return (
                 <div key={c.id} className="rounded-lg p-3" style={{ background: "#FAFAFA", border: "1px solid #E5E5E5" }}>
                   <div className="flex items-center justify-between gap-2 mb-1">
@@ -209,16 +212,15 @@ export function PatientCallLinksCard({
                         >
                           {copiedId === c.id ? "✓ Copiado" : "📋 Copiar link"}
                         </button>
-                        {wa && (
-                          <a
-                            href={wa}
-                            target="_blank"
-                            rel="noreferrer"
+                        {patientGroupUrl && (
+                          <button
+                            onClick={() => sendToGroup(c)}
                             className="text-[11px] font-medium px-2 py-1 rounded-md"
                             style={{ background: "#22C55E", color: "#FFFFFF" }}
+                            title="Copia el mensaje al portapapeles y abre el grupo de seguimiento"
                           >
-                            💬 WhatsApp
-                          </a>
+                            💬 Grupo
+                          </button>
                         )}
                       </div>
                     </>
