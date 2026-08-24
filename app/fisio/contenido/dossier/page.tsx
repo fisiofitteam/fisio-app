@@ -139,6 +139,11 @@ export default async function DossierPage({
           </Link>
         </section>
       ) : (
+        (() => {
+          // Contador global de reels del mes, en el orden de aparición
+          // (semana asc → día asc). Se incrementa al renderizar cada pieza.
+          let reelCounter = 0;
+          return (
         <div className="space-y-8">
           {weeks.map((week) => {
             const startStr = week.startDate.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
@@ -199,6 +204,10 @@ export default async function DossierPage({
                       const fmtLabel = formatLabelOnly(p.format);
                       const fmtIcon = formatIcon(p.format);
                       const displayTitle = p.title?.trim() || fmtLabel;
+                      // Como solo mostramos reels, el contador es continuo y
+                      // no distingue formato. Empieza en 1.
+                      reelCounter += 1;
+                      const reelLabel = `Reel ${reelCounter}`;
                       return (
                         <article
                           key={p.id}
@@ -207,6 +216,12 @@ export default async function DossierPage({
                           {/* Header de la pieza */}
                           <div className="flex items-baseline justify-between gap-3 flex-wrap mb-2">
                             <div className="flex items-baseline gap-2 flex-wrap">
+                              <span
+                                className="text-sm font-bold px-2 py-0.5 rounded"
+                                style={{ background: "#1E3A8A", color: "#FAFAFA", letterSpacing: "0.02em" }}
+                              >
+                                {reelLabel}
+                              </span>
                               <span>{fmtIcon}</span>
                               <h4 className="text-base font-semibold">{displayTitle}</h4>
                               {p.title?.trim() && (
@@ -236,7 +251,7 @@ export default async function DossierPage({
                           {blocks.length > 0 && (
                             <div className="mb-2">
                               <div className="text-[10px] uppercase tracking-wide text-neutral-500 mb-1">Guion</div>
-                              <div className="space-y-1.5">
+                              <div className="space-y-2">
                                 {blocks.map((b, i) => {
                                   // El primer bloque cuenta como hook — lo
                                   // destacamos con label "🎣 Hook" (aunque el
@@ -248,7 +263,12 @@ export default async function DossierPage({
                                   return (
                                     <div key={i} className="text-sm">
                                       {label && (
-                                        <div className="text-[11px] font-semibold text-neutral-700">{label}</div>
+                                        <div
+                                          className="text-[12px] font-bold uppercase tracking-wide"
+                                          style={{ color: "#172554" }}
+                                        >
+                                          {label}
+                                        </div>
                                       )}
                                       {b.content && (
                                         <div className={`text-neutral-800 whitespace-pre-wrap ${isHook ? "italic" : ""}`}>{b.content}</div>
@@ -304,6 +324,8 @@ export default async function DossierPage({
             );
           })}
         </div>
+          );
+        })()
       )}
     </main>
   );
