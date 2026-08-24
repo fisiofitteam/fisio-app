@@ -3,14 +3,12 @@
  * de sus sesiones. Se usa para pintar un banner persuasivo en el home
  * pidiéndole que las complete.
  *
- * Criterio: en cualquier ProgramSession del paciente (fecha pasada, presente
- * o futura) existe una tarea de tipo FORM que NO tiene una respuesta guardada
- * en el campo `responses` de la sesión. Aplica tanto si la sesión está
- * completada como si no — el paciente puede haber terminado un workout sin
- * pararse a rellenar el formulario.
- *
- * Devuelve la lista ordenada por fecha ascendente (más antigua primero) para
- * que el banner priorice lo que lleva más tiempo pendiente.
+ * Criterio: existe una tarea FORM SIN respuesta en una sesión cuya fecha
+ * programada ya ha llegado (hoy o pasado). Los formularios de sesiones
+ * futuras NO cuentan aún — no queremos molestar al paciente con avisos
+ * de algo que aún no le toca. Una vez llega el día, el banner persiste
+ * hasta que rellene el formulario, incluso si la sesión pasa sin marcarse
+ * como completada.
  */
 import { prisma } from "@/lib/prisma";
 
@@ -22,9 +20,18 @@ export type PendingForm = {
 };
 
 export async function getPendingFormsForPatient(patientId: string): Promise<PendingForm[]> {
+  // "Hoy" en el timezone del servidor. El schedule del paciente usa el mismo
+  // criterio (00:00 del día programado en UTC), así que basta con comparar
+  // contra el fin del día actual — la sesión "de hoy" aparece desde las 00:00.
+  const endOfToday = new Date();
+  endOfToday.setHours(23, 59, 59, 999);
+
   const sessions = await prisma.programSession.findMany({
     where: {
       assignment: { patientId, isActive: true },
+      // Solo sesiones cuya fecha ya ha llegado (hoy o pasado). Las futuras
+      // no molestan al paciente.
+      scheduledDate: { lte: endOfToday },
       // Filtro barato: contiene la palabra FORM en el snapshot. Evita cargar
       // sesiones sin ningún formulario. La comprobación fina se hace al
       // parsear el JSON.
