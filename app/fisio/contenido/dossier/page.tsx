@@ -89,7 +89,10 @@ export default async function DossierPage({
       endDate: { gte: monthStart },
     },
     include: {
+      // Solo REELS — el resto de formatos (carrusel, foto, directo) no
+      // aplican al flujo grabación / drive / editor.
       pieces: {
+        where: { format: "reel" },
         orderBy: [{ dayOfWeek: "asc" }, { createdAt: "asc" }],
       },
     },
@@ -119,7 +122,7 @@ export default async function DossierPage({
         <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1">FisioFit Team · Dossier de contenido</div>
         <h2 className="text-2xl font-bold">{monthLabel(year, month)}</h2>
         <p className="text-xs text-neutral-500 mt-1">
-          {weeks.length} semana{weeks.length === 1 ? "" : "s"} · {weeks.reduce((n, w) => n + w.pieces.length, 0)} piezas totales
+          {weeks.length} semana{weeks.length === 1 ? "" : "s"} · {weeks.reduce((n, w) => n + w.pieces.length, 0)} reels totales
         </p>
       </div>
 
@@ -182,7 +185,7 @@ export default async function DossierPage({
                 {/* Piezas de la semana */}
                 {week.pieces.length === 0 ? (
                   <p className="text-sm text-neutral-400 italic ml-1">
-                    Sin piezas planificadas esta semana.
+                    Sin reels planificados esta semana.
                   </p>
                 ) : (
                   <div className="space-y-4">
@@ -252,25 +255,6 @@ export default async function DossierPage({
                                   </div>
                                 ))}
                               </div>
-                            </div>
-                          )}
-
-                          {p.caption && (
-                            <div className="mb-2">
-                              <div className="text-[10px] uppercase tracking-wide text-neutral-500 mb-0.5">Caption</div>
-                              <p className="text-sm text-neutral-800 whitespace-pre-wrap">{p.caption}</p>
-                            </div>
-                          )}
-
-                          {(p.ctaType || p.dmKeyword) && (
-                            <div className="text-xs text-neutral-700 mb-2">
-                              {p.ctaType && <><b>CTA:</b> {p.ctaType}</>}
-                              {p.ctaType && p.dmKeyword && " · "}
-                              {p.dmKeyword && (
-                                <>
-                                  <b>Keyword DM:</b> <code className="bg-neutral-100 px-1 rounded">{p.dmKeyword}</code>
-                                </>
-                              )}
                             </div>
                           )}
 
