@@ -8,6 +8,7 @@ const TABS: Tab[] = [
   { key: "calendar", label: "📅 Calendario", href: "/fisio/contenido/calendario" },
   { key: "this-week", label: "📍 Esta semana", href: "/fisio/contenido" },
   { key: "dossier", label: "📄 Dossier", href: "/fisio/contenido/dossier" },
+  { key: "marketer", label: "🧠 Marketer IA", href: "/fisio/contenido/marketer", ceoOnly: true },
   { key: "template", label: "🧩 Plantillas", href: "/fisio/contenido/plantilla" },
   // El editor Story Maker vive en /fisio/contenido/story-maker (page Next
   // con iframe embebido a /storymaker). Así se queda dentro de la app.
