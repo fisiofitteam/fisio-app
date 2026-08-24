@@ -7,7 +7,7 @@ type Tab = { key: string; label: string; href: string; ceoOnly?: boolean; extern
 const TABS: Tab[] = [
   { key: "calendar", label: "📅 Calendario", href: "/fisio/contenido/calendario" },
   { key: "this-week", label: "📍 Esta semana", href: "/fisio/contenido" },
-  { key: "to-record", label: "🎬 Para grabar", href: "/fisio/contenido/para-grabar" },
+  { key: "dossier", label: "📄 Dossier", href: "/fisio/contenido/dossier" },
   { key: "template", label: "🧩 Plantillas", href: "/fisio/contenido/plantilla" },
   // El editor Story Maker vive en /fisio/contenido/story-maker (page Next
   // con iframe embebido a /storymaker). Así se queda dentro de la app.

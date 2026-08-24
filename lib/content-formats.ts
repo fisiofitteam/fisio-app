@@ -55,12 +55,30 @@ export function goalColor(value: string): GoalColor {
   return GOALS.find((g) => g.value === value)?.color ?? "yellow";
 }
 
-// Tailwind classes para etiquetas de objetivo
+// Tailwind classes para etiquetas de objetivo (chips)
 export const GOAL_COLOR_CLASSES: Record<GoalColor, string> = {
   green: "bg-emerald-100 text-emerald-800 border border-emerald-200",
   yellow: "bg-amber-100 text-amber-800 border border-amber-200",
   red: "bg-red-100 text-red-800 border border-red-200",
 };
+
+// Tailwind classes para el FONDO de una pieza en el calendario. Más suaves
+// que los chips (que van encima) y con hover diferenciado para no fastidiar
+// el drag-and-drop.
+export const GOAL_TILE_CLASSES: Record<GoalColor, string> = {
+  green: "bg-emerald-50 hover:bg-emerald-100 border border-emerald-200",
+  yellow: "bg-amber-50 hover:bg-amber-100 border border-amber-200",
+  red: "bg-red-50 hover:bg-red-100 border border-red-200",
+};
+
+/**
+ * Devuelve las clases Tailwind del fondo de la pieza según su primer
+ * objetivo. Si no tiene objetivos, devuelve el estilo neutro histórico.
+ */
+export function goalTileClasses(goals: GoalKey[]): string {
+  if (goals.length === 0) return "bg-neutral-100 hover:bg-neutral-200 border border-transparent";
+  return GOAL_TILE_CLASSES[goalColor(goals[0])];
+}
 
 /**
  * Parse goals desde JSON string almacenado en BD.

@@ -39,13 +39,21 @@ export async function POST(req: NextRequest) {
   });
   if (!week) return NextResponse.json({ error: "Semana no encontrada" }, { status: 404 });
 
+  // Objetivos opcionales al crear (array de strings). Los filtramos
+  // contra el catálogo válido para no aceptar basura.
+  const ALLOWED_GOALS = ["atraer", "conectar", "educar", "convertir", "lanzamiento"];
+  const goalsRaw = Array.isArray(data?.goals) ? data.goals : [];
+  const goalsClean = goalsRaw
+    .map((g: unknown) => String(g))
+    .filter((g: string) => ALLOWED_GOALS.includes(g));
+
   const piece = await prisma.contentPiece.create({
     data: {
       weekId: week.id,
       dayOfWeek,
       format: typeof data?.format === "string" ? data.format : "",
       goal: "",
-      goals: "[]",
+      goals: JSON.stringify(goalsClean),
       ctaType: "",
       dmKeyword: week.leadMagnetKeyword ?? null,
       title: typeof data?.title === "string" && data.title.trim() ? data.title.trim() : null,

@@ -17,6 +17,7 @@ import {
   goalColor,
   goalLabel,
   GOAL_COLOR_CLASSES,
+  goalTileClasses,
 } from "@/lib/content-formats";
 import { AddPieceModal } from "@/components/AddPieceModal";
 
@@ -546,7 +547,7 @@ function MonthGrid({
                                 router.push(`?month=${month}&year=${year}`);
                               }
                             }}
-                            className="relative flex flex-col gap-0.5 text-[10px] px-1.5 py-1 pr-5 rounded bg-neutral-100 hover:bg-neutral-200 leading-tight cursor-move overflow-hidden"
+                            className={`relative flex flex-col gap-0.5 text-[10px] px-1.5 py-1 pr-5 rounded leading-tight cursor-move overflow-hidden ${goalTileClasses(goals)}`}
                             title={`${fmtLabel}${dp.piece.hook ? " · " + dp.piece.hook : ""}${dp.weekTheme ? " · " + dp.weekTheme : ""}`}
                           >
                             {statusIcon && (

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { FORMATS } from "@/lib/content-formats";
+import { FORMATS, GOALS, GOAL_COLOR_CLASSES, goalColor, type GoalKey } from "@/lib/content-formats";
 import { DAY_LABELS } from "@/lib/content-templates";
 
 /**
@@ -37,8 +37,13 @@ export function AddPieceModal({
   const [dayOfWeek, setDayOfWeek] = useState<number>(lockedDayOfWeek ?? 1);
   const [format, setFormat] = useState<string>(lockedFormat ?? "reel");
   const [title, setTitle] = useState("");
+  const [goals, setGoals] = useState<GoalKey[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function toggleGoal(g: GoalKey) {
+    setGoals((prev) => prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g]);
+  }
 
   async function create() {
     setError(null);
@@ -52,6 +57,7 @@ export function AddPieceModal({
           dayOfWeek,
           format: format || "",
           title: title.trim() || null,
+          goals,
         }),
       });
       const data = await res.json();
@@ -143,6 +149,32 @@ export function AddPieceModal({
             <p className="text-[11px] text-neutral-500 mt-1">
               Puedes dejarlo en blanco — la pieza se llamará por su formato hasta que la edites.
             </p>
+          </div>
+
+          <div>
+            <label className="text-xs text-neutral-600 block mb-1">
+              Objetivo(s) <span className="text-neutral-400">— opcional, coloreará la pieza en el calendario</span>
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {GOALS.map((g) => {
+                const active = goals.includes(g.value);
+                return (
+                  <button
+                    key={g.value}
+                    type="button"
+                    onClick={() => toggleGoal(g.value)}
+                    disabled={busy}
+                    className={`text-xs px-2 py-1 rounded-lg transition ${
+                      active
+                        ? GOAL_COLOR_CLASSES[goalColor(g.value)]
+                        : "bg-neutral-50 text-neutral-500 border border-neutral-200 hover:bg-neutral-100"
+                    }`}
+                  >
+                    {active ? "✓ " : ""}{g.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {error && (
