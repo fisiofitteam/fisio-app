@@ -113,7 +113,8 @@ function systemPrompt(brief: Awaited<ReturnType<typeof getAiBrief>>): string {
     "- Responde SOLO con la herramienta `submit_strategy`, sin texto adicional.",
     "- Si el CEO especifica una fecha de lanzamiento, alinea la semana de lanzamiento con ella.",
     "- Si el CEO pide una mezcla concreta (ej. 3 reels + 1 carrusel/semana), respétala exactamente.",
-    "- Titles cortos y específicos. Hook = frase de apertura literal (no descripción del hook).",
+    "- Titles cortos y específicos.",
+    "- 'hook' = IDEA PRINCIPAL de la pieza: 1-2 frases que resumen QUÉ se cuenta y CÓMO (ángulo/tono). NO es el hook literal de apertura del vídeo; el fisio ya escribirá los planos concretos con IA después. Ej: 'Reel confrontacional sobre por qué el descanso no cura el hombro. Termina con CTA al webinar.'",
     "- Rationale en 1-2 frases explicando por qué esa pieza en ese slot.",
   ].join("\n");
 }

@@ -98,14 +98,11 @@ export async function POST(req: NextRequest) {
     weekCreated = true;
   }
 
-  // El hook se guarda como primer bloque del guion — así se ve directo en
-  // el dossier y en el editor de la pieza. Si no hay hook, blocks queda [].
-  const blocks = hook
-    ? [
-        { id: `blk-${Date.now()}`, label: "🎣 Hook", content: hook, order: 0 },
-      ]
-    : [];
-
+  // La "idea principal" viene en `hook` — la guardamos en piece.hook, que
+  // es el campo que el editor muestra en el cuadro amarillo "💡 Idea
+  // principal". El guion (blocks) SE DEJA VACÍO porque cuando el fisio
+  // pulse "Generar con IA" dentro de la pieza, se rellena solo con los
+  // planos (Plano 1, Plano 2…) y no queremos duplicidad.
   const piece = await prisma.contentPiece.create({
     data: {
       weekId: week.id,
@@ -117,7 +114,7 @@ export async function POST(req: NextRequest) {
       goal: "",
       ctaType: "",
       dmKeyword: week.leadMagnetKeyword ?? null,
-      blocks: JSON.stringify(blocks),
+      blocks: "[]",
       status: "idea",
     },
   });

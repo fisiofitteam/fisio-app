@@ -424,7 +424,7 @@ export function MarketerIAView() {
                           )}
                           {piece.hook && (
                             <div className="mb-1">
-                              <div className="text-[10px] uppercase tracking-wide text-neutral-500">🎣 Hook</div>
+                              <div className="text-[10px] uppercase tracking-wide text-neutral-500">💡 Idea principal</div>
                               <p className="text-sm italic text-neutral-800">"{piece.hook}"</p>
                             </div>
                           )}

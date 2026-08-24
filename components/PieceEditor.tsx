@@ -341,17 +341,20 @@ export function PieceEditor({
       <div className="grid grid-cols-1 lg:grid-cols-[60%_40%] gap-4">
         {/* COLUMNA IZQUIERDA: guion editable */}
         <section className="space-y-3">
-          {/* Hook */}
+          {/* Idea principal — descripción corta de la pieza (no el hook literal
+              del guion). Es lo que rellena el Marketer IA al proponer piezas
+              y lo que sirve al equipo para saber "de qué va" la pieza sin
+              tener que leer el guion entero. */}
           <div className="border-2 border-amber-200 rounded-lg p-3 bg-amber-50/40">
             <label className="text-[10px] uppercase text-amber-700 font-semibold tracking-wide mb-1 block">
-              ⚡ Hook principal
+              💡 Idea principal
             </label>
             <textarea
               className="w-full bg-transparent border-0 outline-none text-base font-medium resize-none"
               rows={2}
               value={piece.hook ?? ""}
               onChange={(e) => update("hook", e.target.value)}
-              placeholder="El gancho que para el scroll. Frase corta, directa, provocadora."
+              placeholder="Ej. Reel confrontacional sobre por qué el descanso no cura el hombro. Termina con CTA al webinar."
             />
           </div>
 
