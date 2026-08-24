@@ -121,6 +121,7 @@ function systemPrompt(brief: Awaited<ReturnType<typeof getAiBrief>>): string {
 function buildUserPrompt(input: {
   brief: string;
   targetDate?: string;
+  startWeek?: string;
   weeksAhead: number;
   piecesPerWeek?: Record<string, number>;
   recentThemes: string[];
@@ -134,10 +135,13 @@ function buildUserPrompt(input: {
   const themesLine = input.recentThemes.length > 0
     ? `\n\nTEMAS RECIENTES YA TRATADOS (evita repetirlos exactos):\n${input.recentThemes.slice(0, 12).map((t) => `- ${t}`).join("\n")}`
     : "";
+  const startLine = input.startWeek
+    ? `a partir del lunes ${input.startWeek}`
+    : "a partir del próximo lunes";
   return [
     `BRIEF DEL CEO:\n${input.brief.trim()}`,
     input.targetDate ? `\nFECHA OBJETIVO (lanzamiento): ${input.targetDate}` : "",
-    `\nHORIZONTE: ${input.weeksAhead} semana${input.weeksAhead === 1 ? "" : "s"} a partir del próximo lunes.`,
+    `\nHORIZONTE: ${input.weeksAhead} semana${input.weeksAhead === 1 ? "" : "s"} ${startLine}.`,
     `\nMEZCLA POR SEMANA: ${mix}`,
     themesLine,
     "\n\nGenera la estrategia usando la herramienta `submit_strategy`.",
@@ -172,6 +176,9 @@ async function runGenerate(req: NextRequest) {
   const weeksAhead = Math.max(1, Math.min(8, Math.round(Number(body?.weeksAhead) || 2)));
   const targetDate = typeof body?.targetDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.targetDate)
     ? body.targetDate
+    : undefined;
+  const startWeek = typeof body?.startWeek === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.startWeek)
+    ? body.startWeek
     : undefined;
   const piecesPerWeek = (body?.piecesPerWeek && typeof body.piecesPerWeek === "object")
     ? body.piecesPerWeek
@@ -260,6 +267,7 @@ async function runGenerate(req: NextRequest) {
           content: buildUserPrompt({
             brief: briefText,
             targetDate,
+            startWeek,
             weeksAhead,
             piecesPerWeek,
             recentThemes,

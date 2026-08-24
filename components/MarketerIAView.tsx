@@ -52,20 +52,58 @@ const WEEK_TYPE_LABEL: Record<string, string> = {
 };
 
 /**
- * Calcula el próximo lunes desde hoy (00:00 UTC), y suma weekOffset*7 días.
+ * Devuelve el próximo lunes desde hoy en UTC. Base por defecto cuando el
+ * CEO no elige "empezar semana del...".
  */
-function mondayForOffset(offset: number): Date {
+function nextMondayUtc(): Date {
   const now = new Date();
   const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
   const dow = d.getUTCDay(); // 0=Dom .. 6=Sab
   const daysUntilMonday = dow === 1 ? 7 : (8 - dow) % 7 || 7;
-  d.setUTCDate(d.getUTCDate() + daysUntilMonday + offset * 7);
+  d.setUTCDate(d.getUTCDate() + daysUntilMonday);
+  return d;
+}
+
+/**
+ * Formatea un Date como "YYYY-MM-DD" para input type="date".
+ */
+function toDateInputValue(d: Date): string {
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * Dado un YYYY-MM-DD, devuelve el LUNES de esa semana ISO en UTC.
+ * El CEO puede elegir cualquier fecha; snappeamos al lunes para que la
+ * base sea siempre un inicio de semana.
+ */
+function snapToMondayUtc(iso: string): Date {
+  const [y, m, d] = iso.split("-").map(Number);
+  const day = new Date(Date.UTC(y, m - 1, d));
+  const dow = day.getUTCDay(); // 0=Dom
+  const backToMonday = dow === 0 ? 6 : dow - 1;
+  day.setUTCDate(day.getUTCDate() - backToMonday);
+  return day;
+}
+
+/**
+ * Suma `offset` semanas al lunes base y devuelve el Date resultante.
+ */
+function mondayForOffset(baseMonday: Date, offset: number): Date {
+  const d = new Date(baseMonday);
+  d.setUTCDate(d.getUTCDate() + offset * 7);
   return d;
 }
 
 export function MarketerIAView() {
   const [brief, setBrief] = useState("");
   const [targetDate, setTargetDate] = useState("");
+  // Semana de inicio de la estrategia. Por defecto, el próximo lunes desde
+  // hoy. El input se snappea al lunes automáticamente si el CEO elige otro
+  // día. Se envía al backend y se usa para posicionar todas las weekOffset.
+  const [startWeek, setStartWeek] = useState<string>(() => toDateInputValue(nextMondayUtc()));
   const [weeksAhead, setWeeksAhead] = useState(2);
   const [mixReel, setMixReel] = useState(3);
   const [mixCarousel, setMixCarousel] = useState(1);
@@ -101,6 +139,7 @@ export function MarketerIAView() {
         body: JSON.stringify({
           brief: brief.trim(),
           targetDate: targetDate || undefined,
+          startWeek: toDateInputValue(snapToMondayUtc(startWeek)),
           weeksAhead,
           piecesPerWeek: Object.keys(piecesPerWeek).length > 0 ? piecesPerWeek : undefined,
         }),
@@ -137,7 +176,8 @@ export function MarketerIAView() {
     // Marcar optimista para bloquear doble click.
     setAdded((p) => ({ ...p, [key]: "loading" }));
     try {
-      const monday = mondayForOffset(week.weekOffset);
+      const baseMonday = snapToMondayUtc(startWeek);
+      const monday = mondayForOffset(baseMonday, week.weekOffset);
       const { year, weekNumber } = isoWeekFromDate(monday);
       const r = await fetch("/api/content/marketer/apply", {
         method: "POST",
@@ -201,6 +241,23 @@ export function MarketerIAView() {
             placeholder='Ej. "Lanzamiento del programa CONSOLIDA el 15 de octubre. Quiero 2 semanas educativas atacando el mito de que hay que descansar cuando duele el hombro, y luego una semana de lanzamiento con testimonios."'
             disabled={busy}
           />
+        </div>
+
+        <div>
+          <label className="text-xs text-neutral-600 block mb-1">Empezar semana del…</label>
+          <input
+            type="date"
+            value={startWeek}
+            onChange={(e) => setStartWeek(e.target.value)}
+            className="input text-sm w-full"
+            disabled={busy}
+          />
+          <p className="text-[10px] text-neutral-500 mt-1">
+            {(() => {
+              const monday = snapToMondayUtc(startWeek);
+              return `Snap al lunes ${monday.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })}`;
+            })()}
+          </p>
         </div>
 
         <div>
@@ -303,7 +360,8 @@ export function MarketerIAView() {
 
             {/* Semanas */}
             {result.weeks.map((week) => {
-              const monday = mondayForOffset(week.weekOffset);
+              const baseMonday = snapToMondayUtc(startWeek);
+              const monday = mondayForOffset(baseMonday, week.weekOffset);
               const startStr = monday.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
               const end = new Date(monday);
               end.setUTCDate(end.getUTCDate() + 6);
