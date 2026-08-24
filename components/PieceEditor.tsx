@@ -168,18 +168,15 @@ export function PieceEditor({
     const next = currentGoals.includes(g)
       ? currentGoals.filter((x) => x !== g)
       : [...currentGoals, g];
-    // El backend espera un array y serializa él mismo a JSON.
-    // Tras el PATCH el server devuelve la pieza con goals como string JSON,
-    // por eso lo guardamos también como string en el estado local para que
-    // parseGoals(piece.goals) siga funcionando.
-    update("goals", JSON.stringify(next) as any);
-    // Ojo: update() lleva el valor al pendingPayloadRef tal cual.
-    // Forzamos que se envíe como array al backend usando un fetch directo.
-    fetch("/api/content/pieces", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: piece.id, goals: next }),
-    });
+    // State local: goals se persiste como string JSON en la BD, así que
+    // aquí también lo guardamos como string para que parseGoals(piece.goals)
+    // siga funcionando en el render.
+    setPiece((p) => ({ ...p, goals: JSON.stringify(next) }));
+    // Cola de guardado: SIEMPRE array. El endpoint PATCH solo procesa
+    // goals si Array.isArray(rest.goals); si le llegaba un string (el JSON
+    // stringify de arriba), lo reseteaba a "[]" — este era el bug del
+    // "guardo y al refrescar se borran las etiquetas".
+    queueSave({ goals: next as any });
   }
 
   // ===== MODO GRABACIÓN =====
