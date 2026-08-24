@@ -49,7 +49,9 @@ import { getAiBrief } from "@/lib/ai-brief";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// Sonnet con tool-use grande puede tardar 30-90s cuando el brief es largo
+// y pedimos 4 semanas con mezcla amplia. 300s = techo Vercel Pro.
+export const maxDuration = 300;
 
 const MODEL = "claude-sonnet-4-6";
 const MAX_OUTPUT_TOKENS = 6000;
@@ -143,6 +145,20 @@ function buildUserPrompt(input: {
 }
 
 async function handle(req: NextRequest) {
+  try {
+    return await runGenerate(req);
+  } catch (e: any) {
+    // Cinturón + tirantes: cualquier throw fuera del try interno cae aquí
+    // en JSON para que el cliente no reciba "An error occurred..." de HTML.
+    console.error("[marketer/generate] top-level error:", e);
+    return NextResponse.json(
+      { error: e?.message ?? "Error inesperado generando estrategia" },
+      { status: 500 },
+    );
+  }
+}
+
+async function runGenerate(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user || !canAccess(user.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -255,7 +271,15 @@ async function handle(req: NextRequest) {
     // Extraer el tool_use.
     const toolUse = msg.content.find((c): c is Anthropic.ToolUseBlock => c.type === "tool_use");
     if (!toolUse) {
-      return NextResponse.json({ error: "La IA no devolvió estrategia" }, { status: 502 });
+      // Log del contenido devuelto por Claude cuando no llama a la tool —
+      // útil para diagnosticar si soltó texto suelto en vez del tool_use.
+      const textFallback = msg.content
+        .filter((c): c is Anthropic.TextBlock => c.type === "text")
+        .map((c) => c.text)
+        .join("\n")
+        .slice(0, 500);
+      console.warn("[marketer/generate] IA sin tool_use. Text fallback:", textFallback);
+      return NextResponse.json({ error: "La IA no devolvió estrategia (no llamó a la tool)" }, { status: 502 });
     }
     const parsed = toolUse.input as any;
     return NextResponse.json({
@@ -264,7 +288,11 @@ async function handle(req: NextRequest) {
       weeks: Array.isArray(parsed.weeks) ? parsed.weeks : [],
     });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "Error generando estrategia" }, { status: 500 });
+    console.error("[marketer/generate] Anthropic error:", e?.message ?? e);
+    return NextResponse.json(
+      { error: e?.message ?? "Error llamando a la IA" },
+      { status: 500 },
+    );
   }
 }
 

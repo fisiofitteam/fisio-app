@@ -105,9 +105,23 @@ export function MarketerIAView() {
           piecesPerWeek: Object.keys(piecesPerWeek).length > 0 ? piecesPerWeek : undefined,
         }),
       });
-      const d = await r.json();
-      if (!r.ok || !d.ok) {
-        setError(d.error || "No se pudo generar");
+      // Parseo defensivo: si el server devuelve texto plano (timeout de
+      // Vercel, error de infraestructura) el .json() peta con "Unexpected
+      // token 'A'…". Leemos texto y probamos a parsear a mano.
+      const raw = await r.text();
+      let d: any;
+      try {
+        d = JSON.parse(raw);
+      } catch {
+        setError(
+          r.status === 504
+            ? "La IA tardó demasiado (>5 min). Prueba con menos semanas o brief más corto."
+            : `Respuesta no válida del servidor (${r.status}): ${raw.slice(0, 200)}`,
+        );
+        return;
+      }
+      if (!r.ok || !d?.ok) {
+        setError(d?.error || `Error ${r.status}`);
         return;
       }
       setResult({ strategy: d.strategy, weeks: d.weeks });
