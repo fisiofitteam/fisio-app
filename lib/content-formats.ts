@@ -7,6 +7,7 @@
  * estructura de bloques se gestiona mediante ScriptTemplate (plantillas
  * de guion creadas por el usuario).
  */
+import type React from "react";
 
 export type FormatKey = "reel" | "carousel" | "infographic" | "image" | "live";
 
@@ -36,15 +37,15 @@ export function formatIcon(value: string): string {
 
 export type GoalKey = "atraer" | "conectar" | "educar" | "convertir" | "lanzamiento";
 
-// Color category: green (atraer/conectar), yellow (educar), red (convertir/lanzamiento)
-export type GoalColor = "green" | "yellow" | "red";
+// Color category: green (atraer/conectar), yellow (educar), red (convertir), purple (lanzamiento)
+export type GoalColor = "green" | "yellow" | "red" | "purple";
 
 export const GOALS: { value: GoalKey; label: string; color: GoalColor }[] = [
   { value: "atraer", label: "Atraer", color: "green" },
   { value: "conectar", label: "Conectar", color: "green" },
   { value: "educar", label: "Educar", color: "yellow" },
   { value: "convertir", label: "Convertir", color: "red" },
-  { value: "lanzamiento", label: "Lanzamiento", color: "red" },
+  { value: "lanzamiento", label: "Lanzamiento", color: "purple" },
 ];
 
 export function goalLabel(value: string): string {
@@ -55,29 +56,47 @@ export function goalColor(value: string): GoalColor {
   return GOALS.find((g) => g.value === value)?.color ?? "yellow";
 }
 
-// Tailwind classes para etiquetas de objetivo (chips)
+// Tailwind classes para etiquetas de objetivo (chips que van encima del cuadro).
 export const GOAL_COLOR_CLASSES: Record<GoalColor, string> = {
   green: "bg-emerald-100 text-emerald-800 border border-emerald-200",
   yellow: "bg-amber-100 text-amber-800 border border-amber-200",
   red: "bg-red-100 text-red-800 border border-red-200",
+  purple: "bg-violet-100 text-violet-800 border border-violet-200",
 };
 
-// Tailwind classes para el FONDO de una pieza en el calendario. Más suaves
-// que los chips (que van encima) y con hover diferenciado para no fastidiar
-// el drag-and-drop.
-export const GOAL_TILE_CLASSES: Record<GoalColor, string> = {
-  green: "bg-emerald-50 hover:bg-emerald-100 border border-emerald-200",
-  yellow: "bg-amber-50 hover:bg-amber-100 border border-amber-200",
-  red: "bg-red-50 hover:bg-red-100 border border-red-200",
+// HEX del FONDO (tono claro) y BORDER de la pieza del calendario, por color.
+// Los usamos con inline styles para evitar problemas de Tailwind JIT purge
+// con clases dinámicas y para poder hacer gradientes con background-image.
+export const GOAL_TILE_HEX: Record<GoalColor, { bg: string; border: string }> = {
+  green:  { bg: "#ECFDF5", border: "#A7F3D0" }, // emerald-50 / emerald-200
+  yellow: { bg: "#FEFCE8", border: "#FDE68A" }, // amber-50 / amber-200
+  red:    { bg: "#FEF2F2", border: "#FECACA" }, // red-50 / red-200
+  purple: { bg: "#F5F3FF", border: "#DDD6FE" }, // violet-50 / violet-200
 };
 
 /**
- * Devuelve las clases Tailwind del fondo de la pieza según su primer
- * objetivo. Si no tiene objetivos, devuelve el estilo neutro histórico.
+ * Devuelve el estilo inline del fondo de una pieza según sus objetivos.
+ *   - 0 goals → gris neutro (histórico).
+ *   - 1 goal  → color plano.
+ *   - 2+ goals → gradiente diagonal del color[0] al color[último].
+ * El border toma el color dominante (color[0]).
  */
-export function goalTileClasses(goals: GoalKey[]): string {
-  if (goals.length === 0) return "bg-neutral-100 hover:bg-neutral-200 border border-transparent";
-  return GOAL_TILE_CLASSES[goalColor(goals[0])];
+export function goalTileStyle(goals: GoalKey[]): React.CSSProperties {
+  if (goals.length === 0) {
+    return { background: "#F5F5F5", border: "1px solid transparent" };
+  }
+  const colors = goals.map((g) => GOAL_TILE_HEX[goalColor(g)]);
+  if (colors.length === 1) {
+    return { background: colors[0].bg, border: `1px solid ${colors[0].border}` };
+  }
+  // Gradiente entre extremos. Usamos linear-gradient a 135deg — se ve bien
+  // en cuadros pequeños y respeta la diagonal de lectura izq→dcha.
+  const first = colors[0];
+  const last = colors[colors.length - 1];
+  return {
+    background: `linear-gradient(135deg, ${first.bg} 0%, ${last.bg} 100%)`,
+    border: `1px solid ${first.border}`,
+  };
 }
 
 /**

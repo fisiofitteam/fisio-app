@@ -17,7 +17,7 @@ import {
   goalColor,
   goalLabel,
   GOAL_COLOR_CLASSES,
-  goalTileClasses,
+  goalTileStyle,
 } from "@/lib/content-formats";
 import { AddPieceModal } from "@/components/AddPieceModal";
 
@@ -204,7 +204,9 @@ export function CalendarView({
         <span className="mr-3 font-medium">Leyenda objetivos:</span>
         <span className={`inline-block mr-2 mb-1 px-2 py-0.5 rounded text-[10px] ${GOAL_COLOR_CLASSES.green}`}>🟢 Atraer / Conectar</span>
         <span className={`inline-block mr-2 mb-1 px-2 py-0.5 rounded text-[10px] ${GOAL_COLOR_CLASSES.yellow}`}>🟡 Educar</span>
-        <span className={`inline-block mr-2 mb-1 px-2 py-0.5 rounded text-[10px] ${GOAL_COLOR_CLASSES.red}`}>🔴 Convertir / Lanzamiento</span>
+        <span className={`inline-block mr-2 mb-1 px-2 py-0.5 rounded text-[10px] ${GOAL_COLOR_CLASSES.red}`}>🔴 Convertir</span>
+        <span className={`inline-block mr-2 mb-1 px-2 py-0.5 rounded text-[10px] ${GOAL_COLOR_CLASSES.purple}`}>🟣 Lanzamiento</span>
+        <span className="inline-block mr-2 mb-1 text-[10px] italic">· Piezas con 2 objetivos → gradiente de ambos colores</span>
       </section>
     </>
   );
@@ -565,7 +567,8 @@ function MonthGrid({
                                 router.push(`?month=${month}&year=${year}`);
                               }
                             }}
-                            className={`relative flex flex-col gap-0.5 text-[10px] px-1.5 py-1 pr-5 rounded leading-tight cursor-move overflow-hidden ${goalTileClasses(goals)}`}
+                            className="relative flex flex-col gap-0.5 text-[10px] px-1.5 py-1 pr-5 rounded leading-tight cursor-move overflow-hidden hover:brightness-95 transition"
+                            style={goalTileStyle(goals)}
                             title={`${fmtLabel}${dp.piece.hook ? " · " + dp.piece.hook : ""}${dp.weekTheme ? " · " + dp.weekTheme : ""}`}
                           >
                             <span
