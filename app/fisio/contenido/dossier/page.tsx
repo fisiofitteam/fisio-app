@@ -233,27 +233,29 @@ export default async function DossierPage({
                             </div>
                           )}
 
-                          {p.hook && (
-                            <div className="mb-2">
-                              <div className="text-[10px] uppercase tracking-wide text-neutral-500 mb-0.5">Hook</div>
-                              <p className="text-sm italic text-neutral-800">"{p.hook}"</p>
-                            </div>
-                          )}
-
                           {blocks.length > 0 && (
                             <div className="mb-2">
                               <div className="text-[10px] uppercase tracking-wide text-neutral-500 mb-1">Guion</div>
                               <div className="space-y-1.5">
-                                {blocks.map((b, i) => (
-                                  <div key={i} className="text-sm">
-                                    {b.label && (
-                                      <div className="text-[11px] font-semibold text-neutral-700">{b.label}</div>
-                                    )}
-                                    {b.content && (
-                                      <div className="text-neutral-800 whitespace-pre-wrap">{b.content}</div>
-                                    )}
-                                  </div>
-                                ))}
+                                {blocks.map((b, i) => {
+                                  // El primer bloque cuenta como hook — lo
+                                  // destacamos con label "🎣 Hook" (aunque el
+                                  // fisio lo haya nombrado de otra forma) y
+                                  // el contenido en italic para leer el
+                                  // guion "de un vistazo".
+                                  const isHook = i === 0;
+                                  const label = isHook ? "🎣 Hook" : b.label;
+                                  return (
+                                    <div key={i} className="text-sm">
+                                      {label && (
+                                        <div className="text-[11px] font-semibold text-neutral-700">{label}</div>
+                                      )}
+                                      {b.content && (
+                                        <div className={`text-neutral-800 whitespace-pre-wrap ${isHook ? "italic" : ""}`}>{b.content}</div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </div>
                           )}
