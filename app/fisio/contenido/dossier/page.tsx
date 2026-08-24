@@ -252,30 +252,21 @@ export default async function DossierPage({
                             <div className="mb-2">
                               <div className="text-[10px] uppercase tracking-wide text-neutral-500 mb-1">Guion</div>
                               <div className="space-y-2">
-                                {blocks.map((b, i) => {
-                                  // El primer bloque cuenta como hook — lo
-                                  // destacamos con label "🎣 Hook" (aunque el
-                                  // fisio lo haya nombrado de otra forma) y
-                                  // el contenido en italic para leer el
-                                  // guion "de un vistazo".
-                                  const isHook = i === 0;
-                                  const label = isHook ? "🎣 Hook" : b.label;
-                                  return (
-                                    <div key={i} className="text-sm">
-                                      {label && (
-                                        <div
-                                          className="text-[12px] font-bold uppercase tracking-wide"
-                                          style={{ color: "#172554" }}
-                                        >
-                                          {label}
-                                        </div>
-                                      )}
-                                      {b.content && (
-                                        <div className={`text-neutral-800 whitespace-pre-wrap ${isHook ? "italic" : ""}`}>{b.content}</div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
+                                {blocks.map((b, i) => (
+                                  <div key={i} className="text-sm">
+                                    {b.label && (
+                                      <div
+                                        className="text-[12px] font-bold uppercase tracking-wide"
+                                        style={{ color: "#172554" }}
+                                      >
+                                        {b.label}
+                                      </div>
+                                    )}
+                                    {b.content && (
+                                      <div className="text-neutral-800 whitespace-pre-wrap">{b.content}</div>
+                                    )}
+                                  </div>
+                                ))}
                               </div>
                             </div>
                           )}
