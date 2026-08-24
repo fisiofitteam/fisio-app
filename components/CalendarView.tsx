@@ -21,6 +21,21 @@ import {
 } from "@/lib/content-formats";
 import { AddPieceModal } from "@/components/AddPieceModal";
 
+/**
+ * Meta de estado por pieza para el badge de la esquina superior derecha
+ * en el calendario. Icono corto + label legible en tooltip + color.
+ * Los valores coinciden con los del catálogo PIECE_STATUS en
+ * lib/content-templates.ts — si añades allí un nuevo estado, añade aquí.
+ */
+const PIECE_STATUS_BADGE: Record<string, { icon: string; label: string; color: string }> = {
+  idea: { icon: "💡", label: "Idea", color: "#737373" },
+  script: { icon: "✍️", label: "Guion listo", color: "#B45309" },
+  recorded: { icon: "🎥", label: "Grabado", color: "#1D4ED8" },
+  edited: { icon: "🎬", label: "Editado", color: "#7C3AED" },
+  scheduled: { icon: "📅", label: "Programado", color: "#3730A3" },
+  published: { icon: "✓", label: "Publicado", color: "#065F46" },
+};
+
 type Piece = {
   id: string;
   dayOfWeek: number;
@@ -524,7 +539,10 @@ function MonthGrid({
                         const fmtLabel = formatLabelOnly(dp.piece.format);
                         const fmtIcon = formatIcon(dp.piece.format);
                         const label = dp.piece.title?.trim() || dp.piece.hook?.trim() || fmtLabel || "Pieza";
-                        const statusIcon = dp.piece.status === "published" ? "✓" : dp.piece.status === "scheduled" ? "📅" : "";
+                        // Badge de estado arriba a la derecha. Todos los
+                        // estados llevan icono + tooltip para leer rápido
+                        // en qué fase está cada pieza sin abrirla.
+                        const statusMeta = PIECE_STATUS_BADGE[dp.piece.status] ?? { icon: "•", label: dp.piece.status, color: "#737373" };
                         const goals = parseGoals(dp.piece.goals);
                         return (
                           <Link
@@ -550,11 +568,13 @@ function MonthGrid({
                             className={`relative flex flex-col gap-0.5 text-[10px] px-1.5 py-1 pr-5 rounded leading-tight cursor-move overflow-hidden ${goalTileClasses(goals)}`}
                             title={`${fmtLabel}${dp.piece.hook ? " · " + dp.piece.hook : ""}${dp.weekTheme ? " · " + dp.weekTheme : ""}`}
                           >
-                            {statusIcon && (
-                              <span className="absolute top-0.5 right-0.5 text-emerald-700 font-bold text-[11px] leading-none">
-                                {statusIcon}
-                              </span>
-                            )}
+                            <span
+                              className="absolute top-0.5 right-0.5 text-[10px] leading-none font-bold"
+                              style={{ color: statusMeta.color }}
+                              title={`Estado: ${statusMeta.label}`}
+                            >
+                              {statusMeta.icon}
+                            </span>
                             <button
                               type="button"
                               onClick={(e) => {
