@@ -150,7 +150,7 @@ export default async function DossierPage({
             const endStr = week.endDate.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
             const weekTypeLabel = WEEK_TYPE_LABEL[week.weekType] ?? week.weekType;
             return (
-              <section key={week.id} className="print:break-inside-avoid-page">
+              <section key={week.id}>
                 {/* Cabecera de semana */}
                 <div className="border-b-2 border-neutral-800 pb-2 mb-3">
                   <div className="flex items-baseline justify-between gap-3 flex-wrap">
