@@ -57,20 +57,26 @@ export function goalColor(value: string): GoalColor {
 }
 
 // Tailwind classes para etiquetas de objetivo (chips que van encima del cuadro).
+// El rojo va un peldaño más oscuro que el resto porque su fondo también sube
+// (ver GOAL_TILE_HEX.red): sin eso, el chip se confundiría con el fondo.
 export const GOAL_COLOR_CLASSES: Record<GoalColor, string> = {
   green: "bg-emerald-100 text-emerald-800 border border-emerald-200",
   yellow: "bg-amber-100 text-amber-800 border border-amber-200",
-  red: "bg-red-100 text-red-800 border border-red-200",
+  red: "bg-red-200 text-red-900 border border-red-400",
   purple: "bg-violet-100 text-violet-800 border border-violet-200",
 };
 
 // HEX del FONDO (tono claro) y BORDER de la pieza del calendario, por color.
 // Los usamos con inline styles para evitar problemas de Tailwind JIT purge
 // con clases dinámicas y para poder hacer gradientes con background-image.
+//
+// Nota: el rojo va un peldaño más marcado que el resto porque en piezas con
+// dos objetivos (ej. Educar + Convertir) el rojo apenas se distinguía del
+// amarillo suave; con red-100/300 sí gana presencia visual.
 export const GOAL_TILE_HEX: Record<GoalColor, { bg: string; border: string }> = {
   green:  { bg: "#ECFDF5", border: "#A7F3D0" }, // emerald-50 / emerald-200
   yellow: { bg: "#FEFCE8", border: "#FDE68A" }, // amber-50 / amber-200
-  red:    { bg: "#FEF2F2", border: "#FECACA" }, // red-50 / red-200
+  red:    { bg: "#FEE2E2", border: "#F87171" }, // red-100 / red-400
   purple: { bg: "#F5F3FF", border: "#DDD6FE" }, // violet-50 / violet-200
 };
 
