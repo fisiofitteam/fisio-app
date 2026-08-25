@@ -19,7 +19,11 @@ export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   const user = await getActiveProfessional();
-  if (!user || (user.role !== "ceo" && user.role !== "head_success")) {
+  // Cualquier miembro del equipo con acceso al panel clínico puede usar
+  // el Programador IA desde la ficha de un paciente. Antes solo CEO y
+  // head_success, pero los fisios normales trabajan con sus pacientes
+  // asignados y también lo necesitan.
+  if (!user || (user.role !== "ceo" && user.role !== "head_success" && user.role !== "fisio")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
