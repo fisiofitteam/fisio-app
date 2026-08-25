@@ -799,6 +799,8 @@ model ProgramSession {
   weekNumber    Int
   dayOfWeek     Int                                 // 1-7
 
+  dayOrder      Int      @default(0)
+
   // Snapshot de las tareas del día (JSON estructurado)
   tasksSnapshot String                              // JSON: [{id, type, title, ...payload}]
 

@@ -25,6 +25,9 @@ import { colorForSession, colorForTask, buildAssignmentIndexMap } from "@/lib/se
 type Session = {
   id: string;
   scheduledDate: string;
+  /** Índice ascendente entre sesiones del mismo día. Reordenable por el
+   *  fisio con ↑↓; se refleja en todas las vistas de la app del paciente. */
+  dayOrder?: number;
   completedAt: string | null;
   weekNumber: number;
   /** Programa (assignment) al que pertenece — se usa para asignar
@@ -203,6 +206,17 @@ export function CalendarMonth({
       const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
       if (!map[key]) map[key] = [];
       map[key].push(s);
+    }
+    // Orden intra-día: primero dayOrder ASC (default 0), luego scheduledDate
+    // como tiebreaker por si dos comparten dayOrder (histórico) o son
+    // sesiones muy antiguas creadas antes de tener el campo.
+    for (const key of Object.keys(map)) {
+      map[key].sort((a, b) => {
+        const da = a.dayOrder ?? 0;
+        const db = b.dayOrder ?? 0;
+        if (da !== db) return da - db;
+        return a.scheduledDate.localeCompare(b.scheduledDate);
+      });
     }
     return map;
   }, [sessions]);
@@ -1001,6 +1015,14 @@ function DayDetail({
 }) {
   const date = parseKey(dateKey);
   const router = useRouter();
+  // Estado local del orden — permite mover ↑↓ sin cerrar el modal ni
+  // esperar al refresh de Next. Al cerrar el modal, el server ya tiene
+  // el orden persistido y la próxima carga hidratará con lo mismo.
+  const [ordered, setOrdered] = useState<Session[]>(sessions);
+
+  useEffect(() => {
+    setOrdered(sessions);
+  }, [sessions]);
 
   async function markReviewed(sessionId: string) {
     await fetch("/api/sessions/review-form", {
@@ -1010,6 +1032,27 @@ function DayDetail({
     });
     onClose();
     router.refresh();
+  }
+
+  /** Mueve la sesión de índice `from` a `from + delta` y persiste el
+   *  nuevo orden. El backend hace la actualización en transacción. */
+  async function moveSession(from: number, delta: -1 | 1) {
+    const to = from + delta;
+    if (to < 0 || to >= ordered.length) return;
+    const next = [...ordered];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    setOrdered(next);
+    try {
+      await fetch("/api/sessions/reorder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderedSessionIds: next.map((s) => s.id) }),
+      });
+      router.refresh();
+    } catch (e) {
+      console.error("Error reordenando sesiones", e);
+    }
   }
 
   return (
@@ -1022,20 +1065,44 @@ function DayDetail({
           <button onClick={onClose} className="text-neutral-400 text-xl">✕</button>
         </div>
         <div className="p-4 space-y-3">
-          {sessions.map((s) => {
+          {ordered.map((s, idx) => {
             const tasks = JSON.parse(s.tasksSnapshot) as any[];
             const hasForm = tasks.some((t) => t.type === "FORM");
             const needsReview = hasForm && s.completedAt && !s.formReviewedAt;
+            const canReorder = ordered.length > 1;
             return (
               <div key={s.id} className="card">
                 <div className="flex justify-between items-start mb-2">
                   <div>
-                    <div className="font-medium text-sm">{s.programName}</div>
+                    <div className="font-medium text-sm">
+                      {canReorder && (
+                        <span className="text-xs text-neutral-400 mr-1 tabular-nums">
+                          {idx + 1}.
+                        </span>
+                      )}
+                      {s.programName}
+                    </div>
                     <div className="text-xs text-neutral-500">
                       {s.isStandalone ? "Sesión suelta" : `Semana ${s.weekNumber}`}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    {canReorder && (
+                      <>
+                        <button
+                          onClick={() => moveSession(idx, -1)}
+                          disabled={idx === 0}
+                          className="text-sm text-neutral-500 hover:text-neutral-900 disabled:opacity-30 px-1"
+                          title="Subir en el orden del día"
+                        >↑</button>
+                        <button
+                          onClick={() => moveSession(idx, 1)}
+                          disabled={idx === ordered.length - 1}
+                          className="text-sm text-neutral-500 hover:text-neutral-900 disabled:opacity-30 px-1"
+                          title="Bajar en el orden del día"
+                        >↓</button>
+                      </>
+                    )}
                     <button
                       onClick={() => onEditSession(s)}
                       className="text-xs text-neutral-600 hover:text-neutral-900"

@@ -75,7 +75,7 @@ export default async function PatientWeekPage({
       assignment: { patientId: patient.id, isActive: true },
       scheduledDate: { gte: rangeStart, lt: rangeEndExclusive },
     },
-    orderBy: { scheduledDate: "asc" },
+    orderBy: [{ scheduledDate: "asc" }, { dayOrder: "asc" }],
   });
 
   // Índice estable por assignment del paciente. Ordenado por startDate

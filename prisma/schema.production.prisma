@@ -839,6 +839,13 @@ model ProgramSession {
   weekNumber    Int
   dayOfWeek     Int                                 // 1-7
 
+  // Orden intra-día cuando hay varias sesiones el mismo día (ej. tren
+  // inferior + accesorios). Se ordena ascendente. Sesiones antiguas y
+  // recién creadas empiezan en 0 — el fisio las reordena desde la vista
+  // calendario con las flechas ↑↓. Al añadir una sesión nueva, el editor
+  // la coloca al final (mayor dayOrder + 1).
+  dayOrder      Int      @default(0)
+
   // Snapshot de las tareas del día (JSON estructurado)
   tasksSnapshot String                              // JSON: [{id, type, title, ...payload}]
 

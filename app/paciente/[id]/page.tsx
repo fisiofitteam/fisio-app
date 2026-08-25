@@ -223,7 +223,7 @@ export default async function PatientHome({ params }: { params: { id: string } }
         scheduledDate: { gte: todayUtc, lt: tomorrowUtc },
       },
       include: { assignment: { include: { program: { select: { name: true } } } } },
-      orderBy: { scheduledDate: "asc" },
+      orderBy: [{ scheduledDate: "asc" }, { dayOrder: "asc" }],
     }).catch(() => [] as any[]);
 
     // ¿El atleta tiene ProgramAssignments activos? Se usa para decidir si
@@ -443,7 +443,7 @@ export default async function PatientHome({ params }: { params: { id: string } }
       scheduledDate: { gte: today, lt: tomorrow },
     },
     include: { assignment: { include: { program: true } } },
-    orderBy: { scheduledDate: "asc" },
+    orderBy: [{ scheduledDate: "asc" }, { dayOrder: "asc" }],
   });
 
   let nextSession = null;
@@ -454,7 +454,7 @@ export default async function PatientHome({ params }: { params: { id: string } }
         scheduledDate: { gte: tomorrow },
       },
       include: { assignment: { include: { program: true } } },
-      orderBy: { scheduledDate: "asc" },
+      orderBy: [{ scheduledDate: "asc" }, { dayOrder: "asc" }],
     });
   }
 

@@ -24,7 +24,7 @@ export default async function PatientCalendarTab({
       scheduledDate: { gte: firstDay, lte: lastDay },
     },
     include: { assignment: { include: { program: true } } },
-    orderBy: { scheduledDate: "asc" },
+    orderBy: [{ scheduledDate: "asc" }, { dayOrder: "asc" }],
   });
 
   const activeAssignments = await prisma.programAssignment.findMany({
@@ -50,6 +50,7 @@ export default async function PatientCalendarTab({
       sessions={sessions.map((s) => ({
         id: s.id,
         scheduledDate: s.scheduledDate.toISOString(),
+        dayOrder: (s as any).dayOrder ?? 0,
         completedAt: s.completedAt?.toISOString() ?? null,
         weekNumber: s.weekNumber,
         assignmentId: s.assignmentId,

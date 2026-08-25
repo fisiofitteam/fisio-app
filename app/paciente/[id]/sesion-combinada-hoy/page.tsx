@@ -32,7 +32,7 @@ export default async function CombinedSessionTodayPage({ params }: { params: { i
       scheduledDate: { gte: today, lt: tomorrow },
     },
     include: { assignment: { include: { program: true } } },
-    orderBy: { scheduledDate: "asc" },
+    orderBy: [{ scheduledDate: "asc" }, { dayOrder: "asc" }],
   });
 
   if (sessions.length === 0) {
