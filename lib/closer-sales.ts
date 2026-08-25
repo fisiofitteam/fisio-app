@@ -65,23 +65,30 @@ export async function getCloserSalesInPeriod(
   });
 
   // Fallback: para leads sin convertedPatientId (p.ej. Prevention por
-  // landing antes del fix upstream) buscamos Patient por email del lead.
-  const orphanEmails = leads
-    .filter((l) => !l.convertedPatient && l.email)
-    .map((l) => l.email!.toLowerCase());
-  const patientsByEmail = new Map<string, {
+  // landing antes del fix upstream) buscamos Patient por email o phone.
+  type PatientLite = {
     id: string;
     fullName: string;
     programType: string | null;
     subscriptionAmountCents: number | null;
     renewalAmountPaid: number | null;
     renewalNotes: string | null;
-  }>();
-  if (orphanEmails.length > 0) {
+  };
+  const orphanLeads = leads.filter((l) => !l.convertedPatient);
+  const orphanEmails = orphanLeads.map((l) => l.email?.toLowerCase()).filter(Boolean) as string[];
+  const orphanPhones = orphanLeads.map((l) => l.phone).filter(Boolean) as string[];
+  const patientsByEmail = new Map<string, PatientLite>();
+  const patientsByPhone = new Map<string, PatientLite>();
+
+  if (orphanEmails.length > 0 || orphanPhones.length > 0) {
+    const orConds: any[] = [];
+    if (orphanEmails.length > 0) orConds.push({ email: { in: orphanEmails, mode: "insensitive" } });
+    if (orphanPhones.length > 0) orConds.push({ phone: { in: orphanPhones } });
+
     const patients = await prisma.patient.findMany({
-      where: { email: { in: orphanEmails, mode: "insensitive" } },
+      where: { OR: orConds },
       select: {
-        id: true, email: true, fullName: true, programType: true,
+        id: true, email: true, phone: true, fullName: true, programType: true,
         subscriptions: { orderBy: { createdAt: "asc" }, take: 1, select: { amountCents: true } },
         renewals: {
           where: { isReservation: false },
@@ -92,15 +99,16 @@ export async function getCloserSalesInPeriod(
       },
     });
     for (const p of patients) {
-      if (!p.email) continue;
-      patientsByEmail.set(p.email.toLowerCase(), {
+      const lite: PatientLite = {
         id: p.id,
         fullName: p.fullName,
         programType: p.programType,
         subscriptionAmountCents: p.subscriptions?.[0]?.amountCents ?? null,
         renewalAmountPaid: p.renewals?.[0]?.amountPaid ?? null,
         renewalNotes: p.renewals?.[0]?.notes ?? null,
-      });
+      };
+      if (p.email) patientsByEmail.set(p.email.toLowerCase(), lite);
+      if (p.phone) patientsByPhone.set(p.phone, lite);
     }
   }
 
@@ -123,8 +131,10 @@ export async function getCloserSalesInPeriod(
       subscriptionAmountCents = l.convertedPatient.subscriptions?.[0]?.amountCents ?? null;
       renewalAmountPaid = l.convertedPatient.renewals?.[0]?.amountPaid ?? null;
       renewalNotes = l.convertedPatient.renewals?.[0]?.notes ?? null;
-    } else if (l.email) {
-      const p = patientsByEmail.get(l.email.toLowerCase());
+    } else {
+      const byEmail = l.email ? patientsByEmail.get(l.email.toLowerCase()) : undefined;
+      const byPhone = l.phone ? patientsByPhone.get(l.phone) : undefined;
+      const p = byEmail ?? byPhone;
       if (p) {
         patientId = p.id;
         patientName = p.fullName;
@@ -135,7 +145,10 @@ export async function getCloserSalesInPeriod(
       }
     }
 
-    if (!patientId) continue; // no podemos atribuir
+    // Si no encontramos Patient asociado, incluimos igualmente el lead
+    // (para que el closer vea todas sus ventas ganadas) pero con importe
+    // 0 y saleType "one_shot" — la UI pintara "—" en la columna precio.
+    // Asi seguimos coherentes con el contador `metrics.won`.
 
     let contractedAmount = 0;
     let saleType: CloserSaleRow["saleType"] = "one_shot";
