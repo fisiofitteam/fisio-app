@@ -202,6 +202,9 @@ async function handlePreventionCheckoutCompleted(session: Stripe.Checkout.Sessio
       data: {
         status: "won",
         decidedAt: new Date(),
+        // Vincula el Lead al Patient recien creado para que las metricas
+        // del closer atribuyan la venta correctamente.
+        convertedPatientId: patient.id,
         ...(closerIdFromMeta ? { closerId: closerIdFromMeta } : {}),
       },
     }).catch((err) => {

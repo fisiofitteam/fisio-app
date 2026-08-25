@@ -140,6 +140,10 @@ export async function POST(req: Request) {
       data: {
         status: "won",
         decidedAt: new Date(),
+        // Ligamos el Lead al Patient recien creado. Necesario para que
+        // las metricas del closer (lib/closer-sales.ts) puedan atribuir
+        // esta venta correctamente sin depender del fallback por email.
+        convertedPatientId: patient.id,
         ...(closerIdFromMeta ? { closerId: closerIdFromMeta } : {}),
       },
     }).catch((err) => {

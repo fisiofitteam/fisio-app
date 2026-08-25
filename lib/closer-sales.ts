@@ -52,7 +52,17 @@ export async function getCloserSalesInPeriod(
   const leadIdsCoveredBySale = new Set(paidSales.map((s) => s.leadId));
 
   const rows: CloserSaleRow[] = paidSales.map((s) => {
-    const installments = Math.max(1, s.installmentCount || 1);
+    // Numero de cuotas del contrato:
+    //  - installmentCount explicito si existe (fase 2 PayPal en adelante)
+    //  - fallback: si tiene paypalSubscriptionId (fraccionado por
+    //    suscripcion) pero installmentCount es null, asumimos una cuota
+    //    por mes contratado (durationMonths). Cubre ventas creadas antes
+    //    de que se persistiera installmentCount.
+    //  - si no, pago unico (1).
+    const explicitInstallments = s.installmentCount && s.installmentCount >= 2 ? s.installmentCount : null;
+    const isSubscription = !!s.paypalSubscriptionId;
+    const inferredInstallments = explicitInstallments ?? (isSubscription ? s.durationMonths : 1);
+    const installments = Math.max(1, inferredInstallments);
     const perInstallmentEur = s.amountCents / 100;
     const contractedAmount = perInstallmentEur * installments;
     return {
@@ -68,13 +78,18 @@ export async function getCloserSalesInPeriod(
     };
   });
 
-  // 2) Prevention won leads del closer, sin Sale asociada.
-  const preventionLeads = await prisma.lead.findMany({
+  // 2) Prevention won leads del closer.
+  // Ojo: /api/prevention/confirm marca el Lead como won pero NO setea
+  // convertedPatientId (el Patient se crea aparte). Por eso NO podemos
+  // filtrar por convertedPatient.programType — dejariamos fuera los
+  // David-Orga del mundo. En su lugar, tomamos TODOS los leads won del
+  // closer sin Sale, y buscamos su Patient por convertedPatientId primero,
+  // y si no, por email.
+  const wonLeads = await prisma.lead.findMany({
     where: {
       ...(closerId ? { closerId } : {}),
       status: "won",
       decidedAt: { gte: from, lt: to },
-      convertedPatient: { programType: "PREVENTION" },
     },
     include: {
       convertedPatient: {
@@ -91,17 +106,66 @@ export async function getCloserSalesInPeriod(
     orderBy: { decidedAt: "desc" },
   });
 
-  for (const l of preventionLeads) {
+  // Para leads sin convertedPatient, intentamos casar por email.
+  const orphanEmails = wonLeads
+    .filter((l) => !l.convertedPatient && l.email)
+    .map((l) => l.email!.toLowerCase());
+  const patientsByEmail = new Map<string, { id: string; fullName: string; programType: string | null; subscriptionAmountCents: number | null }>();
+  if (orphanEmails.length > 0) {
+    const patients = await prisma.patient.findMany({
+      where: { email: { in: orphanEmails, mode: "insensitive" } },
+      select: {
+        id: true, email: true, fullName: true, programType: true,
+        subscriptions: { orderBy: { createdAt: "asc" }, take: 1, select: { amountCents: true } },
+      },
+    });
+    for (const p of patients) {
+      if (!p.email) continue;
+      patientsByEmail.set(p.email.toLowerCase(), {
+        id: p.id,
+        fullName: p.fullName,
+        programType: p.programType,
+        subscriptionAmountCents: p.subscriptions?.[0]?.amountCents ?? null,
+      });
+    }
+  }
+
+  for (const l of wonLeads) {
     if (leadIdsCoveredBySale.has(l.id)) continue;
-    if (!l.convertedPatient || !l.decidedAt) continue;
-    const sub = l.convertedPatient.subscriptions?.[0];
-    const amountEur = sub ? sub.amountCents / 100 : 0;
+    if (!l.decidedAt) continue;
+
+    // Resolver Patient + tipo de programa.
+    let patientId: string | null = null;
+    let patientName = l.fullName || "—";
+    let programType: string | null = null;
+    let subscriptionAmountCents: number | null = null;
+
+    if (l.convertedPatient) {
+      patientId = l.convertedPatient.id;
+      patientName = l.convertedPatient.fullName;
+      programType = l.convertedPatient.programType;
+      subscriptionAmountCents = l.convertedPatient.subscriptions?.[0]?.amountCents ?? null;
+    } else if (l.email) {
+      const p = patientsByEmail.get(l.email.toLowerCase());
+      if (p) {
+        patientId = p.id;
+        patientName = p.fullName;
+        programType = p.programType;
+        subscriptionAmountCents = p.subscriptionAmountCents;
+      }
+    }
+
+    // Solo procesamos Prevention aqui (el bloque 3 hace fallback para
+    // RECUPERA/CONSOLIDA/ADVANCE sin Sale).
+    if (programType !== "PREVENTION") continue;
+
+    const amountEur = subscriptionAmountCents != null ? subscriptionAmountCents / 100 : 0;
     rows.push({
       key: `prev:${l.id}`,
       leadId: l.id,
-      patientId: l.convertedPatient.id,
-      patientName: l.convertedPatient.fullName,
-      programType: l.convertedPatient.programType,
+      patientId,
+      patientName,
+      programType,
       saleType: "prevention",
       contractedAmount: amountEur,
       paidSoFar: amountEur,
