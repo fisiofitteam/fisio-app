@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { PatientNav } from "@/components/PatientNav";
 import { buildAssignmentIndexMap, colorForSession, colorForTask } from "@/lib/session-colors";
 import { todayForPatient, dowForPatient, weekStartForPatient } from "@/lib/patient-dates";
+import { parseAndSortTasksSnapshot } from "@/lib/task-order";
 
 const DAY_NAMES = ["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 
@@ -252,7 +253,7 @@ function DayCard({
       ) : (
         <div className="space-y-2">
           {daySessions.map((s) => {
-            const tasks = JSON.parse(s.tasksSnapshot) as any[];
+            const tasks = parseAndSortTasksSnapshot(s.tasksSnapshot);
             const idx = assignmentIndex.get(s.assignmentId) ?? 0;
             const c = colorForSession({
               tasksSnapshot: s.tasksSnapshot,

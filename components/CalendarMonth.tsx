@@ -1345,6 +1345,21 @@ function EditSessionModal({
     setTasks((prev) => prev.filter((t) => t.id !== id));
   }
 
+  /** Mueve la tarea de índice `from` a `from + delta` (-1 = arriba, +1 = abajo).
+   *  Re-asigna el campo `order` en todas las tareas para reflejar el nuevo
+   *  índice — así la app del paciente (SessionRunner, calendario semana)
+   *  puede ordenar por `order` de forma fiable. */
+  function moveTask(from: number, delta: -1 | 1) {
+    setTasks((prev) => {
+      const to = from + delta;
+      if (to < 0 || to >= prev.length) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next.map((t, i) => ({ ...t, order: i }));
+    });
+  }
+
   async function save() {
     setSaving(true);
     await fetch("/api/sessions", {
@@ -1400,15 +1415,16 @@ function EditSessionModal({
               </p>
             )}
 
-            {tasks.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setEditingTaskId(t.id)}
-                className="w-full text-left card !p-3 hover:border-neutral-400"
-              >
-                <div className="flex justify-between items-start">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs text-neutral-500 uppercase">{t.type}</div>
+            {tasks.map((t, i) => (
+              <div key={t.id} className="card !p-3 hover:border-neutral-400">
+                <div className="flex justify-between items-start gap-2">
+                  <button
+                    onClick={() => setEditingTaskId(t.id)}
+                    className="flex-1 min-w-0 text-left"
+                  >
+                    <div className="text-xs text-neutral-500 uppercase">
+                      {i + 1}. {t.type}
+                    </div>
                     <div className="font-medium text-sm">{t.title}</div>
                     {t.type === "WORKOUT" && t.bodyText && (
                       <pre className="text-xs text-neutral-600 whitespace-pre-wrap mt-1 font-mono line-clamp-3">{t.bodyText}</pre>
@@ -1416,13 +1432,27 @@ function EditSessionModal({
                     {t.type === "VIDEO" && t.youtubeUrl && (
                       <div className="text-xs text-neutral-500 mt-1 truncate">{t.youtubeUrl}</div>
                     )}
+                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => moveTask(i, -1)}
+                      disabled={i === 0}
+                      className="text-sm text-neutral-500 hover:text-neutral-900 disabled:opacity-30 px-1"
+                      title="Subir"
+                    >↑</button>
+                    <button
+                      onClick={() => moveTask(i, 1)}
+                      disabled={i === tasks.length - 1}
+                      className="text-sm text-neutral-500 hover:text-neutral-900 disabled:opacity-30 px-1"
+                      title="Bajar"
+                    >↓</button>
+                    <button
+                      onClick={() => removeTask(t.id)}
+                      className="text-xs text-red-600 px-2"
+                    >✕</button>
                   </div>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); removeTask(t.id); }}
-                    className="text-xs text-red-600 px-2"
-                  >✕</button>
                 </div>
-              </button>
+              </div>
             ))}
 
             <button onClick={() => setPickerOpen(true)} className="btn btn-ghost text-xs w-full">

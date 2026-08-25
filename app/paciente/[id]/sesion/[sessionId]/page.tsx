@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { PatientNav } from "@/components/PatientNav";
 import { SessionRunner } from "@/components/SessionRunner";
+import { parseAndSortTasksSnapshot } from "@/lib/task-order";
 
 const DAY_NAMES = ["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 
@@ -21,7 +22,7 @@ export default async function PatientSessionPage({
 
   const date = new Date(session.scheduledDate);
   const dow = date.getDay() === 0 ? 7 : date.getDay();
-  const tasks = JSON.parse(session.tasksSnapshot) as any[];
+  const tasks = parseAndSortTasksSnapshot(session.tasksSnapshot);
 
   return (
     <main className="min-h-screen" style={{ color: "var(--p-text)" }}>

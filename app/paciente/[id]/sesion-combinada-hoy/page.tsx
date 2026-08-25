@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { PatientNav } from "@/components/PatientNav";
 import { CombinedSessionRunner, type CombinedGroup } from "@/components/CombinedSessionRunner";
 import { todayForPatient, dowForPatient } from "@/lib/patient-dates";
+import { parseAndSortTasksSnapshot } from "@/lib/task-order";
 
 const DAY_NAMES = ["", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
@@ -52,11 +53,7 @@ export default async function CombinedSessionTodayPage({ params }: { params: { i
   }
 
   const groups: CombinedGroup[] = sessions.map((s) => {
-    let tasks: any[] = [];
-    try {
-      const arr = JSON.parse(s.tasksSnapshot);
-      if (Array.isArray(arr)) tasks = arr;
-    } catch {}
+    const tasks = parseAndSortTasksSnapshot(s.tasksSnapshot);
     return {
       sessionId: s.id,
       programName: s.assignment.program.name,
