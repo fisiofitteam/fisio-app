@@ -27,7 +27,24 @@ const WEEK_ROLE: Record<1|2|3|4, string> = {
   1: "Introducción", 2: "Progresión", 3: "Pico", 4: "Descarga",
 };
 
-function sessionToTasksSnapshot(s: Session): any[] {
+type Exercise = {
+  id: string;
+  name: string;
+  category: string;
+  youtubeUrl: string | null;
+  description: string | null;
+};
+
+/**
+ * Convierte una sesión generada por la IA en el snapshot de tareas que
+ * persiste en ProgramSession. Los ejercicios que vengan resueltos contra
+ * la biblioteca (`resolved`) se adjuntan como `exercises` en la task —
+ * así el runner del paciente los muestra con vídeo y descripción. Los
+ * nombres que NO estén en la biblioteca no se copian abajo como bullets
+ * (antes se repetían duplicando lo que ya sale en el bodyText del guion),
+ * y se conservan solo como referencia si el fisio quiere añadirlos a mano.
+ */
+function sessionToTasksSnapshot(s: Session, resolvedByBlock: Exercise[][]): any[] {
   return s.blocks.map((b, i) => {
     const header: string[] = [];
     if (i === 0 && s.title) header.push(`_${s.title}_`);
@@ -35,7 +52,6 @@ function sessionToTasksSnapshot(s: Session): any[] {
     const body = [
       header.join("\n\n"),
       b.body || "",
-      b.exercises && b.exercises.length ? b.exercises.map((e) => `• ${e}`).join("\n") : "",
     ].filter(Boolean).join("\n\n");
     return {
       id: `ai-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`,
@@ -43,8 +59,36 @@ function sessionToTasksSnapshot(s: Session): any[] {
       order: i,
       title: b.heading || `Bloque ${i + 1}`,
       bodyText: body,
+      exercises: resolvedByBlock[i] ?? [],
     };
   });
+}
+
+/**
+ * Batch: para todos los bloques de una sesión, pide al backend cuáles de
+ * los nombres de ejercicios están en la biblioteca. Devuelve un array
+ * paralelo a `s.blocks` con solo los ejercicios encontrados (los que
+ * no matchean se descartan del array, no se envían al snapshot).
+ */
+async function resolveExercisesForSession(s: Session): Promise<Exercise[][]> {
+  const allNames = s.blocks.flatMap((b) => b.exercises ?? []);
+  if (allNames.length === 0) return s.blocks.map(() => []);
+  try {
+    const r = await fetch("/api/exercises/match", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ names: allNames }),
+    });
+    const d = await r.json().catch(() => ({}));
+    const matches: Record<string, Exercise | null> = d?.matches ?? {};
+    return s.blocks.map((b) =>
+      (b.exercises ?? [])
+        .map((n) => matches[n])
+        .filter((ex): ex is Exercise => !!ex)
+    );
+  } catch {
+    return s.blocks.map(() => []);
+  }
 }
 
 function todayLocalDate(): string {
@@ -126,6 +170,9 @@ export function AiCalendarPlannerModal({
   }
 
   async function saveSessionAtDate(scheduledDate: Date, session: Session): Promise<void> {
+    // Resolvemos los ejercicios contra la biblioteca ANTES de guardar,
+    // para que el snapshot lleve los vídeos y descripciones si están.
+    const resolvedByBlock = await resolveExercisesForSession(session);
     const r = await fetch("/api/sessions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -133,7 +180,7 @@ export function AiCalendarPlannerModal({
         patientId,
         scheduledDate: scheduledDate.toISOString(),
         title: session.title,
-        tasksSnapshot: sessionToTasksSnapshot(session),
+        tasksSnapshot: sessionToTasksSnapshot(session, resolvedByBlock),
       }),
     });
     if (!r.ok) {
