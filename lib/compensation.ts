@@ -2,6 +2,7 @@
 // Solo servidor (usa prisma).
 import { prisma } from "@/lib/prisma";
 import { activePatientCondition, currentlyPausedCondition } from "@/lib/patient-active";
+import { getCloserSalesInPeriod, sumContracted } from "@/lib/closer-sales";
 
 // Umbral de días de vacaciones para activar descuento de salario.
 // Debe coincidir con MIN_DAYS_TO_COMPENSATE en app/api/professional-leaves/route.ts.
@@ -209,17 +210,17 @@ export async function computeMonthlySalary(
     }
   }
 
-  // Ventas nuevas pagadas del mes
-  const sales = await prisma.sale.findMany({
-    where: {
-      status: "paid",
-      paidAt: { gte: start, lt: end },
-      ...(config.newSaleScope === "own" ? { closerId: professionalId } : {}),
-    },
-    select: { amountCents: true },
-  });
-  const newSaleCount = sales.length;
-  const newSaleRevenue = sales.reduce((s, x) => s + (x.amountCents || 0), 0) / 100;
+  // Ventas nuevas atribuidas al mes. Usamos el helper unificado que
+  // devuelve el importe CONTRATADO (no lo cobrado) — asi los fraccionados
+  // cuentan por el total pactado y las Prevention por landing (que no
+  // crean Sale) se detectan via PatientSubscription.
+  const closerSales = await getCloserSalesInPeriod(
+    config.newSaleScope === "own" ? professionalId : undefined,
+    start,
+    end,
+  );
+  const newSaleCount = closerSales.length;
+  const newSaleRevenue = sumContracted(closerSales);
 
   // Días naturales del mes (UTC) — base para la regla de 3 del descuento.
   const daysInMonth = Math.round((end.getTime() - start.getTime()) / 86400000);

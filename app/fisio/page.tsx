@@ -830,40 +830,25 @@ async function renderCloserPanel(
 
   const metrics = await calculateSalesMetrics(pStart, pEnd, user.id);
 
-  // Ventas realizadas en el período (con paciente y precio)
-  const wonLeads = await prisma.lead.findMany({
-    where: {
-      closerId: user.id,
-      status: "won",
-      decidedAt: { gte: pStart, lte: pEnd },
-    },
-    include: {
-      convertedPatient: {
-        select: { id: true, fullName: true, programType: true },
-      },
-    },
-    orderBy: { decidedAt: "desc" },
-  });
+  // Ventas atribuidas al closer con IMPORTE CONTRATADO (no cobrado).
+  // Un fraccionado a 4 cuotas de 366€ cuenta como 1464€, no 366€.
+  // Prevention cae al PatientSubscription.amountCents (primera cobro).
+  const { getCloserSalesInPeriod, sumContracted } = await import("@/lib/closer-sales");
+  const closerSales = await getCloserSalesInPeriod(user.id, pStart, pEnd);
+  const contratado = sumContracted(closerSales);
+  const ticketMedio = closerSales.length > 0 ? Math.round(contratado / closerSales.length) : null;
 
-  // Buscar transacciones income_new asociadas
-  const patientIds = wonLeads.map((l) => l.convertedPatient?.id).filter(Boolean) as string[];
-  const txs = patientIds.length > 0 ? await prisma.transaction.findMany({
-    where: { type: "income_new", patientId: { in: patientIds } },
-  }) : [];
-  const txByPatient = new Map<string, number>();
-  for (const t of txs) {
-    if (t.patientId) txByPatient.set(t.patientId, (txByPatient.get(t.patientId) ?? 0) + t.amount);
-  }
-
-  const ventas = wonLeads.map((l) => ({
-    leadId: l.id,
-    leadName: l.fullName,
-    patient: l.convertedPatient,
-    amount: l.convertedPatient ? (txByPatient.get(l.convertedPatient.id) ?? 0) : 0,
-    decidedAt: l.decidedAt,
+  const ventas = closerSales.map((r) => ({
+    leadId: r.leadId,
+    key: r.key,
+    leadName: r.patientName,
+    patient: r.patientId ? { id: r.patientId, fullName: r.patientName, programType: r.programType } : null,
+    amount: r.contractedAmount,
+    saleType: r.saleType,
+    decidedAt: r.decidedAt,
   }));
 
-  const commission = Math.round(metrics.revenue * 0.10);
+  const commission = Math.round(contratado * 0.10);
   const eur = (n: number) => `${n.toLocaleString("es-ES", { maximumFractionDigits: 0 })} €`;
 
   // Tareas puntuales del closer
@@ -895,16 +880,16 @@ async function renderCloserPanel(
           <div className="text-xs text-emerald-700 mt-0.5">cerradas en el período</div>
         </div>
         <div className="rounded-xl p-4 border border-neutral-200" style={{ background: "#FAFAFA" }}>
-          <div className="text-xs uppercase text-neutral-600 font-medium">Facturación</div>
-          <div className="text-3xl font-bold text-neutral-900 mt-1">{eur(metrics.revenue)}</div>
+          <div className="text-xs uppercase text-neutral-600 font-medium">Contratado</div>
+          <div className="text-3xl font-bold text-neutral-900 mt-1">{eur(contratado)}</div>
           <div className="text-xs text-neutral-600 mt-0.5">
-            Ticket medio: {metrics.ticketAvg !== null ? eur(metrics.ticketAvg) : "—"}
+            Ticket medio: {ticketMedio !== null ? eur(ticketMedio) : "—"}
           </div>
         </div>
         <div className="rounded-xl p-4 border border-blue-200" style={{ background: "#EFF6FF" }}>
           <div className="text-xs uppercase text-blue-700 font-medium">Tu comisión (10%)</div>
           <div className="text-3xl font-bold text-blue-800 mt-1">{eur(commission)}</div>
-          <div className="text-xs text-blue-700 mt-0.5">según facturación cobrada</div>
+          <div className="text-xs text-blue-700 mt-0.5">sobre importe contratado</div>
         </div>
       </div>
 
@@ -934,7 +919,7 @@ async function renderCloserPanel(
               </thead>
               <tbody>
                 {ventas.map((v) => (
-                  <tr key={v.leadId} className="border-b border-neutral-100 hover:bg-neutral-50">
+                  <tr key={v.key} className="border-b border-neutral-100 hover:bg-neutral-50">
                     <td className="py-2 px-2">
                       {v.patient ? (
                         <Link href={`/fisio/paciente/${v.patient.id}`} className="font-medium hover:underline">
@@ -942,6 +927,9 @@ async function renderCloserPanel(
                         </Link>
                       ) : (
                         <span>{v.leadName}</span>
+                      )}
+                      {v.saleType === "installment" && (
+                        <span className="ml-2 text-[9px] uppercase bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-medium">Fraccionado</span>
                       )}
                     </td>
                     <td className="py-2 px-2">
