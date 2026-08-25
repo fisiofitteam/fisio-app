@@ -3486,6 +3486,33 @@ model AdvanceWeeklySummary {
   @@index([weekStartDate])
 }
 
+// Informe ejecutivo del CEO. Persistente para llevar historico y que la
+// IA pueda comparar tendencias entre periodos (no partir de 0 cada
+// semana). El snapshot de metricas se guarda entero — asi la narrativa
+// puede regenerarse en el futuro sin volver a hacer todas las queries.
+model CeoReport {
+  id            String   @id @default(cuid())
+  // "week" | "month" | "quarter" | "custom"
+  periodType    String
+  periodStart   DateTime
+  periodEnd     DateTime
+  // Etiqueta legible: "Semana 12-18 ago", "Julio 2026", "Q3 2026"
+  periodLabel   String
+  // JSON snapshot con TODAS las metricas del periodo (sales, lead-origin,
+  // renewals, finance, skalex). Fuente de verdad para poder regenerar la
+  // narrativa sin volver a consultar la DB.
+  metrics       String
+  // JSON con la narrativa IA: { resumenEjecutivo, luces[], sombras[],
+  // accionesRecomendadas[], alertas[], tendencias[] }
+  narrative     String
+  // Profesional que lanzo la generacion (auditoria).
+  generatedById String?
+  generatedAt   DateTime @default(now())
+
+  @@index([periodStart])
+  @@index([periodType, periodStart])
+}
+
 // Tarifa de renovacion por programa y duracion. Editable solo por CEO
 // desde /fisio/recursos/tarifas.
 model RenewalRate {

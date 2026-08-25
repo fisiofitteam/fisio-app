@@ -3085,6 +3085,23 @@ model AdvanceWeeklySummary {
   @@index([weekStartDate])
 }
 
+// Informe ejecutivo del CEO. Persistente para llevar historico y
+// permitir a la IA comparar tendencias entre periodos.
+model CeoReport {
+  id            String   @id @default(cuid())
+  periodType    String
+  periodStart   DateTime
+  periodEnd     DateTime
+  periodLabel   String
+  metrics       String
+  narrative     String
+  generatedById String?
+  generatedAt   DateTime @default(now())
+
+  @@index([periodStart])
+  @@index([periodType, periodStart])
+}
+
 // Tarifa de renovacion por programa y duracion. Editable solo por CEO
 // desde /fisio/recursos/tarifas. El resto del equipo la consulta.
 model RenewalRate {
