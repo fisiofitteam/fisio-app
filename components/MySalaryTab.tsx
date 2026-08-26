@@ -34,14 +34,39 @@ function lastMonths(count = 12): { year: number; month: number; label: string }[
   return out;
 }
 
+type RenewalDetail = {
+  patientId: string;
+  patientName: string;
+  programType: string | null;
+  periodMonths: number;
+  amountPaid: number | null;
+  attributionDate: string;
+  startDate: string | null;
+  endDate: string | null;
+  notes: string | null;
+};
+
 export function MySalaryTab({ professionalId }: { professionalId: string }) {
   const months = lastMonths(12);
   const [sel, setSel] = useState(0); // índice en months (0 = mes actual)
   const [salary, setSalary] = useState<Salary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showRenewals, setShowRenewals] = useState(false);
+  const [renewals, setRenewals] = useState<RenewalDetail[] | null>(null);
+  const [loadingRenewals, setLoadingRenewals] = useState(false);
 
   const { year, month, label } = months[sel];
   const isCurrent = sel === 0;
+
+  function openRenewals() {
+    setShowRenewals(true);
+    if (renewals !== null) return;
+    setLoadingRenewals(true);
+    fetch(`/api/my-salary/renewals?year=${year}&month=${month}`)
+      .then((r) => (r.ok ? r.json() : { renewals: [] }))
+      .then((d) => setRenewals(d.renewals ?? []))
+      .finally(() => setLoadingRenewals(false));
+  }
 
   useEffect(() => {
     setLoading(true);
@@ -49,6 +74,9 @@ export function MySalaryTab({ professionalId }: { professionalId: string }) {
       .then((r) => (r.ok ? r.json() : null))
       .then((s) => setSalary(s))
       .finally(() => setLoading(false));
+    // Al cambiar de mes invalidamos la lista cacheada.
+    setRenewals(null);
+    setShowRenewals(false);
   }, [year, month]);
 
   const hasComp = salary
@@ -91,11 +119,24 @@ export function MySalaryTab({ professionalId }: { professionalId: string }) {
               <div className="text-2xl font-semibold">{salary.activePatients}</div>
               {!isCurrent && <div className="text-[11px] text-neutral-400 mt-0.5">actual</div>}
             </div>
-            <div>
-              <div className="text-xs text-neutral-500 mb-1">Renovaciones (mes)</div>
-              <div className="text-2xl font-semibold text-emerald-700">{salary.renewalOwnCount}</div>
+            <button
+              type="button"
+              onClick={openRenewals}
+              disabled={salary.renewalOwnCount === 0}
+              className="text-left cursor-pointer disabled:cursor-default group"
+              title={salary.renewalOwnCount > 0 ? "Ver detalle de renovaciones" : ""}
+            >
+              <div className="text-xs text-neutral-500 mb-1 flex items-center gap-1">
+                Renovaciones (mes)
+                {salary.renewalOwnCount > 0 && (
+                  <span className="text-emerald-600 text-[10px] group-hover:underline">🔍 detalle</span>
+                )}
+              </div>
+              <div className={`text-2xl font-semibold text-emerald-700 ${salary.renewalOwnCount > 0 ? "group-hover:underline" : ""}`}>
+                {salary.renewalOwnCount}
+              </div>
               <div className="text-xs text-neutral-400 mt-0.5">{eur(salary.renewalOwnRevenue)}</div>
-            </div>
+            </button>
             {salary.config.newSaleCommissionPct > 0 ? (
               <div>
                 <div className="text-xs text-neutral-500 mb-1">Ventas nuevas (mes)</div>
@@ -147,6 +188,109 @@ export function MySalaryTab({ professionalId }: { professionalId: string }) {
           )}
         </>
       )}
+
+      {showRenewals && (
+        <RenewalsModal
+          label={label}
+          loading={loadingRenewals}
+          renewals={renewals ?? []}
+          onClose={() => setShowRenewals(false)}
+        />
+      )}
     </section>
+  );
+}
+
+function RenewalsModal({
+  label, loading, renewals, onClose,
+}: {
+  label: string;
+  loading: boolean;
+  renewals: RenewalDetail[];
+  onClose: () => void;
+}) {
+  const total = renewals.reduce((s, r) => s + (r.amountPaid ?? 0), 0);
+  const fmtDate = (iso: string | null) =>
+    iso ? new Date(iso).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" }) : "—";
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div
+        className="bg-white rounded-2xl w-full max-w-2xl max-h-[88vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-4 border-b flex items-center justify-between sticky top-0 bg-white">
+          <div>
+            <h3 className="font-medium">Renovaciones atribuidas · <span className="capitalize">{label}</span></h3>
+            <p className="text-[11px] text-neutral-500 mt-0.5">
+              Atribuidas por fecha de decisión (decidedAt) del follow-up. Solo pacientes asignados a ti.
+            </p>
+          </div>
+          <button onClick={onClose} className="text-neutral-400 text-xl px-2">✕</button>
+        </div>
+
+        <div className="p-4">
+          {loading ? (
+            <p className="text-sm text-neutral-400 italic py-6 text-center">Cargando…</p>
+          ) : renewals.length === 0 ? (
+            <p className="text-sm text-neutral-400 italic py-6 text-center">
+              No hay renovaciones atribuidas a este mes.
+            </p>
+          ) : (
+            <>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-xs text-neutral-500 uppercase border-b border-neutral-200">
+                    <th className="text-left py-2 px-2 font-medium">Paciente</th>
+                    <th className="text-left py-2 px-2 font-medium">Programa</th>
+                    <th className="text-right py-2 px-2 font-medium">Decidida</th>
+                    <th className="text-right py-2 px-2 font-medium">Periodo</th>
+                    <th className="text-right py-2 px-2 font-medium">Importe</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {renewals.map((r) => (
+                    <tr key={`${r.patientId}-${r.attributionDate}`} className="border-b border-neutral-100 hover:bg-neutral-50">
+                      <td className="py-2 px-2">
+                        <Link href={`/fisio/paciente/${r.patientId}/suscripcion`} className="hover:underline font-medium">
+                          {r.patientName}
+                        </Link>
+                        {r.notes && (
+                          <div className="text-[10px] text-neutral-500 mt-0.5 italic">{r.notes}</div>
+                        )}
+                      </td>
+                      <td className="py-2 px-2">
+                        <span className="text-[10px] uppercase bg-neutral-100 text-neutral-700 border border-neutral-300 px-2 py-0.5 rounded-full font-medium">
+                          {r.programType ?? "—"} · {r.periodMonths}M
+                        </span>
+                      </td>
+                      <td className="text-right py-2 px-2 text-xs text-neutral-600 whitespace-nowrap">
+                        {fmtDate(r.attributionDate)}
+                      </td>
+                      <td className="text-right py-2 px-2 text-[10px] text-neutral-500 whitespace-nowrap">
+                        {fmtDate(r.startDate)} → {fmtDate(r.endDate)}
+                      </td>
+                      <td className="text-right py-2 px-2 font-medium text-emerald-700 tabular-nums">
+                        {r.amountPaid != null ? eur(r.amountPaid) : <span className="text-neutral-300">—</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-neutral-300 font-semibold">
+                    <td colSpan={4} className="py-2 px-2 text-right">
+                      Total ({renewals.length} {renewals.length === 1 ? "renovación" : "renovaciones"})
+                    </td>
+                    <td className="py-2 px-2 text-right tabular-nums text-emerald-700">
+                      {eur(total)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
