@@ -13,8 +13,8 @@ export default async function EquipoPage({
 
   // Tab activa. Por defecto: "calendario" para todos, "miembros" para CEO/Head_success.
   const isManager = user.role === "ceo" || user.role === "head_success";
-  // Solo managers ven la pestaña "actividad".
-  const canSeeActivity = isManager;
+  // Solo el CEO ve la pestaña "actividad" (head_success no).
+  const canSeeActivity = user.role === "ceo";
   const validTabs = canSeeActivity
     ? ["miembros", "calendario", "llamadas", "actividad"]
     : ["miembros", "calendario", "llamadas"];
