@@ -6,14 +6,18 @@ import { EquipoTabs } from "@/components/EquipoTabs";
 export default async function EquipoPage({
   searchParams,
 }: {
-  searchParams: { tab?: string };
+  searchParams: { tab?: string; actPeriod?: string };
 }) {
   const user = await getActiveProfessional();
   if (!user) redirect("/login");
 
   // Tab activa. Por defecto: "calendario" para todos, "miembros" para CEO/Head_success.
   const isManager = user.role === "ceo" || user.role === "head_success";
-  const validTabs = ["miembros", "calendario", "llamadas"];
+  // Solo managers ven la pestaña "actividad".
+  const canSeeActivity = isManager;
+  const validTabs = canSeeActivity
+    ? ["miembros", "calendario", "llamadas", "actividad"]
+    : ["miembros", "calendario", "llamadas"];
   const tab = searchParams.tab && validTabs.includes(searchParams.tab)
     ? searchParams.tab
     : (isManager ? "miembros" : "calendario");
@@ -57,6 +61,118 @@ export default async function EquipoPage({
     orderBy: { startDate: "asc" },
   });
 
+  // ─── Agregados de actividad (solo managers) ───
+  // Todo el calculo va en servidor. Si no tiene permiso, ni siquiera se
+  // consultan las tablas — asi no filtramos datos a quien no debe verlos.
+  let activityData: null | {
+    activity: { id: string; fullName: string; role: string; seconds: number }[];
+    period: string;
+    periodDays: number;
+    daily: { date: string; seconds: number }[];
+    personDaily: Record<string, { date: string; seconds: number }[]>;
+    personHourly: Record<string, number[]>;
+  } = null;
+
+  if (canSeeActivity) {
+    // Ejes de tiempo (todo en UTC).
+    const now = new Date();
+    const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const dow = (todayStart.getUTCDay() + 6) % 7; // 0 = lunes
+    const weekStart = new Date(todayStart.getTime() - dow * 86400000);
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+
+    const actPeriod = ["hoy", "semana", "mes"].includes(searchParams.actPeriod ?? "")
+      ? searchParams.actPeriod!
+      : "semana";
+    const actStart =
+      actPeriod === "hoy" ? todayStart : actPeriod === "mes" ? monthStart : weekStart;
+
+    // Leemos desde el menor inicio para cubrir todas las series con una query.
+    const fetchStart = new Date(Math.min(weekStart.getTime(), monthStart.getTime()));
+
+    // Personas de vacaciones hoy — se excluyen del listado.
+    const onLeaveIds = new Set(
+      (
+        await prisma.professionalLeave.findMany({
+          where: {
+            status: { not: "cancelled" },
+            startDate: { lte: now },
+            endDate: { gte: todayStart },
+          },
+          select: { professionalId: true },
+        })
+      ).map((l) => l.professionalId),
+    );
+
+    const activityRows = await (prisma as any).dailyActivity.findMany({
+      where: { date: { gte: fetchStart } },
+      select: { professionalId: true, date: true, activeSeconds: true },
+    });
+
+    const actSec = new Map<string, number>();
+    const daySec = new Map<string, number>();
+    const personDay = new Map<string, Map<string, number>>();
+
+    for (const a of activityRows as { professionalId: string; date: Date; activeSeconds: number }[]) {
+      const t = a.date.getTime();
+      if (t >= actStart.getTime()) {
+        actSec.set(a.professionalId, (actSec.get(a.professionalId) ?? 0) + a.activeSeconds);
+        const key = a.date.toISOString().slice(0, 10);
+        daySec.set(key, (daySec.get(key) ?? 0) + a.activeSeconds);
+        let pm = personDay.get(a.professionalId);
+        if (!pm) { pm = new Map(); personDay.set(a.professionalId, pm); }
+        pm.set(key, (pm.get(key) ?? 0) + a.activeSeconds);
+      }
+    }
+
+    // Serie del equipo por dia — rellenamos huecos con 0.
+    const daily: { date: string; seconds: number }[] = [];
+    for (let t = actStart.getTime(); t <= todayStart.getTime(); t += 86400000) {
+      const key = new Date(t).toISOString().slice(0, 10);
+      daily.push({ date: key, seconds: daySec.get(key) ?? 0 });
+    }
+
+    const periodDays =
+      actPeriod === "hoy"
+        ? 1
+        : Math.max(1, Math.round((todayStart.getTime() - actStart.getTime()) / 86400000) + 1);
+
+    const activity = pros
+      .filter((p) => p.active && !onLeaveIds.has(p.id))
+      .map((p) => ({ id: p.id, fullName: p.fullName, role: p.role, seconds: actSec.get(p.id) ?? 0 }));
+
+    const personDaily: Record<string, { date: string; seconds: number }[]> = {};
+    for (const p of activity) {
+      const pm = personDay.get(p.id);
+      const arr: { date: string; seconds: number }[] = [];
+      for (let t = actStart.getTime(); t <= todayStart.getTime(); t += 86400000) {
+        const key = new Date(t).toISOString().slice(0, 10);
+        arr.push({ date: key, seconds: pm?.get(key) ?? 0 });
+      }
+      personDaily[p.id] = arr;
+    }
+
+    // Agregado por hora (24 casillas por persona) para la franja horaria.
+    const personHourly: Record<string, number[]> = {};
+    if (activity.length > 0) {
+      const ids = activity.map((p) => p.id);
+      const todayEnd = new Date(todayStart.getTime() + 86399999);
+      const hourlyRows = await (prisma as any).hourlyActivity.findMany({
+        where: { professionalId: { in: ids }, date: { gte: actStart, lte: todayEnd } },
+        select: { professionalId: true, hour: true, activeSeconds: true },
+      });
+      const hmap = new Map<string, number[]>();
+      for (const p of activity) hmap.set(p.id, new Array(24).fill(0));
+      for (const h of hourlyRows as { professionalId: string; hour: number; activeSeconds: number }[]) {
+        const arr = hmap.get(h.professionalId);
+        if (arr && h.hour >= 0 && h.hour < 24) arr[h.hour] += h.activeSeconds;
+      }
+      for (const p of activity) personHourly[p.id] = hmap.get(p.id) ?? new Array(24).fill(0);
+    }
+
+    activityData = { activity, period: actPeriod, periodDays, daily, personDaily, personHourly };
+  }
+
   return (
     <main>
       <header className="mb-4">
@@ -84,6 +200,7 @@ export default async function EquipoPage({
           affectedPatientsCount: l.affectedPatientsCount,
           notes: l.notes,
         }))}
+        activityData={activityData}
       />
     </main>
   );

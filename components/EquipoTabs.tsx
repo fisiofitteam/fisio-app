@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { InviteView } from "@/app/fisio/equipo/InviteView";
 import { AgendaScheduleView } from "./AgendaScheduleView";
+import { TeamActivityView } from "./TeamActivityView";
 
 type TeamMember = {
   id: string;
@@ -62,6 +63,7 @@ export function EquipoTabs({
   currentUserId,
   team,
   leaves,
+  activityData,
 }: {
   activeTab: string;
   isManager: boolean;
@@ -69,6 +71,14 @@ export function EquipoTabs({
   currentUserId: string;
   team: TeamMember[];
   leaves: Leave[];
+  activityData?: {
+    activity: { id: string; fullName: string; role: string; seconds: number }[];
+    period: string;
+    periodDays: number;
+    daily: { date: string; seconds: number }[];
+    personDaily: Record<string, { date: string; seconds: number }[]>;
+    personHourly: Record<string, number[]>;
+  } | null;
 }) {
   const router = useRouter();
   const [creatingLeave, setCreatingLeave] = useState(false);
@@ -120,6 +130,18 @@ export function EquipoTabs({
             🗓️ Calendario de llamadas
           </button>
         )}
+        {activityData && (
+          <button
+            onClick={() => switchTab("actividad")}
+            className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === "actividad"
+                ? "border-neutral-900 text-neutral-900"
+                : "border-transparent text-neutral-500 hover:text-neutral-900"
+            }`}
+          >
+            📊 Actividad
+          </button>
+        )}
       </div>
 
       {activeTab === "miembros" && isManager && (
@@ -141,6 +163,17 @@ export function EquipoTabs({
             onCreate={() => setCreatingLeave(true)}
           />
         </>
+      )}
+
+      {activeTab === "actividad" && activityData && (
+        <TeamActivityView
+          activity={activityData.activity}
+          period={activityData.period}
+          periodDays={activityData.periodDays}
+          daily={activityData.daily}
+          personDaily={activityData.personDaily}
+          personHourly={activityData.personHourly}
+        />
       )}
 
       {creatingLeave && (

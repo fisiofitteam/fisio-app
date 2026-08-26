@@ -3513,6 +3513,37 @@ model CeoReport {
   @@index([periodType, periodStart])
 }
 
+// Tiempo activo por profesional y dia. Alimentado por un heartbeat del
+// cliente (componente ActivityHeartbeat) que hace ping cada minuto si la
+// pestaña esta visible y hubo interaccion en <90s. NO mide trabajo real,
+// solo tiempo dentro de la app.
+model DailyActivity {
+  id             String   @id @default(cuid())
+  professionalId String
+  // Dia a medianoche UTC (mismo instante para todos, agrupado determinista).
+  date           DateTime
+  activeSeconds  Int      @default(0)
+  updatedAt      DateTime @updatedAt
+
+  @@unique([professionalId, date])
+  @@index([date])
+}
+
+// Tiempo activo por profesional, dia y HORA LOCAL del navegador.
+// Alimenta el desglose por franja horaria de la ficha individual.
+// Independiente de DailyActivity — se puede prescindir sin afectar al resto.
+model HourlyActivity {
+  id             String   @id @default(cuid())
+  professionalId String
+  date           DateTime
+  hour           Int      // 0-23, hora local del navegador
+  activeSeconds  Int      @default(0)
+  updatedAt      DateTime @updatedAt
+
+  @@unique([professionalId, date, hour])
+  @@index([date])
+}
+
 // Tarifa de renovacion por programa y duracion. Editable solo por CEO
 // desde /fisio/recursos/tarifas.
 model RenewalRate {

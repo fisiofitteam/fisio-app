@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { FisioSidebar } from "@/components/FisioSidebar";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { CommunityTodayBanner } from "@/components/CommunityTodayBanner";
+import { ActivityHeartbeat } from "@/components/ActivityHeartbeat";
 import { getActiveProfessional } from "@/lib/session";
 import { getThemeFromCookie } from "@/lib/theme";
 
@@ -13,6 +14,9 @@ export default async function FisioLayout({ children }: { children: React.ReactN
   const theme = getThemeFromCookie();
   return (
     <div className={`fisio-shell min-h-screen ${theme === "dark" ? "dark" : ""}`}>
+      {/* Latido de actividad para el panel del equipo. No renderiza nada;
+          hace ping/minuto si la pestaña esta visible y hay interaccion. */}
+      <ActivityHeartbeat />
       {/* Al imprimir queremos SOLO el contenido de la página — sidebar,
           banners superiores y padding se ocultan/reducen. Las páginas
           que quieran ocultar más piezas (headers, botones "Editar…")

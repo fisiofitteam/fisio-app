@@ -3102,6 +3102,29 @@ model CeoReport {
   @@index([periodType, periodStart])
 }
 
+model DailyActivity {
+  id             String   @id @default(cuid())
+  professionalId String
+  date           DateTime
+  activeSeconds  Int      @default(0)
+  updatedAt      DateTime @updatedAt
+
+  @@unique([professionalId, date])
+  @@index([date])
+}
+
+model HourlyActivity {
+  id             String   @id @default(cuid())
+  professionalId String
+  date           DateTime
+  hour           Int
+  activeSeconds  Int      @default(0)
+  updatedAt      DateTime @updatedAt
+
+  @@unique([professionalId, date, hour])
+  @@index([date])
+}
+
 // Tarifa de renovacion por programa y duracion. Editable solo por CEO
 // desde /fisio/recursos/tarifas. El resto del equipo la consulta.
 model RenewalRate {
