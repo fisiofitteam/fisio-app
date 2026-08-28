@@ -34,6 +34,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (typeof body.process === "string") data.process = body.process;
   if (typeof body.obstacles === "string") data.obstacles = body.obstacles;
   if (typeof body.achievements === "string") data.achievements = body.achievements;
+  if (typeof body.shortSummary === "string") data.shortSummary = body.shortSummary || null;
   if (typeof body.insight === "string") data.insight = body.insight;
   if (typeof body.notes === "string") data.notes = body.notes || null;
   if (typeof body.consentSigned === "boolean") {
@@ -91,6 +92,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     processVideos: parseVids(row.processVideos),
     obstaclesVideos: parseVids(row.obstaclesVideos),
     achievementsVideos: parseVids(row.achievementsVideos),
+    shortSummary: row.shortSummary,
     aiDraftedAt: row.aiDraftedAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,

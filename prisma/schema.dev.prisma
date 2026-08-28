@@ -1485,6 +1485,7 @@ model ClinicalCase {
   obstaclesVideos        String  @default("[]")
   achievements           String?
   achievementsVideos     String  @default("[]")
+  shortSummary           String?
   aiDraftedAt            DateTime?
 
   createdAt       DateTime @default(now())

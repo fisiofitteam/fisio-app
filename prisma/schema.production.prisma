@@ -1595,6 +1595,10 @@ model ClinicalCase {
   obstaclesVideos        String  @default("[]")
   achievements           String?                        // "Qué ha conseguido"
   achievementsVideos     String  @default("[]")
+  // Resumen ultra corto (2 lineas) generado por IA para mostrar en la
+  // card del banco de recursos y en tooltips. Se regenera cada vez que
+  // se guarda un borrador nuevo.
+  shortSummary           String?
   // Cuándo la IA generó el borrador por última vez. Sirve para saber si
   // el fisio ya lo editó desde entonces (edited > aiDraftedAt).
   aiDraftedAt            DateTime?

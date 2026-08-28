@@ -52,10 +52,12 @@ export default async function BankPage({
           athleteName: c.athleteName,
           injury: c.injury,
           insight: c.insight,
+          shortSummary: (c as any).shortSummary ?? null,
           consentSigned: c.consentSigned,
           videoUrls: JSON.parse(c.videoUrls) as string[],
           notes: c.notes,
           patientId: c.patientId,
+          hasNarrative: !!((c as any).initialSituation || (c as any).process),
         }))}
         leadMagnets={leadMagnets.map((l) => ({
           id: l.id,

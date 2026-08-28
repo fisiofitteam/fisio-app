@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { FORMAT_TEMPLATES, BODY_ZONES, type FormatKey } from "@/lib/content-templates";
 
@@ -29,10 +29,12 @@ type ClinicalCase = {
   athleteName: string;
   injury: string;
   insight: string | null;
+  shortSummary: string | null;
   consentSigned: boolean;
   videoUrls: string[];
   notes: string | null;
   patientId: string | null;
+  hasNarrative: boolean;
 };
 
 type LeadMagnet = {
@@ -541,6 +543,7 @@ function HookModal({ item, onClose, onSave }: { item: Hook | null; onClose: () =
 function CasesTab({ items, patientsForLink }: { items: ClinicalCase[]; patientsForLink: { id: string; fullName: string }[] }) {
   const router = useRouter();
   const [editing, setEditing] = useState<ClinicalCase | "new" | null>(null);
+  const [detail, setDetail] = useState<ClinicalCase | null>(null);
 
   async function save(data: any) {
     const isNew = editing === "new";
@@ -565,7 +568,7 @@ function CasesTab({ items, patientsForLink }: { items: ClinicalCase[]; patientsF
         <button onClick={() => setEditing("new")} className="btn btn-primary text-xs">+ Nuevo caso</button>
       </div>
       <p className="text-xs text-neutral-500 mb-3 italic">
-        💡 Los casos también pueden crearse desde la ficha de cualquier paciente, con un click.
+        💡 Los casos también pueden crearse desde la ficha de cualquier paciente, con un click. Haz clic en un caso para ver el detalle y generar piezas.
       </p>
 
       {items.length === 0 ? (
@@ -575,28 +578,41 @@ function CasesTab({ items, patientsForLink }: { items: ClinicalCase[]; patientsF
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {items.map((c) => (
-            <div key={c.id} className="card group">
-              <div className="flex justify-between items-start gap-2 mb-2">
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-medium text-sm">{c.athleteName}</h3>
-                  <p className="text-xs text-neutral-500 mt-0.5">{c.injury}</p>
+            <div key={c.id} className="card group hover:border-emerald-400 transition-colors">
+              <button onClick={() => setDetail(c)} className="w-full text-left">
+                <div className="flex justify-between items-start gap-2 mb-2">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-medium text-sm">{c.athleteName}</h3>
+                    <p className="text-xs text-neutral-500 mt-0.5">{c.injury}</p>
+                  </div>
+                  {c.consentSigned ? (
+                    <span className="text-[10px] uppercase bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded whitespace-nowrap">✓ Permiso</span>
+                  ) : (
+                    <span className="text-[10px] uppercase bg-amber-100 text-amber-800 px-2 py-0.5 rounded whitespace-nowrap">⚠ Sin permiso</span>
+                  )}
                 </div>
-                {c.consentSigned ? (
-                  <span className="text-[10px] uppercase bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded whitespace-nowrap">✓ Permiso</span>
+                {c.shortSummary ? (
+                  <p className="text-xs text-neutral-700 mt-2 line-clamp-3">{c.shortSummary}</p>
+                ) : c.insight ? (
+                  <p className="text-xs text-neutral-700 italic mt-2 line-clamp-3">"{c.insight}"</p>
                 ) : (
-                  <span className="text-[10px] uppercase bg-amber-100 text-amber-800 px-2 py-0.5 rounded whitespace-nowrap">⚠ Sin permiso</span>
+                  <p className="text-xs text-neutral-400 italic mt-2">
+                    {c.hasNarrative
+                      ? "Sin resumen aún. Vuelve a generar el borrador para crear uno."
+                      : "Sin narrativa aún. Abre el caso y pulsa \"Generar con IA\"."}
+                  </p>
                 )}
-              </div>
-              {c.insight && (
-                <p className="text-xs text-neutral-700 italic mt-2 line-clamp-3">"{c.insight}"</p>
-              )}
-              {c.videoUrls.length > 0 && (
-                <div className="text-xs text-neutral-500 mt-2">
-                  🎥 {c.videoUrls.length} {c.videoUrls.length === 1 ? "vídeo" : "vídeos"}
+                <div className="flex items-center gap-3 mt-2 text-xs text-neutral-500">
+                  {c.hasNarrative && (
+                    <span className="text-emerald-700">📝 Narrativa</span>
+                  )}
+                  {c.videoUrls.length > 0 && (
+                    <span>🎥 {c.videoUrls.length}</span>
+                  )}
                 </div>
-              )}
+              </button>
               <div className="flex gap-2 mt-3 pt-2 border-t border-neutral-100 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={() => setEditing(c)} className="text-[11px] text-neutral-500 hover:text-neutral-900">Editar</button>
+                <button onClick={() => setEditing(c)} className="text-[11px] text-neutral-500 hover:text-neutral-900">Editar metadatos</button>
                 <button onClick={() => remove(c.id)} className="text-[11px] text-neutral-300 hover:text-red-600 ml-auto">Eliminar</button>
               </div>
             </div>
@@ -607,7 +623,264 @@ function CasesTab({ items, patientsForLink }: { items: ClinicalCase[]; patientsF
       {editing && (
         <CaseModal item={editing === "new" ? null : editing} patientsForLink={patientsForLink} onClose={() => setEditing(null)} onSave={save} />
       )}
+      {detail && (
+        <CaseDetailModal caseId={detail.id} onClose={() => setDetail(null)} />
+      )}
     </>
+  );
+}
+
+// ============================================================================
+// Detalle del caso + generador de piezas (carrusel / stories / reel)
+// ============================================================================
+
+type CaseDetail = {
+  id: string;
+  athleteName: string;
+  injury: string;
+  consentSigned: boolean;
+  shortSummary: string | null;
+  initialSituation: string | null;
+  process: string | null;
+  obstacles: string | null;
+  achievements: string | null;
+  initialSituationVideos: { url: string; caption?: string }[];
+  processVideos: { url: string; caption?: string }[];
+  obstaclesVideos: { url: string; caption?: string }[];
+  achievementsVideos: { url: string; caption?: string }[];
+};
+
+type GeneratedPiece = {
+  format: string;
+  title: string;
+  hook: string;
+  caption: string;
+  slides: { title: string; body: string }[];
+  ctaHint: string;
+};
+
+const FORMAT_OPTIONS = [
+  { key: "carousel", label: "📚 Carrusel", desc: "6-10 slides con hook + narrativa + CTA" },
+  { key: "stories", label: "📸 Stories", desc: "5-8 stories consecutivas de ritmo rápido" },
+  { key: "reel", label: "🎬 Reel", desc: "Guion 30-60s: planos + voz en off + texto sobre" },
+];
+
+const APARTADOS_DETAIL = [
+  { key: "initialSituation" as const, videosKey: "initialSituationVideos" as const, label: "Cómo estaba / dolor principal" },
+  { key: "process" as const, videosKey: "processVideos" as const, label: "Cómo ha sido su proceso" },
+  { key: "obstacles" as const, videosKey: "obstaclesVideos" as const, label: "Obstáculos que ha superado" },
+  { key: "achievements" as const, videosKey: "achievementsVideos" as const, label: "Qué ha conseguido" },
+];
+
+function CaseDetailModal({ caseId, onClose }: { caseId: string; onClose: () => void }) {
+  const [data, setData] = useState<CaseDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [selectedFormat, setSelectedFormat] = useState<"carousel" | "stories" | "reel">("carousel");
+  const [generating, setGenerating] = useState(false);
+  const [piece, setPiece] = useState<GeneratedPiece | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/content/cases/${caseId}`);
+        if (!res.ok) { setError("No se pudo cargar"); return; }
+        const d = await res.json();
+        if (!cancelled) setData(d);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [caseId]);
+
+  async function generatePiece() {
+    setGenerating(true);
+    setError(null);
+    setPiece(null);
+    try {
+      const res = await fetch(`/api/content/cases/${caseId}/piece`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ format: selectedFormat }),
+      });
+      const text = await res.text();
+      let d: any = {};
+      try { d = JSON.parse(text); } catch { /* ignore */ }
+      if (!res.ok || !d?.ok) { setError(d?.error || `Error ${res.status}`); return; }
+      setPiece(d);
+    } catch (e: any) {
+      setError(e?.message || "Error de red");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  function copyPieceToClipboard() {
+    if (!piece) return;
+    const text = [
+      `# ${piece.title || "Pieza"}`,
+      "",
+      `HOOK: ${piece.hook}`,
+      "",
+      ...piece.slides.map((s, i) => `--- Slide ${i + 1}${s.title ? ` · ${s.title}` : ""} ---\n${s.body}`),
+      "",
+      piece.caption ? `CAPTION:\n${piece.caption}` : "",
+      piece.ctaHint ? `\nCTA: ${piece.ctaHint}` : "",
+    ].filter(Boolean).join("\n");
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  const hasNarrative = !!(data?.initialSituation || data?.process);
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="p-4 border-b sticky top-0 bg-white flex items-center justify-between z-10">
+          <div className="min-w-0">
+            <h3 className="font-medium truncate">🩺 {data?.athleteName ?? "Caso"}</h3>
+            <p className="text-[11px] text-neutral-500 mt-0.5 truncate">{data?.injury}</p>
+          </div>
+          <button onClick={onClose} className="text-neutral-400 text-xl px-2">✕</button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          {loading && <p className="text-sm text-neutral-400 italic text-center py-8">Cargando caso…</p>}
+          {error && <div className="bg-red-50 border border-red-200 rounded p-2 text-xs text-red-700">{error}</div>}
+
+          {data && (
+            <>
+              {data.shortSummary && (
+                <div className="bg-neutral-50 border border-neutral-200 rounded p-3">
+                  <div className="text-[10px] uppercase text-neutral-500 font-medium mb-1">Resumen</div>
+                  <p className="text-sm text-neutral-800">{data.shortSummary}</p>
+                </div>
+              )}
+
+              {!hasNarrative && (
+                <div className="bg-amber-50 border border-amber-200 rounded p-3 text-xs text-amber-800">
+                  Este caso todavía no tiene narrativa. Ábrelo desde la ficha del paciente y pulsa "🧠 Generar con IA" para crear los 4 apartados.
+                </div>
+              )}
+
+              {hasNarrative && (
+                <div className="space-y-3">
+                  {APARTADOS_DETAIL.map((ap) => {
+                    const text = data[ap.key];
+                    const videos = data[ap.videosKey];
+                    if (!text && videos.length === 0) return null;
+                    return (
+                      <details key={ap.key} className="border border-neutral-200 rounded p-3 open:bg-neutral-50" open>
+                        <summary className="text-sm font-semibold cursor-pointer">{ap.label}</summary>
+                        {text && (
+                          <p className="text-xs text-neutral-700 mt-2 whitespace-pre-wrap leading-relaxed">{text}</p>
+                        )}
+                        {videos.length > 0 && (
+                          <ul className="mt-2 space-y-1">
+                            {videos.map((v, i) => (
+                              <li key={i} className="text-[11px]">
+                                <a href={v.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                  🎥 {v.caption || v.url}
+                                </a>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </details>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* ─── Generador de piezas ─── */}
+              {hasNarrative && (
+                <div className="border-t pt-4 space-y-3">
+                  <h4 className="text-sm font-semibold">🎬 Generar pieza de contenido</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {FORMAT_OPTIONS.map((f) => (
+                      <button
+                        key={f.key}
+                        onClick={() => setSelectedFormat(f.key as any)}
+                        disabled={generating}
+                        className={`text-left rounded p-2 border transition-colors ${
+                          selectedFormat === f.key
+                            ? "border-emerald-500 bg-emerald-50"
+                            : "border-neutral-200 hover:border-neutral-300"
+                        }`}
+                      >
+                        <div className="text-sm font-medium">{f.label}</div>
+                        <div className="text-[10px] text-neutral-500 mt-0.5">{f.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={generatePiece}
+                    disabled={generating}
+                    className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-sm font-medium py-2 rounded-lg disabled:opacity-50"
+                  >
+                    {generating ? "Generando…" : `🧠 Generar ${FORMAT_OPTIONS.find((f) => f.key === selectedFormat)?.label}`}
+                  </button>
+                  {generating && (
+                    <p className="text-[11px] text-neutral-500 italic text-center">
+                      Sonnet está tejiendo el guión… suele tardar 15-30s.
+                    </p>
+                  )}
+
+                  {piece && (
+                    <div className="border-2 border-amber-300 rounded-lg p-3 bg-amber-50/40 space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="text-[10px] uppercase text-amber-800 font-semibold">
+                            {FORMAT_OPTIONS.find((f) => f.key === piece.format)?.label ?? piece.format}
+                          </div>
+                          <h5 className="font-medium text-sm mt-0.5">{piece.title}</h5>
+                        </div>
+                        <button
+                          onClick={copyPieceToClipboard}
+                          className="text-[11px] px-2 py-1 rounded bg-white border border-amber-300 hover:bg-amber-100"
+                        >
+                          {copied ? "✓ Copiado" : "📋 Copiar"}
+                        </button>
+                      </div>
+                      <div>
+                        <div className="text-[10px] uppercase text-neutral-500 font-medium">Hook</div>
+                        <p className="text-sm font-medium">{piece.hook}</p>
+                      </div>
+                      <ol className="space-y-2 text-sm">
+                        {piece.slides.map((s, i) => (
+                          <li key={i} className="bg-white rounded p-2 border border-neutral-200">
+                            <div className="text-[10px] uppercase text-neutral-500 font-semibold">
+                              Slide {i + 1}{s.title ? ` · ${s.title}` : ""}
+                            </div>
+                            <p className="text-xs mt-1 whitespace-pre-wrap">{s.body}</p>
+                          </li>
+                        ))}
+                      </ol>
+                      {piece.caption && (
+                        <div>
+                          <div className="text-[10px] uppercase text-neutral-500 font-medium">Caption</div>
+                          <p className="text-xs whitespace-pre-wrap">{piece.caption}</p>
+                        </div>
+                      )}
+                      {piece.ctaHint && (
+                        <div className="text-[11px] text-neutral-600 italic">
+                          <strong>CTA:</strong> {piece.ctaHint}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 

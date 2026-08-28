@@ -47,6 +47,8 @@ Devuelve EXCLUSIVAMENTE llamando a la tool "submit_case", con estos 4 apartados:
 
 4. achievements — "Que ha conseguido y como se siente ahora": recuperacion objetiva (funcionalidad, cargas, competiciones, PRs) + subjetiva (como se siente el paciente, aprendizajes que se lleva).
 
+5. shortSummary — resumen ULTRA CORTO (max 200 caracteres, 1-2 frases) para mostrar en cards del banco de recursos. Formato: "[Nombre] · [lesion/situacion] → [logro/estado actual]". Ej: "Oscar · rotura supraespinoso + bursitis → recuperado, snatch 80%, MU sin dolor". NO uses adjetivos vacios, solo hechos.
+
 REGLAS ESTRICTAS:
 - ESCRIBE EN TERCERA PERSONA. "El paciente", "Oscar", "Ana", etc. NUNCA en primera persona del atleta.
 - USA CITAS DEL PACIENTE entre comillas cuando salgan de las sensaciones o notas ("me siento jodido", "como nuevo"). Nunca inventes citas.
@@ -87,15 +89,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const tool: Anthropic.Tool = {
     name: "submit_case",
-    description: "Guarda el caso clinico narrativo con los 4 apartados.",
+    description: "Guarda el caso clinico narrativo con los 4 apartados + resumen corto.",
     input_schema: {
       type: "object",
-      required: ["initialSituation", "process", "obstacles", "achievements"],
+      required: ["initialSituation", "process", "obstacles", "achievements", "shortSummary"],
       properties: {
         initialSituation: { type: "string", description: "Como estaba / dolor principal." },
         process: { type: "string", description: "Como ha sido su proceso." },
         obstacles: { type: "string", description: "Dificultades o creencias superadas." },
         achievements: { type: "string", description: "Que ha conseguido y como se siente ahora." },
+        shortSummary: { type: "string", description: "Resumen ultra corto de 1-2 frases (max 200 chars) para cards del banco." },
       },
     },
   };
@@ -119,6 +122,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const process = String(parsed.process ?? "").trim();
     const obstacles = String(parsed.obstacles ?? "").trim();
     const achievements = String(parsed.achievements ?? "").trim();
+    const shortSummary = String(parsed.shortSummary ?? "").trim().slice(0, 300);
 
     if (!initialSituation || !process || !obstacles || !achievements) {
       return NextResponse.json({ error: "La IA devolvio apartados vacios" }, { status: 502 });
@@ -131,6 +135,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         process,
         obstacles,
         achievements,
+        shortSummary: shortSummary || null,
         aiDraftedAt: new Date(),
       },
     });
@@ -142,6 +147,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       process,
       obstacles,
       achievements,
+      shortSummary,
     });
   } catch (e: any) {
     console.error("[cases/ai-draft]", e);
