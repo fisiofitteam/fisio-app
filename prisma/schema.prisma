@@ -1469,13 +1469,24 @@ model LeadMagnet {
 model ClinicalCase {
   id              String   @id @default(cuid())
   athleteName     String
-  injury          String                                // "Impingement subacromial derecho"
-  insight         String?                               // qué aprendí clínicamente
+  injury          String
+  insight         String?
   consentSigned   Boolean  @default(false)
   consentSignedAt DateTime?
-  videoUrls       String   @default("[]")               // JSON array de URLs
+  videoUrls       String   @default("[]")
   notes           String?
-  patientId       String?                               // relación opcional al paciente real si existe
+  patientId       String?
+
+  initialSituation       String?
+  initialSituationVideos String  @default("[]")
+  process                String?
+  processVideos          String  @default("[]")
+  obstacles              String?
+  obstaclesVideos        String  @default("[]")
+  achievements           String?
+  achievementsVideos     String  @default("[]")
+  aiDraftedAt            DateTime?
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

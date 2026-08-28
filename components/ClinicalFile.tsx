@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { PROGRAM_TYPES, DIFFICULTIES, PROGRAM_LABELS, DIFFICULTY_LABELS } from "./PatientPills";
 import { RollingAssignmentBlock } from "./RollingAssignmentBlock";
@@ -466,114 +466,360 @@ function ConvertToCaseBlock({ patient }: { patient: Patient }) {
   );
 }
 
-function ConvertToCaseModal({ patient, onClose, onCreated }: { patient: Patient; onClose: () => void; onCreated: () => void }) {
-  const [insight, setInsight] = useState("");
-  const [consentSigned, setConsentSigned] = useState(false);
-  const [videoUrlsText, setVideoUrlsText] = useState("");
-  const [notes, setNotes] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [done, setDone] = useState<{ caseId: string; updated: boolean } | null>(null);
+type VideoRef = { url: string; caption: string };
 
-  async function save() {
-    setSaving(true);
-    const videoUrls = videoUrlsText.split("\n").map((s) => s.trim()).filter(Boolean);
-    const res = await fetch("/api/content/cases/from-patient", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ patientId: patient.id, insight, consentSigned, videoUrls, notes }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setDone({ caseId: data.caseId, updated: data.updated });
+const APARTADOS = [
+  {
+    key: "initialSituation" as const,
+    videosKey: "initialSituationVideos" as const,
+    label: "Cómo estaba / dolor principal",
+    placeholder: "Punto de partida: qué le pasaba, desde cuándo, tratamientos previos, hallazgos objetivos, estado emocional…",
+  },
+  {
+    key: "process" as const,
+    videosKey: "processVideos" as const,
+    label: "Cómo ha sido su proceso",
+    placeholder: "Arco del tratamiento: fases, hitos, adaptaciones, cómo respondió, adherencia…",
+  },
+  {
+    key: "obstacles" as const,
+    videosKey: "obstaclesVideos" as const,
+    label: "Obstáculos que ha superado",
+    placeholder: "Frustración, miedo al movimiento, hipervigilancia, impulsividad competitiva, creencias limitantes…",
+  },
+  {
+    key: "achievements" as const,
+    videosKey: "achievementsVideos" as const,
+    label: "Qué ha conseguido",
+    placeholder: "Recuperación objetiva (funcionalidad, cargas, competiciones) + subjetiva (cómo se siente, aprendizajes)…",
+  },
+];
+
+type CaseState = {
+  initialSituation: string;
+  process: string;
+  obstacles: string;
+  achievements: string;
+  initialSituationVideos: VideoRef[];
+  processVideos: VideoRef[];
+  obstaclesVideos: VideoRef[];
+  achievementsVideos: VideoRef[];
+  consentSigned: boolean;
+  notes: string;
+};
+
+function ConvertToCaseModal({ patient, onClose, onCreated }: { patient: Patient; onClose: () => void; onCreated: () => void }) {
+  const [caseId, setCaseId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savedFeedback, setSavedFeedback] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const [state, setState] = useState<CaseState>({
+    initialSituation: "",
+    process: "",
+    obstacles: "",
+    achievements: "",
+    initialSituationVideos: [],
+    processVideos: [],
+    obstaclesVideos: [],
+    achievementsVideos: [],
+    consentSigned: false,
+    notes: "",
+  });
+
+  // Crea (o recupera) el caso ligado a este paciente al abrir el modal.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/content/cases/from-patient", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ patientId: patient.id }),
+        });
+        if (!res.ok) { setError("No se pudo crear el caso"); return; }
+        const data = await res.json();
+        if (cancelled) return;
+        setCaseId(data.caseId);
+
+        // Carga el estado actual del caso (por si ya existía).
+        const detail = await fetch(`/api/content/cases/${data.caseId}`).then((r) => r.ok ? r.json() : null);
+        if (cancelled || !detail) return;
+        setState({
+          initialSituation: detail.initialSituation ?? "",
+          process: detail.process ?? "",
+          obstacles: detail.obstacles ?? "",
+          achievements: detail.achievements ?? "",
+          initialSituationVideos: (detail.initialSituationVideos ?? []).map((v: any) => ({ url: v.url, caption: v.caption ?? "" })),
+          processVideos: (detail.processVideos ?? []).map((v: any) => ({ url: v.url, caption: v.caption ?? "" })),
+          obstaclesVideos: (detail.obstaclesVideos ?? []).map((v: any) => ({ url: v.url, caption: v.caption ?? "" })),
+          achievementsVideos: (detail.achievementsVideos ?? []).map((v: any) => ({ url: v.url, caption: v.caption ?? "" })),
+          consentSigned: !!detail.consentSigned,
+          notes: detail.notes ?? "",
+        });
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patient.id]);
+
+  async function generateWithAi() {
+    if (!caseId) return;
+    setGenerating(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/content/cases/${caseId}/ai-draft`, { method: "POST" });
+      const text = await res.text();
+      let d: any = {};
+      try { d = JSON.parse(text); } catch { /* ignore */ }
+      if (!res.ok || !d?.ok) {
+        setError(d?.error || `Error ${res.status} generando con IA`);
+        return;
+      }
+      setState((prev) => ({
+        ...prev,
+        initialSituation: d.initialSituation ?? prev.initialSituation,
+        process: d.process ?? prev.process,
+        obstacles: d.obstacles ?? prev.obstacles,
+        achievements: d.achievements ?? prev.achievements,
+      }));
+      setSavedFeedback("Borrador generado ✅ — revisa y edita antes de guardar.");
+    } catch (e: any) {
+      setError(e?.message || "Error de red");
+    } finally {
+      setGenerating(false);
     }
-    setSaving(false);
   }
 
-  if (done) {
-    return (
-      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
-        <div className="bg-white rounded-2xl max-w-md w-full p-5" onClick={(e) => e.stopPropagation()}>
-          <div className="text-center py-4">
-            <div className="text-4xl mb-3">✓</div>
-            <h3 className="font-semibold mb-1">
-              {done.updated ? "Caso actualizado" : "Caso creado"}
-            </h3>
-            <p className="text-sm text-neutral-500 mb-4">
-              {done.updated
-                ? "Ya existía un caso para este paciente y se ha actualizado con la nueva información."
-                : "El caso está disponible en el banco de recursos para usarlo en contenido."}
-            </p>
-            <div className="flex gap-2 justify-center">
-              <a href="/fisio/contenido/banco?tab=cases" className="btn btn-primary text-sm">Ver casos</a>
-              <button onClick={onCreated} className="text-sm text-neutral-500 px-3 py-2">Cerrar</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+  async function save() {
+    if (!caseId) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/content/cases/${caseId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          initialSituation: state.initialSituation,
+          process: state.process,
+          obstacles: state.obstacles,
+          achievements: state.achievements,
+          initialSituationVideos: state.initialSituationVideos,
+          processVideos: state.processVideos,
+          obstaclesVideos: state.obstaclesVideos,
+          achievementsVideos: state.achievementsVideos,
+          consentSigned: state.consentSigned,
+          notes: state.notes,
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d?.error || `Error ${res.status} guardando`);
+        return;
+      }
+      setSavedFeedback("Caso guardado ✅");
+      onCreated();
+    } catch (e: any) {
+      setError(e?.message || "Error de red");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function updateVideos(videosKey: keyof CaseState, next: VideoRef[]) {
+    setState((prev) => ({ ...prev, [videosKey]: next } as CaseState));
   }
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl max-w-lg w-full p-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex justify-between items-center mb-1">
-          <h3 className="font-medium">🩺 Crear caso de éxito</h3>
-          <button onClick={onClose} className="text-neutral-400 text-xl">✕</button>
+      <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="p-4 border-b sticky top-0 bg-white flex items-center justify-between z-10">
+          <div>
+            <h3 className="font-medium">🩺 Caso de éxito · {patient.fullName}</h3>
+            <p className="text-[11px] text-neutral-500 mt-0.5">
+              {patient.diagnosis || "Sin diagnóstico registrado"}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={generateWithAi}
+              disabled={loading || generating || !caseId}
+              className="text-xs font-medium px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white disabled:opacity-40"
+              title="La IA lee toda la info del paciente y rellena los 4 apartados"
+            >
+              {generating ? "Generando…" : "🧠 Generar con IA"}
+            </button>
+            <button onClick={onClose} className="text-neutral-400 text-xl px-2">✕</button>
+          </div>
         </div>
-        <p className="text-xs text-neutral-500 mb-4">
-          De {patient.fullName} · {patient.diagnosis || "sin diagnóstico"}
-        </p>
 
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs text-neutral-500 block mb-1">Insight clínico clave</label>
-            <textarea
-              className="input text-sm"
-              rows={3}
-              value={insight}
-              onChange={(e) => setInsight(e.target.value)}
-              placeholder="¿Qué fue lo que marcó la diferencia? ¿Qué aprendiste? Esto será la chicha del caso público."
-              autoFocus
-            />
-          </div>
-          <div>
-            <label className="text-xs text-neutral-500 block mb-1">URLs de vídeos (una por línea, opcional)</label>
-            <textarea
-              className="input text-sm"
-              rows={2}
-              value={videoUrlsText}
-              onChange={(e) => setVideoUrlsText(e.target.value)}
-              placeholder="https://drive.google.com/..."
-            />
-          </div>
-          <div>
-            <label className="text-xs text-neutral-500 block mb-1">Notas adicionales</label>
-            <textarea
-              className="input text-sm"
-              rows={2}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Cuándo usar este caso, ideas de hooks..."
-            />
-          </div>
-          <label className="flex items-start gap-2 text-sm bg-amber-50 border border-amber-200 rounded p-2">
-            <input type="checkbox" checked={consentSigned} onChange={(e) => setConsentSigned(e.target.checked)} className="mt-0.5" />
-            <span className="text-amber-900">
-              El paciente ha firmado el permiso de uso de imagen y testimonio.
-              <span className="block text-[11px] text-amber-700 mt-0.5">
-                Sin esta confirmación el caso quedará marcado como "⚠ Sin permiso" y no debes usarlo públicamente.
-              </span>
-            </span>
-          </label>
+        <div className="p-4 space-y-5">
+          {loading ? (
+            <p className="text-sm text-neutral-400 italic text-center py-8">Cargando caso…</p>
+          ) : (
+            <>
+              {savedFeedback && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded p-2 text-xs text-emerald-800">
+                  {savedFeedback}
+                </div>
+              )}
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded p-2 text-xs text-red-700 whitespace-pre-wrap">
+                  {error}
+                </div>
+              )}
+              {generating && (
+                <p className="text-[11px] text-neutral-500 italic">
+                  Leyendo anamnesis, sesiones, sensaciones, resúmenes semanales… tarda 20-60s.
+                </p>
+              )}
 
-          <div className="flex justify-end gap-2 pt-2">
-            <button onClick={onClose} className="text-sm text-neutral-500">Cancelar</button>
-            <button onClick={save} disabled={saving} className="btn btn-primary text-sm">
-              {saving ? "Guardando..." : "Crear caso"}
+              {APARTADOS.map((ap) => (
+                <ApartadoBlock
+                  key={ap.key}
+                  label={ap.label}
+                  placeholder={ap.placeholder}
+                  text={state[ap.key]}
+                  onTextChange={(v) => setState((prev) => ({ ...prev, [ap.key]: v }))}
+                  videos={state[ap.videosKey]}
+                  onVideosChange={(next) => updateVideos(ap.videosKey, next)}
+                />
+              ))}
+
+              <div>
+                <label className="text-xs text-neutral-500 block mb-1">Notas internas (opcional)</label>
+                <textarea
+                  className="input text-sm w-full"
+                  rows={2}
+                  value={state.notes}
+                  onChange={(e) => setState((prev) => ({ ...prev, notes: e.target.value }))}
+                  placeholder="Cuándo usar este caso, ideas de hooks…"
+                />
+              </div>
+
+              <label className="flex items-start gap-2 text-sm bg-amber-50 border border-amber-200 rounded p-2">
+                <input
+                  type="checkbox"
+                  checked={state.consentSigned}
+                  onChange={(e) => setState((prev) => ({ ...prev, consentSigned: e.target.checked }))}
+                  className="mt-0.5"
+                />
+                <span className="text-amber-900">
+                  El paciente ha firmado el permiso de uso de imagen y testimonio.
+                  <span className="block text-[11px] text-amber-700 mt-0.5">
+                    Sin esta confirmación el caso queda marcado como "⚠ Sin permiso" y no debe publicarse.
+                  </span>
+                </span>
+              </label>
+
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <button onClick={onClose} className="text-sm text-neutral-500 px-3 py-2">Cancelar</button>
+                <button onClick={save} disabled={saving} className="btn btn-primary text-sm">
+                  {saving ? "Guardando…" : "Guardar caso"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ApartadoBlock({
+  label, placeholder, text, onTextChange, videos, onVideosChange,
+}: {
+  label: string;
+  placeholder: string;
+  text: string;
+  onTextChange: (v: string) => void;
+  videos: VideoRef[];
+  onVideosChange: (next: VideoRef[]) => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [newUrl, setNewUrl] = useState("");
+  const [newCaption, setNewCaption] = useState("");
+
+  function addVideo() {
+    const url = newUrl.trim();
+    if (!url) return;
+    onVideosChange([...videos, { url, caption: newCaption.trim() }]);
+    setNewUrl("");
+    setNewCaption("");
+    setAdding(false);
+  }
+
+  function removeVideo(i: number) {
+    const next = videos.slice();
+    next.splice(i, 1);
+    onVideosChange(next);
+  }
+
+  return (
+    <div className="border border-neutral-200 rounded-lg p-3 bg-white">
+      <div className="flex items-center justify-between mb-1.5">
+        <label className="text-sm font-semibold text-neutral-800">{label}</label>
+        <button
+          onClick={() => setAdding((v) => !v)}
+          className="text-[11px] font-medium text-emerald-700 hover:text-emerald-900"
+        >
+          🎥 + Añadir vídeo
+        </button>
+      </div>
+
+      <textarea
+        className="input text-sm w-full"
+        rows={6}
+        value={text}
+        onChange={(e) => onTextChange(e.target.value)}
+        placeholder={placeholder}
+      />
+
+      {adding && (
+        <div className="mt-2 p-2 bg-neutral-50 rounded border border-neutral-200 space-y-2">
+          <input
+            type="url"
+            className="input text-xs w-full"
+            value={newUrl}
+            onChange={(e) => setNewUrl(e.target.value)}
+            placeholder="URL del vídeo (Drive, YouTube, etc)"
+            autoFocus
+          />
+          <input
+            type="text"
+            className="input text-xs w-full"
+            value={newCaption}
+            onChange={(e) => setNewCaption(e.target.value)}
+            placeholder="Descripción corta (ej. clean pesado, MU en anilla)"
+          />
+          <div className="flex justify-end gap-1.5">
+            <button onClick={() => { setAdding(false); setNewUrl(""); setNewCaption(""); }} className="text-[11px] text-neutral-500 px-2 py-1">
+              Cancelar
+            </button>
+            <button onClick={addVideo} disabled={!newUrl.trim()} className="text-[11px] font-medium px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded disabled:opacity-40">
+              + Añadir
             </button>
           </div>
         </div>
-      </div>
+      )}
+
+      {videos.length > 0 && (
+        <ul className="mt-2 space-y-1">
+          {videos.map((v, i) => (
+            <li key={`${v.url}-${i}`} className="flex items-center gap-2 text-[11px] bg-neutral-50 rounded px-2 py-1">
+              <span className="shrink-0">🎥</span>
+              <a href={v.url} target="_blank" rel="noopener noreferrer" className="truncate text-blue-600 hover:underline flex-1" title={v.url}>
+                {v.caption || v.url}
+              </a>
+              <button onClick={() => removeVideo(i)} className="text-neutral-400 hover:text-red-600 text-xs px-1" title="Eliminar">✕</button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

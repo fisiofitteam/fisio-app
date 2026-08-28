@@ -1577,12 +1577,28 @@ model ClinicalCase {
   id              String   @id @default(cuid())
   athleteName     String
   injury          String                                // "Impingement subacromial derecho"
-  insight         String?                               // qué aprendí clínicamente
+  insight         String?                               // qué aprendí clínicamente (legacy, resumen ultra breve)
   consentSigned   Boolean  @default(false)
   consentSignedAt DateTime?
-  videoUrls       String   @default("[]")               // JSON array de URLs
+  videoUrls       String   @default("[]")               // legacy: JSON array de URLs sueltas
   notes           String?
   patientId       String?                               // relación opcional al paciente real si existe
+
+  // ─── Formato PDF (los 4 apartados narrativos + sus videos) ───
+  // Cada apartado es prosa larga que la IA borrada + el fisio edita.
+  // Cada *Videos es un JSON array de { url: string, caption?: string }.
+  initialSituation       String?                        // "Cómo estaba / dolor principal"
+  initialSituationVideos String  @default("[]")
+  process                String?                        // "Cómo ha sido su proceso"
+  processVideos          String  @default("[]")
+  obstacles              String?                        // "Obstáculos que ha superado"
+  obstaclesVideos        String  @default("[]")
+  achievements           String?                        // "Qué ha conseguido"
+  achievementsVideos     String  @default("[]")
+  // Cuándo la IA generó el borrador por última vez. Sirve para saber si
+  // el fisio ya lo editó desde entonces (edited > aiDraftedAt).
+  aiDraftedAt            DateTime?
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
