@@ -672,7 +672,13 @@ const APARTADOS_DETAIL = [
   { key: "achievements" as const, videosKey: "achievementsVideos" as const, label: "Qué ha conseguido" },
 ];
 
+function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function CaseDetailModal({ caseId, onClose }: { caseId: string; onClose: () => void }) {
+  const router = useRouter();
   const [data, setData] = useState<CaseDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedFormat, setSelectedFormat] = useState<"carousel" | "stories" | "reel">("carousel");
@@ -680,6 +686,8 @@ function CaseDetailModal({ caseId, onClose }: { caseId: string; onClose: () => v
   const [piece, setPiece] = useState<GeneratedPiece | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [reelDate, setReelDate] = useState<string>(todayIso());
 
   useEffect(() => {
     let cancelled = false;
@@ -734,6 +742,40 @@ function CaseDetailModal({ caseId, onClose }: { caseId: string; onClose: () => v
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
+  }
+
+  async function publishAndOpen(date?: string) {
+    if (!piece) return;
+    setPublishing(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/content/cases/${caseId}/publish-piece`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          format: piece.format,
+          generated: {
+            title: piece.title,
+            hook: piece.hook,
+            caption: piece.caption,
+            slides: piece.slides,
+            ctaHint: piece.ctaHint,
+          },
+          date: date ?? undefined,
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d?.ok) {
+        setError(d?.error || `Error ${res.status} publicando pieza`);
+        return;
+      }
+      // Redirige al editor visual. Se pierde el modal — es lo que queremos.
+      router.push(d.editorUrl);
+    } catch (e: any) {
+      setError(e?.message || "Error de red");
+    } finally {
+      setPublishing(false);
+    }
   }
 
   const hasNarrative = !!(data?.initialSituation || data?.process);
@@ -872,6 +914,46 @@ function CaseDetailModal({ caseId, onClose }: { caseId: string; onClose: () => v
                           <strong>CTA:</strong> {piece.ctaHint}
                         </div>
                       )}
+
+                      {/* ─── Publicar y abrir en editor visual ─── */}
+                      <div className="border-t border-amber-300 pt-3 mt-2">
+                        {piece.format === "reel" ? (
+                          <div className="flex flex-wrap items-end gap-2">
+                            <div className="flex-1 min-w-[160px]">
+                              <label className="block text-[10px] uppercase text-neutral-500 font-medium mb-1">
+                                Fecha de publicación
+                              </label>
+                              <input
+                                type="date"
+                                value={reelDate}
+                                onChange={(e) => setReelDate(e.target.value)}
+                                className="input text-xs w-full"
+                                disabled={publishing}
+                              />
+                            </div>
+                            <button
+                              onClick={() => publishAndOpen(reelDate)}
+                              disabled={publishing || !reelDate}
+                              className="text-xs font-medium px-4 py-2 rounded bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-40 whitespace-nowrap"
+                            >
+                              {publishing ? "Publicando…" : "📅 Programar y abrir guión"}
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => publishAndOpen()}
+                            disabled={publishing}
+                            className="w-full text-sm font-medium px-4 py-2 rounded bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-40"
+                          >
+                            {publishing ? "Publicando…" : `📅 Publicar y abrir editor visual`}
+                          </button>
+                        )}
+                        <p className="text-[10px] text-neutral-500 mt-1 italic text-center">
+                          {piece.format === "reel"
+                            ? "Se creará la pieza en la fecha elegida y te llevará al editor del guión."
+                            : "Se creará hoy en el calendario y te llevará al editor. La fecha se puede cambiar después."}
+                        </p>
+                      </div>
                     </div>
                   )}
                 </div>
