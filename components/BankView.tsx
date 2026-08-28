@@ -778,6 +778,34 @@ function CaseDetailModal({ caseId, onClose }: { caseId: string; onClose: () => v
     }
   }
 
+  // Flujo especifico REEL: llama al generador oficial de guiones IA
+  // (el mismo que usa el editor de pieza) y aterriza en el editor con
+  // guión rico ya rellenado. No pasa por /piece del caso.
+  async function generateAndPublishReel() {
+    if (!reelDate) return;
+    setPublishing(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/content/cases/${caseId}/publish-reel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: reelDate }),
+      });
+      const text = await res.text();
+      let d: any = {};
+      try { d = JSON.parse(text); } catch { /* ignore */ }
+      if (!res.ok || !d?.ok) {
+        setError(d?.error || `Error ${res.status} generando reel`);
+        return;
+      }
+      router.push(d.editorUrl);
+    } catch (e: any) {
+      setError(e?.message || "Error de red");
+    } finally {
+      setPublishing(false);
+    }
+  }
+
   const hasNarrative = !!(data?.initialSituation || data?.process);
 
   return (
@@ -847,8 +875,8 @@ function CaseDetailModal({ caseId, onClose }: { caseId: string; onClose: () => v
                     {FORMAT_OPTIONS.map((f) => (
                       <button
                         key={f.key}
-                        onClick={() => setSelectedFormat(f.key as any)}
-                        disabled={generating}
+                        onClick={() => { setSelectedFormat(f.key as any); setPiece(null); }}
+                        disabled={generating || publishing}
                         className={`text-left rounded p-2 border transition-colors ${
                           selectedFormat === f.key
                             ? "border-emerald-500 bg-emerald-50"
@@ -860,20 +888,60 @@ function CaseDetailModal({ caseId, onClose }: { caseId: string; onClose: () => v
                       </button>
                     ))}
                   </div>
-                  <button
-                    onClick={generatePiece}
-                    disabled={generating}
-                    className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-sm font-medium py-2 rounded-lg disabled:opacity-50"
-                  >
-                    {generating ? "Generando…" : `🧠 Generar ${FORMAT_OPTIONS.find((f) => f.key === selectedFormat)?.label}`}
-                  </button>
-                  {generating && (
-                    <p className="text-[11px] text-neutral-500 italic text-center">
-                      Sonnet está tejiendo el guión… suele tardar 15-30s.
-                    </p>
+
+                  {/* Para REEL saltamos el paso intermedio: pedimos fecha
+                      y llamamos al generador OFICIAL de guiones IA
+                      (el mismo que usa el editor de pieza). */}
+                  {selectedFormat === "reel" ? (
+                    <div className="bg-amber-50 border border-amber-200 rounded p-3 space-y-2">
+                      <p className="text-xs text-amber-900">
+                        El guión del reel se genera con el mismo motor IA que usas dentro del editor de pieza (planos detallados, few-shot con tus reels ganadores). Elige fecha de publicación y arranca.
+                      </p>
+                      <div className="flex flex-wrap items-end gap-2">
+                        <div className="flex-1 min-w-[160px]">
+                          <label className="block text-[10px] uppercase text-neutral-500 font-medium mb-1">
+                            Fecha de publicación
+                          </label>
+                          <input
+                            type="date"
+                            value={reelDate}
+                            onChange={(e) => setReelDate(e.target.value)}
+                            className="input text-xs w-full"
+                            disabled={publishing}
+                          />
+                        </div>
+                        <button
+                          onClick={generateAndPublishReel}
+                          disabled={publishing || !reelDate}
+                          className="text-xs font-medium px-4 py-2 rounded bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white disabled:opacity-40 whitespace-nowrap"
+                        >
+                          {publishing ? "Generando guión…" : "🎬 Generar guión y abrir editor"}
+                        </button>
+                      </div>
+                      {publishing && (
+                        <p className="text-[11px] text-neutral-500 italic">
+                          Creando pieza + generando planos con Opus… suele tardar 30-60s.
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        onClick={generatePiece}
+                        disabled={generating}
+                        className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-sm font-medium py-2 rounded-lg disabled:opacity-50"
+                      >
+                        {generating ? "Generando…" : `🧠 Generar ${FORMAT_OPTIONS.find((f) => f.key === selectedFormat)?.label}`}
+                      </button>
+                      {generating && (
+                        <p className="text-[11px] text-neutral-500 italic text-center">
+                          Sonnet está tejiendo el guión… suele tardar 15-30s.
+                        </p>
+                      )}
+                    </>
                   )}
 
-                  {piece && (
+                  {piece && piece.format !== "reel" && (
                     <div className="border-2 border-amber-300 rounded-lg p-3 bg-amber-50/40 space-y-3">
                       <div className="flex items-start justify-between gap-2">
                         <div>
