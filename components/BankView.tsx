@@ -945,13 +945,17 @@ function CaseDetailModal({ caseId, onClose }: { caseId: string; onClose: () => v
                             disabled={publishing}
                             className="w-full text-sm font-medium px-4 py-2 rounded bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-40"
                           >
-                            {publishing ? "Publicando…" : `📅 Publicar y abrir editor visual`}
+                            {publishing
+                              ? "Publicando…"
+                              : piece.format === "carousel"
+                                ? "🎨 Abrir en Carrusel Maker"
+                                : "🎨 Abrir en Story Maker"}
                           </button>
                         )}
                         <p className="text-[10px] text-neutral-500 mt-1 italic text-center">
                           {piece.format === "reel"
                             ? "Se creará la pieza en la fecha elegida y te llevará al editor del guión."
-                            : "Se creará hoy en el calendario y te llevará al editor. La fecha se puede cambiar después."}
+                            : "Se creará como borrador y te llevará al editor visual para maquetarlo."}
                         </p>
                       </div>
                     </div>
