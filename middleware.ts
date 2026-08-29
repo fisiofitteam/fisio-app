@@ -13,8 +13,13 @@ const PUBLIC_PATHS = [
   "/acceso",        // magic link 1-clic del paciente (/acceso/[token]) — el
                     //   propio route handler crea la sesión y redirige; si
                     //   el middleware lo bloquea, el handler nunca corre.
-  "/agenda",        // landing pública de reserva
-  "/api/agenda",    // endpoints públicos slots + book
+  "/agenda",        // landing pública de reserva (legacy)
+  "/api/agenda",    // endpoints públicos slots + book (legacy)
+  "/agendar-fisio", // landing pública de reserva de llamada del fisio
+                    //   (/agendar-fisio/[token]) — el paciente accede
+                    //   con un link generado desde la ficha.
+  "/api/booking",   // endpoints públicos slots + reserve del flujo
+                    //   /agendar-fisio (usados por la landing sin sesión).
   "/contratar",     // landing pública de contratación post-pago
   "/pagar",         // página de gracias tras pago (/pagar/gracias)
   "/api/sale",      // endpoints públicos del flujo de venta (status, checkout, create-account)
