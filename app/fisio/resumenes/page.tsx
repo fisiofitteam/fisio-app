@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getActiveProfessional } from "@/lib/session";
 import { WeeklyReportsFeed } from "@/components/WeeklyReportsFeed";
+import { WeeklyReportsRegenButton } from "@/components/WeeklyReportsRegenButton";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,7 @@ export default async function ResumenesPage({ searchParams }: { searchParams: { 
           Marca como visto los que ya hayas revisado.
         </p>
       </header>
+      {isManager && <WeeklyReportsRegenButton />}
       <WeeklyReportsFeed managerDefault={isManager} initialWeekIso={searchParams.week} />
     </div>
   );
