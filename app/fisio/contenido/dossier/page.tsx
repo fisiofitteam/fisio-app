@@ -5,6 +5,7 @@ import { getActiveProfessional } from "@/lib/session";
 import { ContentNav } from "@/components/ContentNav";
 import { DossierMonthPicker } from "@/components/DossierMonthPicker";
 import { DossierPrintButton } from "@/components/DossierPrintButton";
+import { PieceStatusInlineSelect } from "@/components/PieceStatusInlineSelect";
 import { DAY_LABELS } from "@/lib/content-templates";
 import {
   formatLabelOnly,
@@ -232,9 +233,7 @@ export default async function DossierPage({
                               <span className="text-xs font-medium text-neutral-700 capitalize">
                                 📅 {publishStr}
                               </span>
-                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-neutral-100 text-neutral-700">
-                                {STATUS_LABEL[p.status] ?? p.status}
-                              </span>
+                              <PieceStatusInlineSelect pieceId={p.id} initialStatus={p.status} />
                             </div>
                           </div>
 
