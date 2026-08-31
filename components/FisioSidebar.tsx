@@ -69,10 +69,14 @@ const RESUMENES: Item = { id: "resumenes", label: "Resúmenes", Icon: Sunrise, h
 const AJUSTES: Item = { id: "ajustes", label: "Ajustes", Icon: Settings, href: "/fisio/ajustes", match: (p) => p.startsWith("/fisio/ajustes") };
 
 function itemsForRole(role: string, opts: { withResumenes: boolean }): Item[] {
-  const R = opts.withResumenes ? [RESUMENES] : [];
+  // Managers (CEO / head_success) SIEMPRE ven "Resúmenes", aunque no
+  // haya contenido pendiente — desde ahí pueden disparar la regeneración
+  // manual cuando el cron falla. Los fisios normales solo lo ven cuando
+  // hay algo que revisar (evita ruido visual).
+  const isManager = role === "ceo" || role === "head_success";
+  const R = (opts.withResumenes || isManager) ? [RESUMENES] : [];
   if (role === "ceo") {
     // CEO no ve el buzon de Alertas (lo gestionan head_success y fisios).
-    // Solo ve Resumenes cuando hay contenido para el (card global ADVANCE).
     return [PANEL, PACIENTES, ...R, ADVANCE, LLAMADAS_VENTA, CONTENIDO, ANUNCIOS, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, RECURSOS, FINANZAS, EQUIPO, CHAT, FISIO_IA, SETTER_IA, AJUSTES];
   }
   if (role === "head_success") {
