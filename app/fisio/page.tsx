@@ -700,7 +700,7 @@ export default async function FisioPanelPage({
           <div className="flex justify-between items-center mb-3 gap-3 flex-wrap">
             <h2 className="font-medium text-sm">Próximas llamadas</h2>
             <div className="flex items-center gap-3">
-              {isManager && <RegenerateCallsButton />}
+              <RegenerateCallsButton />
               <Link href="/fisio/llamadas" className="text-xs text-neutral-500 hover:text-neutral-900">Ver todas →</Link>
             </div>
           </div>

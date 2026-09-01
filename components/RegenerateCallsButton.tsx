@@ -4,15 +4,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 /**
- * Botón "Regenerar" en el recuadro de próximas llamadas del panel del
- * fisio. Dispara manualmente el cron patient-calls-scheduler (que crea
- * los ScheduledCall de optimización/renovación según reglas de negocio).
+ * Botón "Actualizar llamadas" del recuadro "Próximas llamadas" del panel.
+ * Dispara manualmente el generador de ScheduledCall (optimización 4a→5a
+ * semana, renovación 14 días antes). Sirve como red de seguridad cuando
+ * el cron programado falla o va con retraso.
  *
- * Uso: sirve como red de seguridad cuando el cron programado falla o va
- * con retraso — el manager pulsa y los avisos aparecen al instante.
- *
- * Solo tiene sentido para managers (CEO/head_success), que son los
- * autorizados a llamar al endpoint con ?manual=1.
+ * Accesible a fisios, head_success y CEO — usa un endpoint dedicado
+ * (/api/patient-calls/refresh) que valida por rol de equipo clínico.
  */
 export function RegenerateCallsButton() {
   const router = useRouter();
@@ -25,7 +23,7 @@ export function RegenerateCallsButton() {
     setError(null);
     setFeedback(null);
     try {
-      const r = await fetch("/api/cron/patient-calls-scheduler?manual=1", {
+      const r = await fetch("/api/patient-calls/refresh", {
         method: "POST",
       });
       const d = await r.json().catch(() => ({}));
@@ -61,7 +59,7 @@ export function RegenerateCallsButton() {
         className="text-xs text-neutral-500 hover:text-neutral-900 disabled:opacity-50"
         title="Ejecuta el generador manual de avisos de optimización/renovación (útil si el cron automático falló)"
       >
-        {busy ? "⏳" : "🔄 Regenerar"}
+        {busy ? "⏳ Actualizando…" : "🔄 Actualizar llamadas"}
       </button>
     </div>
   );
