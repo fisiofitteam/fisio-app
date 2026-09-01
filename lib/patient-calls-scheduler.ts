@@ -25,6 +25,7 @@
  */
 import { prisma } from "@/lib/prisma";
 import { activePatientCondition } from "@/lib/patient-active";
+import { notifyProfessional } from "@/lib/notifications";
 
 const OPT_PROGRAM_TYPES = ["RECUPERA", "CONSOLIDA"];
 const REN_PROGRAM_TYPES = ["RECUPERA", "CONSOLIDA", "ADVANCE"];
@@ -67,9 +68,11 @@ export async function schedulePatientCalls(now: Date = new Date()): Promise<Sche
     },
     select: {
       id: true,
+      fullName: true,
       programType: true,
       subscriptionStartDate: true,
       subscriptionPeriodMonths: true,
+      assignedProfessionalId: true,
     },
   });
 
@@ -100,7 +103,7 @@ export async function schedulePatientCalls(now: Date = new Date()): Promise<Sche
         // no ha renovado nunca todavía. Coincide con "primer periodo".
         const isFirstPeriod = periodsCount <= 1;
         if (alreadyCall === 0 && isFirstPeriod) {
-          await prisma.scheduledCall.create({
+          const created = await prisma.scheduledCall.create({
             data: {
               patientId: p.id,
               type: "optimizacion",
@@ -108,6 +111,12 @@ export async function schedulePatientCalls(now: Date = new Date()): Promise<Sche
             },
           });
           optCreated++;
+          await notifyFisioOfNewCall({
+            professionalId: p.assignedProfessionalId,
+            callId: created.id,
+            patientName: p.fullName,
+            type: "optimizacion",
+          });
         }
       }
     }
@@ -124,7 +133,7 @@ export async function schedulePatientCalls(now: Date = new Date()): Promise<Sche
           },
         });
         if (recent === 0) {
-          await prisma.scheduledCall.create({
+          const created = await prisma.scheduledCall.create({
             data: {
               patientId: p.id,
               type: "renovacion",
@@ -132,6 +141,12 @@ export async function schedulePatientCalls(now: Date = new Date()): Promise<Sche
             },
           });
           renCreated++;
+          await notifyFisioOfNewCall({
+            professionalId: p.assignedProfessionalId,
+            callId: created.id,
+            patientName: p.fullName,
+            type: "renovacion",
+          });
         }
       }
     }
@@ -155,4 +170,36 @@ function daysUntilRenewal(start: Date | null, periodMonths: number, now: Date): 
   const renewal = new Date(start);
   renewal.setMonth(renewal.getMonth() + (periodMonths || 4));
   return daysBetweenUtc(now, renewal);
+}
+
+/**
+ * Notifica al fisio asignado en cuanto se crea una ScheduledCall — asi
+ * se entera el mismo dia (antes solo se notificaba los lunes 7am en
+ * `notify-patient-calls-week`, que dejaba fuera las llamadas que
+ * aparecian a mitad de semana).
+ *
+ * Idempotencia por refKey `patient_call:{callId}` — si el cron vuelve
+ * a correr y `scheduledCall.create` se ejecutara dos veces (no deberia,
+ * el count guarda), la segunda notificacion tampoco duplica.
+ */
+async function notifyFisioOfNewCall(opts: {
+  professionalId: string | null;
+  callId: string;
+  patientName: string;
+  type: "optimizacion" | "renovacion";
+}) {
+  if (!opts.professionalId) return;
+  const label = opts.type === "optimizacion" ? "optimización" : "renovación";
+  try {
+    await notifyProfessional({
+      professionalId: opts.professionalId,
+      type: "patient_call_new",
+      title: `📞 Toca llamada de ${label}`,
+      body: `${opts.patientName}. Agenda desde /fisio/llamadas.`,
+      actionUrl: "/fisio/llamadas",
+      refKey: `patient_call:${opts.callId}`,
+    });
+  } catch (e) {
+    console.error("[patient-calls-scheduler] Error notificando fisio:", e);
+  }
 }
