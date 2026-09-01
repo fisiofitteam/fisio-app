@@ -505,12 +505,15 @@ export default async function FisioPanelPage({
     </div>
   );
 
+  const isoDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const teamBlock = (
     <TeamMetricsBlock
       period={teamPeriod}
       periodLabel={periodLabel}
       from={searchParams.from ?? ""}
       to={searchParams.to ?? ""}
+      periodFrom={isoDate(periodStart)}
+      periodTo={isoDate(periodEnd)}
       renewals={teamRenewals}
       perFisio={perFisio}
     />

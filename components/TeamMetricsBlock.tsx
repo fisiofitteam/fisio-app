@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 type PerFisio = {
   id: string;
@@ -16,6 +17,23 @@ type PerFisio = {
 
 type Period = "month" | "quarter" | "year" | "custom";
 
+type DetailRow = {
+  patientId: string;
+  patientName: string;
+  programType: string | null;
+  fisioId: string | null;
+  fisioName: string | null;
+  outcome: "renewed" | "lost";
+  when: string;
+  amountPaid: number | null;
+};
+
+type DetailFilter = {
+  fisioId?: string;      // undefined = todo el equipo
+  outcome?: "renewed" | "lost" | "all";
+  title: string;
+};
+
 export function TeamMetricsBlock({
   period,
   periodLabel,
@@ -23,6 +41,8 @@ export function TeamMetricsBlock({
   to,
   renewals,
   perFisio,
+  periodFrom,
+  periodTo,
 }: {
   period: Period;
   periodLabel: string;
@@ -30,11 +50,15 @@ export function TeamMetricsBlock({
   to: string;
   renewals: { renewed: number; lost: number; total: number; rate: number | null };
   perFisio: PerFisio[];
+  // ISO YYYY-MM-DD del periodo actual — necesarios para llamar al detalle
+  periodFrom: string;
+  periodTo: string;
 }) {
   const router = useRouter();
   const [showCustom, setShowCustom] = useState(period === "custom");
   const [fromDate, setFromDate] = useState(from || "");
   const [toDate, setToDate] = useState(to || "");
+  const [detail, setDetail] = useState<DetailFilter | null>(null);
 
   function switchPeriod(p: "month" | "quarter" | "year") {
     const url = new URL(window.location.href);
@@ -129,14 +153,34 @@ export function TeamMetricsBlock({
         )}
 
         <div className="grid grid-cols-3 gap-3 pl-2">
-          <div>
-            <div className="text-xs text-neutral-500 mb-1">Renovaciones</div>
-            <div className="text-2xl font-semibold text-emerald-700">{renewals.renewed}</div>
-          </div>
-          <div>
-            <div className="text-xs text-neutral-500 mb-1">No renovaciones</div>
-            <div className="text-2xl font-semibold text-neutral-700">{renewals.lost}</div>
-          </div>
+          <button
+            onClick={() => renewals.renewed > 0 && setDetail({ outcome: "renewed", title: `Renovaciones del equipo · ${periodLabel}` })}
+            disabled={renewals.renewed === 0}
+            className="text-left group disabled:cursor-default"
+            title={renewals.renewed > 0 ? "Ver detalle" : ""}
+          >
+            <div className="text-xs text-neutral-500 mb-1 flex items-center gap-1">
+              Renovaciones
+              {renewals.renewed > 0 && <span className="text-emerald-600 text-[10px] group-hover:underline">🔍</span>}
+            </div>
+            <div className={`text-2xl font-semibold text-emerald-700 ${renewals.renewed > 0 ? "group-hover:underline" : ""}`}>
+              {renewals.renewed}
+            </div>
+          </button>
+          <button
+            onClick={() => renewals.lost > 0 && setDetail({ outcome: "lost", title: `No renovaciones del equipo · ${periodLabel}` })}
+            disabled={renewals.lost === 0}
+            className="text-left group disabled:cursor-default"
+            title={renewals.lost > 0 ? "Ver detalle" : ""}
+          >
+            <div className="text-xs text-neutral-500 mb-1 flex items-center gap-1">
+              No renovaciones
+              {renewals.lost > 0 && <span className="text-neutral-500 text-[10px] group-hover:underline">🔍</span>}
+            </div>
+            <div className={`text-2xl font-semibold text-neutral-700 ${renewals.lost > 0 ? "group-hover:underline" : ""}`}>
+              {renewals.lost}
+            </div>
+          </button>
           <div>
             <div className="text-xs text-neutral-500 mb-1">Tasa</div>
             <div className="text-2xl font-semibold">
@@ -154,6 +198,9 @@ export function TeamMetricsBlock({
       {perFisio.length > 0 && (
         <section className="card mb-5">
           <h2 className="font-medium text-sm mb-3">Métricas por profesional</h2>
+          <p className="text-[11px] text-neutral-500 italic mb-2">
+            🔍 Click en los números para ver el detalle.
+          </p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -174,8 +221,30 @@ export function TeamMetricsBlock({
                         {f.role === "head_success" ? "⭐ Head-success" : "🩺 Fisio"}
                       </div>
                     </td>
-                    <td className="text-right py-2 px-2 text-emerald-700">{f.renewed}</td>
-                    <td className="text-right py-2 px-2 text-neutral-600">{f.lost}</td>
+                    <td className="text-right py-2 px-2">
+                      {f.renewed > 0 ? (
+                        <button
+                          onClick={() => setDetail({ fisioId: f.id, outcome: "renewed", title: `Renovaciones · ${f.fullName} · ${periodLabel}` })}
+                          className="text-emerald-700 hover:underline font-medium"
+                        >
+                          {f.renewed}
+                        </button>
+                      ) : (
+                        <span className="text-neutral-400">0</span>
+                      )}
+                    </td>
+                    <td className="text-right py-2 px-2">
+                      {f.lost > 0 ? (
+                        <button
+                          onClick={() => setDetail({ fisioId: f.id, outcome: "lost", title: `No renovaciones · ${f.fullName} · ${periodLabel}` })}
+                          className="text-neutral-700 hover:underline font-medium"
+                        >
+                          {f.lost}
+                        </button>
+                      ) : (
+                        <span className="text-neutral-400">0</span>
+                      )}
+                    </td>
                     <td className="text-right py-2 px-2 font-medium">
                       {f.rate !== null ? `${f.rate}%` : <span className="text-neutral-300">—</span>}
                     </td>
@@ -194,6 +263,162 @@ export function TeamMetricsBlock({
           </div>
         </section>
       )}
+
+      {detail && (
+        <TeamRenewalsDetailModal
+          filter={detail}
+          from={periodFrom}
+          to={periodTo}
+          onClose={() => setDetail(null)}
+        />
+      )}
     </>
   );
 }
+
+// ─── Modal detalle ───────────────────────────────────────────────
+
+function TeamRenewalsDetailModal({
+  filter, from, to, onClose,
+}: {
+  filter: DetailFilter;
+  from: string;
+  to: string;
+  onClose: () => void;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [rows, setRows] = useState<DetailRow[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  const eur = (n: number) => `${n.toLocaleString("es-ES", { maximumFractionDigits: 0 })} €`;
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const params = new URLSearchParams({ from, to });
+        if (filter.fisioId) params.set("fisioId", filter.fisioId);
+        if (filter.outcome) params.set("outcome", filter.outcome);
+        const res = await fetch(`/api/team-renewals?${params}`);
+        const d = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!res.ok) {
+          setError(d?.error || `Error ${res.status}`);
+          return;
+        }
+        setRows(d.rows ?? []);
+      } catch (e: any) {
+        if (!cancelled) setError(e?.message || "Error de red");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [filter.fisioId, filter.outcome, from, to]);
+
+  const renewedRows = rows.filter((r) => r.outcome === "renewed");
+  const lostRows = rows.filter((r) => r.outcome === "lost");
+  const totalAmount = renewedRows.reduce((s, r) => s + (r.amountPaid ?? 0), 0);
+
+  const fmtDate = (iso: string) =>
+    new Date(iso).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[88vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="p-4 border-b sticky top-0 bg-white flex items-center justify-between z-10">
+          <div>
+            <h3 className="font-medium">{filter.title}</h3>
+            <p className="text-[11px] text-neutral-500 mt-0.5">
+              Atribuidas por fecha de decisión del follow-up.
+            </p>
+          </div>
+          <button onClick={onClose} className="text-neutral-400 text-xl px-2">✕</button>
+        </div>
+
+        <div className="p-4">
+          {loading ? (
+            <p className="text-sm text-neutral-400 italic py-6 text-center">Cargando…</p>
+          ) : error ? (
+            <p className="text-sm text-red-600 py-4">{error}</p>
+          ) : rows.length === 0 ? (
+            <p className="text-sm text-neutral-400 italic py-6 text-center">
+              No hay {filter.outcome === "renewed" ? "renovaciones" : filter.outcome === "lost" ? "pérdidas" : "movimientos"} en este periodo.
+            </p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs text-neutral-500 uppercase border-b border-neutral-200">
+                  <th className="text-left py-2 px-2 font-medium">Paciente</th>
+                  <th className="text-left py-2 px-2 font-medium">Programa</th>
+                  {!filter.fisioId && <th className="text-left py-2 px-2 font-medium">Fisio</th>}
+                  <th className="text-right py-2 px-2 font-medium">Fecha</th>
+                  <th className="text-right py-2 px-2 font-medium">
+                    {filter.outcome === "lost" ? "" : "Importe"}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={`${r.patientId}-${r.when}`} className="border-b border-neutral-100 hover:bg-neutral-50">
+                    <td className="py-2 px-2">
+                      <Link href={`/fisio/paciente/${r.patientId}/suscripcion`} className="hover:underline font-medium">
+                        {r.patientName}
+                      </Link>
+                      {r.outcome === "lost" && (
+                        <span className="ml-2 text-[9px] uppercase bg-red-100 text-red-800 px-1.5 py-0.5 rounded">Perdida</span>
+                      )}
+                    </td>
+                    <td className="py-2 px-2">
+                      {r.programType ? (
+                        <span className="text-[10px] uppercase bg-neutral-100 text-neutral-700 border border-neutral-300 px-2 py-0.5 rounded-full font-medium">
+                          {r.programType}
+                        </span>
+                      ) : (
+                        <span className="text-neutral-400 text-xs">—</span>
+                      )}
+                    </td>
+                    {!filter.fisioId && (
+                      <td className="py-2 px-2 text-xs text-neutral-600">
+                        {r.fisioName ?? <span className="text-neutral-400">—</span>}
+                      </td>
+                    )}
+                    <td className="text-right py-2 px-2 text-xs text-neutral-600 whitespace-nowrap">
+                      {fmtDate(r.when)}
+                    </td>
+                    <td className="text-right py-2 px-2 font-medium tabular-nums">
+                      {r.outcome === "renewed" && r.amountPaid != null ? (
+                        <span className="text-emerald-700">{eur(r.amountPaid)}</span>
+                      ) : r.outcome === "lost" ? (
+                        <span className="text-neutral-400">—</span>
+                      ) : (
+                        <span className="text-neutral-300">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              {(renewedRows.length > 0 || filter.outcome !== "lost") && (
+                <tfoot>
+                  <tr className="border-t-2 border-neutral-300 font-semibold">
+                    <td colSpan={filter.fisioId ? 3 : 4} className="py-2 px-2 text-right">
+                      Total ({rows.length}{" "}
+                      {filter.outcome === "renewed" ? "renovaciones" :
+                       filter.outcome === "lost" ? "pérdidas" : "movimientos"})
+                    </td>
+                    <td className="py-2 px-2 text-right tabular-nums text-emerald-700">
+                      {totalAmount > 0 ? eur(totalAmount) : ""}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
