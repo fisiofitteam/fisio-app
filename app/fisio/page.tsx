@@ -172,8 +172,10 @@ export default async function FisioPanelPage({
   // sentinels de "skipped"). El filtro anterior contaba cualquier sesion
   // con task FORM aunque nadie la hubiese contestado — por eso a los
   // fisios no les aparecian pacientes con forms recien rellenados.
+  const pendingFormsAll = pendingFormSessions.filter(hasPendingFormReview);
+  const pendingFormsCount = pendingFormsAll.length;
   // Recortamos a 5 tras filtrar para el recuadro compacto.
-  const pendingForms = pendingFormSessions.filter(hasPendingFormReview).slice(0, 5);
+  const pendingForms = pendingFormsAll.slice(0, 5);
 
   // Renovaciones próximas: partimos del endDate REAL del SubscriptionRenewal
   // activo/scheduled más tardío de cada paciente (no del subscriptionStartDate
@@ -261,6 +263,18 @@ export default async function FisioPanelPage({
       title: x.patient.fullName,
       meta: `en ${x.days}d`,
       metaAccent: x.days <= 7 ? "danger" : x.days <= 14 ? "warning" : null,
+    })),
+  };
+  const detailPendingForms: KpiDetail = {
+    title: "Formularios por revisar",
+    description: "Sesiones con formulario rellenado por el paciente y sin revisión del fisio.",
+    emptyText: "Ningún formulario pendiente. 🎉",
+    rows: pendingFormsAll.slice(0, 50).map((s: any) => ({
+      href: s.assignment?.patient?.id ? `/fisio/paciente/${s.assignment.patient.id}/formularios` : undefined,
+      title: s.assignment?.patient?.fullName ?? "Paciente",
+      subtitle: s.completedAt
+        ? `Completado ${new Date(s.completedAt).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}`
+        : undefined,
     })),
   };
 
@@ -505,13 +519,19 @@ export default async function FisioPanelPage({
   }
 
   const kpis = isManager ? extraKpisBlock : (
-    <div className="grid grid-cols-2 gap-2 mb-5 max-w-md">
+    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-5">
       <DashboardKpiCard label="Mis pacientes" value={patients.length} detail={detailMyPatients} />
       <DashboardKpiCard
         label="Renuevan en 30d"
         value={renewalsIn30}
         accent={renewalsIn30 > 0 ? "warning" : undefined}
         detail={detailRenewalsIn30}
+      />
+      <DashboardKpiCard
+        label="Formularios por revisar"
+        value={pendingFormsCount}
+        accent={pendingFormsCount > 0 ? "warning" : undefined}
+        detail={detailPendingForms}
       />
     </div>
   );
