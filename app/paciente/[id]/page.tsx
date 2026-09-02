@@ -174,27 +174,54 @@ export default async function PatientHome({ params }: { params: { id: string } }
     const today = todayForPatient(patient.timezone);
     const thisMonday = weekStartForPatient(patient.timezone);
 
-    // Calcular fecha de fin de suscripción (para avisos de caducidad)
-    const subEnd = patient.subscriptionStartDate
-      ? (() => {
-          const e = new Date(patient.subscriptionStartDate);
-          e.setMonth(e.getMonth() + patient.subscriptionPeriodMonths);
-          return e;
-        })()
-      : null;
+    // Fecha de fin del periodo vigente = misma fuente de verdad que el panel
+    // del fisio y `activePatientCondition()`: el `SubscriptionRenewal` en
+    // curso (`status: "active"` con endDate futuro). El endDate ya incluye
+    // las extensiones por pausas y respeta las renovaciones anticipadas
+    // (`scheduled` con startDate futuro). Calcular a partir de
+    // `subscriptionStartDate + subscriptionPeriodMonths` daba falsos
+    // "caducado" en pacientes con pausas o con renovación anticipada.
+    const nowRef = new Date();
+    const activeRenewal = await prisma.subscriptionRenewal.findFirst({
+      where: { patientId: patient.id, status: "active", endDate: { gt: nowRef } },
+      orderBy: { endDate: "desc" },
+      select: { endDate: true },
+    });
+    // Fallback: renovación anticipada que ya cubre HOY (scheduled con
+    // startDate <= now). Cubre el día del cambio de periodo entre que el
+    // active caduca y el scheduled arranca oficialmente.
+    const coveringScheduled = activeRenewal
+      ? null
+      : await prisma.subscriptionRenewal.findFirst({
+          where: {
+            patientId: patient.id,
+            status: "scheduled",
+            startDate: { lte: nowRef },
+            endDate: { gt: nowRef },
+          },
+          orderBy: { endDate: "desc" },
+          select: { endDate: true },
+        });
+    const subEnd = activeRenewal?.endDate ?? coveringScheduled?.endDate ?? null;
     const daysToExpire = subEnd ? Math.round((subEnd.getTime() - today.getTime()) / 86400000) : null;
 
-    // Si ya caducó, no le dejamos ver el programa
-    if (daysToExpire !== null && daysToExpire < 0) {
-      return (
-        <PatientHomeRolling
-          firstName={firstName}
-          patientId={patient.id}
-          mode="expired"
-          weekStartIso={thisMonday.toISOString()}
-          days={[]}
-        />
-      );
+    // Solo bloqueamos si no hay renewal vigente ni scheduled que cubra HOY.
+    // Para pacientes migrados sin ningún renewal en BD conservamos el
+    // comportamiento previo con los campos legacy del Patient.
+    if (subEnd === null && patient.subscriptionStartDate) {
+      const legacyEnd = new Date(patient.subscriptionStartDate);
+      legacyEnd.setMonth(legacyEnd.getMonth() + patient.subscriptionPeriodMonths);
+      if (legacyEnd.getTime() < today.getTime()) {
+        return (
+          <PatientHomeRolling
+            firstName={firstName}
+            patientId={patient.id}
+            mode="expired"
+            weekStartIso={thisMonday.toISOString()}
+            days={[]}
+          />
+        );
+      }
     }
 
     // Semana visible por rolling: la actual si está publicada; si no, la
