@@ -110,12 +110,17 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     select: { id: true, scheduledAt: true, meetingUrl: true },
   });
 
-  // Propagar al ScheduledCall enlazado (aviso del panel /fisio/llamadas):
-  // el paciente ya reservó, así que le ponemos scheduledAt y una nota.
-  // Best-effort: si la fila ya no existe (borrada a mano) o no está enlazada,
-  // seguimos adelante.
-  if (call.scheduledCallId) {
-    try {
+  // Propagar al ScheduledCall (aviso del panel /fisio/llamadas): el
+  // paciente ya reservó, así que le ponemos scheduledAt y una nota.
+  //   - Si el PatientCall ya estaba enlazado a un ScheduledCall (creado por
+  //     el cron), lo actualizamos.
+  //   - Si no había ninguno (fisio generó el link sin esperar al cron), lo
+  //     creamos aquí y lo enlazamos para que /fisio/llamadas lo muestre.
+  //
+  // ScheduledCall.type usa nomenclatura distinta (optimizacion/renovacion).
+  const scheduledCallType = call.type === "optimization" ? "optimizacion" : "renovacion";
+  try {
+    if (call.scheduledCallId) {
       await prisma.scheduledCall.update({
         where: { id: call.scheduledCallId },
         data: {
@@ -123,9 +128,23 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
           notes: `Agendada por el paciente vía link · ${typeLabel}`,
         },
       });
-    } catch (e) {
-      console.warn("[reserve] no se pudo propagar a ScheduledCall", call.scheduledCallId, e);
+    } else {
+      const newScheduled = await prisma.scheduledCall.create({
+        data: {
+          patientId: call.patientId,
+          type: scheduledCallType,
+          scheduledAt: startAt,
+          notes: `Agendada por el paciente vía link · ${typeLabel}`,
+        },
+        select: { id: true },
+      });
+      await prisma.patientCall.update({
+        where: { id: call.id },
+        data: { scheduledCallId: newScheduled.id },
+      });
     }
+  } catch (e) {
+    console.warn("[reserve] no se pudo propagar/crear ScheduledCall para", call.id, e);
   }
 
   // Emails de confirmación — best-effort. Si Resend falla no rompemos la
