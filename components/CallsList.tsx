@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AgendarLlamadaButton } from "@/components/AgendarLlamadaButton";
 import { PatientCallSummaryPanel, type PatientCallSummaryData } from "@/components/PatientCallSummaryPanel";
+import { PreCallFormAnswers, type PreCallFormAnswersData } from "@/components/PreCallFormAnswers";
 
 type Call = {
   id: string;
@@ -19,6 +20,7 @@ type Call = {
   outcome: string;
   patientCallId: string | null;
   patientCallType: "optimization" | "renewal" | null;
+  preCallForm: PreCallFormAnswersData | null;
   summary: PatientCallSummaryData | null;
 };
 
@@ -144,8 +146,8 @@ function CallRow({ call, onClick, onMarkDone, onDelete }: { call: Call; onClick:
     : date!.toLocaleDateString("es-ES", { timeZone: TZ, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
   return (
-    <div className="card !p-3 cursor-pointer hover:border-neutral-300" onClick={onClick}>
-      <div className="flex justify-between items-start gap-2">
+    <div className="card !p-3 hover:border-neutral-300">
+      <div className="flex justify-between items-start gap-2 cursor-pointer" onClick={onClick}>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-medium text-sm">{call.patientName}</span>
@@ -187,6 +189,11 @@ function CallRow({ call, onClick, onMarkDone, onDelete }: { call: Call; onClick:
           )}
         </div>
       </div>
+      {call.preCallForm && (
+        <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+          <PreCallFormAnswers response={call.preCallForm} />
+        </div>
+      )}
     </div>
   );
 }
@@ -390,7 +397,8 @@ function DoneCallRow({
         </div>
       </summary>
 
-      <div className="mt-3 border-t border-neutral-100 pt-3">
+      <div className="mt-3 border-t border-neutral-100 pt-3 space-y-2">
+        {call.preCallForm && <PreCallFormAnswers response={call.preCallForm} />}
         {call.summary && call.patientCallId && call.patientCallType ? (
           <PatientCallSummaryPanel
             callId={call.patientCallId}

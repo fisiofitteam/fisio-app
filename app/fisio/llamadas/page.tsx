@@ -22,7 +22,7 @@ export default async function CallsPage() {
       patientCalls: {
         orderBy: { createdAt: "desc" },
         take: 1,
-        include: { callSummary: true },
+        include: { callSummary: true, formResponse: true },
       },
     },
     orderBy: [
@@ -58,6 +58,15 @@ export default async function CallsPage() {
             // pasamos para poder pintar el resumen IA en las realizadas.
             patientCallId: pc?.id ?? null,
             patientCallType: (pc?.type ?? null) as "optimization" | "renewal" | null,
+            preCallForm: pc?.formResponse
+              ? {
+                  formSnapshot: pc.formResponse.formSnapshot,
+                  answers: pc.formResponse.answers,
+                  satisfactionScore: pc.formResponse.satisfactionScore,
+                  npsScore: pc.formResponse.npsScore,
+                  submittedAt: pc.formResponse.submittedAt.toISOString(),
+                }
+              : null,
             summary: sum && sum.clinicalSummary
               ? {
                   clinicalSummary: sum.clinicalSummary,
