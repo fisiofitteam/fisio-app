@@ -143,6 +143,9 @@ export function CalendarMonth({
   // StandaloneRecurrenceModal sigue en el archivo por si se recupera el flujo.
   const [editingSession, setEditingSession] = useState<Session | null>(null);
   const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null);
+  // "Programas activos" arranca COLAPSADO — se acumulaba mucha info a la
+  // vista. Un click en el header lo despliega.
+  const [assignmentsOpen, setAssignmentsOpen] = useState(false);
   const [dragging, setDragging] = useState<Session | null>(null);
   const [dropAction, setDropAction] = useState<{ session: Session; targetKey: string } | null>(null);
   const [moveToDateSession, setMoveToDateSession] = useState<Session | null>(null);
@@ -355,45 +358,122 @@ export function CalendarMonth({
     router.refresh();
   }
 
+  // ─── Estado por programa (próximo / en proceso / finalizado) ────
+  // Basado en la fecha de la ÚLTIMA sesión real del assignment, con
+  // fallback a startDate + weeksCount*7 si no hay sesiones registradas.
+  const todayMs = new Date().setHours(0, 0, 0, 0);
+  const lastSessionByAssignment = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const s of sessions) {
+      if (!s.assignmentId) continue;
+      const t = new Date(s.scheduledDate).getTime();
+      const prev = map.get(s.assignmentId);
+      if (prev === undefined || t > prev) map.set(s.assignmentId, t);
+    }
+    return map;
+  }, [sessions]);
+
+  function statusFor(a: Assignment): { key: "upcoming" | "active" | "finished"; label: string; classes: string } {
+    const startMs = new Date(a.startDate).setHours(0, 0, 0, 0);
+    const fallbackEnd = new Date(a.startDate);
+    fallbackEnd.setDate(fallbackEnd.getDate() + a.weeksCount * 7);
+    const lastMs = lastSessionByAssignment.get(a.id) ?? fallbackEnd.getTime();
+    if (todayMs < startMs) {
+      return { key: "upcoming", label: "Próximo", classes: "bg-blue-100 text-blue-800 border-blue-200" };
+    }
+    if (todayMs > lastMs) {
+      return { key: "finished", label: "Finalizado", classes: "bg-neutral-100 text-neutral-600 border-neutral-200" };
+    }
+    return { key: "active", label: "En proceso", classes: "bg-emerald-100 text-emerald-800 border-emerald-200" };
+  }
+
+  const statusCounts = { upcoming: 0, active: 0, finished: 0 };
+  for (const a of activeAssignments) statusCounts[statusFor(a).key]++;
+
   return (
     <div>
       <section className="card mb-4">
-        <h2 className="font-medium mb-3">Programas activos</h2>
-        {activeAssignments.length === 0 ? (
-          <p className="text-sm text-neutral-500 text-center py-4">No hay programas asignados. Asigna el primero o crea una sesión suelta.</p>
-        ) : (
-          <div className="space-y-2">
-            {activeAssignments.map((a) => (
-              <div key={a.id} className="flex justify-between items-center text-sm gap-2">
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium">{a.programName}</div>
-                  <div className="text-xs text-neutral-500">
-                    {a.programType} · N{a.programLevel} · {a.weeksCount} sem · {a.sessionCount} sesiones
-                  </div>
-                  {(() => {
-                    const end = new Date(a.startDate);
-                    end.setDate(end.getDate() + a.weeksCount * 7);
-                    const dl = Math.ceil((end.getTime() - Date.now()) / 86400000);
-                    if (dl < 0 || dl > 7) return null;
-                    return (
-                      <div className="text-xs font-medium mt-0.5" style={{ color: "#B45309" }}>
-                        🔔 menos de una semana para terminar
-                      </div>
-                    );
-                  })()}
-                </div>
-                <div className="text-xs text-neutral-500">
-                  desde {new Date(a.startDate).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
-                </div>
-                <button
-                  onClick={() => setEditingAssignment(a)}
-                  className="text-xs text-neutral-500 hover:text-neutral-900 px-1.5"
-                  title="Editar"
-                >
-                  ✎
-                </button>
+        <button
+          onClick={() => setAssignmentsOpen((v) => !v)}
+          className="w-full flex items-center justify-between gap-2 text-left"
+          aria-expanded={assignmentsOpen}
+        >
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-neutral-500 text-xs">{assignmentsOpen ? "▼" : "▶"}</span>
+            <h2 className="font-medium">Programas activos</h2>
+            <span className="text-xs text-neutral-500">
+              ({activeAssignments.length})
+            </span>
+            {!assignmentsOpen && activeAssignments.length > 0 && (
+              <div className="flex gap-1 ml-1">
+                {statusCounts.active > 0 && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    {statusCounts.active} en proceso
+                  </span>
+                )}
+                {statusCounts.upcoming > 0 && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+                    {statusCounts.upcoming} próximo{statusCounts.upcoming === 1 ? "" : "s"}
+                  </span>
+                )}
+                {statusCounts.finished > 0 && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-neutral-100 text-neutral-600 border border-neutral-200">
+                    {statusCounts.finished} finalizado{statusCounts.finished === 1 ? "" : "s"}
+                  </span>
+                )}
               </div>
-            ))}
+            )}
+          </div>
+        </button>
+
+        {assignmentsOpen && (
+          <div className="mt-3">
+            {activeAssignments.length === 0 ? (
+              <p className="text-sm text-neutral-500 text-center py-4">No hay programas asignados. Asigna el primero o crea una sesión suelta.</p>
+            ) : (
+              <div className="space-y-2">
+                {activeAssignments.map((a) => {
+                  const st = statusFor(a);
+                  return (
+                    <div key={a.id} className="flex justify-between items-center text-sm gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium">{a.programName}</span>
+                          <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded-full border ${st.classes}`}>
+                            {st.label}
+                          </span>
+                        </div>
+                        <div className="text-xs text-neutral-500">
+                          {a.programType} · N{a.programLevel} · {a.weeksCount} sem · {a.sessionCount} sesiones
+                        </div>
+                        {(() => {
+                          if (st.key !== "active") return null;
+                          const end = new Date(a.startDate);
+                          end.setDate(end.getDate() + a.weeksCount * 7);
+                          const dl = Math.ceil((end.getTime() - Date.now()) / 86400000);
+                          if (dl < 0 || dl > 7) return null;
+                          return (
+                            <div className="text-xs font-medium mt-0.5" style={{ color: "#B45309" }}>
+                              🔔 menos de una semana para terminar
+                            </div>
+                          );
+                        })()}
+                      </div>
+                      <div className="text-xs text-neutral-500">
+                        desde {new Date(a.startDate).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
+                      </div>
+                      <button
+                        onClick={() => setEditingAssignment(a)}
+                        className="text-xs text-neutral-500 hover:text-neutral-900 px-1.5"
+                        title="Editar"
+                      >
+                        ✎
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </section>
