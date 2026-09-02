@@ -7,16 +7,18 @@ export default async function CallsPage() {
   const user = await getActiveProfessional();
   if (!user) redirect("/");
 
-  // Fuera los pacientes fantasma en llamadas y en el selector. Los fisios
-  // normales solo ven las llamadas de SUS pacientes asignados; CEO y
-  // head_success ven las de todo el equipo.
+  // Los fisios normales solo ven las llamadas de SUS pacientes asignados;
+  // CEO y head_success ven las de todo el equipo. Los pacientes marcados
+  // como test SÍ aparecen aquí (útil para probar el flujo end-to-end) — se
+  // distinguen con un chip 🧪 en cada tarjeta. Las métricas agregadas
+  // siguen ignorando isTest por otro camino.
   const patientFilter = user.isManager
-    ? { isTest: false }
-    : { isTest: false, assignedProfessionalId: user.id };
+    ? {}
+    : { assignedProfessionalId: user.id };
   const calls = await prisma.scheduledCall.findMany({
     where: { patient: patientFilter },
     include: {
-      patient: { select: { id: true, fullName: true, whatsappGroupUrl: true } },
+      patient: { select: { id: true, fullName: true, whatsappGroupUrl: true, isTest: true } },
       patientCalls: {
         orderBy: { createdAt: "desc" },
         take: 1,
@@ -46,6 +48,7 @@ export default async function CallsPage() {
             patientName: c.patient.fullName,
             patientFirstName: c.patient.fullName.split(" ")[0] ?? c.patient.fullName,
             patientGroupUrl: c.patient.whatsappGroupUrl ?? null,
+            patientIsTest: c.patient.isTest,
             scheduledAt: c.scheduledAt?.toISOString() ?? null,
             type: c.type,
             notes: c.notes ?? "",

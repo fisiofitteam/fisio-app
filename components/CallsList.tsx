@@ -11,6 +11,7 @@ type Call = {
   patientName: string;
   patientFirstName: string;
   patientGroupUrl: string | null;
+  patientIsTest: boolean;
   scheduledAt: string | null;
   type: string;
   notes: string;
@@ -146,6 +147,11 @@ function CallRow({ call, onClick, onMarkDone, onDelete }: { call: Call; onClick:
             }`}>
               {TYPE_LABELS[call.type] ?? call.type}
             </span>
+            {call.patientIsTest && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-neutral-200 text-neutral-700" title="Paciente marcado como test">
+                🧪 Test
+              </span>
+            )}
           </div>
           <div className={`text-xs mt-0.5 ${
             noSchedule && !call.completedAt ? "text-amber-700 font-medium"
