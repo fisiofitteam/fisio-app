@@ -26,7 +26,7 @@ export function PatientNav({
     if (variant === "advance") {
       return [
         { id: "home", label: "Hoy", href: `/paciente/${patientId}`, Icon: Home },
-        { id: "semana", label: "Semana", href: `/paciente/${patientId}/semana`, Icon: Calendar },
+        { id: "semana", label: "Semana", href: `/paciente/${patientId}/semana-completa`, Icon: Calendar },
         { id: "prs", label: "PRs", href: `/paciente/${patientId}/prs`, Icon: Trophy },
         { id: "comunidad", label: "Comunidad", href: `/paciente/${patientId}/comunidad`, Icon: Users },
         { id: "metricas", label: "Métricas", href: `/paciente/${patientId}/metricas`, Icon: BarChart3 },
