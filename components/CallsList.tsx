@@ -183,7 +183,7 @@ function CallRow({ call, onClick, onMarkDone, onDelete }: { call: Call; onClick:
             <button onClick={onMarkDone} className="text-xs text-emerald-700">✓ Hecha</button>
           )}
           {onDelete && (
-            <button onClick={onDelete} className="text-xs text-red-600" title="Eliminar llamada (solo CEO)">✕</button>
+            <button onClick={onDelete} className="text-xs text-red-600" title="Eliminar llamada">✕</button>
           )}
         </div>
       </div>
@@ -384,7 +384,7 @@ function DoneCallRow({
         <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
           <button onClick={onEdit} className="text-xs text-neutral-500">✎ Editar</button>
           {onDelete && (
-            <button onClick={onDelete} className="text-xs text-red-600" title="Eliminar llamada (solo CEO)">✕</button>
+            <button onClick={onDelete} className="text-xs text-red-600" title="Eliminar llamada">✕</button>
           )}
           <span className="text-neutral-400 text-xs group-open:rotate-180 transition-transform">▼</span>
         </div>

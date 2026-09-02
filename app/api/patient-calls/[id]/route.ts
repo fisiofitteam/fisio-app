@@ -15,8 +15,8 @@ import { getActiveProfessional } from "@/lib/session";
  */
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   const user = await getActiveProfessional();
-  if (!user || user.role !== "ceo") {
-    return NextResponse.json({ error: "Solo el CEO puede borrar llamadas" }, { status: 403 });
+  if (!user || (user.role !== "ceo" && user.role !== "head_success")) {
+    return NextResponse.json({ error: "Solo CEO o head coach pueden borrar llamadas" }, { status: 403 });
   }
 
   const call = await prisma.patientCall.findUnique({

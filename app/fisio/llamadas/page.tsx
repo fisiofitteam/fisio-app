@@ -73,7 +73,7 @@ export default async function CallsPage() {
           };
         })}
         patients={patients.map((p) => ({ id: p.id, fullName: p.fullName }))}
-        isCeo={user.role === "ceo"}
+        isCeo={user.role === "ceo" || user.role === "head_success"}
       />
     </main>
   );

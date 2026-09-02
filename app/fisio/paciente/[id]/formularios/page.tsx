@@ -16,7 +16,7 @@ export default async function PatientFormsTab({ params }: { params: { id: string
   if (!patient) notFound();
 
   const activeUser = await getActiveProfessional();
-  const isCeo = activeUser?.role === "ceo";
+  const isCeo = activeUser?.role === "ceo" || activeUser?.role === "head_success";
 
   // baseUrl para armar el link público de reserva que la card copia / manda por WhatsApp.
   const hdrs = headers();

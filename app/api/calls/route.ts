@@ -32,23 +32,46 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  // Solo el CEO puede borrar llamadas — el resto usa "✓ Hecha" para
-  // cerrarlas sin destruir el historial (avisos del cron, resúmenes IA,
-  // respuestas del formulario previo).
+  // CEO y head_success pueden borrar llamadas — el resto usa "✓ Hecha"
+  // para cerrarlas sin destruir el historial (avisos del cron, resúmenes
+  // IA, respuestas del formulario previo).
   const user = await getActiveProfessional();
-  if (!user || user.role !== "ceo") {
-    return NextResponse.json({ error: "Solo el CEO puede borrar llamadas" }, { status: 403 });
+  if (!user || (user.role !== "ceo" && user.role !== "head_success")) {
+    return NextResponse.json({ error: "Solo CEO o head coach pueden borrar llamadas" }, { status: 403 });
   }
 
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "missing id" }, { status: 400 });
 
-  // Borramos también los PatientCall enlazados (con su formResponse en
-  // cascada) para dejar el historial limpio. El evento de Google Calendar
-  // asociado no se cancela — hacerlo requeriría llamadas al API con
-  // refresh token y riesgo de fallo silencioso. El CEO lo borra a mano en
-  // Calendar si le molesta.
+  // 1) Borra el PatientCall enlazado por scheduledCallId (con formResponse
+  //    en cascada) y el ScheduledCall en sí.
+  // 2) Además, como red de seguridad para llamadas huérfanas de pruebas
+  //    (creadas antes del fix que enlaza al reservar), busca un PatientCall
+  //    del mismo paciente + mismo tipo con scheduledAt idéntico al del
+  //    ScheduledCall y lo borra también. La coincidencia exacta de fecha
+  //    evita falsos positivos entre múltiples llamadas del mismo paciente.
+  //
+  // El evento de Google Calendar NO se cancela — requiere refresh token y
+  // añade puntos de fallo. El usuario lo borra a mano si le molesta.
+  const scheduled = await prisma.scheduledCall.findUnique({
+    where: { id },
+    select: { patientId: true, type: true, scheduledAt: true },
+  });
+
   await prisma.patientCall.deleteMany({ where: { scheduledCallId: id } });
   await prisma.scheduledCall.delete({ where: { id } });
+
+  if (scheduled?.scheduledAt) {
+    const patientCallType = scheduled.type === "renovacion" ? "renewal" : "optimization";
+    await prisma.patientCall.deleteMany({
+      where: {
+        patientId: scheduled.patientId,
+        type: patientCallType,
+        scheduledAt: scheduled.scheduledAt,
+        scheduledCallId: null, // solo huérfanos: los enlazados ya cayeron arriba
+      },
+    });
+  }
+
   return NextResponse.json({ ok: true });
 }

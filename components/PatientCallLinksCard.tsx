@@ -99,7 +99,7 @@ export function PatientCallLinksCard({
   patientFirstName: string;
   /** Origen absoluto para armar la URL pública del link (ej. https://app.fisiofit.team). */
   baseUrl: string;
-  /** Solo el CEO puede borrar llamadas (limpieza de pruebas / huérfanas). */
+  /** CEO y head coach pueden borrar llamadas (limpieza de pruebas / huérfanas). */
   isCeo?: boolean;
 }) {
   const [calls, setCalls] = useState<PatientCall[]>([]);
@@ -203,7 +203,7 @@ export function PatientCallLinksCard({
                       <button
                         onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteCall(c); }}
                         className="text-xs text-red-600"
-                        title="Eliminar llamada (solo CEO)"
+                        title="Eliminar llamada"
                       >
                         ✕
                       </button>
