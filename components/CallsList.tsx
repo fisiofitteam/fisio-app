@@ -30,9 +30,11 @@ const TYPE_LABELS: Record<string, string> = {
 export function CallsList({
   calls,
   patients,
+  isCeo = false,
 }: {
   calls: Call[];
   patients: { id: string; fullName: string }[];
+  isCeo?: boolean;
 }) {
   const router = useRouter();
   const [showNew, setShowNew] = useState(false);
@@ -52,8 +54,13 @@ export function CallsList({
   const done = calls.filter((c) => c.completedAt).sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? ""));
 
   async function remove(id: string) {
-    if (!confirm("¿Eliminar esta llamada?")) return;
-    await fetch(`/api/calls?id=${id}`, { method: "DELETE" });
+    if (!confirm("¿Eliminar esta llamada?\n\nSe borrará también el link de reserva y sus respuestas del formulario. El evento del calendario NO se cancela.")) return;
+    const r = await fetch(`/api/calls?id=${id}`, { method: "DELETE" });
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      alert(d?.error ?? "No se pudo eliminar");
+      return;
+    }
     router.refresh();
   }
 
@@ -81,7 +88,7 @@ export function CallsList({
                 call={c}
                 onClick={() => setEditing(c)}
                 onMarkDone={() => setCompleteFor(c)}
-                onDelete={() => remove(c.id)}
+                onDelete={isCeo ? () => remove(c.id) : null}
               />
             ))}
           </div>
@@ -97,7 +104,7 @@ export function CallsList({
                 key={c.id}
                 call={c}
                 onEdit={() => setEditing(c)}
-                onDelete={() => remove(c.id)}
+                onDelete={isCeo ? () => remove(c.id) : null}
                 onRefresh={() => router.refresh()}
               />
             ))}
@@ -118,7 +125,7 @@ export function CallsList({
   );
 }
 
-function CallRow({ call, onClick, onMarkDone, onDelete }: { call: Call; onClick: () => void; onMarkDone: () => void; onDelete: () => void }) {
+function CallRow({ call, onClick, onMarkDone, onDelete }: { call: Call; onClick: () => void; onMarkDone: () => void; onDelete: (() => void) | null }) {
   // Pendiente de agendar cuando el aviso llegó pero el fisio aún no ha
   // fijado fecha con el paciente.
   const noSchedule = !call.scheduledAt;
@@ -175,7 +182,9 @@ function CallRow({ call, onClick, onMarkDone, onDelete }: { call: Call; onClick:
           {!call.completedAt && (
             <button onClick={onMarkDone} className="text-xs text-emerald-700">✓ Hecha</button>
           )}
-          <button onClick={onDelete} className="text-xs text-red-600">✕</button>
+          {onDelete && (
+            <button onClick={onDelete} className="text-xs text-red-600" title="Eliminar llamada (solo CEO)">✕</button>
+          )}
         </div>
       </div>
     </div>
@@ -342,7 +351,7 @@ function DoneCallRow({
 }: {
   call: Call;
   onEdit: () => void;
-  onDelete: () => void;
+  onDelete: (() => void) | null;
   onRefresh: () => void;
 }) {
   const dateStr = call.completedAt
@@ -374,7 +383,9 @@ function DoneCallRow({
         </div>
         <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
           <button onClick={onEdit} className="text-xs text-neutral-500">✎ Editar</button>
-          <button onClick={onDelete} className="text-xs text-red-600">✕</button>
+          {onDelete && (
+            <button onClick={onDelete} className="text-xs text-red-600" title="Eliminar llamada (solo CEO)">✕</button>
+          )}
           <span className="text-neutral-400 text-xs group-open:rotate-180 transition-transform">▼</span>
         </div>
       </summary>
