@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { getOnboardingConfig } from "@/lib/onboarding-config";
+import { getActiveProfessional } from "@/lib/session";
 import { CallAnamnesisSection } from "@/components/CallAnamnesisSection";
 import { PatientCallLinksCard } from "@/components/PatientCallLinksCard";
 
@@ -13,6 +14,9 @@ function fDate(d: Date | string): string {
 export default async function PatientFormsTab({ params }: { params: { id: string } }) {
   const patient = await prisma.patient.findUnique({ where: { id: params.id } });
   if (!patient) notFound();
+
+  const activeUser = await getActiveProfessional();
+  const isCeo = activeUser?.role === "ceo";
 
   // baseUrl para armar el link público de reserva que la card copia / manda por WhatsApp.
   const hdrs = headers();
@@ -197,6 +201,7 @@ export default async function PatientFormsTab({ params }: { params: { id: string
         patientGroupUrl={patient.whatsappGroupUrl ?? null}
         patientFirstName={patient.fullName.split(" ")[0] ?? patient.fullName}
         baseUrl={callsBaseUrl}
+        isCeo={isCeo}
       />
 
       {/* ── Formularios de sesión ───────────────────────────────────────── */}

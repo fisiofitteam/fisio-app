@@ -89,6 +89,7 @@ export function PatientCallLinksCard({
   patientGroupUrl,
   patientFirstName,
   baseUrl,
+  isCeo = false,
 }: {
   patientId: string;
   /** URL del grupo de seguimiento de WhatsApp del paciente. Al pulsar el
@@ -98,6 +99,8 @@ export function PatientCallLinksCard({
   patientFirstName: string;
   /** Origen absoluto para armar la URL pública del link (ej. https://app.fisiofit.team). */
   baseUrl: string;
+  /** Solo el CEO puede borrar llamadas (limpieza de pruebas / huérfanas). */
+  isCeo?: boolean;
 }) {
   const [calls, setCalls] = useState<PatientCall[]>([]);
   const [loading, setLoading] = useState(true);
@@ -131,6 +134,17 @@ export function PatientCallLinksCard({
     navigator.clipboard.writeText(url);
     setCopiedId(call.id);
     setTimeout(() => setCopiedId(null), 1800);
+  }
+
+  async function deleteCall(call: PatientCall) {
+    if (!confirm(`¿Eliminar esta llamada de ${TYPE_LABEL[call.type]}?\n\nSe borran también las respuestas del formulario. El evento del calendario NO se cancela.`)) return;
+    const r = await fetch(`/api/patient-calls/${call.id}`, { method: "DELETE" });
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      alert(d?.error ?? "No se pudo eliminar");
+      return;
+    }
+    loadCalls();
   }
 
   /** Copia el mensaje al portapapeles y abre el grupo del paciente. */
@@ -185,6 +199,15 @@ export function PatientCallLinksCard({
                   </div>
                   <div className="flex items-center gap-3 flex-shrink-0">
                     <span className="text-[10px] text-neutral-500">Creado {formatDate(c.createdAt)}</span>
+                    {isCeo && (
+                      <button
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteCall(c); }}
+                        className="text-xs text-red-600"
+                        title="Eliminar llamada (solo CEO)"
+                      >
+                        ✕
+                      </button>
+                    )}
                     <span className="text-neutral-400 text-xs group-open:rotate-180 transition-transform">▼</span>
                   </div>
                 </summary>
