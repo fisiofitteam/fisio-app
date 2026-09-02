@@ -203,7 +203,24 @@ export default async function PatientHome({ params }: { params: { id: string } }
           select: { endDate: true },
         });
     const subEnd = activeRenewal?.endDate ?? coveringScheduled?.endDate ?? null;
-    const daysToExpire = subEnd ? Math.round((subEnd.getTime() - today.getTime()) / 86400000) : null;
+    let daysToExpire: number | null = subEnd
+      ? Math.round((subEnd.getTime() - today.getTime()) / 86400000)
+      : null;
+
+    // Si ya hay una renovación programada que arranca sin gap con el periodo
+    // vigente (renovación anticipada o reserva), no mostramos el aviso de
+    // "caduca en N días" — el paciente ya ha renovado y no debe ver el rojo.
+    if (activeRenewal?.endDate && daysToExpire !== null && daysToExpire <= 14) {
+      const upcomingRenewal = await prisma.subscriptionRenewal.findFirst({
+        where: {
+          patientId: patient.id,
+          status: "scheduled",
+          startDate: { lte: activeRenewal.endDate },
+        },
+        select: { id: true },
+      });
+      if (upcomingRenewal) daysToExpire = null;
+    }
 
     // Solo bloqueamos si no hay renewal vigente ni scheduled que cubra HOY.
     // Para pacientes migrados sin ningún renewal en BD conservamos el
