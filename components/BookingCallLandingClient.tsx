@@ -17,9 +17,11 @@ type CallType = "optimization" | "renewal";
 type Fisio = { fullName: string; photoUrl: string | null };
 type Patient = { fullName: string; email: string | null };
 
+// Cara al paciente llamamos "Graduación" a la que internamente es
+// "renewal" — evita el tono comercial que da "renovación".
 const TYPE_HEADLINE: Record<CallType, string> = {
   optimization: "Llamada de optimización",
-  renewal: "Llamada de renovación",
+  renewal: "Llamada de graduación",
 };
 const TYPE_INTRO: Record<CallType, string> = {
   optimization: "Vamos a revisar cómo van los últimos días y ajustar tu plan.",

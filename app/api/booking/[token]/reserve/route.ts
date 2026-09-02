@@ -71,7 +71,10 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     );
   }
 
-  const typeLabel = call.type === "optimization" ? "Optimización" : "Renovación";
+  // Cara al paciente llamamos a la llamada de renovación "Graduación" para
+  // evitar el tono comercial. Se refleja en el summary del evento del
+  // calendar, en el asunto del email de confirmación y en el aviso al fisio.
+  const typeLabel = call.type === "optimization" ? "Optimización" : "Graduación";
   const summary = `${typeLabel} — ${call.patient.fullName}`;
   const description = [
     `Llamada de ${typeLabel.toLowerCase()} con ${call.patient.fullName}.`,
