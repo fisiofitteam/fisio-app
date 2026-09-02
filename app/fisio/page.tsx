@@ -234,7 +234,35 @@ export default async function FisioPanelPage({
     }))
     .sort((a, b) => a.days - b.days);
   const renewalsIn30 = withRenewalAll.filter((x) => x.days >= 0 && x.days <= 30).length;
+  const renewalsIn30List = withRenewalAll.filter((x) => x.days >= 0 && x.days <= 30);
   const withRenewal = withRenewalAll.slice(0, 5);
+
+  // ─── Detalles clicables para los KPIs del fisio normal ─────────────
+  // Managers también los usan pero construyen otros extra dentro del if.
+  const detailMyPatients: KpiDetail = {
+    title: isManager ? "Pacientes totales" : "Mis pacientes",
+    description: isManager
+      ? `${patients.length} activos (excluye Prevention, fantasma y terminados).`
+      : `${patients.length} pacientes asignados actualmente.`,
+    rows: [...patients]
+      .sort((a, b) => a.fullName.localeCompare(b.fullName))
+      .map((p) => ({
+        href: `/fisio/paciente/${p.id}`,
+        title: p.fullName,
+        subtitle: p.programType ?? "—",
+      })),
+  };
+  const detailRenewalsIn30: KpiDetail = {
+    title: "Renuevan en 30 días",
+    description: "Ordenados por proximidad de vencimiento.",
+    emptyText: "Nadie vence en los próximos 30 días.",
+    rows: renewalsIn30List.map((x) => ({
+      href: `/fisio/paciente/${x.patient.id}`,
+      title: x.patient.fullName,
+      meta: `en ${x.days}d`,
+      metaAccent: x.days <= 7 ? "danger" : x.days <= 14 ? "warning" : null,
+    })),
+  };
 
   // Programas asignados a punto de terminar (≤7 días) → recuadro + campanita
   const programEndings = await getProgramEndingsForProfessional(user.id);
@@ -396,25 +424,14 @@ export default async function FisioPanelPage({
       " · " + d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
     const callTypeLabel = (t: string) => t === "optimizacion" ? "Optimización" : t === "renovacion" ? "Renovación" : t;
 
-    // Renuevan en 30d: reutilizamos withRenewalAll (ya filtrado 0..30 días)
-    const renewalsIn30List = withRenewalAll.filter((x) => x.days >= 0 && x.days <= 30);
+    // (renewalsIn30List y detailMyPatients / detailRenewalsIn30 están
+    //  definidos arriba fuera de este bloque — los reutilizamos aquí.)
 
     // Adherencia media: top 5 mejores y bottom 5 peores para dar contexto
     // sobre por qué el promedio queda como queda.
     const sortedByAdh = [...validAdhs].sort((a, b) => a.adh.percentage - b.adh.percentage);
 
     // === DETAILS ===
-    const detailTotal: KpiDetail = {
-      title: "Pacientes totales",
-      description: `${patients.length} activos (excluye Prevention, fantasma y terminados).`,
-      rows: [...patients]
-        .sort((a, b) => a.fullName.localeCompare(b.fullName))
-        .map((p) => ({
-          href: `/fisio/paciente/${p.id}`,
-          title: p.fullName,
-          subtitle: p.programType ?? "—",
-        })),
-    };
     const detailUnassigned: KpiDetail = {
       title: "Sin asignar",
       description: "Pacientes activos sin fisio asignado. Asígnales uno cuanto antes.",
@@ -423,17 +440,6 @@ export default async function FisioPanelPage({
         href: `/fisio/paciente/${p.id}`,
         title: p.fullName,
         subtitle: p.programType ?? "—",
-      })),
-    };
-    const detailRenewals: KpiDetail = {
-      title: "Renuevan en 30 días",
-      description: "Ordenados por proximidad de vencimiento.",
-      emptyText: "Nadie vence en los próximos 30 días.",
-      rows: renewalsIn30List.map((x) => ({
-        href: `/fisio/paciente/${x.patient.id}`,
-        title: x.patient.fullName,
-        meta: `en ${x.days}d`,
-        metaAccent: x.days <= 7 ? "danger" : x.days <= 14 ? "warning" : null,
       })),
     };
     const detailForms: KpiDetail = {
@@ -487,9 +493,9 @@ export default async function FisioPanelPage({
 
     extraKpisBlock = (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-5">
-        <DashboardKpiCard label="Pacientes totales" value={patients.length} detail={detailTotal} />
+        <DashboardKpiCard label="Pacientes totales" value={patients.length} detail={detailMyPatients} />
         <DashboardKpiCard label="Sin asignar" value={unassignedList.length} accent={unassignedList.length > 0 ? "warning" : undefined} detail={detailUnassigned} />
-        <DashboardKpiCard label="Renuevan en 30d" value={renewalsIn30} accent={renewalsIn30 > 0 ? "warning" : undefined} detail={detailRenewals} />
+        <DashboardKpiCard label="Renuevan en 30d" value={renewalsIn30} accent={renewalsIn30 > 0 ? "warning" : undefined} detail={detailRenewalsIn30} />
         <DashboardKpiCard label="Formularios por revisar" value={pendingFormsCount} accent={pendingFormsCount > 0 ? "warning" : undefined} detail={detailForms} />
         <DashboardKpiCard label="Adherencia media" value={avgAdh !== null ? `${avgAdh}%` : "—"} detail={detailAdherence} />
         <DashboardKpiCard label="Tasa renovación" value={teamRenewals.rate !== null ? `${teamRenewals.rate}%` : "—"} detail={detailRenewalRate} />
@@ -500,8 +506,13 @@ export default async function FisioPanelPage({
 
   const kpis = isManager ? extraKpisBlock : (
     <div className="grid grid-cols-2 gap-2 mb-5 max-w-md">
-      <KpiCard label="Mis pacientes" value={patients.length} />
-      <KpiCard label="Renuevan en 30d" value={renewalsIn30} accent={renewalsIn30 > 0 ? "warning" : undefined} />
+      <DashboardKpiCard label="Mis pacientes" value={patients.length} detail={detailMyPatients} />
+      <DashboardKpiCard
+        label="Renuevan en 30d"
+        value={renewalsIn30}
+        accent={renewalsIn30 > 0 ? "warning" : undefined}
+        detail={detailRenewalsIn30}
+      />
     </div>
   );
 
