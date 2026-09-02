@@ -123,13 +123,17 @@ function CallRow({ call, onClick, onMarkDone, onDelete }: { call: Call; onClick:
   const noSchedule = !call.scheduledAt;
   const date = call.scheduledAt ? new Date(call.scheduledAt) : null;
   const days = date ? Math.round((date.getTime() - Date.now()) / 86400000) : 0;
-  const time = date ? date.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }) : "";
+  // Sin timeZone, en Vercel (UTC) durante el SSR aparecían las llamadas 2h
+  // antes que en el calendar. Todo el negocio opera en Madrid, así que
+  // fijamos la TZ para que server y cliente pinten la misma hora.
+  const TZ = "Europe/Madrid";
+  const time = date ? date.toLocaleTimeString("es-ES", { timeZone: TZ, hour: "2-digit", minute: "2-digit" }) : "";
   const dateLabel = noSchedule
     ? "Pendiente de agendar"
     : days === 0 ? `Hoy ${time}`
     : days === 1 ? `Mañana ${time}`
-    : days < 7 && days > 0 ? `${date!.toLocaleDateString("es-ES", { weekday: "long" })} ${time}`
-    : date!.toLocaleDateString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    : days < 7 && days > 0 ? `${date!.toLocaleDateString("es-ES", { timeZone: TZ, weekday: "long" })} ${time}`
+    : date!.toLocaleDateString("es-ES", { timeZone: TZ, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
   return (
     <div className="card !p-3 cursor-pointer hover:border-neutral-300" onClick={onClick}>
@@ -149,7 +153,7 @@ function CallRow({ call, onClick, onMarkDone, onDelete }: { call: Call; onClick:
             : days <= 1 && !call.completedAt ? "text-amber-700"
             : "text-neutral-500"
           }`}>
-            {call.completedAt ? `Realizada el ${new Date(call.completedAt).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}` : dateLabel}
+            {call.completedAt ? `Realizada el ${new Date(call.completedAt).toLocaleDateString("es-ES", { timeZone: TZ, day: "numeric", month: "short" })}` : dateLabel}
           </div>
           {call.notes && <div className="text-xs text-neutral-600 mt-1 italic">{call.notes}</div>}
           {call.outcome && <div className="text-xs text-emerald-700 mt-1">→ {call.outcome}</div>}
@@ -186,9 +190,15 @@ function CallModal({
   const isEdit = !!call;
   // Si la llamada aún no tiene fecha (aviso automático), el fisio la
   // rellena aquí. Dejamos ambos inputs vacíos por defecto para no
-  // sugerir una fecha inventada.
-  const initialDate = call?.scheduledAt ? call.scheduledAt.split("T")[0] : "";
-  const initialTime = call?.scheduledAt ? new Date(call.scheduledAt).toTimeString().slice(0, 5) : "";
+  // sugerir una fecha inventada. Fecha/hora se calculan en Madrid — antes
+  // usábamos split("T") sobre la ISO UTC y toTimeString() del navegador,
+  // que en llamadas cerca de medianoche daban un día distinto al del panel.
+  const initialDate = call?.scheduledAt
+    ? new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(call.scheduledAt))
+    : "";
+  const initialTime = call?.scheduledAt
+    ? new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(call.scheduledAt))
+    : "";
 
   const [patientId, setPatientId] = useState(call?.patientId ?? "");
   const [scheduledDate, setScheduledDate] = useState(initialDate);
