@@ -38,6 +38,10 @@ export function AgendarLlamadaButton({
   const [type, setType] = useState<CallType>("optimization");
   const [durationMin, setDurationMin] = useState<string>("45");
   const [note, setNote] = useState("");
+  // Formulario previo: si está ON, la landing bloquea la elección de slot
+  // hasta que el paciente rellene el cuestionario. Default ON — es el que
+  // alimenta la satisfacción/NPS agregados y ayuda a preparar la llamada.
+  const [requiresForm, setRequiresForm] = useState(true);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
@@ -79,6 +83,7 @@ export function AgendarLlamadaButton({
     setOpen(false);
     setType("optimization");
     setNote("");
+    setRequiresForm(true);
     setError(null);
     setGeneratedUrl(null);
     setCopied(false);
@@ -97,7 +102,7 @@ export function AgendarLlamadaButton({
     const r = await fetch(`/api/patients/${patientId}/call-link`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type, durationMin: dur, fisioNote: note || null }),
+      body: JSON.stringify({ type, durationMin: dur, fisioNote: note || null, requiresForm }),
     });
     const d = await r.json();
     if (!r.ok) {
@@ -307,6 +312,24 @@ export function AgendarLlamadaButton({
                   onChange={(e) => setNote(e.target.value)}
                   maxLength={2000}
                 />
+
+                <label
+                  className="flex items-start gap-2 mb-3 p-2.5 rounded-lg cursor-pointer"
+                  style={{ background: "#F9FAFB", border: "1px solid #E5E5E5" }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={requiresForm}
+                    onChange={(e) => setRequiresForm(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <div className="flex-1">
+                    <div className="text-xs font-medium">📋 Pedir formulario previo</div>
+                    <div className="text-[11px] text-neutral-500 mt-0.5">
+                      El paciente rellena un cuestionario corto antes de reservar. Te ayuda a preparar la llamada y alimenta la satisfacción/NPS del equipo.
+                    </div>
+                  </div>
+                </label>
 
                 {error && <div className="text-xs text-red-600 mb-2">{error}</div>}
 

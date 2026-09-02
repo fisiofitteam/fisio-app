@@ -53,7 +53,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       meetingUrl: true,
       fisioNote: true,
       createdAt: true,
-      durationMin: true,
+      durationMin: true,      requiresForm: true,
+      formCompletedAt: true,
       callSummary: {
         select: {
           id: true,
@@ -69,6 +70,16 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
           transcriptCharCount: true,
           generatedAt: true,
           updatedAt: true,
+        },
+      },
+      formResponse: {
+        select: {
+          id: true,
+          formSnapshot: true,
+          answers: true,
+          satisfactionScore: true,
+          npsScore: true,
+          submittedAt: true,
         },
       },
     },
@@ -97,6 +108,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const body = await req.json().catch(() => ({}));
   const type = String(body?.type ?? "");
   const fisioNote = typeof body?.fisioNote === "string" ? body.fisioNote.trim().slice(0, 2000) : null;
+  const requiresForm = body?.requiresForm === true;
   // Override opcional de duración desde el modal; si no viene o es inválido
   // se cae al default guardado en ProfessionalCallSettings.
   const durationOverride = Number.isFinite(Number(body?.durationMin))
@@ -190,6 +202,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       status: "pending",
       fisioNote,
       durationMin,
+      requiresForm,
       scheduledCallId: pendingScheduledCall?.id ?? null,
     },
     select: { id: true, bookingToken: true, tokenExpiresAt: true },

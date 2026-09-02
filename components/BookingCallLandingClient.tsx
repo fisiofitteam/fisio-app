@@ -53,6 +53,24 @@ function madridDayKey(iso: string): string {
   }).format(new Date(iso));
 }
 
+type PreCallQuestion = {
+  id: string;
+  text: string;
+  description?: string;
+  type: "text" | "scale" | "yesno" | "choice" | "likert";
+  min?: number;
+  max?: number;
+  options?: string[];
+  scaleLabels?: string[];
+};
+
+type PreCallForm = {
+  id: string;
+  name: string;
+  description: string | null;
+  questions: PreCallQuestion[];
+};
+
 export function BookingCallLandingClient(props: {
   token: string;
   status: string;
@@ -71,6 +89,15 @@ export function BookingCallLandingClient(props: {
   const [emailInput, setEmailInput] = useState(props.patient.email ?? "");
   const [reserving, setReserving] = useState(false);
   const [reserveError, setReserveError] = useState<string | null>(null);
+
+  // Formulario previo (si el fisio lo activó al generar el link). Mientras
+  // needsForm === true, ocultamos el selector de huecos.
+  const [needsForm, setNeedsForm] = useState(false);
+  const [form, setForm] = useState<PreCallForm | null>(null);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [submittingForm, setSubmittingForm] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [reloadTick, setReloadTick] = useState(0);
 
   // Estado local si acaba de reservar en esta sesión (sin recargar página):
   const [justScheduledAt, setJustScheduledAt] = useState<string | null>(null);
@@ -96,10 +123,60 @@ export function BookingCallLandingClient(props: {
         setLoading(false);
         return;
       }
+      // Si el backend responde needsForm, cargamos el formulario y bloqueamos slots.
+      if (d.needsForm) {
+        setNeedsForm(true);
+        setSlots([]);
+        const fr = await fetch(`/api/booking/${props.token}/form`);
+        const fd = await fr.json().catch(() => ({}));
+        if (fr.ok && fd.form) setForm(fd.form);
+        else setFormError(fd?.error ?? "No se pudo cargar el formulario");
+        setLoading(false);
+        return;
+      }
+      setNeedsForm(false);
       setSlots(d.slots ?? []);
       setLoading(false);
     })();
-  }, [props.token, isPending]);
+  }, [props.token, isPending, reloadTick]);
+
+  async function submitForm() {
+    if (!form) return;
+    setFormError(null);
+    // Validación mínima: pide obligatoriamente las preguntas de escala
+    // (satisfaction / nps) para no perder las métricas. Los textos libres
+    // son opcionales — muchas veces el paciente no quiere alargarse.
+    const missing = form.questions.find(
+      (q) => q.type === "scale" && (answers[q.id] === undefined || answers[q.id] === ""),
+    );
+    if (missing) {
+      setFormError(`Falta: "${missing.text}"`);
+      return;
+    }
+    setSubmittingForm(true);
+    // Convertir escalas a number para que el server pueda calcular scores.
+    const payload: Record<string, unknown> = {};
+    for (const q of form.questions) {
+      const v = answers[q.id];
+      if (v === undefined || v === "") continue;
+      payload[q.id] = q.type === "scale" ? Number(v) : v;
+    }
+    const r = await fetch(`/api/booking/${props.token}/form`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ answers: payload }),
+    });
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      setFormError(d?.error ?? "No se pudo enviar el formulario");
+      setSubmittingForm(false);
+      return;
+    }
+    // Recargar → el backend deja de mandar needsForm y devuelve los slots.
+    setNeedsForm(false);
+    setReloadTick((t) => t + 1);
+    setSubmittingForm(false);
+  }
 
   const slotsByDay = useMemo(() => {
     const map = new Map<string, string[]>();
@@ -225,8 +302,143 @@ export function BookingCallLandingClient(props: {
           </div>
         )}
 
+        {/* Formulario previo — se muestra ANTES de los slots si el fisio lo pidió */}
+        {isPending && !justScheduledAt && needsForm && (
+          <div className="rounded-2xl p-4" style={{ background: "#FFFFFF" }}>
+            <h2 className="font-semibold text-sm mb-1">Un par de preguntas antes de reservar</h2>
+            <p className="text-xs text-neutral-500 mb-4">
+              Nos ayudan a preparar la llamada. Tardas menos de un minuto.
+            </p>
+            {!form ? (
+              <div className="text-xs text-neutral-500 italic py-6 text-center">
+                {formError ?? "Cargando formulario…"}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {form.questions.map((q) => (
+                  <div key={q.id}>
+                    <label className="text-xs font-medium block mb-1">{q.text}</label>
+                    {q.description && (
+                      <div className="text-[11px] text-neutral-500 mb-1.5">{q.description}</div>
+                    )}
+                    {q.type === "text" && (
+                      <textarea
+                        className="w-full text-sm p-2 rounded-lg"
+                        style={{ border: "1px solid #E5E5E5", minHeight: 70 }}
+                        value={answers[q.id] ?? ""}
+                        onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                      />
+                    )}
+                    {q.type === "scale" && (() => {
+                      const min = q.min ?? 0;
+                      const max = q.max ?? 10;
+                      const nums = Array.from({ length: max - min + 1 }, (_, i) => min + i);
+                      return (
+                        <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${nums.length}, minmax(0, 1fr))` }}>
+                          {nums.map((n) => {
+                            const isSel = String(n) === answers[q.id];
+                            return (
+                              <button
+                                key={n}
+                                onClick={() => setAnswers((prev) => ({ ...prev, [q.id]: String(n) }))}
+                                className="text-xs font-semibold py-2 rounded-lg tabular-nums"
+                                style={{
+                                  background: isSel ? "#0A0A0A" : "#F5F5F5",
+                                  color: isSel ? "#FAFAFA" : "#171717",
+                                  border: isSel ? "1px solid #0A0A0A" : "1px solid transparent",
+                                }}
+                              >
+                                {n}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                    {q.type === "yesno" && (
+                      <div className="flex gap-2">
+                        {["Sí", "No"].map((v) => {
+                          const isSel = v === answers[q.id];
+                          return (
+                            <button
+                              key={v}
+                              onClick={() => setAnswers((prev) => ({ ...prev, [q.id]: v }))}
+                              className="flex-1 text-xs font-semibold py-2 rounded-lg"
+                              style={{
+                                background: isSel ? "#0A0A0A" : "#F5F5F5",
+                                color: isSel ? "#FAFAFA" : "#171717",
+                              }}
+                            >
+                              {v}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {q.type === "choice" && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {(q.options ?? []).map((opt) => {
+                          const isSel = opt === answers[q.id];
+                          return (
+                            <button
+                              key={opt}
+                              onClick={() => setAnswers((prev) => ({ ...prev, [q.id]: opt }))}
+                              className="text-xs font-semibold px-3 py-1.5 rounded-lg"
+                              style={{
+                                background: isSel ? "#0A0A0A" : "#F5F5F5",
+                                color: isSel ? "#FAFAFA" : "#171717",
+                              }}
+                            >
+                              {opt}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {q.type === "likert" && (() => {
+                      const labels = q.scaleLabels ?? ["1", "2", "3", "4", "5"];
+                      return (
+                        <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${labels.length}, minmax(0, 1fr))` }}>
+                          {labels.map((label, i) => {
+                            const value = String(i + 1);
+                            const isSel = value === answers[q.id];
+                            return (
+                              <button
+                                key={value}
+                                onClick={() => setAnswers((prev) => ({ ...prev, [q.id]: value }))}
+                                className="text-[10px] font-medium py-2 px-1 rounded-lg text-center leading-tight"
+                                style={{
+                                  background: isSel ? "#0A0A0A" : "#F5F5F5",
+                                  color: isSel ? "#FAFAFA" : "#171717",
+                                }}
+                              >
+                                {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                ))}
+
+                {formError && <div className="text-xs text-red-600">{formError}</div>}
+
+                <button
+                  onClick={submitForm}
+                  disabled={submittingForm}
+                  className="w-full text-sm font-semibold py-3 rounded-lg disabled:opacity-40"
+                  style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+                >
+                  {submittingForm ? "Enviando…" : "Continuar → elegir hora"}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Selector de slot */}
-        {isPending && !justScheduledAt && (
+        {isPending && !justScheduledAt && !needsForm && (
           <div className="rounded-2xl p-4" style={{ background: "#FFFFFF" }}>
             <h2 className="font-semibold text-sm mb-2">Elige el día y la hora</h2>
             {loading ? (

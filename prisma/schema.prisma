@@ -1046,6 +1046,10 @@ model ScheduledCall {
 
 model FormLibrary {
   id        String   @id @default(cuid())
+  // Slug estable para formularios que la app usa por función (ej. "pre_call"
+  // para el formulario previo a la llamada de optimización/graduación).
+  // Los formularios manuales de la biblioteca lo dejan null.
+  slug      String?  @unique
   name      String
   description String?
   questions String                                  // JSON: [{id, text, type, options?}]
@@ -3302,7 +3306,17 @@ model PatientCall {
   googleEventId  String?
 
   fisioNote      String?
+
+  // Formulario previo (satisfacción, objetivos, comentarios). Si
+  // requiresForm=true, la landing pública bloquea la elección de slot
+  // hasta que el paciente rellene el PatientCallFormResponse.
+  requiresForm    Boolean   @default(false)
+  formCompletedAt DateTime?
+
   callSummary    CallSummary? @relation("CallSummaryPatientCall")
+
+  // Respuestas del formulario previo (0 o 1 por llamada).
+  formResponse   PatientCallFormResponse? @relation("PatientCallFormResponse")
 
   scheduledCallId String?
   scheduledCall   ScheduledCall? @relation("PatientCallScheduledCall", fields: [scheduledCallId], references: [id], onDelete: SetNull)
@@ -3314,6 +3328,29 @@ model PatientCall {
   @@index([patientId, type])
   @@index([bookingToken])
   @@index([scheduledCallId])
+}
+
+// Respuestas del formulario previo a la llamada. Se guarda snapshot de las
+// preguntas al momento de responder para que ediciones posteriores del
+// FormLibrary no afecten a las respuestas antiguas.
+model PatientCallFormResponse {
+  id                 String   @id @default(cuid())
+  patientCallId      String   @unique
+  patientCall        PatientCall @relation("PatientCallFormResponse", fields: [patientCallId], references: [id], onDelete: Cascade)
+
+  patientId          String
+  professionalId     String
+
+  formSnapshot       String
+  answers            String
+
+  satisfactionScore  Int?     // 1..10 · pregunta con id "q_satisfaction"
+  npsScore           Int?     // 0..10 · pregunta con id "q_nps"
+
+  submittedAt        DateTime @default(now())
+
+  @@index([professionalId, submittedAt])
+  @@index([patientId, submittedAt])
 }
 
 model ProfessionalCallAvailability {

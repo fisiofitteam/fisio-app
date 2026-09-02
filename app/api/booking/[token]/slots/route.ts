@@ -38,6 +38,8 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
       professionalId: true,
       durationMin: true,
       type: true,
+      requiresForm: true,
+      formCompletedAt: true,
     },
   });
   if (!call) return NextResponse.json({ error: "Token inválido" }, { status: 404 });
@@ -46,6 +48,13 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
   }
   if (call.tokenExpiresAt < new Date()) {
     return NextResponse.json({ error: "Link caducado" }, { status: 410 });
+  }
+
+  // Gate: si el fisio pidió formulario previo y aún no está rellenado, no
+  // devolvemos huecos — la landing muestra el formulario primero. Es también
+  // un backstop por si alguien manipula la UI para saltarse el paso.
+  if (call.requiresForm && !call.formCompletedAt) {
+    return NextResponse.json({ needsForm: true, slots: [], durationMin: call.durationMin ?? null });
   }
 
   const [availability, oneOffs, exceptions, settings] = await Promise.all([

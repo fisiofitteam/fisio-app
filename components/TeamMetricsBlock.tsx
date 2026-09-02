@@ -13,6 +13,16 @@ type PerFisio = {
   lost: number;
   rate: number | null;
   adherence: number | null;
+  // Nulos si no hay respuestas suficientes en el periodo.
+  satisfactionAvg: number | null;
+  npsAvg: number | null;
+  responsesCount: number;
+};
+
+type SatisfactionKpis = {
+  satisfactionAvg: number | null;
+  npsAvg: number | null;
+  responsesCount: number;
 };
 
 type Period = "month" | "quarter" | "year" | "custom";
@@ -43,6 +53,7 @@ export function TeamMetricsBlock({
   perFisio,
   periodFrom,
   periodTo,
+  satisfaction,
 }: {
   period: Period;
   periodLabel: string;
@@ -53,6 +64,9 @@ export function TeamMetricsBlock({
   // ISO YYYY-MM-DD del periodo actual — necesarios para llamar al detalle
   periodFrom: string;
   periodTo: string;
+  // Satisfacción agregada del equipo (respuestas al formulario previo).
+  // Null si aún no hay datos suficientes en el periodo.
+  satisfaction?: SatisfactionKpis;
 }) {
   const router = useRouter();
   const [showCustom, setShowCustom] = useState(period === "custom");
@@ -193,6 +207,37 @@ export function TeamMetricsBlock({
             )}
           </div>
         </div>
+
+        {satisfaction && (
+          <div className="grid grid-cols-2 gap-3 pl-2 mt-4 pt-4 border-t border-neutral-100">
+            <div>
+              <div className="text-xs text-neutral-500 mb-1">Satisfacción media</div>
+              <div className="text-2xl font-semibold text-blue-700">
+                {satisfaction.satisfactionAvg !== null
+                  ? <>{satisfaction.satisfactionAvg}<span className="text-sm text-neutral-400"> / 10</span></>
+                  : <span className="text-neutral-300">—</span>}
+              </div>
+              {satisfaction.responsesCount > 0 && (
+                <div className="text-xs text-neutral-400 mt-0.5">
+                  sobre {satisfaction.responsesCount} {satisfaction.responsesCount === 1 ? "respuesta" : "respuestas"}
+                </div>
+              )}
+            </div>
+            <div>
+              <div className="text-xs text-neutral-500 mb-1">NPS medio del equipo</div>
+              <div className="text-2xl font-semibold text-emerald-700">
+                {satisfaction.npsAvg !== null
+                  ? <>{satisfaction.npsAvg}<span className="text-sm text-neutral-400"> / 10</span></>
+                  : <span className="text-neutral-300">—</span>}
+              </div>
+              {satisfaction.responsesCount > 0 && (
+                <div className="text-xs text-neutral-400 mt-0.5">
+                  del formulario previo a la llamada
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </section>
 
       {perFisio.length > 0 && (
@@ -210,6 +255,8 @@ export function TeamMetricsBlock({
                   <th className="text-right py-2 px-2 font-medium">Perdidas</th>
                   <th className="text-right py-2 px-2 font-medium">Tasa</th>
                   <th className="text-right py-2 px-2 font-medium">Cumplim.</th>
+                  <th className="text-right py-2 px-2 font-medium">Satisf.</th>
+                  <th className="text-right py-2 px-2 font-medium">NPS</th>
                 </tr>
               </thead>
               <tbody>
@@ -255,6 +302,16 @@ export function TeamMetricsBlock({
                           f.adherence >= 50 ? "text-amber-700" : "text-red-600"
                         }>{f.adherence}%</span>
                       ) : <span className="text-neutral-300">—</span>}
+                    </td>
+                    <td className="text-right py-2 px-2" title={f.responsesCount > 0 ? `${f.responsesCount} respuesta${f.responsesCount === 1 ? "" : "s"}` : ""}>
+                      {f.satisfactionAvg !== null
+                        ? <span className="font-medium text-blue-700">{f.satisfactionAvg}</span>
+                        : <span className="text-neutral-300">—</span>}
+                    </td>
+                    <td className="text-right py-2 px-2" title={f.responsesCount > 0 ? `${f.responsesCount} respuesta${f.responsesCount === 1 ? "" : "s"}` : ""}>
+                      {f.npsAvg !== null
+                        ? <span className="font-medium text-emerald-700">{f.npsAvg}</span>
+                        : <span className="text-neutral-300">—</span>}
                     </td>
                   </tr>
                 ))}

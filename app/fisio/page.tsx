@@ -311,6 +311,7 @@ export default async function FisioPanelPage({
   // del negocio — de los que TUVIERON que decidir, cuántos siguieron.
   let teamRenewals = { renewed: 0, lost: 0, total: 0, rate: null as number | null };
   let perFisio: PerFisio[] = [];
+  let teamSatisfaction: { satisfactionAvg: number | null; npsAvg: number | null; responsesCount: number } | undefined;
   if (isManager) {
     const opportunities = await getRenewalActivityInPeriod(periodStart, periodEnd);
     const tr = opportunities.filter((o) => o.outcome === "renewed").length;
@@ -319,6 +320,27 @@ export default async function FisioPanelPage({
     teamRenewals = {
       renewed: tr, lost: tl, total: tt,
       rate: tt > 0 ? Math.round((tr / tt) * 100) : null,
+    };
+
+    // Respuestas del formulario previo enviadas dentro del periodo. Traemos
+    // solo lo mínimo para no cargar el JSON de respuestas — con los dos
+    // scores materializados basta para agregar por fisio y global.
+    const preCallResponses = await prisma.patientCallFormResponse.findMany({
+      where: { submittedAt: { gte: periodStart, lte: periodEnd } },
+      select: { professionalId: true, satisfactionScore: true, npsScore: true },
+    });
+    const avg = (nums: number[]) =>
+      nums.length === 0 ? null : Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 10) / 10;
+    const globalSatValues = preCallResponses
+      .map((r) => r.satisfactionScore)
+      .filter((v): v is number => v !== null);
+    const globalNpsValues = preCallResponses
+      .map((r) => r.npsScore)
+      .filter((v): v is number => v !== null);
+    teamSatisfaction = {
+      satisfactionAvg: avg(globalSatValues),
+      npsAvg: avg(globalNpsValues),
+      responsesCount: preCallResponses.length,
     };
 
     const fisios = await prisma.professional.findMany({
@@ -345,10 +367,17 @@ export default async function FisioPanelPage({
         const avgAdh = validAdhs.length > 0
           ? Math.round(validAdhs.reduce((acc, a) => acc + a.percentage, 0) / validAdhs.length)
           : null;
+        // Satisfacción/NPS de las respuestas del fisio en el periodo.
+        const myResponses = preCallResponses.filter((r) => r.professionalId === f.id);
+        const mySat = myResponses.map((r) => r.satisfactionScore).filter((v): v is number => v !== null);
+        const myNps = myResponses.map((r) => r.npsScore).filter((v): v is number => v !== null);
         return {
           id: f.id, fullName: f.fullName, role: f.role,
           patientsCount: myPatientIds.length,
           renewed: fr, lost: fl, rate: fRate, adherence: avgAdh,
+          satisfactionAvg: avg(mySat),
+          npsAvg: avg(myNps),
+          responsesCount: myResponses.length,
         };
       })
     );
@@ -547,6 +576,7 @@ export default async function FisioPanelPage({
       periodTo={isoDate(periodEnd)}
       renewals={teamRenewals}
       perFisio={perFisio}
+      satisfaction={teamSatisfaction}
     />
   );
 
@@ -786,6 +816,9 @@ type PerFisio = {
   lost: number;
   rate: number | null;
   adherence: number | null;
+  satisfactionAvg: number | null;
+  npsAvg: number | null;
+  responsesCount: number;
 };
 
 function KpiCard({ label, value, accent }: { label: string; value: number | string; accent?: "warning" | "info" | "danger" }) {

@@ -31,6 +31,15 @@ type CallSummary = {
   updatedAt: string;
 };
 
+type FormResponse = {
+  id: string;
+  formSnapshot: string;   // JSON { name, description, questions[] }
+  answers: string;        // JSON { [questionId]: value }
+  satisfactionScore: number | null;
+  npsScore: number | null;
+  submittedAt: string;
+};
+
 type PatientCall = {
   id: string;
   type: CallType;
@@ -42,7 +51,10 @@ type PatientCall = {
   fisioNote: string | null;
   createdAt: string;
   durationMin: number | null;
+  requiresForm: boolean;
+  formCompletedAt: string | null;
   callSummary: CallSummary | null;
+  formResponse: FormResponse | null;
 };
 
 const TYPE_LABEL: Record<CallType, string> = {
@@ -209,11 +221,18 @@ export function PatientCallLinksCard({
                     />
                   )}
 
+                  {c.formResponse && <PreCallFormAnswers response={c.formResponse} />}
+
                   {isPending && (
                     <>
                       {c.fisioNote && (
                         <div className="text-xs text-neutral-600 italic">
                           Nota: {c.fisioNote}
+                        </div>
+                      )}
+                      {c.requiresForm && !c.formCompletedAt && (
+                        <div className="text-[11px] rounded-md p-2" style={{ background: "#FEF3C7", color: "#78350F" }}>
+                          📋 Formulario previo pendiente — el paciente debe rellenarlo antes de reservar.
                         </div>
                       )}
                       <div className="text-[10px] text-neutral-500">
@@ -270,6 +289,72 @@ export function PatientCallLinksCard({
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * Bloque desplegable con las respuestas del formulario previo. Muestra las
+ * dos puntuaciones destacadas arriba (satisfacción del programa + NPS del
+ * fisio) y debajo el resto de respuestas texto/opción tal cual las escribió
+ * el paciente. Útil para preparar la llamada con Fisio IA.
+ */
+function PreCallFormAnswers({ response }: { response: FormResponse }) {
+  let questions: Array<{ id: string; text: string; type: string }> = [];
+  let answers: Record<string, unknown> = {};
+  try {
+    const snap = JSON.parse(response.formSnapshot);
+    if (Array.isArray(snap?.questions)) questions = snap.questions;
+  } catch {}
+  try {
+    answers = JSON.parse(response.answers) ?? {};
+  } catch {}
+  const submitted = new Intl.DateTimeFormat("es-ES", {
+    timeZone: "Europe/Madrid",
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(response.submittedAt));
+
+  return (
+    <details className="rounded-lg" style={{ border: "1px solid #E5E5E5", background: "#FAFAFA" }}>
+      <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden px-3 py-2 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-medium">📋 Respuestas del paciente</span>
+          {response.satisfactionScore != null && (
+            <span
+              className="text-[10px] font-medium px-1.5 py-0.5 rounded-full"
+              style={{ background: "#DBEAFE", color: "#1E3A8A" }}
+            >
+              Satisfacción {response.satisfactionScore}/10
+            </span>
+          )}
+          {response.npsScore != null && (
+            <span
+              className="text-[10px] font-medium px-1.5 py-0.5 rounded-full"
+              style={{ background: "#D1FAE5", color: "#065F46" }}
+            >
+              NPS {response.npsScore}/10
+            </span>
+          )}
+        </div>
+        <span className="text-[10px] text-neutral-500">{submitted}</span>
+      </summary>
+      <div className="px-3 pb-3 pt-1 space-y-2">
+        {questions.length === 0 ? (
+          <div className="text-[11px] text-neutral-500 italic">Sin preguntas guardadas.</div>
+        ) : (
+          questions.map((q) => {
+            const raw = answers[q.id];
+            const val = raw === undefined || raw === null || raw === "" ? "—" : String(raw);
+            return (
+              <div key={q.id}>
+                <div className="text-[10px] uppercase tracking-wide text-neutral-500">{q.text}</div>
+                <div className="text-xs text-neutral-800 whitespace-pre-wrap">{val}</div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </details>
   );
 }
 

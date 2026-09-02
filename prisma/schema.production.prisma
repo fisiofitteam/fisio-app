@@ -1131,6 +1131,10 @@ model ScheduledCall {
 
 model FormLibrary {
   id        String   @id @default(cuid())
+  // Slug estable para formularios que la app usa por función (ej. "pre_call"
+  // para el formulario previo a la llamada de optimización/graduación).
+  // Los formularios manuales de la biblioteca lo dejan null.
+  slug      String?  @unique
   name      String
   description String?
   questions String                                  // JSON: [{id, text, type, options?}]
@@ -2018,9 +2022,18 @@ model PatientCall {
   // Notas del fisio antes de la llamada (opcional)
   fisioNote      String?
 
+  // Formulario previo (satisfacción, objetivos, comentarios). Si
+  // requiresForm=true, la landing pública bloquea la elección de slot
+  // hasta que el paciente rellene el PatientCallFormResponse.
+  requiresForm    Boolean   @default(false)
+  formCompletedAt DateTime?
+
   // Resumen IA de la transcripción de Meet. La relación vive en el modelo
   // CallSummary (campo patientCallId?), que es el que aloja la FK.
   callSummary    CallSummary? @relation("CallSummaryPatientCall")
+
+  // Respuestas del formulario previo (0 o 1 por llamada).
+  formResponse   PatientCallFormResponse? @relation("PatientCallFormResponse")
 
   // Enlace opcional al ScheduledCall (aviso automático del cron) que dio
   // origen a esta reserva. Sirve para propagar estado al panel /fisio/llamadas.
@@ -2034,6 +2047,40 @@ model PatientCall {
   @@index([patientId, type])
   @@index([bookingToken])
   @@index([scheduledCallId])
+}
+
+// Respuestas del formulario previo a la llamada. Se guarda snapshot de las
+// preguntas al momento de responder (si el equipo edita el FormLibrary
+// después, las respuestas antiguas no cambian).
+//
+// Las 2 preguntas con id conocido (`q_satisfaction`, `q_nps`) se materializan
+// en columnas indexadas para agregar métricas rápidas por fisio/periodo.
+model PatientCallFormResponse {
+  id                 String   @id @default(cuid())
+  patientCallId      String   @unique
+  patientCall        PatientCall @relation("PatientCallFormResponse", fields: [patientCallId], references: [id], onDelete: Cascade)
+
+  // Denormalizados para consultas de métricas sin join a Patient/Professional.
+  patientId          String
+  professionalId     String
+
+  // Snapshot del formulario en el momento de responder:
+  //   { name, description, questions: [{id, text, type, ...}] }
+  formSnapshot       String
+
+  // Respuestas del paciente en JSON: { [questionId]: value }
+  // value es string | number | boolean según type de la pregunta.
+  answers            String
+
+  // Materializadas para agregación rápida (nullable si el equipo borró la
+  // pregunta del formulario o si el paciente la dejó vacía).
+  satisfactionScore  Int?     // 1..10 · preguntas con id "q_satisfaction"
+  npsScore           Int?     // 0..10 · preguntas con id "q_nps"
+
+  submittedAt        DateTime @default(now())
+
+  @@index([professionalId, submittedAt])
+  @@index([patientId, submittedAt])
 }
 
 // Plantilla semanal del fisio: qué horas de qué días acepta llamadas de
