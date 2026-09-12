@@ -28,6 +28,16 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
   const startAt = new Date(startAtStr);
   if (isNaN(startAt.getTime())) return NextResponse.json({ error: "startAt inválido" }, { status: 400 });
 
+  // Antelación mínima de 24h (mismo umbral que /slots). Backstop por si
+  // alguien manipula la UI o el enlace se abre con un slot cacheado.
+  const MIN_LEAD_TIME_MS = 24 * 3_600_000;
+  if (startAt.getTime() < Date.now() + MIN_LEAD_TIME_MS) {
+    return NextResponse.json(
+      { error: "Las reservas requieren al menos 24 horas de antelación. Elige otro hueco." },
+      { status: 400 },
+    );
+  }
+
   const call = await prisma.patientCall.findUnique({
     where: { bookingToken: params.token },
     include: {

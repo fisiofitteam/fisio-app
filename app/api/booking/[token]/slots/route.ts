@@ -3,6 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { fetchBusyBlocks } from "@/lib/googleFreeBusy";
 import { computeFreeSlots } from "@/lib/patient-call-slots";
 
+// Antelación mínima con la que un paciente puede reservar. Se aplica en
+// slots (filtrado) y en reserve (backstop por si alguien manipula la UI).
+// El objetivo es dar al fisio tiempo de preparar la llamada.
+const MIN_LEAD_TIME_HOURS = 24;
+const MIN_LEAD_TIME_MS = MIN_LEAD_TIME_HOURS * 3_600_000;
+
 /**
  * GET /api/booking/[token]/slots?from=ISO&to=ISO
  *
@@ -131,8 +137,13 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
     durationMin,
   });
 
+  // Antelación mínima de 24h: el paciente no puede reservar huecos
+  // demasiado inminentes para dar al fisio margen de prepararse.
+  const minStart = Date.now() + MIN_LEAD_TIME_MS;
+  const filteredSlots = slots.filter((d) => d.getTime() >= minStart);
+
   return NextResponse.json({
     durationMin,
-    slots: slots.map((d) => d.toISOString()),
+    slots: filteredSlots.map((d) => d.toISOString()),
   });
 }
