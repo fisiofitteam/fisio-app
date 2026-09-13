@@ -114,8 +114,16 @@ function systemPrompt(brief: Awaited<ReturnType<typeof getAiBrief>>): string {
     "- Si el CEO especifica una fecha de lanzamiento, alinea la semana de lanzamiento con ella.",
     "- Si el CEO pide una mezcla concreta (ej. 3 reels + 1 carrusel/semana), respétala exactamente.",
     "- Titles cortos y específicos.",
-    "- 'hook' = IDEA PRINCIPAL de la pieza: 1-2 frases que resumen QUÉ se cuenta y CÓMO (ángulo/tono). NO es el hook literal de apertura del vídeo; el fisio ya escribirá los planos concretos con IA después. Ej: 'Reel confrontacional sobre por qué el descanso no cura el hombro. Termina con CTA al webinar.'",
+    "- 'hook' = IDEA PRINCIPAL de la pieza: 1-2 frases que resumen QUÉ se cuenta y CÓMO (ángulo/tono). NO es el hook literal de apertura del vídeo. Ej: 'Reel confrontacional sobre por qué el descanso no cura el hombro. Termina con CTA al webinar.'",
     "- Rationale en 1-2 frases explicando por qué esa pieza en ese slot.",
+    "",
+    "GUION POR PLANOS (obligatorio para format=reel, opcional para el resto):",
+    "- Para CADA reel devuelve un array `blocks` con 3 o 4 objetos.",
+    "- Cada block: label = 'Plano 1' | 'Plano 2' | 'Plano 3' | 'Plano 4' (en ese orden estricto).",
+    "- content = LA IDEA a transmitir en ese plano, no la frase literal. 1-3 líneas. Explica QUÉ pasa en el plano y QUÉ se cuenta en él (gancho, contexto, giro, cierre/CTA…).",
+    "- Ejemplo de plano: 'Plano 1 — Ales a cámara con gesto retador. Idea: romper la creencia de que 'descansar cura' abriendo con la afirmación contraria.'",
+    "- No añadas guion literal, ni copies de audio, ni instrucciones de edición.",
+    "- Para carousel/infographic/image/live NO devuelvas blocks (o devuelve array vacío).",
   ].join("\n");
 }
 
@@ -245,6 +253,25 @@ async function runGenerate(req: NextRequest) {
                       },
                     },
                     rationale: { type: "string" },
+                    blocks: {
+                      type: "array",
+                      description:
+                        "Obligatorio para format=reel: 3-4 planos con la IDEA a transmitir (no frase literal). Vacío para otros formatos.",
+                      items: {
+                        type: "object",
+                        required: ["label", "content"],
+                        properties: {
+                          label: {
+                            type: "string",
+                            description: "Plano 1, Plano 2, Plano 3 o Plano 4 (en ese orden).",
+                          },
+                          content: {
+                            type: "string",
+                            description: "Idea del plano en 1-3 líneas. No frase literal.",
+                          },
+                        },
+                      },
+                    },
                   },
                 },
               },

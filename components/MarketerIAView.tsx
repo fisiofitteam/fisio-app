@@ -21,6 +21,11 @@ import { DAY_LABELS, isoWeekFromDate } from "@/lib/content-templates";
  * de sesión (el CEO no guarda el brief, cada tirada es de usar y tirar).
  */
 
+type MarketerBlock = {
+  label: string;
+  content: string;
+};
+
 type Piece = {
   dayOfWeek: number;
   format: string;
@@ -28,6 +33,7 @@ type Piece = {
   hook: string;
   goals: GoalKey[];
   rationale: string;
+  blocks?: MarketerBlock[];
 };
 
 type Week = {
@@ -430,6 +436,22 @@ export function MarketerIAView() {
                           )}
                           {piece.rationale && (
                             <div className="text-[11px] text-neutral-600 italic">{piece.rationale}</div>
+                          )}
+                          {piece.blocks && piece.blocks.length > 0 && (
+                            <details className="mt-2 rounded-md" style={{ border: "1px solid #E5E5E5", background: "#FAFAFA" }}>
+                              <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden px-2.5 py-1.5 flex items-center justify-between gap-2">
+                                <span className="text-[10px] uppercase tracking-wide text-neutral-500">🎬 Guion por planos</span>
+                                <span className="text-[10px] text-neutral-500">{piece.blocks.length} bloque{piece.blocks.length === 1 ? "" : "s"}</span>
+                              </summary>
+                              <div className="px-2.5 pb-2.5 pt-1 space-y-2">
+                                {piece.blocks.map((b, bi) => (
+                                  <div key={bi}>
+                                    <div className="text-[10px] uppercase tracking-wide text-neutral-500">{b.label || `Plano ${bi + 1}`}</div>
+                                    <div className="text-xs text-neutral-800 whitespace-pre-wrap">{b.content}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            </details>
                           )}
                           <div className="mt-2 flex justify-end">
                             {isAdded ? (

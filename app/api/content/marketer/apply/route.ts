@@ -72,6 +72,23 @@ export async function POST(req: NextRequest) {
     .map((g: unknown) => String(g))
     .filter((g: string) => (ALLOWED_GOALS as readonly string[]).includes(g));
 
+  // Bloques (guion por planos) — la IA los devuelve solo para reels con
+  // label "Plano N" y content = idea a transmitir. Normalizamos aquí para
+  // que casen con el formato que espera el editor de pieza:
+  //   { id, label, content, order }
+  // Si vienen vacíos o no vienen, guardamos [] y el editor los pinta como
+  // en cualquier pieza vacía.
+  const blocksRaw = Array.isArray(pieceIn.blocks) ? pieceIn.blocks : [];
+  const blocks = blocksRaw
+    .slice(0, 4)
+    .map((b: any, i: number) => ({
+      id: `mk_${Date.now()}_${i}`,
+      label: typeof b?.label === "string" && b.label.trim() ? b.label.trim() : `Plano ${i + 1}`,
+      content: typeof b?.content === "string" ? b.content.trim() : "",
+      order: i,
+    }))
+    .filter((b: { content: string }) => b.content.length > 0);
+
   // Reutiliza o crea la semana.
   let week = await prisma.contentWeek.findFirst({ where: { year, weekNumber } });
   let weekCreated = false;
@@ -98,11 +115,10 @@ export async function POST(req: NextRequest) {
     weekCreated = true;
   }
 
-  // La "idea principal" viene en `hook` — la guardamos en piece.hook, que
-  // es el campo que el editor muestra en el cuadro amarillo "💡 Idea
-  // principal". El guion (blocks) SE DEJA VACÍO porque cuando el fisio
-  // pulse "Generar con IA" dentro de la pieza, se rellena solo con los
-  // planos (Plano 1, Plano 2…) y no queremos duplicidad.
+  // La "idea principal" viene en `hook` — se guarda en piece.hook (el
+  // cuadro "💡 Idea principal" del editor). El `blocks` viene relleno solo
+  // para reels: 3-4 planos con la idea a transmitir. Para otros formatos,
+  // llega vacío y el fisio puede pedir "Generar con IA" dentro de la pieza.
   const piece = await prisma.contentPiece.create({
     data: {
       weekId: week.id,
@@ -114,7 +130,7 @@ export async function POST(req: NextRequest) {
       goal: "",
       ctaType: "",
       dmKeyword: week.leadMagnetKeyword ?? null,
-      blocks: "[]",
+      blocks: JSON.stringify(blocks),
       status: "idea",
     },
   });
