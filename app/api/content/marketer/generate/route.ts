@@ -115,6 +115,7 @@ function systemPrompt(brief: Awaited<ReturnType<typeof getAiBrief>>): string {
     "",
     "IMPORTANTE:",
     "- Responde SOLO con la herramienta `submit_strategy`, sin texto adicional.",
+    "- Si el CEO adjunta un PDF (plan estratégico, resultados, competencia, brand book…), léelo entero y úsalo como contexto primario para la estrategia. Extrae temas, ángulos, público objetivo, tono, datos concretos y referencias de ese PDF, y ancla la estrategia en ellos. Cuando cites o te apoyes en el PDF, hazlo de forma implícita (no digas 'según el PDF', sino integra el dato como si fuera propio).",
     "- Si el CEO especifica una fecha de lanzamiento, alinea la semana de lanzamiento con ella.",
     "- MEZCLA: si el CEO especifica cuántas piezas de cada formato por semana, CUMPLE ESE CONTEO EXACTO. Si pide 3 reels + 1 carrusel/semana, cada semana lleva EXACTAMENTE 3 reels y EXACTAMENTE 1 carrusel — ni una menos, ni una más, ni ningún formato distinto. Prohibido reducir el número aunque parezca creativamente 'suficiente' con menos. Cuenta los formatos antes de devolver la tool.",
     "- Titles cortos y específicos.",
@@ -214,6 +215,23 @@ async function runGenerate(req: NextRequest) {
   const briefText = typeof body?.brief === "string" ? body.brief.trim() : "";
   if (briefText.length < 10) {
     return NextResponse.json({ error: "Escribe un brief más detallado (mínimo 10 caracteres)" }, { status: 400 });
+  }
+
+  // PDF opcional adjuntado por el CEO ("aquí tienes el plan estratégico
+  // del trimestre, hazlo cuadrar"). Se pasa como base64 desde el cliente,
+  // sin cabecera data:. Anthropic acepta PDFs hasta 32MB / 100 páginas
+  // como bloque `document` — validamos aquí un techo pragmático de 10MB
+  // para evitar body huge en el POST.
+  const pdfBase64 = typeof body?.pdfBase64 === "string" ? body.pdfBase64.trim() : "";
+  const pdfName = typeof body?.pdfName === "string" ? body.pdfName.trim().slice(0, 200) : "";
+  if (pdfBase64) {
+    const approxBytes = Math.ceil((pdfBase64.length * 3) / 4);
+    if (approxBytes > 4 * 1024 * 1024) {
+      return NextResponse.json(
+        { error: "El PDF supera los 4 MB. Comprímelo o divide el documento." },
+        { status: 400 },
+      );
+    }
   }
   const weeksAhead = Math.max(1, Math.min(8, Math.round(Number(body?.weeksAhead) || 2)));
   const targetDate = typeof body?.targetDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.targetDate)
@@ -315,6 +333,37 @@ async function runGenerate(req: NextRequest) {
     },
   };
 
+  const userText = buildUserPrompt({
+    brief: briefText,
+    targetDate,
+    startWeek,
+    weeksAhead,
+    piecesPerWeek,
+    recentThemes,
+  });
+
+  // Si el CEO adjuntó un PDF, lo mandamos como bloque `document` antes
+  // del texto — Claude lo lee entero y usa su contenido como contexto
+  // primario. El texto va después, así el brief manda sobre el PDF cuando
+  // hay conflicto.
+  const userContent: Anthropic.MessageParam["content"] = pdfBase64
+    ? [
+        {
+          type: "document",
+          source: {
+            type: "base64",
+            media_type: "application/pdf",
+            data: pdfBase64,
+          },
+          title: pdfName || undefined,
+          // Cache del PDF: si el CEO reintenta con el mismo PDF y ajusta
+          // el brief, no volvemos a pagar la ingesta del PDF completo.
+          cache_control: { type: "ephemeral" },
+        } as any,
+        { type: "text", text: userText },
+      ]
+    : userText;
+
   try {
     const msg = await client().messages.create({
       model: MODEL,
@@ -322,19 +371,7 @@ async function runGenerate(req: NextRequest) {
       system: systemPrompt(brief),
       tools: [tool],
       tool_choice: { type: "tool", name: "submit_strategy" },
-      messages: [
-        {
-          role: "user",
-          content: buildUserPrompt({
-            brief: briefText,
-            targetDate,
-            startWeek,
-            weeksAhead,
-            piecesPerWeek,
-            recentThemes,
-          }),
-        },
-      ],
+      messages: [{ role: "user", content: userContent }],
     });
 
     // Extraer el tool_use.

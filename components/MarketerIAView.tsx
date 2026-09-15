@@ -121,6 +121,16 @@ export function MarketerIAView() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Result | null>(null);
+  // PDF adjunto opcional (plan trimestral, brand book, resultados…).
+  // Se convierte a base64 en cliente y se manda en el body; NO se guarda
+  // persistente — se usa solo para esta tirada.
+  const [pdfData, setPdfData] = useState<string | null>(null);
+  const [pdfName, setPdfName] = useState<string | null>(null);
+  const [pdfSizeKb, setPdfSizeKb] = useState<number | null>(null);
+  // 4 MB es el techo cómodo: en base64 el body sube a ~5.4 MB, dentro
+  // del límite estándar de request de Vercel (4.5 MB no aplica porque
+  // el body ya viene JSON, pero mantenemos margen).
+  const PDF_MAX_MB = 4;
   // Estado de "añadida al calendario" por índice compuesto weekOffset|dayOfWeek|posicion
   const [added, setAdded] = useState<Record<string, string>>({}); // key → pieceId
 
@@ -149,6 +159,8 @@ export function MarketerIAView() {
           startWeek: toDateInputValue(snapToMondayUtc(startWeek)),
           weeksAhead,
           piecesPerWeek: Object.keys(piecesPerWeek).length > 0 ? piecesPerWeek : undefined,
+          pdfBase64: pdfData || undefined,
+          pdfName: pdfName || undefined,
         }),
       });
       // Parseo defensivo: si el server devuelve texto plano (timeout de
@@ -248,6 +260,75 @@ export function MarketerIAView() {
             placeholder='Ej. "Lanzamiento del programa CONSOLIDA el 15 de octubre. Quiero 2 semanas educativas atacando el mito de que hay que descansar cuando duele el hombro, y luego una semana de lanzamiento con testimonios."'
             disabled={busy}
           />
+        </div>
+
+        <div>
+          <label className="text-xs text-neutral-600 block mb-1">PDF de apoyo (opcional)</label>
+          {pdfData ? (
+            <div
+              className="flex items-center justify-between gap-2 p-2 rounded-lg text-xs"
+              style={{ border: "1px solid #E5E5E5", background: "#FAFAFA" }}
+            >
+              <div className="min-w-0 flex-1">
+                <div className="font-medium truncate">📄 {pdfName}</div>
+                {pdfSizeKb != null && (
+                  <div className="text-[10px] text-neutral-500">
+                    {pdfSizeKb >= 1024 ? `${(pdfSizeKb / 1024).toFixed(1)} MB` : `${pdfSizeKb} KB`}
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => { setPdfData(null); setPdfName(null); setPdfSizeKb(null); }}
+                disabled={busy}
+                className="text-xs text-red-600"
+              >
+                ✕ Quitar
+              </button>
+            </div>
+          ) : (
+            <label
+              className="block text-xs cursor-pointer p-2 rounded-lg text-center"
+              style={{ border: "1px dashed #D4D4D4", color: "#525252" }}
+            >
+              <span>📎 Adjuntar PDF (máx {PDF_MAX_MB} MB)</span>
+              <input
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                disabled={busy}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!file) return;
+                  if (file.type !== "application/pdf") {
+                    setError("El archivo debe ser un PDF.");
+                    return;
+                  }
+                  if (file.size > PDF_MAX_MB * 1024 * 1024) {
+                    setError(`El PDF supera los ${PDF_MAX_MB} MB.`);
+                    return;
+                  }
+                  const buf = await file.arrayBuffer();
+                  // btoa acepta binario en chunks. Para PDFs de <10MB va bien
+                  // sin hacerlo por trozos.
+                  let bin = "";
+                  const bytes = new Uint8Array(buf);
+                  const CHUNK = 0x8000;
+                  for (let i = 0; i < bytes.length; i += CHUNK) {
+                    bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+                  }
+                  setPdfData(btoa(bin));
+                  setPdfName(file.name);
+                  setPdfSizeKb(Math.round(file.size / 1024));
+                  setError(null);
+                }}
+              />
+            </label>
+          )}
+          <p className="text-[10px] text-neutral-500 mt-1">
+            La IA lo lee entero y lo usa como contexto primario para la estrategia. No se guarda — solo se usa en esta tirada.
+          </p>
         </div>
 
         <div>
