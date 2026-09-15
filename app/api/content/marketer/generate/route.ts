@@ -116,7 +116,7 @@ function systemPrompt(brief: Awaited<ReturnType<typeof getAiBrief>>): string {
     "IMPORTANTE:",
     "- Responde SOLO con la herramienta `submit_strategy`, sin texto adicional.",
     "- Si el CEO especifica una fecha de lanzamiento, alinea la semana de lanzamiento con ella.",
-    "- Si el CEO pide una mezcla concreta (ej. 3 reels + 1 carrusel/semana), respétala exactamente.",
+    "- MEZCLA: si el CEO especifica cuántas piezas de cada formato por semana, CUMPLE ESE CONTEO EXACTO. Si pide 3 reels + 1 carrusel/semana, cada semana lleva EXACTAMENTE 3 reels y EXACTAMENTE 1 carrusel — ni una menos, ni una más, ni ningún formato distinto. Prohibido reducir el número aunque parezca creativamente 'suficiente' con menos. Cuenta los formatos antes de devolver la tool.",
     "- Titles cortos y específicos.",
     "- 'hook' = IDEA PRINCIPAL de la pieza: 1-2 frases que resumen QUÉ se cuenta y CÓMO (ángulo/tono). NO es el hook literal de apertura del vídeo. Ej: 'Reel confrontacional sobre por qué el descanso no cura el hombro. Termina con CTA al webinar.'",
     "- Rationale en 1-2 frases explicando por qué esa pieza en ese slot.",
@@ -163,12 +163,16 @@ function buildUserPrompt(input: {
   piecesPerWeek?: Record<string, number>;
   recentThemes: string[];
 }): string {
-  const mix = input.piecesPerWeek && Object.keys(input.piecesPerWeek).length > 0
-    ? Object.entries(input.piecesPerWeek)
-        .filter(([, n]) => n && n > 0)
-        .map(([f, n]) => `${n}× ${f}`)
-        .join(" + ")
+  const mixEntries = input.piecesPerWeek
+    ? Object.entries(input.piecesPerWeek).filter(([, n]) => n && n > 0)
+    : [];
+  const mix = mixEntries.length > 0
+    ? mixEntries.map(([f, n]) => `${n}× ${f}`).join(" + ")
     : "libre — decide tú la mezcla óptima";
+  const piecesPerWeek = mixEntries.reduce((sum, [, n]) => sum + Number(n), 0);
+  const strictLine = mixEntries.length > 0
+    ? `\nOBLIGATORIO: cada semana debe tener EXACTAMENTE ${piecesPerWeek} piezas con esta distribución: ${mix}. Antes de devolver la tool, cuenta las piezas de cada formato por semana y verifica que coincide. No devuelvas menos aunque creas que sobra alguna.`
+    : "";
   const themesLine = input.recentThemes.length > 0
     ? `\n\nTEMAS RECIENTES YA TRATADOS (evita repetirlos exactos):\n${input.recentThemes.slice(0, 12).map((t) => `- ${t}`).join("\n")}`
     : "";
@@ -180,6 +184,7 @@ function buildUserPrompt(input: {
     input.targetDate ? `\nFECHA OBJETIVO (lanzamiento): ${input.targetDate}` : "",
     `\nHORIZONTE: ${input.weeksAhead} semana${input.weeksAhead === 1 ? "" : "s"} ${startLine}.`,
     `\nMEZCLA POR SEMANA: ${mix}`,
+    strictLine,
     themesLine,
     "\n\nGenera la estrategia usando la herramienta `submit_strategy`.",
   ].join("");
@@ -366,10 +371,43 @@ async function runGenerate(req: NextRequest) {
       );
     }
 
+    // Verificación de mezcla: si el CEO pidió un reparto concreto, contamos
+    // por formato y por semana. Si alguna semana no cumple, devolvemos un
+    // warning para que la UI lo pinte visible (no rechazamos — la
+    // estrategia sigue siendo útil aunque falte una pieza).
+    let mixWarning: string | null = null;
+    if (body?.piecesPerWeek && typeof body.piecesPerWeek === "object") {
+      const expected: Record<string, number> = {};
+      for (const [k, v] of Object.entries(body.piecesPerWeek as Record<string, unknown>)) {
+        const n = Number(v);
+        if (Number.isFinite(n) && n > 0) expected[k] = Math.round(n);
+      }
+      const problems: string[] = [];
+      for (const w of weeksOut) {
+        const pieces = Array.isArray((w as any)?.pieces) ? (w as any).pieces : [];
+        const got: Record<string, number> = {};
+        for (const p of pieces) {
+          const f = String((p as any)?.format ?? "");
+          if (!f) continue;
+          got[f] = (got[f] ?? 0) + 1;
+        }
+        for (const [f, exp] of Object.entries(expected)) {
+          const g = got[f] ?? 0;
+          if (g !== exp) {
+            problems.push(`Semana ${((w as any)?.weekOffset ?? 0) + 1}: ${g}/${exp} ${f}`);
+          }
+        }
+      }
+      if (problems.length > 0) {
+        mixWarning = `La IA no cumplió la mezcla exacta pedida — ${problems.join(" · ")}. Puedes reintentar si quieres el reparto exacto.`;
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       strategy: String(parsed.strategy ?? ""),
       weeks: weeksOut,
+      warning: mixWarning,
     });
   } catch (e: any) {
     console.error("[marketer/generate] Anthropic error:", e?.message ?? e);

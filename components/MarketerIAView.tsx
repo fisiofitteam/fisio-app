@@ -48,6 +48,7 @@ type Week = {
 type Result = {
   strategy: string;
   weeks: Week[];
+  warning?: string | null;
 };
 
 const WEEK_TYPE_LABEL: Record<string, string> = {
@@ -169,7 +170,7 @@ export function MarketerIAView() {
         setError(d?.error || `Error ${r.status}`);
         return;
       }
-      setResult({ strategy: d.strategy, weeks: d.weeks });
+      setResult({ strategy: d.strategy, weeks: d.weeks, warning: d.warning ?? null });
     } catch (e: any) {
       setError(e?.message || "Error inesperado");
     } finally {
@@ -344,6 +345,15 @@ export function MarketerIAView() {
 
         {result && (
           <div className="space-y-4">
+            {result.warning && (
+              <div
+                className="rounded-lg p-3 text-xs"
+                style={{ background: "#FEF3C7", color: "#78350F", border: "1px solid #FCD34D" }}
+              >
+                <div className="font-semibold mb-0.5">⚠️ Mezcla incompleta</div>
+                <div>{result.warning}</div>
+              </div>
+            )}
             {/* Resumen + acción global */}
             <div className="card space-y-3">
               <div>
