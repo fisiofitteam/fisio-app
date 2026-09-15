@@ -54,7 +54,11 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 const MODEL = "claude-sonnet-4-6";
-const MAX_OUTPUT_TOKENS = 6000;
+// Con guion por planos cada reel añade ~600-900 tokens al output. 3 semanas
+// con 5 piezas (3 reels + 1 carrusel + 1 directo) pueden pedir 12-16k
+// tokens. Subimos el techo bien alto para no cortar el tool_use — Sonnet
+// 4.6 soporta salidas de hasta 64k, así que 20k es margen cómodo.
+const MAX_OUTPUT_TOKENS = 20000;
 
 let _client: Anthropic | null = null;
 function client(): Anthropic {
@@ -342,10 +346,30 @@ async function runGenerate(req: NextRequest) {
       return NextResponse.json({ error: "La IA no devolvió estrategia (no llamó a la tool)" }, { status: 502 });
     }
     const parsed = toolUse.input as any;
+    const weeksOut: unknown[] = Array.isArray(parsed.weeks) ? parsed.weeks : [];
+
+    // Si el modelo llegó al techo de tokens, `parsed` queda con JSON parcial
+    // (a menudo weeks vacío) y el UI mostraría "0 piezas" sin explicación.
+    // Devolvemos error visible para que el CEO sepa reducir alcance o
+    // reintentar. stop_reason "end_turn" o "tool_use" = OK; "max_tokens" = corte.
+    if (msg.stop_reason === "max_tokens" && weeksOut.length === 0) {
+      console.warn("[marketer/generate] max_tokens sin semanas usables", {
+        max: MAX_OUTPUT_TOKENS,
+        usage: msg.usage,
+      });
+      return NextResponse.json(
+        {
+          error:
+            "La estrategia se cortó por longitud. Prueba con menos semanas o menos piezas por semana.",
+        },
+        { status: 502 },
+      );
+    }
+
     return NextResponse.json({
       ok: true,
       strategy: String(parsed.strategy ?? ""),
-      weeks: Array.isArray(parsed.weeks) ? parsed.weeks : [],
+      weeks: weeksOut,
     });
   } catch (e: any) {
     console.error("[marketer/generate] Anthropic error:", e?.message ?? e);
