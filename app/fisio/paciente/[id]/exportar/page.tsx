@@ -62,23 +62,41 @@ export default async function PatientExportPage({
     orderBy: { startDate: "desc" },
   });
 
+  // Extracción de formularios rellenados por el paciente. Protegido por
+  // try/catch por sesión: cualquier tasksSnapshot / responses / questions
+  // con JSON roto o null hacía caer el render entero (500 en el export).
+  // Se descarta esa sesión y se sigue con el resto.
   const formSessions = assignments
     .flatMap((a) => a.sessions.map((s) => ({ s, programName: a.program.name })))
     .filter(({ s }) => s.completedAt)
     .map(({ s, programName }) => {
-      const tasks = JSON.parse(s.tasksSnapshot) as any[];
-      const responses = s.responses ? JSON.parse(s.responses) : {};
-      const formTask = tasks.find((t) => t.type === "FORM" && responses[t.id]);
-      if (!formTask) return null;
-      return {
-        sessionId: s.id,
-        completedAt: s.completedAt,
-        formReviewedAt: s.formReviewedAt,
-        programName,
-        formTitle: formTask.title,
-        questions: formTask.questions ? JSON.parse(formTask.questions) : [],
-        responses: responses[formTask.id],
-      };
+      try {
+        const tasks = s.tasksSnapshot ? (JSON.parse(s.tasksSnapshot) as any[]) : [];
+        if (!Array.isArray(tasks) || tasks.length === 0) return null;
+        const responses = s.responses ? JSON.parse(s.responses) : {};
+        const formTask = tasks.find((t) => t.type === "FORM" && responses[t.id]);
+        if (!formTask) return null;
+        // `questions` puede venir como string JSON, como array ya parseado,
+        // o como null. Soportar los tres para no romper el export.
+        let questions: any[] = [];
+        if (Array.isArray(formTask.questions)) {
+          questions = formTask.questions;
+        } else if (typeof formTask.questions === "string" && formTask.questions.trim()) {
+          try { questions = JSON.parse(formTask.questions); } catch { questions = []; }
+        }
+        return {
+          sessionId: s.id,
+          completedAt: s.completedAt,
+          formReviewedAt: s.formReviewedAt,
+          programName,
+          formTitle: formTask.title,
+          questions: Array.isArray(questions) ? questions : [],
+          responses: responses[formTask.id],
+        };
+      } catch (err) {
+        console.warn("[export/pdf] sesión ignorada por JSON roto", s.id, err);
+        return null;
+      }
     })
     .filter(Boolean)
     .sort((a: any, b: any) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()) as any[];
