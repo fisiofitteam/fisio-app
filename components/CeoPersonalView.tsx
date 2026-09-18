@@ -15,6 +15,7 @@ import {
   type CeoTaskStatus,
 } from "@/lib/ceo-personal";
 import { CeoYesterdayCarryoverModal } from "@/components/CeoYesterdayCarryoverModal";
+import { QuarterlyObjectiveCard } from "@/components/QuarterlyObjectiveCard";
 
 type Tag = { id: string; name: string; color: string };
 
@@ -223,6 +224,10 @@ export function CeoPersonalView({ userFullName }: { userFullName: string }) {
     <div className="space-y-4">
       {/* Popup de "ayer quedó esto pendiente" — autoabre una vez al día */}
       <CeoYesterdayCarryoverModal onResolved={() => { /* nada que hacer en padre, los hijos refrescan vía evento */ }} />
+
+      {/* 0. Objetivo del trimestre — colapsable, arriba del foco del mes.
+          Da el marco largo del que colgar el mes y la semana. */}
+      <QuarterlyObjectiveCard />
 
       {/* 1. Foco del mes */}
       <FocusBlock

@@ -15,7 +15,6 @@ import { FisioPanelTabs } from "@/components/FisioPanelTabs";
 import { ProgramEndingsBox } from "@/components/ProgramEndingsBox";
 import { LoadReviewsBox } from "@/components/LoadReviewsBox";
 import { WeeklyTeamTasksBoard } from "@/components/WeeklyTeamTasksBoard";
-import { QuarterlyObjectiveCard } from "@/components/QuarterlyObjectiveCard";
 import { buildWeeklyBoardForProfessional } from "@/lib/weekly-team-tasks";
 import { AdHocTasksCard } from "@/components/AdHocTasksCard";
 import { buildAdHocActiveForProfessional } from "@/lib/team-tasks-adhoc";
@@ -664,7 +663,6 @@ export default async function FisioPanelPage({
   // Más las pestañas externas Métricas equipo (head_success) y salario.
   const tareasContent = (
     <div className="space-y-3">
-      {user.role === "ceo" && <QuarterlyObjectiveCard />}
       {weeklyBoard && (
         <WeeklyTeamTasksBoard
           board={weeklyBoard}
