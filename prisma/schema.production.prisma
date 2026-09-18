@@ -3557,6 +3557,23 @@ model AdvanceWeeklySummary {
 // IA pueda comparar tendencias entre periodos (no partir de 0 cada
 // semana). El snapshot de metricas se guarda entero — asi la narrativa
 // puede regenerarse en el futuro sin volver a hacer todas las queries.
+// Objetivo del trimestre del CEO: temática principal + un foco por
+// departamento (marketing, ventas, servicio, ceo). Es texto libre editado
+// por el CEO desde el panel de tareas. Se guarda uno por trimestre
+// (formato "YYYY-Qn") para poder volver atrás y ver qué se propuso.
+model QuarterlyObjective {
+  id             String   @id @default(cuid())
+  quarter        String   @unique                            // "2026-Q3"
+  mainTheme      String                                       // tema central del trimestre
+  focusMarketing String                                       // foco del departamento
+  focusSales     String
+  focusService   String
+  focusCeo       String
+  updatedById    String?                                      // auditoría
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
 model CeoReport {
   id            String   @id @default(cuid())
   // "week" | "month" | "quarter" | "custom"
