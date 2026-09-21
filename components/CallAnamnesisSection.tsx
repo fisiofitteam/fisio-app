@@ -17,10 +17,15 @@ export function CallAnamnesisSection({
   patientId,
   initialText,
   clinicalNotes,
+  leadId,
 }: {
   patientId: string;
   initialText: string | null;
   clinicalNotes?: CallClinicalData | null;
+  /** Lead que originó al paciente. Si existe, se muestra el botón de
+   *  generar/regenerar el resumen IA a demanda (rescate cuando el cron
+   *  no lo hizo o falló). */
+  leadId?: string | null;
 }) {
   const router = useRouter();
   const [text, setText] = useState(initialText ?? "");
@@ -28,6 +33,34 @@ export function CallAnamnesisSection({
   const [saving, setSaving] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasContent = text.trim().length > 0;
+
+  const [generating, setGenerating] = useState(false);
+  const [generateMsg, setGenerateMsg] = useState<string | null>(null);
+  // "Regenerar" si ya hay algo utilizable; "Generar" si aún no.
+  const summaryExists = !!clinicalNotes?.clinicalSummary;
+
+  async function regenerateSummary() {
+    if (!leadId) return;
+    setGenerating(true);
+    setGenerateMsg(null);
+    const r = await fetch(`/api/leads/${leadId}/regenerate-summary`, { method: "POST" }).catch(() => null);
+    const d = await r?.json().catch(() => ({}));
+    if (r?.ok && d?.ok) {
+      setGenerateMsg("Resumen generado ✅");
+      router.refresh();
+    } else {
+      const reason = d?.reason;
+      const detail = d?.detail || d?.error;
+      const humanReason: Record<string, string> = {
+        no_meeting_url: "El lead no tiene meetingUrl.",
+        no_google_conn: "El closer no tiene Google Meet conectado.",
+        no_transcript: "Meet aún no publicó la transcripción. Suele tardar 5-30 min tras la llamada.",
+        error: detail || "Error generando el resumen.",
+      };
+      setGenerateMsg(humanReason[reason] ?? detail ?? `Error ${r?.status ?? ""}`);
+    }
+    setGenerating(false);
+  }
 
   async function persist(value: string) {
     if (value === savedText) return;
@@ -67,6 +100,31 @@ export function CallAnamnesisSection({
 
         <div className="mt-3 border-t border-neutral-100 pt-3">
           <CallClinicalNotesBlock data={clinicalNotes} />
+
+          {leadId && (
+            <div className="flex items-center justify-between gap-2 mb-3 rounded-md px-2 py-1.5"
+              style={{ background: "#F5F5F5", border: "1px solid #E5E5E5" }}
+            >
+              <div className="text-[11px] text-neutral-600">
+                {summaryExists
+                  ? "¿El resumen está desactualizado o falta contenido? Puedes regenerarlo."
+                  : "Aún no hay resumen IA. Si Meet ya publicó la transcripción, puedes generarlo ahora."}
+              </div>
+              <button
+                onClick={regenerateSummary}
+                disabled={generating}
+                className="text-[11px] font-medium px-2 py-1 rounded-md disabled:opacity-40 flex-shrink-0"
+                style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+                title="Fuerza al generador IA a procesar la transcripción de Meet ahora"
+              >
+                {generating ? "Generando…" : summaryExists ? "🔄 Regenerar" : "🧠 Generar resumen"}
+              </button>
+            </div>
+          )}
+          {generateMsg && (
+            <div className="text-[11px] mb-2 text-neutral-700">{generateMsg}</div>
+          )}
+
           <textarea
             value={text}
             onChange={onChange}

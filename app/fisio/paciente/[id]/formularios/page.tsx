@@ -30,6 +30,7 @@ export default async function PatientFormsTab({ params }: { params: { id: string
     where: { convertedPatientId: params.id, meetingUrl: { not: null } },
     orderBy: { callScheduledAt: "desc" },
     select: {
+      id: true,
       callSummary: {
         select: {
           clinicalSummary: true,
@@ -193,6 +194,7 @@ export default async function PatientFormsTab({ params }: { params: { id: string
         patientId={patient.id}
         initialText={patient.anamnesisCallNotes ?? null}
         clinicalNotes={clinicalNotes}
+        leadId={sourceLead?.id ?? null}
       />
 
       {/* ── Llamadas de seguimiento del fisio (optimización / renovación) ── */}
