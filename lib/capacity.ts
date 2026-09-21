@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getOpsConfig, type OpsConfigShape } from "@/lib/ops-config";
+import { getRenewalActivityInPeriod } from "@/lib/renewals";
 
 /**
  * Reporte de capacidad operativa: cuánta carga lleva cada fisio (+ head
@@ -132,29 +133,22 @@ export async function computeCapacityReport(): Promise<CapacityReport> {
     },
   });
 
-  // 3) Histórico de renovaciones finalizadas en los últimos M meses para
-  //    calcular la tasa. Un renewal "finalizado" tiene status="finished"
-  //    (renovó) o status="lost" (no renovó).
+  // 3) Histórico de decisiones de renovación de los últimos M meses.
+  //    Usamos la fuente de verdad canónica de la app (misma que
+  //    TeamMetricsBlock y las comisiones): un "renovó" implica que el
+  //    paciente tiene un nuevo SubscriptionRenewal posterior; un "perdido"
+  //    implica que su periodo terminó sin nueva renovación. El status
+  //    "finished" a secas NO basta — puede ser tanto renovado como perdido.
   const historyFrom = addMonths(now, -config.renewalHistoryMonths);
-  const historicalRenewals = await prisma.subscriptionRenewal.findMany({
-    where: {
-      status: { in: ["finished", "lost"] },
-      decidedAt: { gte: historyFrom },
-      patient: { isTest: false, assignedProfessionalId: { in: coaches.map((c) => c.id) } },
-    },
-    select: {
-      status: true,
-      patient: { select: { assignedProfessionalId: true } },
-    },
-  });
+  const activity = await getRenewalActivityInPeriod(historyFrom, now);
 
   const renewalsByCoach = new Map<string, { won: number; lost: number }>();
-  for (const r of historicalRenewals) {
-    const cid = r.patient.assignedProfessionalId;
+  for (const a of activity) {
+    const cid = a.assignedProfessionalId;
     if (!cid) continue;
     const cur = renewalsByCoach.get(cid) ?? { won: 0, lost: 0 };
-    if (r.status === "finished") cur.won++;
-    else if (r.status === "lost") cur.lost++;
+    if (a.outcome === "renewed") cur.won++;
+    else if (a.outcome === "lost") cur.lost++;
     renewalsByCoach.set(cid, cur);
   }
 
