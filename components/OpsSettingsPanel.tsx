@@ -66,31 +66,6 @@ export function OpsSettingsPanel({
             onChange={(v) => setDraft((p) => ({ ...p, defaultMaxPatients: v }))}
           />
 
-          <div>
-            <div className="text-xs text-neutral-500 mb-1">Base de ocupación</div>
-            <div className="flex gap-2">
-              {(["active", "assigned"] as const).map((v) => (
-                <button
-                  key={v}
-                  onClick={() => setDraft((p) => ({ ...p, occupancyBasis: v }))}
-                  className="flex-1 text-xs font-medium py-2 rounded-lg"
-                  style={
-                    draft.occupancyBasis === v
-                      ? { background: "#0A0A0A", color: "#FAFAFA" }
-                      : { background: "#F5F5F5", color: "#171717" }
-                  }
-                >
-                  {v === "active" ? "Solo activos (recomendado)" : "Todos los asignados"}
-                </button>
-              ))}
-            </div>
-            <p className="text-[10px] text-neutral-500 mt-1">
-              {draft.occupancyBasis === "active"
-                ? "Cuenta pacientes con SubscriptionRenewal activo + endDate futuro."
-                : "Cuenta cualquier paciente con assignedProfessionalId = ese coach."}
-            </p>
-          </div>
-
           <div className="grid grid-cols-2 gap-3">
             <NumField
               label="Ocupación · ámbar (%)"
