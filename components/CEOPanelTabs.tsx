@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { CeoPersonalView } from "@/components/CeoPersonalView";
+import { CapacityReportLazy } from "@/components/CapacityReportLazy";
 
 type FinanceResumen = {
   income: number;
@@ -35,7 +36,7 @@ export function CEOPanelTabs({
   finance: FinanceResumen;
   userFullName: string;
 }) {
-  const [tab, setTab] = useState<"mi-ceo" | "team" | "sales" | "prevention" | "finance">("mi-ceo");
+  const [tab, setTab] = useState<"mi-ceo" | "team" | "sales" | "prevention" | "finance" | "capacity">("mi-ceo");
 
   return (
     <>
@@ -43,6 +44,7 @@ export function CEOPanelTabs({
         <TabButton active={tab === "mi-ceo"} onClick={() => setTab("mi-ceo")} label="🎯 Mi CEO" />
         <TabButton active={tab === "sales"} onClick={() => setTab("sales")} label="📈 Métricas de venta" />
         <TabButton active={tab === "team"} onClick={() => setTab("team")} label="📊 Métricas equipo" />
+        <TabButton active={tab === "capacity"} onClick={() => setTab("capacity")} label="🧭 Capacidad operativa" />
         <TabButton active={tab === "prevention"} onClick={() => setTab("prevention")} label="🛡 Prevention" />
         <TabButton active={tab === "finance"} onClick={() => setTab("finance")} label="💰 Finanzas" />
       </div>
@@ -50,6 +52,7 @@ export function CEOPanelTabs({
       {tab === "mi-ceo" && <CeoPersonalView userFullName={userFullName} />}
       {tab === "sales" && salesBlock}
       {tab === "team" && teamBlock}
+      {tab === "capacity" && <CapacityReportLazy />}
       {tab === "prevention" && preventionBlock}
 
       {tab === "finance" && (

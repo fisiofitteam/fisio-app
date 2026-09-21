@@ -11,6 +11,7 @@ import { TeamMetricsBlock } from "@/components/TeamMetricsBlock";
 import { DashboardKpiCard, type KpiDetail } from "@/components/DashboardKpiCard";
 import { RegenerateCallsButton } from "@/components/RegenerateCallsButton";
 import { CEOPanelTabs } from "@/components/CEOPanelTabs";
+import { CapacityReportLazy } from "@/components/CapacityReportLazy";
 import { FisioPanelTabs } from "@/components/FisioPanelTabs";
 import { ProgramEndingsBox } from "@/components/ProgramEndingsBox";
 import { LoadReviewsBox } from "@/components/LoadReviewsBox";
@@ -801,6 +802,7 @@ export default async function FisioPanelPage({
         tareasContent={tareasContent}
         gestionContent={gestionContent}
         teamBlock={isManager ? teamBlock : null}
+        capacityBlock={isManager ? <CapacityReportLazy /> : null}
         professionalId={user.id}
       />
     </main>

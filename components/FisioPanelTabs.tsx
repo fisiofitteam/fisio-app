@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { MySalaryTab } from "@/components/MySalaryTab";
 
-type Tab = "tareas" | "gestion" | "team" | "salary";
+type Tab = "tareas" | "gestion" | "team" | "capacity" | "salary";
 
 /**
  * Pestañas del panel para fisio / head_success.
@@ -21,6 +21,7 @@ export function FisioPanelTabs({
   gestionContent,
   panel,
   teamBlock,
+  capacityBlock,
   professionalId,
 }: {
   tareasContent?: React.ReactNode;
@@ -28,11 +29,14 @@ export function FisioPanelTabs({
   /** Modo legacy: un único contenido sin pestañas internas (cerrador). */
   panel?: React.ReactNode;
   teamBlock?: React.ReactNode | null;
+  /** Bloque de "capacidad operativa" — solo para managers. */
+  capacityBlock?: React.ReactNode | null;
   professionalId: string;
 }) {
   const splitMode = tareasContent !== undefined || gestionContent !== undefined;
   const [tab, setTab] = useState<Tab>(splitMode ? "tareas" : "gestion");
   const showTeam = !!teamBlock;
+  const showCapacity = !!capacityBlock;
 
   function btnClass(active: boolean): string {
     return `px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
@@ -75,6 +79,11 @@ export function FisioPanelTabs({
             📊 Métricas equipo
           </button>
         )}
+        {showCapacity && (
+          <button onClick={() => setTab("capacity")} className={btnClass(tab === "capacity")}>
+            🧭 Capacidad operativa
+          </button>
+        )}
         <button onClick={() => setTab("salary")} className={btnClass(tab === "salary")}>
           💶 Mis métricas y salario
         </button>
@@ -83,6 +92,7 @@ export function FisioPanelTabs({
       {tab === "tareas" && tareasContent}
       {tab === "gestion" && gestionContent}
       {tab === "team" && showTeam && teamBlock}
+      {tab === "capacity" && showCapacity && capacityBlock}
       {tab === "salary" && <MySalaryTab professionalId={professionalId} />}
     </>
   );

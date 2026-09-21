@@ -246,6 +246,10 @@ model Professional {
   // Última vez que abrió la pestaña Comunidad (para el badge de novedades en el sidebar).
   communityLastSeenAt DateTime?
 
+  // Capacidad operativa: nº máximo de pacientes que este coach puede
+  // llevar sin saturarse. null = usar el default global de OpsConfig.
+  maxPatients    Int?
+
   patients          Patient[]            @relation("PatientAssignedTo")
   patientsAssignedBy Patient[]           @relation("PatientAssignedBy")
   assignedTasks     FisioTask[]  @relation("AssignedToFisio")
@@ -3561,6 +3565,28 @@ model AdvanceWeeklySummary {
 // departamento (marketing, ventas, servicio, ceo). Es texto libre editado
 // por el CEO desde el panel de tareas. Se guarda uno por trimestre
 // (formato "YYYY-Qn") para poder volver atrás y ver qué se propuso.
+// Configuración global del panel de capacidad operativa (una sola fila con
+// id="singleton"). Umbrales, ventanas y base de ocupación.
+model OpsConfig {
+  id                    String @id @default("singleton")
+  // Default cuando Professional.maxPatients es null
+  defaultMaxPatients    Int    @default(35)
+  // Umbrales de ocupación (%) para pintar la celda en ámbar/rojo
+  occupancyWarn         Int    @default(90)
+  occupancyCrit         Int    @default(100)
+  // Umbrales de tasa de renovación (%): >=warn verde, >=crit ámbar, resto rojo
+  renewalRateWarn       Int    @default(70)
+  renewalRateCrit       Int    @default(40)
+  // Ventana histórica para calcular la tasa (meses) y ventana futura de
+  // "renuevan pronto" en días.
+  renewalHistoryMonths  Int    @default(6)
+  expectedRenewDays     Int    @default(30)
+  // Base de la ocupación: "active" cuenta pacientes con renewal activo +
+  // endDate futuro. "assigned" cuenta cualquier asignado, activo o no.
+  occupancyBasis        String @default("active")
+  updatedAt             DateTime @updatedAt
+}
+
 model QuarterlyObjective {
   id             String   @id @default(cuid())
   quarter        String   @unique                            // "2026-Q3"
