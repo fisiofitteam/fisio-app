@@ -93,10 +93,11 @@ export function CapacityReport({
       )}
 
       {/* ── Resumen ─────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-2">
         <SumTile label="Coaches" value={summary.coaches} />
         <SumTile label="Asignadas" value={summary.assigned} />
         <SumTile label="Activas" value={summary.active} />
+        <SumTile label="Terminadas" value={summary.terminated} />
         <SumTile label="En pausa" value={summary.paused} />
         <SumTile label="Capacidad total" value={summary.capacityTotal} />
         <SumTile
@@ -106,6 +107,10 @@ export function CapacityReport({
         />
         <SumTile label="Renov. previstas" value={summary.expectedRenewTotal} />
       </div>
+      <p className="text-[11px] text-neutral-500 mb-4">
+        <b>Asignadas</b> = <b>Activas</b> + <b>Terminadas</b> (paciente con coach asignado pero sin renewal vigente).
+        {" "}<b>En pausa</b> está incluido dentro de <b>Activas</b>.
+      </p>
 
       {/* Mini widget de coaches saturados */}
       {summary.saturatedCoaches > 0 && (
@@ -130,7 +135,8 @@ export function CapacityReport({
                 <th className="text-left py-2 px-2 font-medium">Coach</th>
                 <th className="text-right py-2 px-2 font-medium">Asignadas</th>
                 <th className="text-right py-2 px-2 font-medium">Activas</th>
-                <th className="text-right py-2 px-2 font-medium">En pausa</th>
+                <th className="text-right py-2 px-2 font-medium" title="Asignadas sin renewal activo (paciente terminado con coach aún vinculado)">Termin.</th>
+                <th className="text-right py-2 px-2 font-medium" title="Subconjunto de Activas — pacientes con ProgramPause vigente ahora">En pausa</th>
                 <th className="text-right py-2 px-2 font-medium">Capacidad</th>
                 <th className="text-right py-2 px-2 font-medium">Ocupación</th>
                 <th className="text-right py-2 px-2 font-medium" title={`Endan en <=${config.expectedRenewDays}d`}>Renuevan {config.expectedRenewDays}d</th>
@@ -161,6 +167,9 @@ export function CapacityReport({
                     </td>
                     <td className="text-right py-2 px-2 tabular-nums">{c.assigned}</td>
                     <td className="text-right py-2 px-2 tabular-nums">{c.active}</td>
+                    <td className="text-right py-2 px-2 tabular-nums" style={{ color: c.terminated > 0 ? "#525252" : "#A3A3A3" }}>
+                      {c.terminated}
+                    </td>
                     <td className="text-right py-2 px-2 tabular-nums">{c.paused}</td>
                     <td className="text-right py-2 px-2">
                       <CapacityCell

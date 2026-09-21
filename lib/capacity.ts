@@ -39,7 +39,8 @@ export type CoachRow = {
   maxPatientsOverride: number | null;
   assigned: number;
   active: number;
-  paused: number;
+  terminated: number;                // assigned - active (sin renewal activo)
+  paused: number;                    // subconjunto de active
   free: number;
   occupancy: number;                 // %
   renewsSoon: number;
@@ -66,6 +67,7 @@ export type CapacityReport = {
     coaches: number;
     assigned: number;
     active: number;
+    terminated: number;
     paused: number;
     capacityTotal: number;
     freeTotal: number;
@@ -210,6 +212,7 @@ export async function computeCapacityReport(): Promise<CapacityReport> {
       maxPatientsOverride: c.maxPatients ?? null,
       assigned,
       active,
+      terminated: Math.max(0, assigned - active),
       paused,
       free,
       occupancy,
@@ -247,6 +250,7 @@ export async function computeCapacityReport(): Promise<CapacityReport> {
     coaches: rows.length,
     assigned: rows.reduce((n, r) => n + r.assigned, 0),
     active: rows.reduce((n, r) => n + r.active, 0),
+    terminated: rows.reduce((n, r) => n + r.terminated, 0),
     paused: rows.reduce((n, r) => n + r.paused, 0),
     capacityTotal: rows.reduce((n, r) => n + r.capacity, 0),
     freeTotal: rows.reduce((n, r) => n + r.free, 0),
