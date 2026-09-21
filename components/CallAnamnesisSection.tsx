@@ -101,23 +101,21 @@ export function CallAnamnesisSection({
         <div className="mt-3 border-t border-neutral-100 pt-3">
           <CallClinicalNotesBlock data={clinicalNotes} />
 
-          {leadId && (
+          {leadId && !summaryExists && (
             <div className="flex items-center justify-between gap-2 mb-3 rounded-md px-2 py-1.5"
               style={{ background: "#F5F5F5", border: "1px solid #E5E5E5" }}
             >
               <div className="text-[11px] text-neutral-600">
-                {summaryExists
-                  ? "¿El resumen está desactualizado o falta contenido? Puedes regenerarlo."
-                  : "Aún no hay resumen IA. Si Meet ya publicó la transcripción, puedes generarlo ahora."}
+                Aún no hay resumen IA. Si Meet ya publicó la transcripción, puedes generarlo ahora.
               </div>
               <button
                 onClick={regenerateSummary}
                 disabled={generating}
                 className="text-[11px] font-medium px-2 py-1 rounded-md disabled:opacity-40 flex-shrink-0"
                 style={{ background: "#0A0A0A", color: "#FAFAFA" }}
-                title="Fuerza al generador IA a procesar la transcripción de Meet ahora"
+                title="Procesa la transcripción de Meet ahora y guarda el resumen"
               >
-                {generating ? "Generando…" : summaryExists ? "🔄 Regenerar" : "🧠 Generar resumen"}
+                {generating ? "Generando…" : "🧠 Generar resumen"}
               </button>
             </div>
           )}
