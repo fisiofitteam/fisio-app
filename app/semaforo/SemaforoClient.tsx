@@ -88,10 +88,23 @@ const STYLES = `
 }
 .sf-scope *,.sf-scope *::before,.sf-scope *::after{box-sizing:border-box}
 .sf-wrap{max-width:640px;margin:0 auto;padding:32px 20px 56px}
+.sf-hero{margin:0 0 20px}
+.sf-card{
+  border-radius:20px;padding:22px 20px;
+  background:var(--surface);border:1px solid var(--line);
+  backdrop-filter:blur(8px);
+  box-shadow:0 20px 60px rgba(0,0,0,.35);
+}
+.sf-card + .sf-card{margin-top:16px}
+.sf-footer{
+  margin-top:28px;text-align:center;color:var(--muted-2);
+  font-size:12px;letter-spacing:.08em;text-transform:uppercase;
+}
+.sf-footer a{color:var(--gold-1);text-decoration:none;font-weight:700}
 .sf-brand{
-  font-family:var(--font-display);font-weight:800;font-size:15px;
+  font-family:var(--font-display);font-weight:800;font-size:14px;
   letter-spacing:.14em;text-transform:uppercase;color:var(--muted-2);
-  margin:0 0 28px;
+  margin:0 0 16px;
 }
 .sf-brand-accent{
   background:linear-gradient(135deg,var(--gold-1) 0%,var(--gold-2) 100%);
@@ -120,14 +133,13 @@ const STYLES = `
 .sf-intro{display:grid;grid-template-columns:1fr auto;gap:22px;align-items:start;margin-bottom:8px}
 .sf-intro .sf-light{margin-top:6px}
 .sf-need{
-  margin:26px 0 6px;padding:16px 18px;border-radius:12px;
-  background:var(--surface);border:1px solid var(--line);backdrop-filter:blur(8px);
-  color:var(--ink);
+  margin:0 0 16px;padding:14px 16px;border-radius:12px;
+  background:#1F1F1F;border:1px solid var(--line);color:var(--ink);
 }
 .sf-need p{margin:0}
 .sf-consent{
-  margin:20px 0 22px;padding:14px 16px;border-radius:12px;
-  background:var(--surface);border:1px solid var(--line);backdrop-filter:blur(8px);
+  margin:0 0 16px;padding:14px 16px;border-radius:12px;
+  background:#1F1F1F;border:1px solid var(--line);
   display:flex;gap:12px;align-items:flex-start;font-size:14px;color:var(--ink);line-height:1.45;
 }
 .sf-consent input{margin-top:3px;flex:none;width:20px;height:20px;accent-color:var(--gold-1);cursor:pointer}
@@ -139,7 +151,7 @@ const STYLES = `
   transition:transform .12s ease,opacity .12s ease;
 }
 .sf-btn:not(:disabled):hover{transform:translateY(-1px)}
-.sf-btn:disabled{opacity:.35;cursor:not-allowed;background:#404040;color:#A3A3A3}
+.sf-btn:disabled{cursor:not-allowed;background:rgba(250,250,250,0.14);color:#A3A3A3;border:1px solid var(--line)}
 .sf-btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line-2)}
 .sf-btn.wa{background:var(--wa);color:#fff}
 .sf-btn.wa:disabled{background:#1F1F1F;color:#737373}
@@ -156,8 +168,8 @@ const STYLES = `
 .sf-qtitle{margin-bottom:14px}
 .sf-help{color:var(--muted);margin-bottom:18px}
 .sf-howto{
-  background:var(--surface);border:1px solid var(--line);border-radius:14px;
-  padding:16px 18px;margin:0 0 20px;backdrop-filter:blur(8px);color:var(--ink);
+  background:#1F1F1F;border:1px solid var(--line);border-radius:12px;
+  padding:14px 16px;margin:0 0 18px;color:var(--ink);
 }
 .sf-howto ol{margin:0;padding-left:20px}
 .sf-howto li{margin:0 0 6px}
@@ -165,25 +177,25 @@ const STYLES = `
 .sf-opts{display:grid;gap:10px}
 .sf-opt{
   display:flex;gap:14px;align-items:center;text-align:left;
-  background:var(--surface);border:1px solid var(--line);border-radius:14px;
-  padding:16px 16px;width:100%;color:var(--ink);backdrop-filter:blur(8px);
+  background:#1F1F1F;border:1px solid var(--line);border-radius:12px;
+  padding:15px 16px;width:100%;color:var(--ink);
   transition:border-color .15s,background .15s,transform .1s;
 }
-.sf-opt:hover{border-color:var(--line-2);background:var(--surface-2)}
-.sf-opt[aria-pressed="true"]{border-color:var(--gold-1);background:var(--surface-2);box-shadow:0 0 0 2px rgba(252,211,77,.15)}
+.sf-opt:hover{border-color:var(--line-2);background:#262626}
+.sf-opt[aria-pressed="true"]{border-color:var(--gold-1);background:rgba(252,211,77,0.08);box-shadow:0 0 0 2px rgba(252,211,77,.15)}
 .sf-opt .sf-dot{flex:none;width:14px;height:14px;border-radius:50%;background:var(--line-2)}
 .sf-opt[aria-pressed="true"] .sf-dot{background:var(--gold-1)}
 .sf-opt .sf-dot.g{background:var(--green)}.sf-opt .sf-dot.a{background:var(--amber)}.sf-opt .sf-dot.r{background:var(--red)}
 .sf-matrix{display:grid;gap:14px}
 .sf-fam{
-  background:var(--surface);border:1px solid var(--line);border-radius:14px;
-  padding:16px;backdrop-filter:blur(8px);
+  background:#1F1F1F;border:1px solid var(--line);border-radius:12px;
+  padding:14px;
 }
 .sf-fam strong{display:block;font-size:16px;color:var(--ink-strong)}
 .sf-fam .sf-ex{font-size:13px;color:var(--muted);margin-bottom:12px}
 .sf-seg{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
 .sf-seg button{
-  border:1px solid var(--line);background:rgba(10,10,10,0.5);border-radius:10px;
+  border:1px solid var(--line);background:#0F0F0F;border-radius:10px;
   padding:10px 10px;font-size:14px;font-weight:500;display:flex;align-items:center;
   gap:8px;text-align:left;font-family:var(--font-body);color:var(--ink);
   transition:border-color .12s,background .12s;
@@ -192,11 +204,11 @@ const STYLES = `
 .sf-seg button[aria-pressed="true"]{border-color:var(--gold-1);background:rgba(252,211,77,.08);font-weight:700}
 .sf-seg .sf-dot{flex:none;width:10px;height:10px;border-radius:50%}
 .sf-field{
-  width:100%;font:inherit;font-size:16px;padding:15px 16px;border-radius:12px;
-  border:1px solid var(--line);background:rgba(10,10,10,0.5);color:var(--ink);
+  width:100%;font:inherit;font-size:16px;padding:14px 16px;border-radius:12px;
+  border:1px solid var(--line-2);background:#1F1F1F;color:var(--ink);
   font-family:var(--font-body);
 }
-.sf-field:focus{outline:none;border-color:var(--gold-1);background:rgba(10,10,10,0.7)}
+.sf-field:focus{outline:none;border-color:var(--gold-1);background:#262626}
 .sf-field::placeholder{color:var(--muted-2)}
 .sf-next{margin-top:22px}
 
@@ -206,25 +218,23 @@ const STYLES = `
 .sf-verdict.g{color:var(--green)}.sf-verdict.a{color:var(--amber)}.sf-verdict.r{color:var(--red)}
 .sf-res-head h2{font-size:clamp(28px,7.5vw,40px)}
 .sf-alert{
-  border-radius:14px;padding:16px 18px;margin:0 0 26px;
-  background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.4);color:#FCA5A5;
+  background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.35);color:#FCA5A5;
 }
-.sf-alert p:last-child{margin:0}
-.sf-alert strong{color:#FCA5A5}
+.sf-alert p{color:#FCA5A5}
+.sf-alert strong{color:#FECACA}
 .sf-block{margin:0 0 30px}
 .sf-block h3{margin-bottom:12px}
-.sf-why{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.sf-why{list-style:none;margin:0;padding:0;display:grid;gap:8px}
 .sf-why li{
   padding:12px 14px 12px 16px;border-radius:12px;
-  background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--line-2);
-  backdrop-filter:blur(8px);color:var(--ink);
+  background:#1F1F1F;border:1px solid var(--line);border-left:3px solid var(--line-2);
+  color:var(--ink);
 }
 .sf-why li.neg{border-left-color:var(--red)}.sf-why li.mid{border-left-color:var(--amber)}.sf-why li.pos{border-left-color:var(--green)}
 .sf-map{display:grid;gap:8px}
 .sf-mrow{
   display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:start;
-  padding:14px;border-radius:12px;background:var(--surface);border:1px solid var(--line);
-  backdrop-filter:blur(8px);
+  padding:14px;border-radius:12px;background:#1F1F1F;border:1px solid var(--line);
 }
 .sf-mrow .sf-dot{width:16px;height:16px;border-radius:50%;margin-top:4px}
 .sf-mrow strong{display:block;color:var(--ink-strong)}
@@ -243,12 +253,11 @@ const STYLES = `
 .sf-tips{margin:0;padding-left:20px}
 .sf-tips li{margin-bottom:10px;color:var(--ink)}
 .sf-cta{
-  background:var(--surface);border:1px solid var(--gold-1);border-radius:18px;
-  padding:22px 20px;backdrop-filter:blur(8px);
-  box-shadow:0 0 0 4px rgba(252,211,77,.06);
+  border-color:rgba(252,211,77,0.5);
+  box-shadow:0 0 0 3px rgba(252,211,77,.06),0 20px 60px rgba(0,0,0,.35);
 }
 .sf-cta h3{margin-bottom:8px}
-.sf-cta .sf-btn{margin-top:10px}
+.sf-cta .sf-btn{margin-top:12px}
 .sf-again{margin-top:14px}
 .sf-screen.sf-enter{animation:sf-in .28s ease-out}
 @keyframes sf-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
@@ -517,35 +526,45 @@ function IntroScreen({
 }) {
   return (
     <>
-      <div className="sf-brand"><span className="sf-brand-accent">FisioFitCross</span></div>
-      <div className="sf-intro">
-        <div>
-          <h1>El Semáforo del Hombro</h1>
-          <p className="sf-lead" style={{ marginTop: 18 }}>
-            Descubre qué movimientos del WOD puedes seguir haciendo, cuáles adaptar y cuáles parar. Sin quitar ejercicios a ciegas.
+      <header className="sf-hero">
+        <div className="sf-brand"><span className="sf-brand-accent">FisioFitCross</span></div>
+        <div className="sf-intro">
+          <div>
+            <h1>
+              El Semáforo<br />
+              <span className="sf-brand-accent">del Hombro</span>
+            </h1>
+            <p className="sf-lead" style={{ marginTop: 18 }}>
+              Descubre qué movimientos del WOD puedes seguir haciendo, cuáles adaptar y cuáles parar. Sin quitar ejercicios a ciegas.
+            </p>
+          </div>
+          <IntroLightAnimated />
+        </div>
+      </header>
+      <section className="sf-card">
+        <div className="sf-need">
+          <p>
+            <strong>10 minutos. </strong>
+            Unas preguntas y 4 pruebas sencillas en casa. Necesitas una pared, el marco de una puerta y una barra de dominadas.
           </p>
         </div>
-        <IntroLightAnimated />
-      </div>
-      <div className="sf-need">
-        <p>
-          <strong>10 minutos. </strong>
-          Unas preguntas y 4 pruebas sencillas en casa. Necesitas una pared, el marco de una puerta y una barra de dominadas.
+        <label className="sf-consent">
+          <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+          <span>
+            {CONSENT_TEXT}{" "}
+            <a href={PRIVACY_URL} target="_blank" rel="noopener">Política de privacidad</a>.
+          </span>
+        </label>
+        <button className="sf-btn" onClick={start} disabled={!consent || starting}>
+          {starting ? "Cargando…" : "Empezar el test →"}
+        </button>
+        <p className="sf-small sf-disclaimer">
+          Este test te orienta, pero no sustituye una valoración profesional. Si algo te duele mucho durante una prueba, para.
         </p>
-      </div>
-      <label className="sf-consent">
-        <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-        <span>
-          {CONSENT_TEXT}{" "}
-          <a href={PRIVACY_URL} target="_blank" rel="noopener">Política de privacidad</a>.
-        </span>
-      </label>
-      <button className="sf-btn" onClick={start} disabled={!consent || starting}>
-        {starting ? "Cargando…" : "Empezar el test"}
-      </button>
-      <p className="sf-small sf-disclaimer">
-        Este test te orienta, pero no sustituye una valoración profesional. Si algo te duele mucho durante una prueba, para.
-      </p>
+      </section>
+      <footer className="sf-footer">
+        <a href="https://instagram.com/fisiofitteam" target="_blank" rel="noopener">@fisiofitteam</a> · Made in Málaga
+      </footer>
     </>
   );
 }
@@ -579,7 +598,7 @@ function QuizScreen(props: {
         <div className="sf-progress" aria-hidden><span style={{ width: `${progressPct}%` }} /></div>
         <div className="sf-count">{step + 1} / {total}</div>
       </div>
-      <section>
+      <section className="sf-card">
         <div className="sf-section">{q.section}</div>
         <h2 className="sf-qtitle">{q.title}</h2>
         {q.help && <p className="sf-help">{q.help}</p>}
@@ -827,19 +846,23 @@ function AlarmScreen({
 
   return (
     <>
-      <div className="sf-brand"><span className="sf-brand-accent">FisioFitCross</span></div>
-      <div className="sf-res-head">
-        <TrafficLight on="r" big />
-        <div>
-          <div className="sf-verdict r">Para aquí un momento</div>
-          <h2>Lo que has marcado necesita que lo veamos contigo</h2>
+      <header className="sf-hero">
+        <div className="sf-brand"><span className="sf-brand-accent">FisioFitCross</span></div>
+        <div className="sf-res-head">
+          <TrafficLight on="r" big />
+          <div>
+            <div className="sf-verdict r">Para aquí un momento</div>
+            <h2>Lo que has marcado necesita que lo veamos contigo</h2>
+          </div>
         </div>
-      </div>
-      <p>Con estas señales no tiene sentido que sigas con las pruebas: podrían empeorar lo que te pasa. Antes de nada, mira este vídeo.</p>
-      <div className="sf-block">
-        <VideoBlock url={videoUrl} label="Vídeo de Ales: qué hacer si has marcado alguna de estas señales" />
-      </div>
-      <div className="sf-cta">
+      </header>
+      <section className="sf-card">
+        <p style={{ marginTop: 0 }}>Con estas señales no tiene sentido que sigas con las pruebas: podrían empeorar lo que te pasa. Antes de nada, mira este vídeo.</p>
+        <div className="sf-block" style={{ margin: "18px 0 0" }}>
+          <VideoBlock url={videoUrl} label="Vídeo de Ales: qué hacer si has marcado alguna de estas señales" />
+        </div>
+      </section>
+      <section className="sf-card sf-cta">
         <h3>Háblalo directamente conmigo</h3>
         <p style={{ margin: 0 }}>Te digo cuál es el siguiente paso en tu caso, incluido si antes te tiene que ver un médico.</p>
         <a
@@ -852,8 +875,11 @@ function AlarmScreen({
           Hablar con Ales por WhatsApp
         </a>
         <p className="sf-small" style={{ margin: "10px 0 0" }}>Se abre WhatsApp con lo que has marcado ya escrito.</p>
-      </div>
+      </section>
       <button className="sf-btn ghost sf-again" onClick={onRestart}>Me he equivocado al marcar</button>
+      <footer className="sf-footer">
+        <a href="https://instagram.com/fisiofitteam" target="_blank" rel="noopener">@fisiofitteam</a> · Made in Málaga
+      </footer>
     </>
   );
 }
@@ -879,65 +905,69 @@ function ResultScreen({
 
   return (
     <>
-      <div className="sf-brand"><span className="sf-brand-accent">FisioFitCross</span> · Tu resultado</div>
-      <div className="sf-res-head">
-        <TrafficLight on={k.c} big />
-        <div>
-          <div className={"sf-verdict " + k.c}>
-            {name ? `${name}, tu hombro está en ${k.verdict.toLowerCase()}` : k.verdict}
+      <header className="sf-hero">
+        <div className="sf-brand"><span className="sf-brand-accent">FisioFitCross</span> · Tu resultado</div>
+        <div className="sf-res-head">
+          <TrafficLight on={k.c} big />
+          <div>
+            <div className={"sf-verdict " + k.c}>
+              {name ? `${name}, tu hombro está en ${k.verdict.toLowerCase()}` : k.verdict}
+            </div>
+            <h2>{k.title}</h2>
           </div>
-          <h2>{k.title}</h2>
         </div>
-      </div>
+      </header>
 
       {r.flags.length > 0 && (
-        <div className="sf-alert">
+        <section className="sf-card sf-alert">
           <p><strong>Antes de nada: </strong>por lo que has marcado, lo primero es que te vea un médico en persona para descartar algo que necesite otro tipo de atención.</p>
-          <p>Cuando te hayan valorado, este resultado te sirve para planificar la vuelta al box.</p>
-        </div>
+          <p style={{ margin: 0 }}>Cuando te hayan valorado, este resultado te sirve para planificar la vuelta al box.</p>
+        </section>
       )}
 
-      <div className="sf-block">
-        <h3>Por qué te ha salido este color</h3>
-        <ul className="sf-why">
-          {r.why.map((w, i) => <li key={i} className={w.k}>{w.t}</li>)}
-        </ul>
-      </div>
-
-      <div className="sf-block">
-        <h3>Tu mapa de movimientos</h3>
-        <div className="sf-map">
-          {FAMILIES.map((f) => {
-            const a = FAM_ADVICE[(r.mov[f.id] as FamilyValue) || "na"];
-            return (
-              <div key={f.id} className="sf-mrow">
-                <div className={"sf-dot sf-" + a.c + "-bg"} aria-label={COLOR_NAME[a.c]} />
-                <div>
-                  <strong>{f.name} · {COLOR_NAME[a.c]}</strong>
-                  <span>{a.t}</span>
-                </div>
-              </div>
-            );
-          })}
+      <section className="sf-card">
+        <div className="sf-block">
+          <h3>Por qué te ha salido este color</h3>
+          <ul className="sf-why">
+            {r.why.map((w, i) => <li key={i} className={w.k}>{w.t}</li>)}
+          </ul>
         </div>
-      </div>
 
-      <div className="sf-block">
-        <h3>Te lo explico en 1 minuto</h3>
-        <VideoBlock
-          url={videoUrls[r.color]}
-          label={`Vídeo: por qué te ha salido ${k.verdict.toLowerCase()} y qué tener en cuenta`}
-        />
-      </div>
+        <div className="sf-block">
+          <h3>Tu mapa de movimientos</h3>
+          <div className="sf-map">
+            {FAMILIES.map((f) => {
+              const a = FAM_ADVICE[(r.mov[f.id] as FamilyValue) || "na"];
+              return (
+                <div key={f.id} className="sf-mrow">
+                  <div className={"sf-dot sf-" + a.c + "-bg"} aria-label={COLOR_NAME[a.c]} />
+                  <div>
+                    <strong>{f.name} · {COLOR_NAME[a.c]}</strong>
+                    <span>{a.t}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
-      <div className="sf-block">
-        <h3>Qué tener en cuenta desde hoy</h3>
-        <ul className="sf-tips">
-          {k.tips.map((t, i) => <li key={i}>{t}</li>)}
-        </ul>
-      </div>
+        <div className="sf-block">
+          <h3>Te lo explico en 1 minuto</h3>
+          <VideoBlock
+            url={videoUrls[r.color]}
+            label={`Vídeo: por qué te ha salido ${k.verdict.toLowerCase()} y qué tener en cuenta`}
+          />
+        </div>
 
-      <div className="sf-cta">
+        <div className="sf-block" style={{ marginBottom: 0 }}>
+          <h3>Qué tener en cuenta desde hoy</h3>
+          <ul className="sf-tips">
+            {k.tips.map((t, i) => <li key={i}>{t}</li>)}
+          </ul>
+        </div>
+      </section>
+
+      <section className="sf-card sf-cta">
         <h3>{k.ctaTitle}</h3>
         <p style={{ margin: 0 }}>{k.ctaText}</p>
         <a
@@ -950,9 +980,12 @@ function ResultScreen({
           {k.ctaBtn}
         </a>
         <p className="sf-small" style={{ margin: "10px 0 0" }}>Se abre WhatsApp con tu resultado ya escrito. Solo tienes que enviarlo.</p>
-      </div>
+      </section>
 
       <button className="sf-btn ghost sf-again" onClick={onRestart}>Repetir el test</button>
+      <footer className="sf-footer">
+        <a href="https://instagram.com/fisiofitteam" target="_blank" rel="noopener">@fisiofitteam</a> · Made in Málaga
+      </footer>
     </>
   );
 }
