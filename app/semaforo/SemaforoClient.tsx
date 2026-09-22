@@ -87,7 +87,15 @@ const STYLES = `
   font-size:17px;line-height:1.55;-webkit-font-smoothing:antialiased;
 }
 .sf-scope *,.sf-scope *::before,.sf-scope *::after{box-sizing:border-box}
-.sf-wrap{max-width:640px;margin:0 auto;padding:40px 20px 56px}
+/* position:relative + z-index:1 obligatorio: los divs .sf-bg y
+ * .sf-bg-overlay son fixed con z-index:0 y se pintan en la capa 6 del
+ * contexto del scope. Como .sf-card lleva backdrop-filter, entra también
+ * en la capa 6 y se pinta encima de esos overlays (porque va después en
+ * el DOM). Pero .sf-hero (header sin position ni background) sigue en la
+ * capa 3 y los overlays fixed lo tapan → hero invisible. Al forzar
+ * position:relative;z-index:1 en el wrap, todo el main entra en capa 7
+ * (>0) y se garantiza que quede encima de los overlays. */
+.sf-wrap{position:relative;z-index:1;max-width:640px;margin:0 auto;padding:40px 20px 56px}
 .sf-hero{margin:0 0 24px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:16px}
 .sf-hero.left{text-align:left;align-items:flex-start}
 .sf-card{
