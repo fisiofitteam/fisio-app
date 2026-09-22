@@ -16,6 +16,7 @@ const TABS: Tab[] = [
   { key: "carousel-maker", label: "🎞 Carrusel Maker", href: "/fisio/contenido/carrusel-maker" },
   { key: "metrics", label: "📈 Métricas", href: "/fisio/contenido/metricas" },
   { key: "bank", label: "🗂 Banco recursos", href: "/fisio/contenido/banco" },
+  { key: "lead-magnets", label: "🧲 Lead magnets", href: "/fisio/contenido/lead-magnets", ceoOnly: true },
   { key: "brief-ia", label: "✨ Brief IA", href: "/fisio/contenido/brief-ia", ceoOnly: true },
 ];
 

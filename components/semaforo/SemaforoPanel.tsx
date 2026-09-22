@@ -63,12 +63,15 @@ const COLORS = {
 } as const;
 
 export function SemaforoPanel({
-  canDelete, legalRevisado, igParamName, campaignParamName,
+  canDelete, legalRevisado, igParamName, campaignParamName, embedded = false,
 }: {
   canDelete: boolean;
   legalRevisado: boolean;
   igParamName: string;
   campaignParamName: string;
+  /** true si va montado dentro de otra página con su propio layout;
+   *  omite el <main> con padding para no doblarlo. */
+  embedded?: boolean;
 }) {
   // ─── Filtros ─────────────────────────────────────────────────
   const [from, setFrom] = useState(isoDaysAgo(30));
@@ -124,8 +127,11 @@ export function SemaforoPanel({
 
   const maxAbandono = kpis ? Math.max(1, ...kpis.abandono.map((a) => a.count)) : 1;
 
+  const Wrap = embedded ? "div" : "main";
+  const wrapClass = embedded ? "" : "p-4 md:p-6 max-w-[1400px] mx-auto";
+
   return (
-    <main className="p-4 md:p-6 max-w-[1400px] mx-auto">
+    <Wrap className={wrapClass}>
       <header className="flex justify-between items-end gap-2 flex-wrap mb-4">
         <div>
           <h1 className="text-xl font-semibold">🚦 Semáforo del Hombro</h1>
@@ -368,7 +374,7 @@ export function SemaforoPanel({
           onClose={() => setShowLinkGen(false)}
         />
       )}
-    </main>
+    </Wrap>
   );
 }
 
