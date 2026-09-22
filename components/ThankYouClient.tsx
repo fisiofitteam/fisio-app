@@ -23,8 +23,11 @@ export function ThankYouClient({ token, sessionId }: { token: string; sessionId:
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const [pollTick, setPollTick] = useState(0);
 
-  // Polling: cada 1.5s comprobar si el pago se ha confirmado
+  // Polling: cada 1.5s comprobar si el pago se ha confirmado. `pollTick`
+  // permite reiniciarlo al pulsar "Reintentar".
   useEffect(() => {
     if (!token) {
       setStatus({ phase: "error", message: "Link no válido" });
@@ -49,7 +52,7 @@ export function ThankYouClient({ token, sessionId }: { token: string; sessionId:
           setStatus({
             phase: "error",
             message:
-              "El pago se está procesando. Si en unos minutos no puedes entrar, escríbenos al WhatsApp.",
+              "No hemos podido confirmar tu pago automáticamente. Pulsa \"Reintentar\" o escríbenos por WhatsApp — tenemos el registro y te ayudamos en 1 minuto.",
           });
           return;
         }
@@ -65,7 +68,52 @@ export function ThankYouClient({ token, sessionId }: { token: string; sessionId:
     };
     poll();
     return () => { cancelled = true; };
-  }, [token]);
+  }, [token, pollTick]);
+
+  /**
+   * Fuerza un reintento server-side de la captura PayPal y reinicia el
+   * polling. Idempotente en PayPal — si ya se capturó, devuelve alreadyPaid.
+   */
+  async function retryCapture() {
+    setRetrying(true);
+    try {
+      const res = await fetch(`/api/sale/${token}/paypal/retry-capture`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (data?.ok) {
+        // Vuelve a checking y reinicia el polling para que recoja el paid.
+        setStatus({ phase: "checking" });
+        setPollTick((t) => t + 1);
+        return;
+      }
+      if (data?.reason === "expired" || data?.reason === "voided") {
+        setStatus({
+          phase: "error",
+          message:
+            "PayPal ha caducado el intento de pago. Ningún importe se ha cobrado. Escríbenos por WhatsApp para retomarlo.",
+        });
+        return;
+      }
+      setStatus({
+        phase: "error",
+        message:
+          "Seguimos sin poder confirmar el pago. Prueba en 1 minuto o escríbenos por WhatsApp — te ayudamos ya.",
+      });
+    } catch {
+      setStatus({
+        phase: "error",
+        message:
+          "No hemos podido reintentar. Escríbenos por WhatsApp con el código de pago y lo resolvemos.",
+      });
+    } finally {
+      setRetrying(false);
+    }
+  }
+
+  const whatsappHref = (() => {
+    const base = "https://wa.me/34621495367";
+    const msg = `¡Hola! Acabo de pagar pero la confirmación se ha quedado colgada. Mi código de pago es: ${token || "(sin código)"}`;
+    return `${base}?text=${encodeURIComponent(msg)}`;
+  })();
 
   /**
    * Entrar a la app: crea cuenta (sin contraseña) y deja sesión activa.
@@ -304,14 +352,40 @@ export function ThankYouClient({ token, sessionId }: { token: string; sessionId:
 
           {/* Error */}
           {status.phase === "error" && (
-            <div
-              className="rounded-2xl p-6 text-center"
-              style={{ background: "rgba(127, 29, 29, 0.25)", border: "1px solid #7F1D1D", backdropFilter: "blur(8px)" }}
-            >
-              <p className="text-sm" style={{ color: "#FCA5A5" }}>
-                {status.message}
-              </p>
-            </div>
+            <>
+              <div
+                className="rounded-2xl p-6 text-center mb-3"
+                style={{ background: "rgba(127, 29, 29, 0.25)", border: "1px solid #7F1D1D", backdropFilter: "blur(8px)" }}
+              >
+                <p className="text-sm" style={{ color: "#FCA5A5" }}>
+                  {status.message}
+                </p>
+              </div>
+              {token && (
+                <div className="space-y-2">
+                  <button
+                    onClick={retryCapture}
+                    disabled={retrying}
+                    className="w-full py-3.5 rounded-xl text-sm font-semibold tracking-tight transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{ background: "#FFD400", color: "#0A0A0A" }}
+                  >
+                    {retrying ? "Reintentando…" : "Reintentar confirmación"}
+                  </button>
+                  <a
+                    href={whatsappHref}
+                    target="_blank"
+                    rel="noopener"
+                    className="w-full block text-center py-3 rounded-xl text-sm font-medium transition-all hover:opacity-90"
+                    style={{ background: "#1FA855", color: "#FFFFFF" }}
+                  >
+                    Escribirnos por WhatsApp
+                  </a>
+                  <p className="text-[11px] text-center pt-2" style={{ color: "#525252" }}>
+                    Código de pago: <span style={{ color: "#A3A3A3", fontFamily: "monospace" }}>{token}</span>
+                  </p>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
