@@ -14,7 +14,7 @@ import {
   type Question,
 } from "@/lib/semaforo/questions";
 import { evaluate, type RespuestasSemaforo } from "@/lib/semaforo/evaluate";
-import { CONSENT_TEXT, IG_PARAM_NAME, CAMPAIGN_PARAM_NAME, PRIVACY_URL, sanitizeInstagram, sanitizeCampaign } from "@/lib/semaforo/config";
+import { IG_PARAM_NAME, CAMPAIGN_PARAM_NAME, sanitizeInstagram, sanitizeCampaign } from "@/lib/semaforo/config";
 
 const display = Barlow_Condensed({ subsets: ["latin"], weight: ["600", "700", "800"], variable: "--font-display" });
 const body = Archivo({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-body" });
@@ -87,8 +87,9 @@ const STYLES = `
   font-size:17px;line-height:1.55;-webkit-font-smoothing:antialiased;
 }
 .sf-scope *,.sf-scope *::before,.sf-scope *::after{box-sizing:border-box}
-.sf-wrap{max-width:640px;margin:0 auto;padding:32px 20px 56px}
-.sf-hero{margin:0 0 20px}
+.sf-wrap{max-width:640px;margin:0 auto;padding:40px 20px 56px}
+.sf-hero{margin:0 0 24px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:16px}
+.sf-hero.left{text-align:left;align-items:flex-start}
 .sf-card{
   border-radius:20px;padding:22px 20px;
   background:var(--surface);border:1px solid var(--line);
@@ -111,13 +112,14 @@ const STYLES = `
   -webkit-background-clip:text;background-clip:text;color:transparent;
 }
 .sf-scope h1,.sf-scope h2,.sf-scope h3{font-family:var(--font-display);line-height:1.02;margin:0;color:var(--ink-strong)}
-.sf-scope h1{font-size:clamp(40px,11vw,64px);font-weight:800;letter-spacing:-.03em}
+.sf-scope h1{font-size:clamp(36px,7vw,56px);font-weight:800;letter-spacing:-.035em}
 .sf-scope h2{font-size:clamp(28px,7.5vw,38px);font-weight:700;letter-spacing:-.02em}
 .sf-scope h3{font-size:22px;font-weight:700}
 .sf-scope p{margin:0 0 14px}
-.sf-lead{font-size:18px;color:var(--muted);max-width:36ch}
+.sf-lead{font-size:15px;color:var(--muted);max-width:40ch;margin:0}
+.sf-hero .sf-lead{margin:0 auto}
 .sf-small{font-size:13px;color:var(--muted-2)}
-.sf-scope button{font:inherit;color:inherit;cursor:pointer}
+.sf-scope button{font:inherit;cursor:pointer}
 .sf-scope :focus-visible{outline:3px solid var(--gold-1);outline-offset:3px;border-radius:6px}
 
 /* Traffic light */
@@ -130,20 +132,11 @@ const STYLES = `
 .sf-bulb.on.r{background:var(--red);box-shadow:0 0 0 4px rgba(239,68,68,.22),0 0 42px rgba(239,68,68,.65)}
 
 /* Intro */
-.sf-intro{display:grid;grid-template-columns:1fr auto;gap:22px;align-items:start;margin-bottom:8px}
-.sf-intro .sf-light{margin-top:6px}
 .sf-need{
   margin:0 0 16px;padding:14px 16px;border-radius:12px;
   background:#1F1F1F;border:1px solid var(--line);color:var(--ink);
 }
 .sf-need p{margin:0}
-.sf-consent{
-  margin:0 0 16px;padding:14px 16px;border-radius:12px;
-  background:#1F1F1F;border:1px solid var(--line);
-  display:flex;gap:12px;align-items:flex-start;font-size:14px;color:var(--ink);line-height:1.45;
-}
-.sf-consent input{margin-top:3px;flex:none;width:20px;height:20px;accent-color:var(--gold-1);cursor:pointer}
-.sf-consent a{color:var(--gold-1);text-decoration:underline}
 .sf-btn{
   display:inline-flex;align-items:center;justify-content:center;gap:10px;
   border:0;border-radius:14px;padding:17px 24px;font-weight:700;font-size:17px;
@@ -326,7 +319,6 @@ export function SemaforoClient({
   const [screen, setScreen] = useState<Screen>("intro");
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Answers>({});
-  const [consent, setConsent] = useState(false);
   const [responseId, setResponseId] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
 
@@ -361,7 +353,7 @@ export function SemaforoClient({
 
   // ─── Iniciar test ──
   async function start() {
-    if (!consent || starting) return;
+    if (starting) return;
     setStarting(true);
     try {
       const res = await fetch("/api/semaforo", {
@@ -453,7 +445,7 @@ export function SemaforoClient({
       <div className="sf-bg-overlay" aria-hidden />
       <main className="sf-wrap sf-screen sf-enter" key={screen + "-" + step} aria-live="polite">
         {screen === "intro" && (
-          <IntroScreen consent={consent} setConsent={setConsent} start={start} starting={starting} />
+          <IntroScreen start={start} starting={starting} />
         )}
         {screen === "quiz" && (
           <QuizScreen
@@ -492,7 +484,6 @@ export function SemaforoClient({
               setResponseId(null);
               setStep(0);
               setScreen("intro");
-              setConsent(false);
             }}
             trackWhatsappClick={trackWhatsappClick}
           />
@@ -507,7 +498,6 @@ export function SemaforoClient({
               setResponseId(null);
               setStep(0);
               setScreen("intro");
-              setConsent(false);
             }}
             trackWhatsappClick={trackWhatsappClick}
           />
@@ -520,26 +510,22 @@ export function SemaforoClient({
 // ═══════════ Intro ═══════════
 
 function IntroScreen({
-  consent, setConsent, start, starting,
+  start, starting,
 }: {
-  consent: boolean; setConsent: (v: boolean) => void; start: () => void; starting: boolean;
+  start: () => void; starting: boolean;
 }) {
   return (
     <>
       <header className="sf-hero">
         <div className="sf-brand"><span className="sf-brand-accent">FisioFitCross</span></div>
-        <div className="sf-intro">
-          <div>
-            <h1>
-              El Semáforo<br />
-              <span className="sf-brand-accent">del Hombro</span>
-            </h1>
-            <p className="sf-lead" style={{ marginTop: 18 }}>
-              Descubre qué movimientos del WOD puedes seguir haciendo, cuáles adaptar y cuáles parar. Sin quitar ejercicios a ciegas.
-            </p>
-          </div>
-          <IntroLightAnimated />
-        </div>
+        <h1>
+          El Semáforo<br />
+          <span className="sf-brand-accent">del Hombro</span>
+        </h1>
+        <p className="sf-lead">
+          Descubre qué movimientos del WOD puedes seguir haciendo, cuáles adaptar y cuáles parar. Sin quitar ejercicios a ciegas.
+        </p>
+        <IntroLightAnimated />
       </header>
       <section className="sf-card">
         <div className="sf-need">
@@ -548,14 +534,7 @@ function IntroScreen({
             Unas preguntas y 4 pruebas sencillas en casa. Necesitas una pared, el marco de una puerta y una barra de dominadas.
           </p>
         </div>
-        <label className="sf-consent">
-          <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-          <span>
-            {CONSENT_TEXT}{" "}
-            <a href={PRIVACY_URL} target="_blank" rel="noopener">Política de privacidad</a>.
-          </span>
-        </label>
-        <button className="sf-btn" onClick={start} disabled={!consent || starting}>
+        <button className="sf-btn" onClick={start} disabled={starting}>
           {starting ? "Cargando…" : "Empezar el test →"}
         </button>
         <p className="sf-small sf-disclaimer">
