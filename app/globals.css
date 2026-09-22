@@ -199,16 +199,23 @@ h1, h2, h3, h4, h5 {
  * el .input global no fija color de texto y muchos navegadores dan
  * fondo blanco por defecto → texto blanco (var(--p-text) en tema dark)
  * sobre fondo blanco = invisible. Aquí forzamos color acorde al tema y
- * fondo de la superficie 2 para que se vea bien en dark y light. */
-.patient-scope input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]),
-.patient-scope textarea,
-.patient-scope select {
+ * fondo de la superficie 2 para que se vea bien en dark y light.
+ *
+ * Envolvemos los selectores en :where() para que la specificity de esta
+ * regla baje a solo la de `.patient-scope` (0,1,0). Así, cualquier input
+ * con clases Tailwind explícitas (text-neutral-900, bg-white, etc.) puede
+ * sobreescribir el default del tema — imprescindible en formularios como
+ * OnboardingFlow donde el input va sobre una card blanca y necesita texto
+ * negro. Sin :where() ganaba la regla base con :not() x5 (specificity 0,6,1)
+ * y quedaba blanco sobre blanco. */
+.patient-scope :where(input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"])),
+.patient-scope :where(textarea),
+.patient-scope :where(select) {
   background: var(--p-surface-2);
   color: var(--p-text);
   border-color: var(--p-border);
 }
-.patient-scope input::placeholder,
-.patient-scope textarea::placeholder {
+.patient-scope :where(input, textarea)::placeholder {
   color: var(--p-text-faint);
 }
 
