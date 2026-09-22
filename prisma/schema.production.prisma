@@ -272,6 +272,8 @@ model Professional {
   callSettings      ProfessionalCallSettings? @relation("CallSettings")
   derivationsCreated PatientDerivation[]           @relation("DerivationFrom")
   derivationsReceived PatientDerivation[]          @relation("DerivationTo")
+
+  semaforosGestionados SemaforoRespuesta[]         @relation("SemaforoGestionadoPor")
   compensation      Compensation?
   communityFeedPosts     CommunityFeedPost[] @relation("FeedPostAuthor")
   communityFeedComments  CommunityComment[]  @relation("FeedCommentAuthor")
@@ -440,6 +442,10 @@ model Lead {
 
   // Resumen IA de la videollamada (Meet transcript → Claude Sonnet).
   callSummary     CallSummary?
+
+  // Respuestas del Semáforo del Hombro que dieron origen a este lead
+  // (idealmente 0 o 1, pero permitimos array por si acaso).
+  semaforoRespuestas SemaforoRespuesta[]
 
   @@index([status])
   @@index([callScheduledAt])
@@ -1143,6 +1149,62 @@ model FormLibrary {
   description String?
   questions String                                  // JSON: [{id, text, type, options?}]
   createdAt DateTime @default(now())
+}
+
+// Lead magnet "El Semáforo del Hombro". Un test público (sin login)
+// que rellenan atletas con dolor de hombro; cada intento es una fila
+// aquí. Se guarda desde el primer paso (estado EN_CURSO) para tener
+// visibilidad del embudo y de dónde abandona la gente. Al terminar,
+// el servidor recalcula color/movimientos con lib/semaforo/evaluate y
+// lo persiste — nunca confiamos en lo que envía el cliente.
+model SemaforoRespuesta {
+  id                    String   @id @default(cuid())
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  // Identificación. Si viene de Instagram (Skalex), ig llega por
+  // querystring; si no, el paso final del test pide nombre + contacto.
+  instagram             String?
+  nombre                String?
+  telefono              String?
+  campana               String?              // texto libre (?c=)
+
+  // Ciclo de vida: "EN_CURSO" mientras rellena, "COMPLETADO" al ver
+  // resultado, "ALARMA" si marcó bandera roja en el paso de seguridad.
+  estado                String   @default("EN_CURSO")
+  ultimoPaso            Int      @default(0)
+
+  // Resultado calculado en servidor con evaluate(). null hasta cierre.
+  // Valores: "VERDE" | "AMBAR" | "ROJO" (null en EN_CURSO).
+  color                 String?
+  banderas              String   @default("[]")     // JSON array de strings
+  respuestas            String   @default("{}")     // JSON con las respuestas
+  movimientos           String?                     // JSON { overhead, tirones, empujes }
+
+  // Trazas del embudo comercial.
+  whatsappClickAt       DateTime?
+
+  // Consentimiento RGPD (datos de salud).
+  consentimientoAt      DateTime
+  consentimientoVersion String
+
+  userAgent             String?
+
+  // Gestión interna.
+  gestionado            Boolean  @default(false)
+  gestionadoPorId       String?
+  gestionadoPor         Professional? @relation("SemaforoGestionadoPor", fields: [gestionadoPorId], references: [id], onDelete: SetNull)
+  notas                 String?
+
+  // Cross-reference opcional con el lead comercial (si se convierte).
+  leadId                String?
+  lead                  Lead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([color])
+  @@index([estado])
+  @@index([instagram])
+  @@index([leadId])
 }
 
 model VideoLibrary {
