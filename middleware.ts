@@ -31,6 +31,9 @@ const PUBLIC_PATHS = [
   "/privacidad",    // política de privacidad pública (requerida por App Store)
   "/terminos",     // términos y condiciones públicos
   "/eliminar-cuenta", // instrucciones de borrado de cuenta (requerida por Google Play)
+  "/semaforo",      // lead magnet "El Semáforo del Hombro" — landing pública
+                    //   sin login, distribuido por Instagram/Skalex.
+  "/api/semaforo",  // endpoints del semáforo (create, update, whatsapp click)
 ];
 
 const STATIC_PREFIXES = ["/_next", "/api/_internal", "/favicon", "/icon-", "/box.jpg", "/manifest.json"];
