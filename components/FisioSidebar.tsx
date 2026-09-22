@@ -31,6 +31,7 @@ import {
   AlertTriangle,
   Sunrise,
   Bot,
+  TrafficCone,
   LucideIcon,
 } from "lucide-react";
 
@@ -67,6 +68,7 @@ const SETTER_IA: Item = { id: "setter-ia", label: "Setter IA", Icon: Bot, href: 
 const ALERTAS: Item = { id: "alertas", label: "Alertas", Icon: AlertTriangle, href: "/fisio/alertas", match: (p) => p.startsWith("/fisio/alertas") };
 const RESUMENES: Item = { id: "resumenes", label: "Resúmenes", Icon: Sunrise, href: "/fisio/resumenes", match: (p) => p.startsWith("/fisio/resumenes") };
 const AJUSTES: Item = { id: "ajustes", label: "Ajustes", Icon: Settings, href: "/fisio/ajustes", match: (p) => p.startsWith("/fisio/ajustes") };
+const SEMAFORO: Item = { id: "semaforo", label: "Semáforo", Icon: TrafficCone, href: "/fisio/semaforo", match: (p) => p.startsWith("/fisio/semaforo") };
 
 function itemsForRole(role: string, opts: { withResumenes: boolean }): Item[] {
   // Managers (CEO / head_success) SIEMPRE ven "Resúmenes", aunque no
@@ -77,16 +79,16 @@ function itemsForRole(role: string, opts: { withResumenes: boolean }): Item[] {
   const R = (opts.withResumenes || isManager) ? [RESUMENES] : [];
   if (role === "ceo") {
     // CEO no ve el buzon de Alertas (lo gestionan head_success y fisios).
-    return [PANEL, PACIENTES, ...R, ADVANCE, LLAMADAS_VENTA, CONTENIDO, ANUNCIOS, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, RECURSOS, FINANZAS, EQUIPO, CHAT, FISIO_IA, SETTER_IA, AJUSTES];
+    return [PANEL, PACIENTES, ...R, ADVANCE, LLAMADAS_VENTA, SEMAFORO, CONTENIDO, ANUNCIOS, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, RECURSOS, FINANZAS, EQUIPO, CHAT, FISIO_IA, SETTER_IA, AJUSTES];
   }
   if (role === "head_success") {
-    return [PANEL, PACIENTES, ALERTAS, ...R, ADVANCE, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, CHAT, FISIO_IA, AJUSTES];
+    return [PANEL, PACIENTES, ALERTAS, ...R, ADVANCE, SEMAFORO, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, CHAT, FISIO_IA, AJUSTES];
   }
   if (role === "setter") {
-    return [PANEL, LEADS, PACIENTES, REGALOS, CONTENIDO, COMUNIDAD, REUNIONES, CALENDARIO, EQUIPO, CHAT, FISIO_IA, AJUSTES];
+    return [PANEL, LEADS, PACIENTES, SEMAFORO, REGALOS, CONTENIDO, COMUNIDAD, REUNIONES, CALENDARIO, EQUIPO, CHAT, FISIO_IA, AJUSTES];
   }
   if (role === "closer") {
-    return [PANEL, LLAMADAS_VENTA, FOLLOWUP, COMUNIDAD, REUNIONES, CALENDARIO, EQUIPO, CHAT, FISIO_IA, AJUSTES];
+    return [PANEL, LLAMADAS_VENTA, SEMAFORO, FOLLOWUP, COMUNIDAD, REUNIONES, CALENDARIO, EQUIPO, CHAT, FISIO_IA, AJUSTES];
   }
   // fisio normal
   return [PANEL, PACIENTES, ALERTAS, ...R, ROLLING_LECTURA, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, CHAT, FISIO_IA, AJUSTES];
