@@ -21,24 +21,34 @@ export const dynamic = "force-dynamic";
 export default async function RenewalThankYouPage({
   searchParams,
 }: {
-  searchParams: { token?: string; PayerID?: string };
+  searchParams: { token?: string | string[]; PayerID?: string | string[] };
 }) {
-  const token = searchParams.token || "";
-  if (token && searchParams.PayerID) {
-    await capturePayPalIfPending(token);
+  // PayPal añade su propio ?token=<orderId>&PayerID=... al returnUrl que ya
+  // llevaba nuestro ?token=<paymentToken>. Next.js devuelve ese `token` como
+  // array de dos strings. El primero es nuestro paymentToken; el segundo el
+  // orderId de PayPal (ver comentario extendido en pagar/gracias/page.tsx).
+  const rawToken = searchParams.token;
+  const paymentToken = Array.isArray(rawToken) ? rawToken[0] ?? "" : rawToken ?? "";
+  const paypalOrderIdFromUrl = Array.isArray(rawToken) ? rawToken[1] : null;
+  const payerId = Array.isArray(searchParams.PayerID) ? searchParams.PayerID[0] : searchParams.PayerID;
+
+  if (paymentToken && payerId) {
+    await capturePayPalIfPending(paymentToken, paypalOrderIdFromUrl ?? null);
   }
-  return <RenewalThankYouClient token={token} />;
+  return <RenewalThankYouClient token={paymentToken} />;
 }
 
-async function capturePayPalIfPending(token: string): Promise<void> {
+async function capturePayPalIfPending(paymentToken: string, orderIdFromUrl: string | null): Promise<void> {
   try {
     const checkout = await prisma.renewalCheckout.findUnique({
-      where: { paymentToken: token },
+      where: { paymentToken },
       select: { status: true, paypalOrderId: true },
     });
-    if (!checkout?.paypalOrderId) return;
+    if (!checkout) return;
     if (checkout.status === "paid") return;
-    await captureOrder(checkout.paypalOrderId);
+    const orderId = orderIdFromUrl ?? checkout.paypalOrderId;
+    if (!orderId) return;
+    await captureOrder(orderId);
   } catch (e) {
     console.error("[renovar/gracias] Fallo al capturar Order PayPal:", e);
   }

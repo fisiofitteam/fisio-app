@@ -31,28 +31,44 @@ export const dynamic = "force-dynamic";
 export default async function GraciasPage({
   searchParams,
 }: {
-  searchParams: { token?: string; session_id?: string; PayerID?: string };
+  searchParams: { token?: string | string[]; session_id?: string | string[]; PayerID?: string | string[] };
 }) {
-  const token = searchParams.token || "";
+  // PayPal añade su propio ?token=<orderId>&PayerID=... al returnUrl que ya
+  // llevaba nuestro ?token=<paymentToken>. Next.js devuelve ese `token` como
+  // array de dos strings. El primero es SIEMPRE nuestro paymentToken (viaja
+  // en el returnUrl original); el segundo es el orderId de PayPal.
+  const rawToken = searchParams.token;
+  const paymentToken = Array.isArray(rawToken) ? rawToken[0] ?? "" : rawToken ?? "";
+  const paypalOrderIdFromUrl = Array.isArray(rawToken) ? rawToken[1] : null;
+  const payerId = firstStr(searchParams.PayerID);
+  const sessionId = firstStr(searchParams.session_id);
 
-  // Si venimos de PayPal, capturar antes de mostrar la página.
-  if (token && searchParams.PayerID) {
-    await capturePayPalIfPending(token);
+  if (paymentToken && payerId) {
+    await capturePayPalIfPending(paymentToken, paypalOrderIdFromUrl);
   }
 
-  return <ThankYouClient token={token} sessionId={searchParams.session_id || ""} />;
+  return <ThankYouClient token={paymentToken} sessionId={sessionId} />;
 }
 
-async function capturePayPalIfPending(token: string): Promise<void> {
+function firstStr(v: string | string[] | undefined): string {
+  if (Array.isArray(v)) return v[0] ?? "";
+  return v ?? "";
+}
+
+async function capturePayPalIfPending(paymentToken: string, orderIdFromUrl: string | null): Promise<void> {
   try {
     const sale = await prisma.sale.findUnique({
-      where: { paymentToken: token },
+      where: { paymentToken },
       select: { id: true, status: true, paypalOrderId: true },
     });
-    if (!sale?.paypalOrderId) return;
+    if (!sale) return;
     if (sale.status === "paid") return; // webhook llegó antes
+    // Preferimos el orderId que trae PayPal en la URL (garantizado) sobre el
+    // que hayamos guardado en BD (puede faltar si el POST original falló).
+    const orderId = orderIdFromUrl ?? sale.paypalOrderId;
+    if (!orderId) return;
     // Captura idempotente: PayPal devuelve el mismo resultado si repetimos.
-    await captureOrder(sale.paypalOrderId);
+    await captureOrder(orderId);
     // La webhook PAYMENT.CAPTURE.COMPLETED se dispara aquí y hace el resto.
   } catch (e) {
     console.error("[pagar/gracias] Fallo al capturar Order PayPal:", e);
