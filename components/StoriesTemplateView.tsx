@@ -33,22 +33,52 @@ const DAY_SHORT = ["", "L", "M", "X", "J", "V", "S", "D"];
 export function StoriesTemplateView() {
   const [slots, setSlots] = useState<Slot[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [needsSetup, setNeedsSetup] = useState(false);
+  const [migrating, setMigrating] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const r = await fetch("/api/content/stories");
-        const d = await r.json();
-        if (!r.ok || !d?.ok) {
-          setError(d?.error || `Error ${r.status}`);
+  async function load() {
+    setError(null);
+    try {
+      const r = await fetch("/api/content/stories");
+      const d = await r.json();
+      if (!r.ok || !d?.ok) {
+        // Prisma tira P2021 cuando la tabla no existe. Detectamos ese caso
+        // para ofrecer el botón "Preparar tablas" en vez de error críptico.
+        const msg = String(d?.error ?? `Error ${r.status}`);
+        if (/does not exist|P2021|StoryTemplateSlot/i.test(msg)) {
+          setNeedsSetup(true);
           return;
         }
-        setSlots(d.slots);
-      } catch (e: any) {
-        setError(e?.message || "Error inesperado");
+        setError(msg);
+        return;
       }
-    })();
+      setSlots(d.slots);
+    } catch (e: any) {
+      setError(e?.message || "Error inesperado");
+    }
+  }
+
+  useEffect(() => {
+    load();
   }, []);
+
+  async function runMigration() {
+    setMigrating(true);
+    try {
+      const r = await fetch("/api/admin/migrate-stories");
+      const d = await r.json();
+      if (r.ok && d?.ok) {
+        setNeedsSetup(false);
+        await load();
+        return;
+      }
+      setError(d?.message || d?.error || "No se pudo preparar la base de datos.");
+    } catch (e: any) {
+      setError(e?.message || "Error inesperado en la migración");
+    } finally {
+      setMigrating(false);
+    }
+  }
 
   function updateSlotLocal(slotId: string, patch: Partial<Slot>) {
     setSlots((prev) =>
@@ -84,6 +114,24 @@ export function StoriesTemplateView() {
     );
   }
 
+  if (needsSetup) {
+    return (
+      <div className="card max-w-md">
+        <h2 className="text-sm font-semibold mb-1">Un solo paso antes de empezar</h2>
+        <p className="text-xs text-neutral-600 mb-3">
+          Es la primera vez que usas Historias en esta app. Pulsa el botón para preparar la base de datos — es instantáneo y solo hay que hacerlo una vez.
+        </p>
+        <button
+          onClick={runMigration}
+          disabled={migrating}
+          className="text-xs font-semibold px-3 py-1.5 rounded-lg disabled:opacity-50"
+          style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+        >
+          {migrating ? "Preparando…" : "Preparar tablas"}
+        </button>
+      </div>
+    );
+  }
   if (error) {
     return (
       <div className="rounded-lg p-3 text-xs" style={{ background: "#FEE2E2", color: "#7F1D1D", border: "1px solid #FCA5A5" }}>
