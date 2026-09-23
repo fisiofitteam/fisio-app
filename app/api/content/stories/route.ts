@@ -46,16 +46,25 @@ export async function GET() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  await ensureSlots();
-
-  const slots = await prisma.storyTemplateSlot.findMany({
-    orderBy: { dayOfWeek: "asc" },
-    include: {
-      ideas: {
-        orderBy: [{ done: "asc" }, { order: "asc" }, { createdAt: "asc" }],
+  // Try/catch obligatorio: si las tablas no existen en Neon (feature aún
+  // sin migrar), Prisma tira P2021 y Next.js devuelve una página de error
+  // HTML — el cliente al hacer .json() peta con "Unexpected end of JSON".
+  // Devolvemos siempre JSON, con el mensaje "does not exist" reconocible
+  // por el UI para pintar el botón "Preparar tablas".
+  try {
+    await ensureSlots();
+    const slots = await prisma.storyTemplateSlot.findMany({
+      orderBy: { dayOfWeek: "asc" },
+      include: {
+        ideas: {
+          orderBy: [{ done: "asc" }, { order: "asc" }, { createdAt: "asc" }],
+        },
       },
-    },
-  });
-
-  return NextResponse.json({ ok: true, slots });
+    });
+    return NextResponse.json({ ok: true, slots });
+  } catch (e: any) {
+    const msg = String(e?.message ?? e);
+    console.error("[/api/content/stories] error:", msg);
+    return NextResponse.json({ ok: false, error: msg }, { status: 500 });
+  }
 }

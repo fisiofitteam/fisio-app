@@ -40,12 +40,22 @@ export function StoriesTemplateView() {
     setError(null);
     try {
       const r = await fetch("/api/content/stories");
-      const d = await r.json();
+      // Parseo defensivo: si Vercel/Next devuelve HTML de error 500 (por
+      // ejemplo cuando la tabla no existe todavía y el endpoint no ha
+      // capturado el error) .json() peta. Leemos texto y probamos JSON.
+      const raw = await r.text();
+      let d: any = null;
+      try { d = raw ? JSON.parse(raw) : null; } catch { /* raw es HTML */ }
+
       if (!r.ok || !d?.ok) {
-        // Prisma tira P2021 cuando la tabla no existe. Detectamos ese caso
-        // para ofrecer el botón "Preparar tablas" en vez de error críptico.
-        const msg = String(d?.error ?? `Error ${r.status}`);
-        if (/does not exist|P2021|StoryTemplateSlot/i.test(msg)) {
+        // Cualquier error 500 o mensaje "does not exist" → necesitamos crear
+        // las tablas. Mostramos el botón "Preparar tablas".
+        const msg = String(d?.error ?? raw ?? `Error ${r.status}`);
+        if (
+          r.status === 500 ||
+          !d ||
+          /does not exist|P2021|StoryTemplateSlot|StoryIdea|relation.*does not exist/i.test(msg)
+        ) {
           setNeedsSetup(true);
           return;
         }
