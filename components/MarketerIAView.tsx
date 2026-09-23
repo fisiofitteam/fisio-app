@@ -117,6 +117,10 @@ export function MarketerIAView() {
   const [mixInfographic, setMixInfographic] = useState(0);
   const [mixImage, setMixImage] = useState(0);
   const [mixLive, setMixLive] = useState(0);
+  // Si el CEO desactiva este toggle, la IA solo devuelve hook + título + goals
+  // por pieza, sin expandir los 4 bloques del guion. Sirve para hacer una
+  // tirada rápida de ideas cuando el guion lo va a redactar él a mano.
+  const [includeScript, setIncludeScript] = useState(true);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -159,6 +163,7 @@ export function MarketerIAView() {
           startWeek: toDateInputValue(snapToMondayUtc(startWeek)),
           weeksAhead,
           piecesPerWeek: Object.keys(piecesPerWeek).length > 0 ? piecesPerWeek : undefined,
+          includeScript,
           pdfBase64: pdfData || undefined,
           pdfName: pdfName || undefined,
         }),
@@ -390,6 +395,24 @@ export function MarketerIAView() {
             <MixInput label="📸 Foto" value={mixImage} onChange={setMixImage} disabled={busy} />
             <MixInput label="🔴 Directo" value={mixLive} onChange={setMixLive} disabled={busy} />
           </div>
+        </div>
+
+        <div>
+          <label className="flex items-start gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={includeScript}
+              onChange={(e) => setIncludeScript(e.target.checked)}
+              disabled={busy}
+              className="mt-0.5 h-4 w-4 accent-neutral-900 cursor-pointer"
+            />
+            <span>
+              <span className="text-xs font-medium text-neutral-800 block">Con guion completo</span>
+              <span className="text-[10px] text-neutral-500 block leading-snug">
+                La IA redacta los 4 bloques (P1 hook · P2 giro · P3 prueba · P4 CTA). Si lo desactivas, solo devuelve el hook y el título — más rápido y barato.
+              </span>
+            </span>
+          </label>
         </div>
 
         {error && (

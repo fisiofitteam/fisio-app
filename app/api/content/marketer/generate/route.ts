@@ -73,7 +73,7 @@ function canAccess(role: string): boolean {
   return role === "ceo" || role === "setter";
 }
 
-function systemPrompt(brief: Awaited<ReturnType<typeof getAiBrief>>): string {
+function systemPrompt(brief: Awaited<ReturnType<typeof getAiBrief>>, includeScript: boolean): string {
   return [
     "Eres el Marketer IA de FisioFit Team, una clínica de fisioterapia online para atletas de CrossFit.",
     "Tu trabajo: diseñar estrategias de contenido de Instagram accionables — semanas con tema central + piezas concretas (hook + objetivo + rationale).",
@@ -122,37 +122,45 @@ function systemPrompt(brief: Awaited<ReturnType<typeof getAiBrief>>): string {
     "- 'hook' = IDEA PRINCIPAL de la pieza: 1-2 frases que resumen QUÉ se cuenta y CÓMO (ángulo/tono). NO es el hook literal de apertura del vídeo. Ej: 'Reel confrontacional sobre por qué el descanso no cura el hombro. Termina con CTA al webinar.'",
     "- Rationale en 1-2 frases explicando por qué esa pieza en ese slot.",
     "",
-    "GUION POR PLANOS (obligatorio para format=reel, opcional para el resto):",
-    "",
-    "Para CADA reel devuelve un array `blocks` con 3 o 4 objetos, labels 'Plano 1'…'Plano 4' en orden.",
-    "El content de cada plano describe la IDEA a transmitir en ese plano — QUÉ se dice y CÓMO se muestra — nunca la frase literal.",
-    "",
-    "ESTRUCTURA RECOMENDADA DE UN REEL DE 3-4 PLANOS:",
-    "  · Plano 1 (gancho) — Golpe seco en 2 segundos: una afirmación provocadora, un dato contraintuitivo o una promesa fuerte. Debe romper el scroll. Cuenta también el ENCUADRE (Ales primer plano a cámara, foto tumbado, plano detalle de la mano, texto grande sobre b-roll…).",
-    "  · Plano 2 (contexto/giro) — Amplía o gira: 'porque casi todo el mundo…', 'y ahí está el error…'. Introduce el conflicto o la creencia limitante que ataca la semana.",
-    "  · Plano 3 (prueba/aha) — El insight, el caso real, la analogía, el ejemplo. Aquí se entiende POR QUÉ.",
-    "  · Plano 4 (cierre/CTA, si hay 4) — Frase de salida + llamada concreta (comenta 'X', DM 'HOMBRO', enlace bio…). Puede fusionarse con el plano 3 si con 3 basta.",
-    "",
-    "CADA PLANO DEBE INCLUIR:",
-    "  · Encuadre visual concreto (primer plano, plano detalle, B-roll de gym, texto sobre pantalla, cortes rápidos…).",
-    "  · La IDEA de lo que se cuenta en 1-3 líneas, específica, no genérica.",
-    "  · Cuando aplique: el gesto, el prop, la localización, o el gráfico que refuerza la idea.",
-    "",
-    "REGLAS DE CALIDAD — LEE Y APLICA:",
-    "  · Nada de 'presenta el problema', 'explica cómo', 'muestra los pasos', 'invita a comentar'. Son placeholders vacíos, NO planos.",
-    "  · Concreto siempre. Si dices 'un ejemplo', dilo cuál. Si dices 'un dato', dilo cuál.",
-    "  · Nombra emociones (rabia, alivio, frustración, incredulidad) y momentos reales del atleta, no arquetipos.",
-    "  · Cero jerga médica en el content (no 'discopatía', no 'tenosinovitis crónica'). Escríbelo como se lo contarías a un atleta en el box.",
-    "  · Prohibido repetir el hook literal en el plano. Los planos DESARROLLAN el hook, no lo copian.",
-    "  · Prohibidas frases con 'la persona', 'el paciente', 'el usuario'. Habla del atleta directamente o en segunda persona.",
-    "",
-    "EJEMPLOS DE PLANOS BUENOS (imita el nivel de concreción):",
-    "  · 'Plano 1 — Primer plano de Ales sujetando una kettlebell a la altura del hombro, mirada retadora. Suelta la afirmación que rompe el mito de la semana ('el reposo NO cura tu hombro') con corte seco a plano medio antes de terminar la frase para forzar el enganche.'",
-    "  · 'Plano 2 — B-roll de un atleta haciendo strict press mientras texto grande cae en pantalla: '4 semanas parado = 4 semanas retrocediendo'. Ales en voz en off explica por qué el descanso pasivo atrofia justo lo que quieres recuperar, sin llegar a la solución todavía.'",
-    "  · 'Plano 3 — Ales en el box junto a Miriam (paciente real ADVANCE) haciendo el ejercicio concreto que le devolvió el overhead. Cuenta el momento en el que ella dejó de tenerle miedo al hombro. La prueba en vídeo cierra la creencia.'",
-    "  · 'Plano 4 — Ales frontal, plano medio, cierre directo: quien esté igual de estancado que Miriam, que comente HOMBRO y le llega el mini-programa gratuito. Sin música al final para que el CTA respire.'",
-    "",
-    "Para carousel/infographic/image/live NO devuelvas blocks (o devuelve array vacío).",
+    includeScript
+      ? [
+          "GUION POR PLANOS (obligatorio para format=reel, opcional para el resto):",
+          "",
+          "Para CADA reel devuelve un array `blocks` con 3 o 4 objetos, labels 'Plano 1'…'Plano 4' en orden.",
+          "El content de cada plano describe la IDEA a transmitir en ese plano — QUÉ se dice y CÓMO se muestra — nunca la frase literal.",
+          "",
+          "ESTRUCTURA RECOMENDADA DE UN REEL DE 3-4 PLANOS:",
+          "  · Plano 1 (gancho) — Golpe seco en 2 segundos: una afirmación provocadora, un dato contraintuitivo o una promesa fuerte. Debe romper el scroll. Cuenta también el ENCUADRE (Ales primer plano a cámara, foto tumbado, plano detalle de la mano, texto grande sobre b-roll…).",
+          "  · Plano 2 (contexto/giro) — Amplía o gira: 'porque casi todo el mundo…', 'y ahí está el error…'. Introduce el conflicto o la creencia limitante que ataca la semana.",
+          "  · Plano 3 (prueba/aha) — El insight, el caso real, la analogía, el ejemplo. Aquí se entiende POR QUÉ.",
+          "  · Plano 4 (cierre/CTA, si hay 4) — Frase de salida + llamada concreta (comenta 'X', DM 'HOMBRO', enlace bio…). Puede fusionarse con el plano 3 si con 3 basta.",
+          "",
+          "CADA PLANO DEBE INCLUIR:",
+          "  · Encuadre visual concreto (primer plano, plano detalle, B-roll de gym, texto sobre pantalla, cortes rápidos…).",
+          "  · La IDEA de lo que se cuenta en 1-3 líneas, específica, no genérica.",
+          "  · Cuando aplique: el gesto, el prop, la localización, o el gráfico que refuerza la idea.",
+          "",
+          "REGLAS DE CALIDAD — LEE Y APLICA:",
+          "  · Nada de 'presenta el problema', 'explica cómo', 'muestra los pasos', 'invita a comentar'. Son placeholders vacíos, NO planos.",
+          "  · Concreto siempre. Si dices 'un ejemplo', dilo cuál. Si dices 'un dato', dilo cuál.",
+          "  · Nombra emociones (rabia, alivio, frustración, incredulidad) y momentos reales del atleta, no arquetipos.",
+          "  · Cero jerga médica en el content (no 'discopatía', no 'tenosinovitis crónica'). Escríbelo como se lo contarías a un atleta en el box.",
+          "  · Prohibido repetir el hook literal en el plano. Los planos DESARROLLAN el hook, no lo copian.",
+          "  · Prohibidas frases con 'la persona', 'el paciente', 'el usuario'. Habla del atleta directamente o en segunda persona.",
+          "",
+          "EJEMPLOS DE PLANOS BUENOS (imita el nivel de concreción):",
+          "  · 'Plano 1 — Primer plano de Ales sujetando una kettlebell a la altura del hombro, mirada retadora. Suelta la afirmación que rompe el mito de la semana ('el reposo NO cura tu hombro') con corte seco a plano medio antes de terminar la frase para forzar el enganche.'",
+          "  · 'Plano 2 — B-roll de un atleta haciendo strict press mientras texto grande cae en pantalla: '4 semanas parado = 4 semanas retrocediendo'. Ales en voz en off explica por qué el descanso pasivo atrofia justo lo que quieres recuperar, sin llegar a la solución todavía.'",
+          "  · 'Plano 3 — Ales en el box junto a Miriam (paciente real ADVANCE) haciendo el ejercicio concreto que le devolvió el overhead. Cuenta el momento en el que ella dejó de tenerle miedo al hombro. La prueba en vídeo cierra la creencia.'",
+          "  · 'Plano 4 — Ales frontal, plano medio, cierre directo: quien esté igual de estancado que Miriam, que comente HOMBRO y le llega el mini-programa gratuito. Sin música al final para que el CTA respire.'",
+          "",
+          "Para carousel/infographic/image/live NO devuelvas blocks (o devuelve array vacío).",
+        ].join("\n")
+      : [
+          "MODO SIN GUION:",
+          "NO redactes el guion por planos. NO devuelvas el campo `blocks` en ninguna pieza (o devuélvelo como array vacío).",
+          "Solo hook + título + goals + rationale por pieza. El CEO va a redactar el guion a mano cuando le toque, así que céntrate en calidad del hook y variedad de ángulos entre piezas.",
+        ].join("\n"),
   ].join("\n");
 }
 
@@ -243,6 +251,10 @@ async function runGenerate(req: NextRequest) {
   const piecesPerWeek = (body?.piecesPerWeek && typeof body.piecesPerWeek === "object")
     ? body.piecesPerWeek
     : undefined;
+  // Con guion (default true) → la IA redacta blocks para cada reel. Sin guion
+  // → solo hook + título; el CEO redacta a mano después. Ahorra tokens y da
+  // tiradas rápidas de ideas.
+  const includeScript = body?.includeScript !== false;
 
   // Contexto: temas recientes ya tratados (últimas 6 semanas) para evitar repetir.
   const recentWeeks = await prisma.contentWeek.findMany({
@@ -368,7 +380,7 @@ async function runGenerate(req: NextRequest) {
     const msg = await client().messages.create({
       model: MODEL,
       max_tokens: MAX_OUTPUT_TOKENS,
-      system: systemPrompt(brief),
+      system: systemPrompt(brief, includeScript),
       tools: [tool],
       tool_choice: { type: "tool", name: "submit_strategy" },
       messages: [{ role: "user", content: userContent }],
