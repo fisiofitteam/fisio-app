@@ -7,6 +7,7 @@ type Tab = { key: string; label: string; href: string; ceoOnly?: boolean; extern
 const TABS: Tab[] = [
   { key: "calendar", label: "📅 Calendario", href: "/fisio/contenido/calendario" },
   { key: "dossier", label: "📄 Dossier", href: "/fisio/contenido/dossier" },
+  { key: "historias", label: "📱 Historias", href: "/fisio/contenido/historias" },
   { key: "marketer", label: "🧠 Marketer IA", href: "/fisio/contenido/marketer", ceoOnly: true },
   { key: "template", label: "🧩 Plantillas", href: "/fisio/contenido/plantilla" },
   // El editor Story Maker vive en /fisio/contenido/story-maker (page Next

@@ -3893,3 +3893,40 @@ model CallSummary {
   @@index([generatedAt])
 }
 
+
+// ── HISTORIAS ─────────────────────────────────────────────────────────
+// Plantilla semanal fija de historias del CEO. UN slot por día (7 slots
+// en total). El nombre del slot ("Café con Ales", "Caso de éxito + CTA")
+// es texto libre — cambiar la plantilla es editar el nombre del slot.
+//
+// Las ideas cuelgan del slot, sin fecha: es un bloc infinito por día
+// (según decisión CEO 2026-09-23). Cuando publicas una idea, la marcas
+// `done` para tacharla sin borrarla (histórico consultable).
+model StoryTemplateSlot {
+  id           String   @id @default(cuid())
+  dayOfWeek    Int      @unique  // 1..7 (Lun..Dom)
+  formatName   String              // "Café con Ales", "Caso de éxito + CTA"
+  emoji        String?
+  color        String?             // hex u opcional para tint
+  updatedAt    DateTime @updatedAt
+
+  ideas        StoryIdea[]
+
+  @@index([dayOfWeek])
+}
+
+model StoryIdea {
+  id             String   @id @default(cuid())
+  templateSlotId String
+  templateSlot   StoryTemplateSlot @relation(fields: [templateSlotId], references: [id], onDelete: Cascade)
+
+  text           String
+  done           Boolean  @default(false)
+  order          Int      @default(0)
+  doneAt         DateTime?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([templateSlotId, done, order])
+}
