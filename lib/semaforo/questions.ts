@@ -115,6 +115,19 @@ export const Q: readonly Question[] = [
     ],
   },
   {
+    id: "eva",
+    section: "Tu dolor ahora",
+    type: "single",
+    title: "En una escala del 0 al 10, ¿cuánto te duele el hombro entrenando?",
+    help: "0 = nada, no lo noto. 10 = el peor dolor que puedas imaginar.",
+    options: [
+      { v: "0-1", label: "0-1 · Nada o casi nada", score: 0, c: "g" },
+      { v: "2-3", label: "2-3 · Molesta pero puedo con todo", score: 1, c: "a" },
+      { v: "4-6", label: "4-6 · Duele y me obliga a bajar carga o cambiar movimientos", score: 2, c: "r" },
+      { v: "7-10", label: "7-10 · Muy fuerte, no puedo entrenar con eso", score: 2, c: "r" },
+    ],
+  },
+  {
     id: "dia-siguiente",
     section: "Cómo responde tu hombro",
     type: "single",
@@ -137,76 +150,35 @@ export const Q: readonly Question[] = [
     ],
   },
   {
+    id: "overhead-subjetivo",
+    section: "Cómo lo notas tú",
+    type: "single",
+    title: "¿Puedes levantar los brazos por encima de la cabeza sin dolor?",
+    help: "Piensa en un movimiento tipo snatch, jerk o wall ball.",
+    options: [
+      { v: "si", label: "Sí, sin problema", score: 0, c: "g" },
+      { v: "molestia", label: "Puedo, pero noto molestia o rigidez", score: 1, c: "a" },
+      { v: "no", label: "Duele o no llego arriba del todo", score: 2, c: "r" },
+    ],
+  },
+  {
+    id: "asimetria",
+    section: "Cómo lo notas tú",
+    type: "single",
+    title: "Comparado con el otro hombro, ¿lo notas diferente?",
+    help: "Sube los dos brazos delante del espejo y compara.",
+    options: [
+      { v: "igual", label: "Están igual", score: 0, c: "g" },
+      { v: "algo", label: "Noto algo de diferencia (rigidez, fuerza, rango)", score: 1, c: "a" },
+      { v: "mucho", label: "La diferencia es clara: llego menos o pesa más", score: 2, c: "r" },
+    ],
+  },
+  {
     id: "movimientos",
     section: "En el box",
     type: "matrix",
     title: "¿Cómo te sientan estos movimientos ahora mismo?",
     help: "Piensa en las últimas 2 semanas de entreno.",
-  },
-  {
-    id: "t-pared",
-    section: "Prueba 1 de 4",
-    type: "single",
-    title: "Brazos a la pared",
-    howto: [
-      "De pie, con talones a un palmo de la pared y espalda, cabeza y glúteos apoyados.",
-      "Brazos estirados, pulgares hacia arriba. Súbelos por delante hasta intentar tocar la pared por encima de la cabeza.",
-      "La zona lumbar no puede despegarse de la pared.",
-    ],
-    options: [
-      { v: 0, label: "Toco la pared sin dolor", score: 0, c: "g" },
-      { v: 1, label: "Me quedo a un palmo o arqueo la espalda para llegar", score: 1, c: "a" },
-      { v: 2, label: "Me duele o me quedo lejos", score: 2, c: "r" },
-    ],
-  },
-  {
-    id: "t-colgado",
-    section: "Prueba 2 de 4",
-    type: "single",
-    title: "Colgado de la barra",
-    howto: [
-      "Agárrate a la barra de dominadas con las palmas hacia delante, a la anchura de tus hombros.",
-      "Cuélgate con los pies despegados (o apoyados detrás si no llegas) y los brazos relajados.",
-      "Aguanta 20 segundos.",
-    ],
-    warn: "Si en la prueba anterior el dolor fue fuerte, sáltate esta.",
-    options: [
-      { v: 0, label: "Aguanto los 20 s sin dolor", score: 0, c: "g" },
-      { v: 1, label: "Molestia tolerable, como mucho 3 sobre 10", score: 1, c: "a" },
-      { v: 2, label: "Dolor claro o no llego a 20 s", score: 2, c: "r" },
-      { v: "skip", label: "Me la salto", score: 1 },
-    ],
-  },
-  {
-    id: "t-rotacion",
-    section: "Prueba 3 de 4",
-    type: "single",
-    title: "Empuje contra el marco",
-    howto: [
-      "De pie junto al marco de una puerta, codo pegado al cuerpo y doblado a 90°.",
-      "Apoya el dorso de la muñeca en el marco y empuja hacia fuera, al 70 % de tu fuerza, durante 10 segundos.",
-      "Repite con el otro brazo y compara.",
-    ],
-    options: [
-      { v: 0, label: "Sin dolor y con la misma fuerza que el otro lado", score: 0, c: "g" },
-      { v: 1, label: "Molestia leve o lo noto más débil", score: 1, c: "a" },
-      { v: 2, label: "Dolor claro", score: 2, c: "r" },
-    ],
-  },
-  {
-    id: "t-espalda",
-    section: "Prueba 4 de 4",
-    type: "single",
-    title: "Mano a la espalda",
-    howto: [
-      "Lleva la mano por detrás de la espalda y súbela todo lo que puedas, como para rascarte entre los omóplatos.",
-      "Haz lo mismo con el otro brazo y compara hasta dónde llega cada pulgar.",
-    ],
-    options: [
-      { v: 0, label: "Llego igual con los dos lados y sin dolor", score: 0, c: "g" },
-      { v: 1, label: "1 o 2 dedos de diferencia", score: 1, c: "a" },
-      { v: 2, label: "Mucha diferencia o me duele", score: 2, c: "r" },
-    ],
   },
   {
     id: "nombre",
@@ -217,12 +189,12 @@ export const Q: readonly Question[] = [
   },
 ] as const;
 
-export const TESTS: readonly { id: string; name: string }[] = [
-  { id: "t-pared", name: "brazos a la pared" },
-  { id: "t-colgado", name: "colgado de la barra" },
-  { id: "t-rotacion", name: "empuje contra el marco" },
-  { id: "t-espalda", name: "mano a la espalda" },
-] as const;
+// Las auto-pruebas físicas quedaron fuera del test (no todo el mundo tiene
+// barra de dominadas o quiere pararse a hacer pruebas). Dejamos el array
+// vacío para no tener que rehacer lib/semaforo/evaluate.ts — evaluate()
+// itera sobre TESTS y si está vacío simplemente no acumula puntos por
+// pruebas físicas, cae en las preguntas subjetivas.
+export const TESTS: readonly { id: string; name: string }[] = [] as const;
 
 // ═══════════ COPY POR COLOR ═══════════
 

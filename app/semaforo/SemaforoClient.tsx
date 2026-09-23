@@ -344,7 +344,12 @@ export function SemaforoClient({
   // ─── Datos del paso final si no llegó ig por URL ──
   const [finalName, setFinalName] = useState("");
   const [finalContact, setFinalContact] = useState("");
-  const [finalContactType, setFinalContactType] = useState<"instagram" | "telefono">("instagram");
+  // finalContactType queda fijo a "telefono" (decisión de negocio del CEO
+  // 2026-09-23): la setter solo puede accionar contactos por WhatsApp, así
+  // que el UI ya no ofrece instagram como opción. Mantenemos el tipo por
+  // compatibilidad con la firma del componente FinalTextStep y del API.
+  const [finalContactType] = useState<"instagram" | "telefono">("telefono");
+  const setFinalContactType = (_t: "instagram" | "telefono") => {};
 
   // ─── Persistencia de respuestas ─────────────────────────────────
   async function patchProgress(patch: Record<string, unknown>) {
@@ -538,8 +543,8 @@ function IntroScreen({
       <section className="sf-card">
         <div className="sf-need">
           <p>
-            <strong>10 minutos. </strong>
-            Unas preguntas y 4 pruebas sencillas en casa. Necesitas una pared, el marco de una puerta y una barra de dominadas.
+            <strong>3 minutos. </strong>
+            Unas preguntas rápidas para saber cómo está tu hombro antes de tu próximo WOD.
           </p>
         </div>
         <button className="sf-btn" onClick={start} disabled={starting}>
@@ -550,7 +555,7 @@ function IntroScreen({
         </p>
       </section>
       <footer className="sf-footer">
-        <a href="https://instagram.com/fisiofitteam" target="_blank" rel="noopener">@fisiofitteam</a> · Made in Málaga
+        <a href="https://instagram.com/fisiofitteam" target="_blank" rel="noopener">@fisiofitteam</a>
       </footer>
     </>
   );
@@ -779,33 +784,19 @@ function FinalTextStep({
       />
       {requireContact && (
         <>
-          <div className="sf-seg" style={{ marginTop: 12 }}>
-            <button
-              aria-pressed={finalContactType === "instagram"}
-              onClick={() => setFinalContactType("instagram")}
-            >
-              <span className="sf-dot" />
-              Instagram
-            </button>
-            <button
-              aria-pressed={finalContactType === "telefono"}
-              onClick={() => setFinalContactType("telefono")}
-            >
-              <span className="sf-dot" />
-              Teléfono
-            </button>
-          </div>
           <input
             className="sf-field"
-            style={{ marginTop: 10 }}
-            type={finalContactType === "telefono" ? "tel" : "text"}
-            placeholder={finalContactType === "instagram" ? "@tu_usuario" : "+34 600 000 000"}
+            style={{ marginTop: 12 }}
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            placeholder="+34 600 000 000"
             value={finalContact}
             onChange={(e) => setFinalContact(e.target.value)}
             maxLength={40}
           />
           <p className="sf-small" style={{ marginTop: 8 }}>
-            Nombre + Instagram o teléfono son obligatorios para darte el resultado.
+            Tu WhatsApp: te escribo yo directamente con tu resultado y qué hacer con tu hombro. No es una lista de correo ni spam.
           </p>
         </>
       )}
@@ -865,7 +856,7 @@ function AlarmScreen({
       </section>
       <button className="sf-btn ghost sf-again" onClick={onRestart}>Me he equivocado al marcar</button>
       <footer className="sf-footer">
-        <a href="https://instagram.com/fisiofitteam" target="_blank" rel="noopener">@fisiofitteam</a> · Made in Málaga
+        <a href="https://instagram.com/fisiofitteam" target="_blank" rel="noopener">@fisiofitteam</a>
       </footer>
     </>
   );
@@ -971,7 +962,7 @@ function ResultScreen({
 
       <button className="sf-btn ghost sf-again" onClick={onRestart}>Repetir el test</button>
       <footer className="sf-footer">
-        <a href="https://instagram.com/fisiofitteam" target="_blank" rel="noopener">@fisiofitteam</a> · Made in Málaga
+        <a href="https://instagram.com/fisiofitteam" target="_blank" rel="noopener">@fisiofitteam</a>
       </footer>
     </>
   );

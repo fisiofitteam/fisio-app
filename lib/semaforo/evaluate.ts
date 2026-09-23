@@ -21,13 +21,12 @@ export type RespuestasSemaforo = {
   tiempo?: { v: string; score: number };
   probado?: string[];
   recurrencia?: { v: string; score: number };
+  eva?: { v: string; score: number };
   "dia-siguiente"?: { v: string; score: number };
   noche?: { v: string; score: number };
+  "overhead-subjetivo"?: { v: string; score: number };
+  asimetria?: { v: string; score: number };
   movimientos?: Partial<Record<string, FamilyValue>>;
-  "t-pared"?: { v: string | number; score: number };
-  "t-colgado"?: { v: string | number; score: number };
-  "t-rotacion"?: { v: string | number; score: number };
-  "t-espalda"?: { v: string | number; score: number };
   nombre?: string;
 } & Record<string, unknown>;
 
@@ -65,8 +64,11 @@ export function evaluate(answers: RespuestasSemaforo): EvaluationResult {
   const probado = answers.probado ?? [];
   const tiempo = sc(answers, "tiempo");
   const recur = sc(answers, "recurrencia");
+  const eva = sc(answers, "eva");
   const dia = sc(answers, "dia-siguiente");
   const noche = sc(answers, "noche");
+  const overhead = sc(answers, "overhead-subjetivo");
+  const asim = sc(answers, "asimetria");
 
   const testScores = TESTS.map((t) => {
     const raw = (answers as Record<string, unknown>)[t.id] as
@@ -81,22 +83,38 @@ export function evaluate(answers: RespuestasSemaforo): EvaluationResult {
   const t2 = testScores.filter((t) => t.s === 2);
   const t1 = testScores.filter((t) => t.s === 1 && !t.skip);
 
+  // Nuevos ejes subjetivos: cuentan como "prueba" con score 0/1/2 igual
+  // que los auto-tests que retiramos. Meto en t2/t1 los que salen rojo/ámbar
+  // para que la regla original de color siga funcionando con la misma forma.
+  const subjectiveAxes = [
+    { id: "eva", name: "el dolor entrenando", score: eva },
+    { id: "overhead-subjetivo", name: "el brazo por encima de la cabeza", score: overhead },
+    { id: "asimetria", name: "comparación con el otro lado", score: asim },
+  ];
+  const sub2 = subjectiveAxes.filter((a) => a.score === 2);
+  const sub1 = subjectiveAxes.filter((a) => a.score === 1);
+
   const mov = answers.movimientos ?? {};
   const famRed = FAMILIES.filter((f) => mov[f.id] === "duele");
 
-  // Reglas de color — copiadas literalmente del prototipo.
+  // Reglas de color — versión adaptada tras retirar auto-tests. Los
+  // subjectiveAxes toman el rol de t2/t1 anteriores.
   const rojo =
     flags.length > 0 ||
     dia === 2 ||
     noche === 2 ||
-    t2.length >= 2 ||
+    eva === 2 ||
+    sub2.length >= 2 ||
     (recur === 2 && tiempo === 2) ||
-    (t2.length >= 1 && famRed.length >= 2);
+    (sub2.length >= 1 && famRed.length >= 2);
 
   const verde =
     !rojo &&
     dia === 0 &&
     noche <= 1 &&
+    eva === 0 &&
+    sub2.length === 0 &&
+    sub1.length <= 1 &&
     t2.length === 0 &&
     t1.length <= 1 &&
     famRed.length === 0 &&
@@ -156,24 +174,37 @@ export function evaluate(answers: RespuestasSemaforo): EvaluationResult {
       t: "Llevas más de 3 meses así. A estas alturas el problema ya no es solo el tejido, también cómo has ido adaptando el entreno.",
     });
 
-  if (t2.length) {
+  if (eva === 2)
     why.push({
-      sev: t2.length >= 2 ? 3 : 2,
+      sev: 3,
       k: "neg",
-      t: `Has tenido dolor claro en ${t2.length === 1 ? "la prueba de" : "las pruebas de"} ${listaEs(t2.map((t) => t.name))}.`,
+      t: "El dolor entrenando es alto: te obliga a bajar carga o adaptar movimientos. Ese nivel de dolor no es información útil, es una señal de que hay que rebajar el estímulo.",
     });
-  }
-  if (t1.length)
+  if (eva === 1)
     why.push({
       sev: 1,
       k: "mid",
-      t: `Hay molestia o diferencia entre lados en ${listaEs(t1.map((t) => t.name))}.`,
+      t: "Notas molestia entrenando, pero aún puedes con casi todo. Es el nivel donde más se aprende, pero también donde más se cronifica si no se guía.",
     });
-  if (!t2.length && !t1.length)
+
+  if (sub2.length) {
+    why.push({
+      sev: sub2.length >= 2 ? 3 : 2,
+      k: "neg",
+      t: `Tienes dificultad clara en ${listaEs(sub2.map((a) => a.name))}.`,
+    });
+  }
+  if (sub1.length)
+    why.push({
+      sev: 1,
+      k: "mid",
+      t: `Hay molestia o diferencia en ${listaEs(sub1.map((a) => a.name))}.`,
+    });
+  if (eva === 0 && !sub2.length && !sub1.length)
     why.push({
       sev: -1,
       k: "pos",
-      t: "Has pasado las pruebas sin dolor ni diferencias entre lados.",
+      t: "No refieres dolor entrenando ni diferencias claras con el otro lado.",
     });
 
   if (famRed.length)
