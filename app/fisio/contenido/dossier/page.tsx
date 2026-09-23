@@ -6,6 +6,8 @@ import { ContentNav } from "@/components/ContentNav";
 import { DossierMonthPicker } from "@/components/DossierMonthPicker";
 import { DossierPrintButton } from "@/components/DossierPrintButton";
 import { PieceStatusInlineSelect } from "@/components/PieceStatusInlineSelect";
+import { PieceInlineText } from "@/components/PieceInlineText";
+import { PieceBlocksInlineEditor } from "@/components/PieceBlocksInlineEditor";
 import { DAY_LABELS } from "@/lib/content-templates";
 import {
   formatLabelOnly,
@@ -215,21 +217,27 @@ export default async function DossierPage({
                           className="border border-neutral-200 rounded-lg p-4 print:break-inside-avoid print:border-neutral-300"
                         >
                           {/* Header de la pieza */}
-                          <div className="flex items-baseline justify-between gap-3 flex-wrap mb-2">
-                            <div className="flex items-baseline gap-2 flex-wrap">
+                          <div className="flex items-start justify-between gap-3 flex-wrap mb-2">
+                            <div className="flex items-baseline gap-2 flex-wrap flex-1 min-w-0">
                               <span
-                                className="text-sm font-bold px-2 py-0.5 rounded"
+                                className="text-sm font-bold px-2 py-0.5 rounded shrink-0"
                                 style={{ background: "#1E3A8A", color: "#FAFAFA", letterSpacing: "0.02em" }}
                               >
                                 {reelLabel}
                               </span>
-                              <span>{fmtIcon}</span>
-                              <h4 className="text-base font-semibold">{displayTitle}</h4>
-                              {p.title?.trim() && (
-                                <span className="text-[11px] text-neutral-400">({fmtLabel})</span>
-                              )}
+                              <span className="shrink-0">{fmtIcon}</span>
+                              <div className="flex-1 min-w-0">
+                                <PieceInlineText
+                                  pieceId={p.id}
+                                  field="title"
+                                  initialValue={p.title ?? ""}
+                                  placeholder={fmtLabel}
+                                  as="h4"
+                                  className="text-base font-semibold"
+                                />
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 shrink-0">
                               <span className="text-xs font-medium text-neutral-700 capitalize">
                                 📅 {publishStr}
                               </span>
@@ -247,28 +255,9 @@ export default async function DossierPage({
                             </div>
                           )}
 
-                          {blocks.length > 0 && (
-                            <div className="mb-2">
-                              <div className="text-[10px] uppercase tracking-wide text-neutral-500 mb-1">Guion</div>
-                              <div className="space-y-2">
-                                {blocks.map((b, i) => (
-                                  <div key={i} className="text-sm">
-                                    {b.label && (
-                                      <div
-                                        className="text-[12px] font-bold uppercase tracking-wide"
-                                        style={{ color: "#172554" }}
-                                      >
-                                        {b.label}
-                                      </div>
-                                    )}
-                                    {b.content && (
-                                      <div className="text-neutral-800 whitespace-pre-wrap">{b.content}</div>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
+                          <div className="mb-2">
+                            <PieceBlocksInlineEditor pieceId={p.id} initialBlocks={blocks} />
+                          </div>
 
                           {(p.recordingLocation || p.recordingOutfit || p.recordingMaterial) && (
                             <div className="text-xs text-neutral-700 mb-1">
@@ -281,12 +270,17 @@ export default async function DossierPage({
                             </div>
                           )}
 
-                          {p.editorNotes && (
-                            <div className="text-xs text-neutral-700 mb-1">
-                              <div className="text-[10px] uppercase tracking-wide text-neutral-500 mb-0.5">Notas para editor</div>
-                              <p className="text-neutral-800 whitespace-pre-wrap">{p.editorNotes}</p>
-                            </div>
-                          )}
+                          <div className="text-xs text-neutral-700 mb-1">
+                            <div className="text-[10px] uppercase tracking-wide text-neutral-500 mb-0.5">Notas para editor</div>
+                            <PieceInlineText
+                              pieceId={p.id}
+                              field="editorNotes"
+                              initialValue={p.editorNotes ?? ""}
+                              placeholder="Añade notas para el editor…"
+                              as="p"
+                              className="text-neutral-800 whitespace-pre-wrap text-xs"
+                            />
+                          </div>
 
                           {p.finalFileUrl && (
                             <div className="text-xs mt-1">
