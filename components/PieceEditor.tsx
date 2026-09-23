@@ -196,8 +196,8 @@ export function PieceEditor({
       {/* Cabecera fija */}
       <header className="mb-4">
         <div className="flex items-center gap-3 mb-2 flex-wrap">
-          <Link href="/fisio/contenido" className="text-xs text-neutral-500 hover:text-neutral-900">
-            ← Esta semana
+          <Link href="/fisio/contenido/calendario" className="text-xs text-neutral-500 hover:text-neutral-900">
+            ← Calendario
           </Link>
           <span className="text-xs text-neutral-300">·</span>
           <span className="text-xs text-neutral-500">{week.centralTheme || "Sin tema"}</span>

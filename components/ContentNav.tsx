@@ -6,7 +6,6 @@ type Tab = { key: string; label: string; href: string; ceoOnly?: boolean; extern
 
 const TABS: Tab[] = [
   { key: "calendar", label: "📅 Calendario", href: "/fisio/contenido/calendario" },
-  { key: "this-week", label: "📍 Esta semana", href: "/fisio/contenido" },
   { key: "dossier", label: "📄 Dossier", href: "/fisio/contenido/dossier" },
   { key: "marketer", label: "🧠 Marketer IA", href: "/fisio/contenido/marketer", ceoOnly: true },
   { key: "template", label: "🧩 Plantillas", href: "/fisio/contenido/plantilla" },
