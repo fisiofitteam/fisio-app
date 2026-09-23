@@ -5,6 +5,7 @@ import { Barlow_Condensed, Archivo } from "next/font/google";
 import {
   Q,
   FAMILIES,
+  FAMILY_GROUPS,
   FAM_OPTS,
   TESTS,
   COPY,
@@ -119,7 +120,8 @@ const STYLES = `
   background:linear-gradient(135deg,var(--gold-1) 0%,var(--gold-2) 100%);
   -webkit-background-clip:text;background-clip:text;color:transparent;
 }
-.sf-scope h1,.sf-scope h2,.sf-scope h3{font-family:var(--font-display);line-height:1.02;margin:0;color:var(--ink-strong)}
+.sf-scope h1,.sf-scope h2,.sf-scope h3{font-family:var(--font-display);line-height:1.08;margin:0;color:var(--ink-strong)}
+.sf-scope h1{line-height:1.02}
 .sf-scope h1{font-size:clamp(36px,7vw,56px);font-weight:800;letter-spacing:-.035em}
 .sf-scope h2{font-size:clamp(28px,7.5vw,38px);font-weight:700;letter-spacing:-.02em}
 .sf-scope h3{font-size:22px;font-weight:700}
@@ -165,9 +167,9 @@ const STYLES = `
 .sf-progress{flex:1;height:6px;border-radius:6px;background:var(--line);overflow:hidden}
 .sf-progress span{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--gold-1),var(--gold-2));transition:width .3s}
 .sf-count{font-size:13px;color:var(--muted-2);font-variant-numeric:tabular-nums;min-width:52px;text-align:right;letter-spacing:.02em}
-.sf-section{font-weight:700;color:var(--gold-1);font-size:12px;text-transform:uppercase;letter-spacing:.14em;margin-bottom:10px}
-.sf-qtitle{margin-bottom:14px}
-.sf-help{color:var(--muted);margin-bottom:18px}
+.sf-section{font-weight:700;color:var(--gold-1);font-size:12px;text-transform:uppercase;letter-spacing:.14em;margin-bottom:12px}
+.sf-qtitle{margin-bottom:22px;padding-bottom:2px}
+.sf-help{color:var(--muted);margin-bottom:22px;margin-top:-10px}
 .sf-howto{
   background:#1F1F1F;border:1px solid var(--line);border-radius:12px;
   padding:14px 16px;margin:0 0 18px;color:var(--ink);
@@ -187,13 +189,18 @@ const STYLES = `
 .sf-opt .sf-dot{flex:none;width:14px;height:14px;border-radius:50%;background:var(--line-2)}
 .sf-opt[aria-pressed="true"] .sf-dot{background:var(--gold-1)}
 .sf-opt .sf-dot.g{background:var(--green)}.sf-opt .sf-dot.a{background:var(--amber)}.sf-opt .sf-dot.r{background:var(--red)}
-.sf-matrix{display:grid;gap:14px}
+.sf-matrix{display:grid;gap:18px}
+.sf-group{display:grid;gap:8px}
+.sf-group-label{
+  font-weight:700;color:var(--gold-1);
+  font-size:11px;text-transform:uppercase;letter-spacing:.16em;
+  padding:0 4px 2px;
+}
 .sf-fam{
   background:#1F1F1F;border:1px solid var(--line);border-radius:12px;
   padding:14px;
 }
-.sf-fam strong{display:block;font-size:16px;color:var(--ink-strong)}
-.sf-fam .sf-ex{font-size:13px;color:var(--muted);margin-bottom:12px}
+.sf-fam strong{display:block;font-size:15px;color:var(--ink-strong);margin-bottom:10px}
 .sf-seg{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
 .sf-seg button{
   border:1px solid var(--line);background:#0F0F0F;border-radius:10px;
@@ -233,6 +240,13 @@ const STYLES = `
 }
 .sf-why li.neg{border-left-color:var(--red)}.sf-why li.mid{border-left-color:var(--amber)}.sf-why li.pos{border-left-color:var(--green)}
 .sf-map{display:grid;gap:8px}
+.sf-map-group{margin-bottom:16px}
+.sf-map-group:last-child{margin-bottom:0}
+.sf-map-group-label{
+  font-weight:700;color:var(--gold-1);
+  font-size:11px;text-transform:uppercase;letter-spacing:.16em;
+  padding:0 4px 8px;
+}
 .sf-mrow{
   display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:start;
   padding:14px;border-radius:12px;background:#1F1F1F;border:1px solid var(--line);
@@ -723,24 +737,31 @@ function MatrixOptions({
   return (
     <>
       <div className="sf-matrix">
-        {FAMILIES.map((f) => (
-          <div key={f.id} className="sf-fam">
-            <strong>{f.name}</strong>
-            <div className="sf-ex">{f.ex}</div>
-            <div className="sf-seg" role="group" aria-label={f.name}>
-              {FAM_OPTS.map((o) => (
-                <button
-                  key={o.v}
-                  aria-pressed={current[f.id] === o.v}
-                  onClick={() => onChange({ ...current, [f.id]: o.v })}
-                >
-                  <span className={"sf-dot sf-" + o.c + "-bg"} />
-                  <span>{o.label}</span>
-                </button>
+        {FAMILY_GROUPS.map((g) => {
+          const items = FAMILIES.filter((f) => f.group === g.id);
+          return (
+            <div key={g.id} className="sf-group">
+              <div className="sf-group-label">{g.label}</div>
+              {items.map((f) => (
+                <div key={f.id} className="sf-fam">
+                  <strong>{f.name}</strong>
+                  <div className="sf-seg" role="group" aria-label={f.name}>
+                    {FAM_OPTS.map((o) => (
+                      <button
+                        key={o.v}
+                        aria-pressed={current[f.id] === o.v}
+                        onClick={() => onChange({ ...current, [f.id]: o.v })}
+                      >
+                        <span className={"sf-dot sf-" + o.c + "-bg"} />
+                        <span>{o.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
       <button className="sf-btn sf-next" disabled={!complete} onClick={onNext}>Continuar</button>
     </>
@@ -875,9 +896,17 @@ function ResultScreen({
   const k = COPY[r.color];
   const name = answers.nombre ?? "";
 
-  const movLine = FAMILIES
-    .map((f) => `${f.name}: ${COLOR_NAME[FAM_ADVICE[(r.mov[f.id] as FamilyValue) || "na"].c]}`)
-    .join(" · ");
+  // Para el WhatsApp, solo listamos los movimientos que le duelen o le
+  // molestan — con 13 patrones no tiene sentido soltar el listado entero
+  // en el mensaje, cargaría de ruido lo importante.
+  const movDestacados = FAMILIES
+    .map((f) => ({ f, v: r.mov[f.id] as FamilyValue | undefined }))
+    .filter((x) => x.v === "duele" || x.v === "leve");
+  const movLine = movDestacados.length > 0
+    ? "Me molestan: " + movDestacados
+        .map((x) => `${x.f.name} (${COLOR_NAME[FAM_ADVICE[x.v as FamilyValue].c]})`)
+        .join(", ")
+    : "Los movimientos del box los llevo bien de momento.";
   const msg = `¡Hola! ${name ? `Soy ${name}. ` : ""}He hecho el Semáforo del Hombro y me ha salido ${k.verdict.toUpperCase()}.\n${movLine}\n${k.waLine}`;
   const wa = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(msg)}`;
 
@@ -913,20 +942,37 @@ function ResultScreen({
 
         <div className="sf-block">
           <h3>Tu mapa de movimientos</h3>
-          <div className="sf-map">
-            {FAMILIES.map((f) => {
-              const a = FAM_ADVICE[(r.mov[f.id] as FamilyValue) || "na"];
-              return (
-                <div key={f.id} className="sf-mrow">
-                  <div className={"sf-dot sf-" + a.c + "-bg"} aria-label={COLOR_NAME[a.c]} />
-                  <div>
-                    <strong>{f.name} · {COLOR_NAME[a.c]}</strong>
-                    <span>{a.t}</span>
-                  </div>
+          {FAMILY_GROUPS.map((g) => {
+            // Solo pintamos movimientos que el usuario practica ("na" = no lo
+            // hago se oculta para que el mapa no ocupe pantalla entera con
+            // cosas irrelevantes). El grupo entero se oculta si no queda nada.
+            const items = FAMILIES
+              .filter((f) => f.group === g.id)
+              .filter((f) => {
+                const v = r.mov[f.id] as FamilyValue | undefined;
+                return v && v !== "na";
+              });
+            if (items.length === 0) return null;
+            return (
+              <div key={g.id} className="sf-map-group">
+                <div className="sf-map-group-label">{g.label}</div>
+                <div className="sf-map">
+                  {items.map((f) => {
+                    const a = FAM_ADVICE[(r.mov[f.id] as FamilyValue) || "na"];
+                    return (
+                      <div key={f.id} className="sf-mrow">
+                        <div className={"sf-dot sf-" + a.c + "-bg"} aria-label={COLOR_NAME[a.c]} />
+                        <div>
+                          <strong>{f.name} · {COLOR_NAME[a.c]}</strong>
+                          <span>{a.t}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })}
         </div>
 
         <div className="sf-block">
