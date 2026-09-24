@@ -67,6 +67,16 @@ export async function activateSaleAsPatient(input: {
     }
   }
 
+  // Reserva de plaza: el Sale.isReservation=true cambia el trato.
+  // Duración del "periodo" del renewal = 1 mes (señal para mantener plaza),
+  // NO la durationMonths del producto entero (que se cobrará luego con una
+  // renovación real). El paciente tiene acceso a la app durante ese mes.
+  const isReservation = (sale as any).isReservation === true;
+  const reservationMonths = 1;
+  const effectiveMonths = isReservation ? reservationMonths : sale.durationMonths;
+  const effectiveEndDate = new Date(now);
+  effectiveEndDate.setMonth(effectiveEndDate.getMonth() + effectiveMonths);
+
   const patient = await prisma.$transaction(async (tx) => {
     const leadEmailRaw =
       sale.lead.contactType === "email" ? sale.lead.contactValue : sale.lead.email;
@@ -81,8 +91,8 @@ export async function activateSaleAsPatient(input: {
         sport: "CrossFit",
         startedAt: now,
         subscriptionStartDate: now,
-        subscriptionPeriodMonths: sale.durationMonths,
-        subscriptionTotalMonths: sale.durationMonths,
+        subscriptionPeriodMonths: effectiveMonths,
+        subscriptionTotalMonths: effectiveMonths,
         programType: sale.programType,
         programMode: "fixed",
         onboardingStatus: manualAlta.assignedProfessionalId ? "active" : "pending_assignment",
@@ -90,9 +100,9 @@ export async function activateSaleAsPatient(input: {
           ? { assignedProfessionalId: manualAlta.assignedProfessionalId }
           : {}),
         ...(manualAlta.diagnosis ? { diagnosis: manualAlta.diagnosis } : {}),
-        programDurationMonths: sale.durationMonths,
+        programDurationMonths: effectiveMonths,
         programStartDate: now,
-        programEndDate,
+        programEndDate: effectiveEndDate,
         onboardingTasks: { anamnesis: false, contract: false, firstSession: false } as any,
       },
     });
@@ -121,7 +131,9 @@ export async function activateSaleAsPatient(input: {
           type: "income_new",
           category: `${sale.programType} ${sale.durationMonths}M`,
           amount: sale.amountCents / 100,
-          description: `Pago vía PayPal · ${sale.programType} ${sale.durationMonths} meses · ${input.paymentMethod}`,
+          description: isReservation
+            ? `Reserva de plaza PayPal · ${sale.programType}`
+            : `Pago vía PayPal · ${sale.programType} ${sale.durationMonths} meses · ${input.paymentMethod}`,
           occurredAt: now,
           patientId: patient.id,
           professionalId: sale.closerId,
@@ -133,15 +145,18 @@ export async function activateSaleAsPatient(input: {
       data: {
         patientId: patient.id,
         programType: sale.programType,
-        periodMonths: sale.durationMonths,
+        periodMonths: effectiveMonths,
         startDate: patient.programStartDate ?? now,
-        endDate: patient.programEndDate ?? new Date(now.getTime() + sale.durationMonths * 30 * 86400000),
+        endDate: effectiveEndDate,
         status: "active",
         amountPaid: sale.amountCents / 100,
         decidedAt: now,
-        notes: isSubscription
-          ? `Alta inicial (PayPal ${installments} cuotas)`
-          : "Alta inicial (pago PayPal)",
+        isReservation,
+        notes: isReservation
+          ? "Reserva de plaza (alta PayPal)"
+          : isSubscription
+            ? `Alta inicial (PayPal ${installments} cuotas)`
+            : "Alta inicial (pago PayPal)",
       },
     });
 
@@ -162,10 +177,14 @@ export async function activateSaleAsPatient(input: {
 
   console.log("[paypal-activation] Patient creado", { patientId: patient.id, saleId: sale.id });
 
-  const notifyTitle = input.notifyTitle ?? "Nuevo paciente sin asignar";
+  const notifyTitle = input.notifyTitle ?? (isReservation
+    ? "Nueva reserva de plaza"
+    : "Nuevo paciente sin asignar");
   const notifyBody =
     input.notifyBody ??
-    `{{fullName}} ha pagado el programa ${sale.programType} de ${sale.durationMonths} meses. Asígnale fisio.`;
+    (isReservation
+      ? `{{fullName}} ha pagado la señal de reserva del programa ${sale.programType}. Contacta con él para cerrar el alta completa.`
+      : `{{fullName}} ha pagado el programa ${sale.programType} de ${sale.durationMonths} meses. Asígnale fisio.`);
   try {
     await notifyHeadSuccess({
       type: "patient_new_unassigned",

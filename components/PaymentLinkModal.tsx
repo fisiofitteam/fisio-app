@@ -79,6 +79,10 @@ export function PaymentLinkModal({
   const [loadingPrice, setLoadingPrice] = useState(false);
   // Fraccionamiento (null = pago único; 2..12 = N cuotas mensuales vía PayPal Subscription)
   const [installmentCount, setInstallmentCount] = useState<number | null>(null);
+  // Reserva de plaza: si true, la señal (típ. 100€) se cobra ahora y luego
+  // el paciente paga el programa entero con una renovación (donde se le
+  // descuenta lo pagado por la reserva). Fraccionamiento se desactiva.
+  const [isReservation, setIsReservation] = useState(false);
 
   // Datos del Sale
   const [activeSale, setActiveSale] = useState<ActiveSale | null>(null);
@@ -187,7 +191,7 @@ export function PaymentLinkModal({
       const res = await fetch(`/api/leads/${lead.id}/generate-payment-link`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productCode, amountEuros, installmentCount }),
+        body: JSON.stringify({ productCode, amountEuros, installmentCount: isReservation ? null : installmentCount, isReservation }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "No se pudo generar el link");
@@ -499,7 +503,34 @@ export function PaymentLinkModal({
               </div>
             </div>
 
-            {/* Fraccionamiento en N cuotas (PayPal Subscription) */}
+            {/* Toggle reserva de plaza */}
+            <div className="rounded-lg border border-neutral-200 p-3">
+              <label className="flex items-start gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isReservation}
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    setIsReservation(on);
+                    if (on) {
+                      // Reserva → forzar pago único y sugerir 100€ si no hay importe.
+                      setInstallmentCount(null);
+                      if (!priceEuros.trim()) setPriceEuros("100");
+                    }
+                  }}
+                  className="mt-0.5 h-4 w-4 accent-neutral-900 cursor-pointer"
+                />
+                <span>
+                  <span className="text-xs font-medium text-neutral-800 block">🎫 Reserva de plaza</span>
+                  <span className="text-[10px] text-neutral-500 block leading-snug">
+                    Señal (típ. 100€) para mantener plaza. Se descontará cuando pague el programa entero. Cambio de duración a 1 mes; sin fraccionar.
+                  </span>
+                </span>
+              </label>
+            </div>
+
+            {/* Fraccionamiento en N cuotas (PayPal Subscription) — oculto si es reserva */}
+            {!isReservation && (
             <div>
               <label className="text-xs text-neutral-500 block mb-1">¿Cómo lo cobramos?</label>
               <div className="grid grid-cols-5 gap-1.5">
@@ -538,6 +569,7 @@ export function PaymentLinkModal({
                 </p>
               )}
             </div>
+            )}
 
             {error && (
               <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>

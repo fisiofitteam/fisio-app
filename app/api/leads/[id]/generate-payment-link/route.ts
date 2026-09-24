@@ -51,6 +51,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: "productCode inválido" }, { status: 400 });
   }
   const config = PRODUCT_CONFIG[productCode];
+  const isReservation = body?.isReservation === true;
 
   // 1. Buscar lead
   const lead = await prisma.lead.findUnique({ where: { id: params.id } });
@@ -138,6 +139,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const token = generatePaymentToken();
   const tokenExpiresAt = new Date(Date.now() + TOKEN_VALIDITY_DAYS * 86400 * 1000);
 
+  // Reserva: la señal es siempre pago único (no fraccionable). Forzamos
+  // installmentCount=null si viene isReservation=true.
+  const finalInstallmentCount = isReservation ? null : installmentCount;
+
   const sale = await prisma.sale.create({
     data: {
       leadId: lead.id,
@@ -151,8 +156,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       paymentToken: token,
       tokenExpiresAt,
       status: "pending",
-      installmentCount,
-    },
+      installmentCount: finalInstallmentCount,
+      isReservation,
+    } as any, // as any por si el cliente Prisma aún no incluye isReservation (self-migration)
   });
 
   return NextResponse.json({
