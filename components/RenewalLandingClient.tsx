@@ -74,8 +74,10 @@ export function RenewalLandingClient({ token, copy }: { token: string; copy: Ren
   async function pay() {
     setPaying(true);
     try {
-      // Migración a PayPal (Fase 3, agosto 2026). Endpoint espejo del de Stripe.
-      const res = await fetch(`/api/renewal/${token}/paypal`, { method: "POST" });
+      // Enrutamos según el paymentProvider elegido al generar el link.
+      // RenewalCheckouts antiguos sin el campo caen en PayPal (retrocompat).
+      const provider = (data as any)?.paymentProvider === "stripe" ? "stripe" : "paypal";
+      const res = await fetch(`/api/renewal/${token}/${provider}`, { method: "POST" });
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.url) {
         window.location.href = d.url;

@@ -14,6 +14,7 @@ type SaleInfo = {
   amountCents: number;
   currency: string;
   installmentCount: number | null;
+  paymentProvider?: "paypal" | "stripe";
 };
 
 function formatEuros(cents: number): string {
@@ -59,8 +60,12 @@ export function ContractLandingClient({ token, copy }: { token: string; copy: Co
   async function startCheckout() {
     setSubmitting(true);
     try {
-      // Endpoint PayPal (migración desde Stripe agosto 2026).
-      const res = await fetch(`/api/sale/${token}/paypal`, { method: "POST" });
+      // El closer eligió PayPal o Stripe al generar el link. Enrutamos al
+      // endpoint correspondiente. Sales antiguos sin paymentProvider caen
+      // en PayPal (default retrocompat).
+      const provider = sale?.paymentProvider ?? "paypal";
+      const endpoint = provider === "stripe" ? "stripe" : "paypal";
+      const res = await fetch(`/api/sale/${token}/${endpoint}`, { method: "POST" });
       const data = await res.json();
       if (!res.ok || !data.url) {
         setError(data.error || "No se pudo iniciar el pago");

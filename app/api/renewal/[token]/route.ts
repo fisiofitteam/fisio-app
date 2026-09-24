@@ -21,5 +21,7 @@ export async function GET(_req: Request, { params }: { params: { token: string }
     amountCents: checkout.amountCents,
     currency: checkout.currency,
     installmentCount: checkout.installmentCount ?? null,
+    paymentProvider: (checkout as any).paymentProvider ?? "paypal",
+    isReservation: (checkout as any).isReservation ?? false,
   });
 }

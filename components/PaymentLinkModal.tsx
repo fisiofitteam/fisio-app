@@ -83,6 +83,8 @@ export function PaymentLinkModal({
   // el paciente paga el programa entero con una renovación (donde se le
   // descuenta lo pagado por la reserva). Fraccionamiento se desactiva.
   const [isReservation, setIsReservation] = useState(false);
+  // Proveedor de pago: paypal (default) o stripe.
+  const [paymentProvider, setPaymentProvider] = useState<"paypal" | "stripe">("paypal");
 
   // Datos del Sale
   const [activeSale, setActiveSale] = useState<ActiveSale | null>(null);
@@ -191,7 +193,7 @@ export function PaymentLinkModal({
       const res = await fetch(`/api/leads/${lead.id}/generate-payment-link`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productCode, amountEuros, installmentCount: isReservation ? null : installmentCount, isReservation }),
+        body: JSON.stringify({ productCode, amountEuros, installmentCount: isReservation ? null : installmentCount, isReservation, paymentProvider }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "No se pudo generar el link");
@@ -501,6 +503,35 @@ export function PaymentLinkModal({
                 />
                 <span className="text-sm text-neutral-500">€</span>
               </div>
+            </div>
+
+            {/* Proveedor de pago */}
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">Pasarela de pago</label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {(["paypal", "stripe"] as const).map((p) => {
+                  const active = paymentProvider === p;
+                  const label = p === "paypal" ? "🅿️ PayPal" : "💳 Stripe";
+                  return (
+                    <button
+                      key={p}
+                      onClick={() => setPaymentProvider(p)}
+                      className={`px-3 py-2 rounded-lg border text-xs font-medium ${
+                        active
+                          ? "bg-neutral-900 text-white border-neutral-900"
+                          : "bg-white border-neutral-200 hover:bg-neutral-50"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-neutral-500 italic mt-1.5">
+                {paymentProvider === "stripe"
+                  ? "Stripe: tarjeta, Klarna, Apple/Google Pay. Robusto para pagos únicos."
+                  : "PayPal: cuenta PayPal + tarjeta + Pay in 3."}
+              </p>
             </div>
 
             {/* Toggle reserva de plaza */}

@@ -52,6 +52,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
   const config = PRODUCT_CONFIG[productCode];
   const isReservation = body?.isReservation === true;
+  const paymentProvider: "paypal" | "stripe" =
+    body?.paymentProvider === "stripe" ? "stripe" : "paypal";
 
   // 1. Buscar lead
   const lead = await prisma.lead.findUnique({ where: { id: params.id } });
@@ -158,7 +160,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       status: "pending",
       installmentCount: finalInstallmentCount,
       isReservation,
-    } as any, // as any por si el cliente Prisma aún no incluye isReservation (self-migration)
+      paymentProvider,
+    } as any, // as any por si el cliente Prisma aún no incluye isReservation/paymentProvider (self-migration)
   });
 
   return NextResponse.json({

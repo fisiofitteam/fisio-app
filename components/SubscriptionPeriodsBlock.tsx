@@ -298,6 +298,8 @@ function AddRenewalModal({
   // Reserva de plaza: señal fija (edit importe/duración) para mantener el sitio
   // hasta que renueve del todo. Fuerza pago único y no descuenta del futuro.
   const [isReservation, setIsReservation] = useState(false);
+  // Pasarela de pago del enlace generado.
+  const [paymentProvider, setPaymentProvider] = useState<"paypal" | "stripe">("paypal");
   // Reserva pendiente de aplicar: si el paciente ya pagó una reserva y aún
   // no ha renovado del todo, se descuenta automáticamente en la renovación real.
   const [pendingReservation, setPendingReservation] = useState<{ id: string; amount: number } | null>(null);
@@ -334,6 +336,7 @@ function AddRenewalModal({
         amountEuros: Number(amountEuros),
         installmentCount: isReservation ? null : installmentCount,
         isReservation,
+        paymentProvider,
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -572,6 +575,31 @@ function AddRenewalModal({
                   </p>
                 )}
               </>
+            )}
+
+            {/* Pasarela de pago (solo en modo enlace) */}
+            {mode === "link" && (
+              <div>
+                <label className="text-xs text-neutral-500 block mb-1">Pasarela</label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {(["paypal", "stripe"] as const).map((p) => {
+                    const active = paymentProvider === p;
+                    const label = p === "paypal" ? "🅿️ PayPal" : "💳 Stripe";
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setPaymentProvider(p)}
+                        className={`px-3 py-2 rounded-lg border text-xs font-medium ${
+                          active ? "bg-neutral-900 text-white border-neutral-900" : "bg-white border-neutral-200 hover:bg-neutral-50"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             )}
 
             {/* Fraccionamiento (solo en modo enlace de pago y no reserva).

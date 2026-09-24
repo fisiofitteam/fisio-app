@@ -2476,6 +2476,9 @@ model Sale {
   // Reserva de plaza (extiende el patrón de RenewalCheckout.isReservation).
   isReservation           Boolean  @default(false)
 
+  // Proveedor de pago elegido al generar el link.
+  paymentProvider         String   @default("paypal")
+
   // ─── Estado de la venta ─────────────────────────────────────────────────
   // "pending"  → link generado, todavía no pagado
   // "paid"     → pago completado correctamente
@@ -2564,6 +2567,8 @@ model RenewalCheckout {
   // todo. Solo permite 1 pago (installmentCount se ignora), y el
   // SubscriptionRenewal que se crea al pagar hereda este flag.
   isReservation Boolean  @default(false)
+
+  paymentProvider String @default("paypal")
 
   status        String   @default("pending")         // "pending" | "paid" | "failed" | "expired"
   paidAt        DateTime?

@@ -72,6 +72,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // Reserva de plaza: si el fisio marca el toggle, el enlace es una señal
   // (típ. 100€/1m). Se fuerza pago único — no admite fraccionamiento.
   const isReservation = body?.isReservation === true;
+  const paymentProvider: "paypal" | "stripe" =
+    body?.paymentProvider === "stripe" ? "stripe" : "paypal";
 
   // Fraccionamiento opcional (mismo criterio que Sale): null/1 → pago único,
   // 2..12 → suscripción PayPal con N cobros mensuales del mismo importe.
@@ -128,7 +130,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       status: "pending",
       installmentCount,
       isReservation,
-    },
+      paymentProvider,
+    } as any,
     select: { paymentToken: true },
   });
 

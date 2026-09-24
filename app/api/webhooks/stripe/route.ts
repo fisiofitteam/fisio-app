@@ -31,6 +31,7 @@ import {
   paymentFailedEmail,
   canceledEmail,
 } from "@/lib/emails/prevention";
+import { activateSaleAsPatient, applyRenewalCheckoutPaid } from "@/lib/paypal/activation";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -67,18 +68,39 @@ export async function POST(req: NextRequest) {
   try {
     switch (event.type) {
       case "checkout.session.completed": {
-        // Post-migración: solo procesamos Prevention (mode=subscription).
-        // Cualquier otro checkout.session.completed que llegue aquí es de un
-        // pago anterior a la migración y lo ignoramos con log.
         const session = event.data.object as Stripe.Checkout.Session;
-        if (session.mode === "subscription" && session.metadata?.productType === "prevention") {
+        const productType = session.metadata?.productType;
+        if (session.mode === "subscription" && productType === "prevention") {
           await handlePreventionCheckoutCompleted(session);
+        } else if (productType === "sale") {
+          await handleSaleCheckoutCompleted(session);
+        } else if (productType === "renewal") {
+          await handleRenewalCheckoutCompleted(session);
         } else {
-          console.log("[stripe-webhook] checkout.session.completed no-Prevention ignorado", {
+          console.log("[stripe-webhook] checkout.session.completed ignorado", {
             sessionId: session.id,
             mode: session.mode,
+            productType,
           });
         }
+        break;
+      }
+      // Cuota mensual de una subscription (Sale o RenewalCheckout).
+      case "invoice.paid": {
+        const invoice = event.data.object as Stripe.Invoice;
+        // Solo si es de una subscription con metadata productType
+        const subId = typeof invoice.subscription === "string" ? invoice.subscription : invoice.subscription?.id;
+        if (subId) {
+          // Recuperar la subscription para su metadata
+          const sub = await stripe.subscriptions.retrieve(subId);
+          const meta = sub.metadata ?? {};
+          if (meta.productType === "sale" || meta.productType === "renewal") {
+            await handleSubscriptionInvoicePaid(invoice, sub, meta.productType as "sale" | "renewal");
+            break;
+          }
+        }
+        // Prevention u otros — fall-through al handler existente
+        await handlePreventionInvoicePaid(invoice);
         break;
       }
       // ─── Prevention · ciclo de vida de la suscripción ────────────────
@@ -87,9 +109,6 @@ export async function POST(req: NextRequest) {
         break;
       case "customer.subscription.deleted":
         await handlePreventionSubscriptionDeleted(event.data.object as Stripe.Subscription);
-        break;
-      case "invoice.paid":
-        await handlePreventionInvoicePaid(event.data.object as Stripe.Invoice);
         break;
       case "invoice.payment_failed":
         await handlePreventionInvoiceFailed(event.data.object as Stripe.Invoice);
@@ -373,4 +392,177 @@ async function handlePreventionInvoiceFailed(invoice: Stripe.Invoice) {
   } catch (err) {
     console.error("[stripe-webhook] Error mandando payment_failed email:", err);
   }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// SALE / RENEWAL HANDLERS (Stripe path, added 2026-09-24)
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Al completar el checkout de un Sale (alta) por Stripe:
+ *   - Guarda stripePaymentIntentId (mode=payment) o stripeSessionId.
+ *   - Llama a activateSaleAsPatient() para crear Patient + SubscriptionRenewal
+ *     + Transaction, con idempotencia end-to-end.
+ */
+async function handleSaleCheckoutCompleted(session: Stripe.Checkout.Session) {
+  const saleId = session.metadata?.saleId;
+  if (!saleId) {
+    console.warn("[stripe-webhook] sale checkout sin saleId en metadata", { sessionId: session.id });
+    return;
+  }
+  // Guardar el PaymentIntent id para trazabilidad (mode=payment). Para
+  // mode=subscription, guardamos el subscription id (viene en session.subscription).
+  const paymentIntentId = typeof session.payment_intent === "string"
+    ? session.payment_intent
+    : session.payment_intent?.id ?? null;
+  const stripeSubId = typeof session.subscription === "string"
+    ? session.subscription
+    : session.subscription?.id ?? null;
+
+  await prisma.sale.update({
+    where: { id: saleId },
+    data: {
+      stripeSessionId: session.id,
+      stripePaymentIntentId: paymentIntentId ?? undefined,
+      paymentMethod: stripeSubId ? "stripe_subscription" : "stripe",
+    },
+  }).catch((err) => console.warn("[stripe-webhook] Sale update trazabilidad falló:", err));
+
+  // Activar Patient / SubscriptionRenewal / Transaction (idempotente).
+  await activateSaleAsPatient({
+    saleId,
+    paymentMethod: stripeSubId ? "stripe_subscription" : "stripe",
+    // Pasamos el subscription id como "paypalSubscriptionId" para reutilizar
+    // el flag isSubscription — aunque el campo se llame "paypal", en Stripe
+    // simplemente marca "hay una subscription en curso, no crees Transaction
+    // aquí, deja que cada cuota (invoice.paid) la registre".
+    paypalSubscriptionId: stripeSubId,
+  });
+}
+
+/**
+ * Al completar el checkout de una Renovación por Stripe.
+ */
+async function handleRenewalCheckoutCompleted(session: Stripe.Checkout.Session) {
+  const checkoutId = session.metadata?.renewalCheckoutId;
+  if (!checkoutId) {
+    console.warn("[stripe-webhook] renewal checkout sin renewalCheckoutId", { sessionId: session.id });
+    return;
+  }
+  const stripeSubId = typeof session.subscription === "string"
+    ? session.subscription
+    : session.subscription?.id ?? null;
+  const paymentIntentId = typeof session.payment_intent === "string"
+    ? session.payment_intent
+    : session.payment_intent?.id ?? null;
+
+  await prisma.renewalCheckout.update({
+    where: { id: checkoutId },
+    data: {
+      stripeSessionId: session.id,
+      stripePaymentIntentId: paymentIntentId ?? undefined,
+      paymentMethod: stripeSubId ? "stripe_subscription" : "stripe",
+    },
+  }).catch((err) => console.warn("[stripe-webhook] Renewal update trazabilidad falló:", err));
+
+  await applyRenewalCheckoutPaid({
+    checkoutId,
+    paymentMethod: stripeSubId ? "stripe_subscription" : "stripe",
+    // Igual que en sale: si hay subscription, marcamos isSubscription para
+    // que las Transactions se creen por cuota, no aquí.
+    isSubscription: !!stripeSubId,
+  });
+}
+
+/**
+ * Cada invoice.paid de una Stripe Subscription vinculada a Sale/RenewalCheckout
+ * registra una Transaction income_new / income_renewal por cuota, con la
+ * marca "cuota N/M" en description.
+ */
+async function handleSubscriptionInvoicePaid(
+  invoice: Stripe.Invoice,
+  sub: Stripe.Subscription,
+  productType: "sale" | "renewal",
+) {
+  const amountValue = (invoice.amount_paid ?? 0) / 100;
+  if (!amountValue) return;
+
+  const totalCycles = Number(sub.metadata?.installments ?? 0) || 0;
+  const paymentToken = sub.metadata?.paymentToken ?? null;
+
+  if (productType === "sale") {
+    const saleId = sub.metadata?.saleId ?? null;
+    if (!saleId) return;
+    const sale = await prisma.sale.findUnique({ where: { id: saleId } });
+    if (!sale || !sale.patientId) return;
+    // Contar cuotas ya registradas para este paciente en este saleId
+    const already = await prisma.transaction.count({
+      where: {
+        patientId: sale.patientId,
+        type: "income_new",
+        description: { contains: "cuota" },
+      },
+    });
+    const cycleNumber = already + 1;
+    await prisma.transaction.create({
+      data: {
+        type: "income_new",
+        category: `${sale.programType} ${sale.durationMonths}M`,
+        amount: amountValue,
+        description: `Pago vía Stripe · ${sale.programType} ${sale.durationMonths} meses · cuota ${cycleNumber}/${totalCycles}`,
+        occurredAt: new Date(),
+        patientId: sale.patientId,
+        professionalId: sale.closerId,
+      },
+    });
+    // Cancelar la suscripción cuando llegue la última cuota (Stripe no
+    // sabe cortar sola en N; lo hacemos aquí).
+    if (totalCycles && cycleNumber >= totalCycles) {
+      try {
+        await (await import("stripe")).default;
+        // Usamos el mismo cliente global
+        const s: any = (globalThis as any).__stripe ?? new (await import("stripe")).default(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2024-06-20" as any });
+        await s.subscriptions.cancel(sub.id);
+      } catch (err) {
+        console.error("[stripe-webhook] No pude cancelar sub tras última cuota:", err);
+      }
+    }
+    return;
+  }
+
+  // productType === "renewal"
+  const checkoutId = sub.metadata?.renewalCheckoutId ?? null;
+  if (!checkoutId) return;
+  const checkout = await prisma.renewalCheckout.findUnique({ where: { id: checkoutId } });
+  if (!checkout || !checkout.patientId) return;
+
+  const already = await prisma.transaction.count({
+    where: {
+      patientId: checkout.patientId,
+      type: "income_renewal",
+      description: { contains: "cuota" },
+    },
+  });
+  const cycleNumber = already + 1;
+  await prisma.transaction.create({
+    data: {
+      type: "income_renewal",
+      category: `${checkout.programType} ${checkout.durationMonths}M`,
+      amount: amountValue,
+      description: `Renovación Stripe · ${checkout.programType} ${checkout.durationMonths} meses · cuota ${cycleNumber}/${totalCycles}`,
+      occurredAt: new Date(),
+      patientId: checkout.patientId,
+      professionalId: checkout.createdById,
+    },
+  });
+  if (totalCycles && cycleNumber >= totalCycles) {
+    try {
+      const s: any = (globalThis as any).__stripe ?? new (await import("stripe")).default(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2024-06-20" as any });
+      await s.subscriptions.cancel(sub.id);
+    } catch (err) {
+      console.error("[stripe-webhook] No pude cancelar sub renewal tras última cuota:", err);
+    }
+  }
+  // Ignorar paymentToken; solo era para trazabilidad
+  void paymentToken;
 }

@@ -54,5 +54,7 @@ export async function GET(_req: Request, { params }: { params: { token: string }
     amountCents: sale.amountCents,
     currency: sale.currency,
     installmentCount: sale.installmentCount ?? null,
+    paymentProvider: (sale as any).paymentProvider ?? "paypal",
+    isReservation: (sale as any).isReservation ?? false,
   });
 }
