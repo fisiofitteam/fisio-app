@@ -17,6 +17,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { captureOrder, getOrder } from "@/lib/paypal/orders";
 import { paypalCredentials } from "@/lib/paypal/config";
+import { activateSaleAsPatient } from "@/lib/paypal/activation";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -59,18 +60,15 @@ export async function POST(_req: Request, { params }: { params: { token: string 
 
     if (order?.status === "COMPLETED") {
       const capture = order?.purchase_units?.[0]?.payments?.captures?.[0];
-      await prisma.sale.update({
-        where: { id: sale.id },
-        data: {
-          status: "paid",
-          paidAt: new Date(),
-          paypalCaptureId: capture?.id ?? sale.paypalCaptureId,
-          paymentMethod: sale.paymentMethod ?? "paypal",
-        },
+      // Ejecuta la activación completa (Patient + SubscriptionRenewal +
+      // Transaction). Idempotente con el webhook.
+      const detectPayLater = JSON.stringify(capture ?? {}).toLowerCase().includes("pay_later")
+        || JSON.stringify(capture ?? {}).toLowerCase().includes("paylater");
+      await activateSaleAsPatient({
+        saleId: sale.id,
+        paymentMethod: sale.paymentMethod ?? (detectPayLater ? "paypal_paylater" : "paypal"),
+        paypalCaptureId: capture?.id ?? sale.paypalCaptureId,
       });
-      // El webhook seguirá procesando (crear Patient, etc). Si no llega,
-      // el endpoint /status ya no tiene nada que hacer porque el Sale está
-      // marcado paid — la parte de crear Patient se dispara desde el webhook.
       return NextResponse.json({ ok: true });
     }
 

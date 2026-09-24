@@ -8,6 +8,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { stripe } from "@/lib/stripe";
 import { captureOrder, getOrder } from "@/lib/paypal/orders";
+import { applyRenewalCheckoutPaid } from "@/lib/paypal/activation";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -37,14 +38,18 @@ export async function GET(_req: Request, { params }: { params: { token: string }
       }
       if (order?.status === "COMPLETED") {
         const capture = order?.purchase_units?.[0]?.payments?.captures?.[0];
-        await prisma.renewalCheckout.update({
-          where: { id: checkout.id },
-          data: {
-            status: "paid",
-            paidAt: new Date(),
-            paypalCaptureId: capture?.id ?? checkout.paypalCaptureId,
-            paymentMethod: "paypal",
-          },
+        // CAMBIO CRÍTICO (bug 2026-09-24): antes solo hacíamos update de
+        // status="paid". Eso dejaba huérfano el checkout — sin
+        // SubscriptionRenewal, sin Transaction, el paciente veía "gracias"
+        // pero su ficha no reflejaba nada. Ahora ejecutamos la activación
+        // COMPLETA. Idempotente con el webhook.
+        const detectPayLater = JSON.stringify(capture ?? {}).toLowerCase().includes("pay_later")
+          || JSON.stringify(capture ?? {}).toLowerCase().includes("paylater");
+        await applyRenewalCheckoutPaid({
+          checkoutId: checkout.id,
+          paymentMethod: detectPayLater ? "paypal_paylater" : "paypal",
+          paypalCaptureId: capture?.id ?? checkout.paypalCaptureId,
+          isSubscription: false,
         });
         return NextResponse.json({ status: "paid" });
       }

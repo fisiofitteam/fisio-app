@@ -29,7 +29,11 @@ import { prisma } from "@/lib/prisma";
 import { notifyHeadSuccess } from "@/lib/notifications";
 import { verifyWebhookSignature } from "@/lib/paypal/webhook";
 import { paypalCredentials } from "@/lib/paypal/config";
-import { applyRenewal } from "@/lib/renewals";
+// activateSaleAsPatient y applyRenewalCheckoutPaid viven en lib/paypal/activation.ts
+// para que también las usen los status endpoints y el reconciliador admin.
+// Antes duplicaban el código aquí y el bug era catastrófico: si el webhook
+// no llegaba, ninguna otra vía podía completar la activación.
+import { activateSaleAsPatient, applyRenewalCheckoutPaid } from "@/lib/paypal/activation";
 
 // Prefijo del custom_id de PayPal para diferenciar renovaciones (RenewalCheckout)
 // de altas (Sale). Ver /api/renewal/[token]/paypal.
@@ -99,155 +103,6 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     console.error("[paypal-webhook] Error inesperado, devolviendo 500 para reintento:", err);
     return NextResponse.json({ error: err?.message ?? "internal" }, { status: 500 });
-  }
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// Alta de paciente (compartida entre Order.capture.completed y
-// Subscription.activated). Idempotente vía Sale.status.
-// ────────────────────────────────────────────────────────────────────────────
-async function activateSaleAsPatient(input: {
-  saleId: string;
-  paymentMethod: string;
-  paypalCaptureId?: string | null;
-  paypalSubscriptionId?: string | null;
-  amountVerified?: boolean;
-  notifyTitle: string;
-  notifyBody: string;
-}) {
-  const sale = await prisma.sale.findUnique({
-    where: { id: input.saleId },
-    include: { lead: true },
-  });
-  if (!sale) return;
-  if (sale.status === "paid" && sale.patientId) {
-    console.log("[paypal-webhook] Sale ya procesado, skipping", { saleId: sale.id });
-    return;
-  }
-
-  const now = new Date();
-  const programEndDate = new Date(now);
-  programEndDate.setMonth(programEndDate.getMonth() + sale.durationMonths);
-
-  let manualAlta: { assignedProfessionalId?: string; diagnosis?: string } = {};
-  if ((sale as any).manualAltaData) {
-    try {
-      const parsed = JSON.parse((sale as any).manualAltaData);
-      if (parsed && typeof parsed === "object") manualAlta = parsed;
-    } catch {
-      console.warn("[paypal-webhook] manualAltaData JSON inválido", { saleId: sale.id });
-    }
-  }
-
-  const patient = await prisma.$transaction(async (tx) => {
-    const leadEmailRaw =
-      sale.lead.contactType === "email" ? sale.lead.contactValue : sale.lead.email;
-    const leadPhoneRaw =
-      sale.lead.contactType === "phone" ? sale.lead.contactValue : sale.lead.phone;
-    const patient = await tx.patient.create({
-      data: {
-        fullName: sale.lead.fullName,
-        email: leadEmailRaw ? leadEmailRaw.trim().toLowerCase() : null,
-        phone: leadPhoneRaw?.trim() || null,
-        instagram: sale.lead.instagram?.trim().replace(/^@+/, "") || null,
-        sport: "CrossFit",
-        startedAt: now,
-        subscriptionStartDate: now,
-        subscriptionPeriodMonths: sale.durationMonths,
-        subscriptionTotalMonths: sale.durationMonths,
-        programType: sale.programType,
-        programMode: "fixed",
-        onboardingStatus: manualAlta.assignedProfessionalId ? "active" : "pending_assignment",
-        ...(manualAlta.assignedProfessionalId
-          ? { assignedProfessionalId: manualAlta.assignedProfessionalId }
-          : {}),
-        ...(manualAlta.diagnosis ? { diagnosis: manualAlta.diagnosis } : {}),
-        programDurationMonths: sale.durationMonths,
-        programStartDate: now,
-        programEndDate,
-        onboardingTasks: { anamnesis: false, contract: false, firstSession: false } as any,
-      },
-    });
-
-    await tx.sale.update({
-      where: { id: sale.id },
-      data: {
-        status: "paid",
-        paidAt: now,
-        patientId: patient.id,
-        paypalCaptureId: input.paypalCaptureId ?? sale.paypalCaptureId,
-        paypalSubscriptionId: input.paypalSubscriptionId ?? sale.paypalSubscriptionId,
-        paymentMethod: input.paymentMethod,
-      },
-    });
-
-    // Para pagos ÚNICOS: registramos el importe total en una sola Transaction
-    // AQUÍ (no hay PAYMENT.SALE.COMPLETED en Orders API).
-    // Para SUSCRIPCIONES: NO creamos Transaction aquí. Cada cuota se
-    // contabiliza cuando llega el evento PAYMENT.SALE.COMPLETED
-    // (registerSubscriptionCycle). Antes creábamos la primera aquí y luego
-    // se duplicaba con el PAYMENT.SALE.COMPLETED del primer cobro, que sí
-    // viene junto al activated. Ahora es responsabilidad única del handler
-    // de cuotas.
-    const isSubscription = !!input.paypalSubscriptionId;
-    const installments = sale.installmentCount ?? 0;
-
-    if (!isSubscription) {
-      await tx.transaction.create({
-        data: {
-          type: "income_new",
-          category: `${sale.programType} ${sale.durationMonths}M`,
-          amount: sale.amountCents / 100,
-          description: `Pago vía PayPal · ${sale.programType} ${sale.durationMonths} meses · ${input.paymentMethod}`,
-          occurredAt: now,
-          patientId: patient.id,
-          professionalId: sale.closerId,
-        },
-      });
-    }
-
-    await tx.subscriptionRenewal.create({
-      data: {
-        patientId: patient.id,
-        programType: sale.programType,
-        periodMonths: sale.durationMonths,
-        startDate: patient.programStartDate ?? now,
-        endDate: patient.programEndDate ?? new Date(now.getTime() + sale.durationMonths * 30 * 86400000),
-        status: "active",
-        amountPaid: sale.amountCents / 100,
-        decidedAt: now,
-        notes: isSubscription
-          ? `Alta inicial (PayPal ${installments} cuotas)`
-          : "Alta inicial (pago PayPal)",
-      },
-    });
-
-    const leadUpdate: any = { convertedPatientId: patient.id };
-    if (sale.lead.status !== "won") {
-      leadUpdate.status = "won";
-      leadUpdate.decidedAt = now;
-    } else if (!sale.lead.decidedAt) {
-      leadUpdate.decidedAt = now;
-    }
-    await tx.lead.update({
-      where: { id: sale.leadId },
-      data: leadUpdate,
-    });
-
-    return patient;
-  });
-
-  console.log("[paypal-webhook] Patient creado", { patientId: patient.id, saleId: sale.id });
-
-  try {
-    await notifyHeadSuccess({
-      type: "patient_new_unassigned",
-      title: input.notifyTitle,
-      body: input.notifyBody.replace("{{fullName}}", sale.lead.fullName),
-      actionUrl: `/fisio/paciente/${patient.id}/ficha`,
-    });
-  } catch (err) {
-    console.error("[paypal-webhook] Error notificando a head_success:", err);
   }
 }
 
@@ -528,86 +383,6 @@ async function handleCaptureRefunded(refund: any) {
 // ════════════════════════════════════════════════════════════════════════════
 // RENOVACIONES · aplican cuando custom_id = "renewal:<paymentToken>"
 // ════════════════════════════════════════════════════════════════════════════
-
-/**
- * Aplica el pago de renovación: crea SubscriptionRenewal vía applyRenewal(),
- * marca el RenewalCheckout como paid y registra la Transaction income_renewal.
- * Idempotente (skip si ya está paid con renewalId).
- */
-async function applyRenewalCheckoutPaid(opts: {
-  checkoutId: string;
-  paymentMethod: string;
-  paypalCaptureId?: string | null;
-  paypalSubscriptionId?: string | null;
-  isSubscription: boolean;
-}) {
-  const checkout = await prisma.renewalCheckout.findUnique({
-    where: { id: opts.checkoutId },
-    include: { patient: { select: { fullName: true, assignedProfessionalId: true } } },
-  });
-  if (!checkout) return;
-  if (checkout.status === "paid" && checkout.renewalId) {
-    console.log("[paypal-webhook] RenewalCheckout ya procesado", { id: checkout.id });
-    return;
-  }
-
-  const installments = checkout.installmentCount ?? 0;
-  const totalEur = checkout.amountCents / 100;
-
-  const isReservation = (checkout as any).isReservation === true;
-  const { renewalId } = await applyRenewal({
-    patientId: checkout.patientId,
-    programType: checkout.programType,
-    periodMonths: checkout.durationMonths,
-    amountPaid: totalEur,
-    professionalId: checkout.createdById,
-    isReservation,
-    notes: isReservation
-      ? "Reserva de plaza (PayPal)"
-      : opts.isSubscription
-        ? `Renovación PayPal (${installments} cuotas)`
-        : "Renovación PayPal",
-  });
-
-  await prisma.renewalCheckout.update({
-    where: { id: checkout.id },
-    data: {
-      status: "paid",
-      paidAt: new Date(),
-      renewalId,
-      paymentMethod: opts.paymentMethod,
-      paypalCaptureId: opts.paypalCaptureId ?? checkout.paypalCaptureId,
-      paypalSubscriptionId: opts.paypalSubscriptionId ?? checkout.paypalSubscriptionId,
-    },
-  });
-
-  // Solo creamos Transaction aquí para pagos ÚNICOS. En suscripciones cada
-  // cuota se contabiliza cuando llega el evento PAYMENT.SALE.COMPLETED —
-  // así evitamos el duplicado que aparecía al superponerse activated +
-  // PAYMENT.SALE.COMPLETED del primer cobro.
-  if (!opts.isSubscription) {
-    await prisma.transaction.create({
-      data: {
-        type: "income_renewal",
-        category: `${checkout.programType} ${checkout.durationMonths}M`,
-        amount: totalEur,
-        description: isReservation
-          ? `Reserva de plaza PayPal · ${checkout.programType}`
-          : `Renovación PayPal · ${checkout.programType} ${checkout.durationMonths} meses`,
-        occurredAt: new Date(),
-        patientId: checkout.patientId,
-        professionalId: checkout.createdById,
-      },
-    });
-  }
-
-  console.log("[paypal-webhook] Renovación aplicada", {
-    checkoutId: checkout.id,
-    renewalId,
-    patient: checkout.patient.fullName,
-    isSubscription: opts.isSubscription,
-  });
-}
 
 /** Renovación pagada de una sola vez (Order capture). */
 async function handleRenewalCaptureCompleted(paymentToken: string, capture: any) {

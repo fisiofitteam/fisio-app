@@ -13,6 +13,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { stripe } from "@/lib/stripe";
 import { captureOrder, getOrder } from "@/lib/paypal/orders";
+import { activateSaleAsPatient } from "@/lib/paypal/activation";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -51,21 +52,28 @@ export async function GET(_req: Request, { params }: { params: { token: string }
 
       if (order?.status === "COMPLETED") {
         const capture = order?.purchase_units?.[0]?.payments?.captures?.[0];
-        const updated = await prisma.sale.update({
+        // CAMBIO CRÍTICO (bug 2026-09-24): antes solo hacíamos update de
+        // status="paid". Ahora ejecutamos la activación COMPLETA para no
+        // depender del webhook — crea Patient, SubscriptionRenewal,
+        // Transaction, actualiza Lead. Idempotente: si el webhook llega
+        // después, activateSaleAsPatient hace return sin efectos.
+        const detectPayLater = JSON.stringify(capture ?? {}).toLowerCase().includes("pay_later")
+          || JSON.stringify(capture ?? {}).toLowerCase().includes("paylater");
+        await activateSaleAsPatient({
+          saleId: sale.id,
+          paymentMethod: sale.paymentMethod ?? (detectPayLater ? "paypal_paylater" : "paypal"),
+          paypalCaptureId: capture?.id ?? sale.paypalCaptureId,
+        });
+        const updated = await prisma.sale.findUnique({
           where: { id: sale.id },
-          data: {
-            status: "paid",
-            paidAt: new Date(),
-            paypalCaptureId: capture?.id ?? sale.paypalCaptureId,
-            paymentMethod: sale.paymentMethod ?? "paypal",
-          },
+          select: { status: true, patientId: true },
         });
         return new NextResponse(
           JSON.stringify({
-            status: updated.status,
+            status: updated?.status ?? "paid",
             leadName: sale.lead.fullName,
             leadEmail: sale.lead.email,
-            hasPatient: !!updated.patientId,
+            hasPatient: !!updated?.patientId,
           }),
           { headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } }
         );
