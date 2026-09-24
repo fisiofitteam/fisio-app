@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { captureOrder } from "@/lib/paypal/orders";
+import { captureOrder, getOrder } from "@/lib/paypal/orders";
+import { applyRenewalCheckoutPaid } from "@/lib/paypal/activation";
 import { RenewalThankYouClient } from "@/components/RenewalThankYouClient";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +33,11 @@ export default async function RenewalThankYouPage({
   const paypalOrderIdFromUrl = Array.isArray(rawToken) ? rawToken[1] : null;
   const payerId = Array.isArray(searchParams.PayerID) ? searchParams.PayerID[0] : searchParams.PayerID;
 
-  if (paymentToken && payerId) {
+  // FIX 2026-09-24: capturar SIEMPRE que haya paymentToken (aunque no
+  // llegue PayerID, frecuente en móviles). Consulta el estado real del
+  // Order y captura+activa si está APPROVED/COMPLETED. Antes se quedaba
+  // colgado y a las 72h PayPal purgaba el hold → banco devolvía.
+  if (paymentToken) {
     await capturePayPalIfPending(paymentToken, paypalOrderIdFromUrl ?? null);
   }
   return <RenewalThankYouClient token={paymentToken} />;
@@ -42,14 +47,49 @@ async function capturePayPalIfPending(paymentToken: string, orderIdFromUrl: stri
   try {
     const checkout = await prisma.renewalCheckout.findUnique({
       where: { paymentToken },
-      select: { status: true, paypalOrderId: true },
+      select: { id: true, status: true, paypalOrderId: true, paypalCaptureId: true, renewalId: true },
     });
-    if (!checkout) return;
-    if (checkout.status === "paid") return;
+    if (!checkout) {
+      console.log("[renovar/gracias] Checkout no encontrado", { paymentToken: paymentToken.slice(0, 8) + "…" });
+      return;
+    }
+    if (checkout.status === "paid" && checkout.renewalId) {
+      console.log("[renovar/gracias] Checkout ya activado", { checkoutId: checkout.id });
+      return;
+    }
     const orderId = orderIdFromUrl ?? checkout.paypalOrderId;
-    if (!orderId) return;
-    await captureOrder(orderId);
+    if (!orderId) {
+      console.log("[renovar/gracias] Checkout sin orderId, imposible capturar", { checkoutId: checkout.id });
+      return;
+    }
+    let order = await getOrder(orderId);
+    console.log("[renovar/gracias] Order status", { checkoutId: checkout.id, orderId, status: order?.status });
+    if (order?.status === "APPROVED") {
+      try {
+        await captureOrder(orderId);
+        order = await getOrder(orderId);
+      } catch (captureErr: any) {
+        const msg = String(captureErr?.message ?? "");
+        if (!/ALREADY_CAPTURED/i.test(msg)) {
+          console.error("[renovar/gracias] captureOrder falló:", captureErr);
+          return;
+        }
+        order = await getOrder(orderId);
+      }
+    }
+    if (order?.status === "COMPLETED") {
+      const capture = order?.purchase_units?.[0]?.payments?.captures?.[0];
+      const detectPayLater = JSON.stringify(capture ?? {}).toLowerCase().includes("pay_later")
+        || JSON.stringify(capture ?? {}).toLowerCase().includes("paylater");
+      await applyRenewalCheckoutPaid({
+        checkoutId: checkout.id,
+        paymentMethod: detectPayLater ? "paypal_paylater" : "paypal",
+        paypalCaptureId: capture?.id ?? checkout.paypalCaptureId,
+        isSubscription: false,
+      });
+      console.log("[renovar/gracias] Renewal activado", { checkoutId: checkout.id });
+    }
   } catch (e) {
-    console.error("[renovar/gracias] Fallo al capturar Order PayPal:", e);
+    console.error("[renovar/gracias] Fallo al capturar/activar Order PayPal:", e);
   }
 }

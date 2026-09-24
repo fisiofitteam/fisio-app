@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { captureOrder } from "@/lib/paypal/orders";
+import { captureOrder, getOrder } from "@/lib/paypal/orders";
+import { activateSaleAsPatient } from "@/lib/paypal/activation";
 import { ThankYouClient } from "@/components/ThankYouClient";
 
 export const metadata = {
@@ -43,7 +44,14 @@ export default async function GraciasPage({
   const payerId = firstStr(searchParams.PayerID);
   const sessionId = firstStr(searchParams.session_id);
 
-  if (paymentToken && payerId) {
+  // FIX 2026-09-24: capturar SIEMPRE que haya paymentToken, aunque el
+  // PayerID no llegue en la URL (frecuente en móviles cuando el usuario
+  // vuelve a la app de PayPal y luego al navegador — PayPal a veces pierde
+  // el PayerID pero el Order sigue APPROVED). Antes solo capturábamos con
+  // PayerID; ahora consultamos el estado real del Order y capturamos si
+  // está APPROVED. Este era el bug que dejaba a los pacientes con el hold
+  // del banco activo hasta que PayPal purgaba el Order a las 72h.
+  if (paymentToken) {
     await capturePayPalIfPending(paymentToken, paypalOrderIdFromUrl);
   }
 
@@ -59,21 +67,54 @@ async function capturePayPalIfPending(paymentToken: string, orderIdFromUrl: stri
   try {
     const sale = await prisma.sale.findUnique({
       where: { paymentToken },
-      select: { id: true, status: true, paypalOrderId: true },
+      select: { id: true, status: true, paypalOrderId: true, paypalCaptureId: true, paymentMethod: true, patientId: true },
     });
-    if (!sale) return;
-    if (sale.status === "paid") return; // webhook llegó antes
-    // Preferimos el orderId que trae PayPal en la URL (garantizado) sobre el
-    // que hayamos guardado en BD (puede faltar si el POST original falló).
+    if (!sale) {
+      console.log("[pagar/gracias] Sale no encontrado", { paymentToken: paymentToken.slice(0, 8) + "…" });
+      return;
+    }
+    if (sale.status === "paid" && sale.patientId) {
+      console.log("[pagar/gracias] Sale ya activado", { saleId: sale.id });
+      return;
+    }
     const orderId = orderIdFromUrl ?? sale.paypalOrderId;
-    if (!orderId) return;
-    // Captura idempotente: PayPal devuelve el mismo resultado si repetimos.
-    await captureOrder(orderId);
-    // La webhook PAYMENT.CAPTURE.COMPLETED se dispara aquí y hace el resto.
+    if (!orderId) {
+      console.log("[pagar/gracias] Sale sin orderId, imposible capturar", { saleId: sale.id });
+      return;
+    }
+
+    // Consultar estado real. Si está APPROVED capturamos. Si ya COMPLETED,
+    // solo activamos. Idempotente end-to-end.
+    let order = await getOrder(orderId);
+    console.log("[pagar/gracias] Order status", { saleId: sale.id, orderId, status: order?.status });
+
+    if (order?.status === "APPROVED") {
+      try {
+        await captureOrder(orderId);
+        order = await getOrder(orderId);
+        console.log("[pagar/gracias] Post-capture status", { saleId: sale.id, status: order?.status });
+      } catch (captureErr: any) {
+        const msg = String(captureErr?.message ?? "");
+        if (!/ALREADY_CAPTURED/i.test(msg)) {
+          console.error("[pagar/gracias] captureOrder falló:", captureErr);
+          return;
+        }
+        order = await getOrder(orderId);
+      }
+    }
+
+    if (order?.status === "COMPLETED") {
+      const capture = order?.purchase_units?.[0]?.payments?.captures?.[0];
+      const detectPayLater = JSON.stringify(capture ?? {}).toLowerCase().includes("pay_later")
+        || JSON.stringify(capture ?? {}).toLowerCase().includes("paylater");
+      await activateSaleAsPatient({
+        saleId: sale.id,
+        paymentMethod: sale.paymentMethod ?? (detectPayLater ? "paypal_paylater" : "paypal"),
+        paypalCaptureId: capture?.id ?? sale.paypalCaptureId,
+      });
+      console.log("[pagar/gracias] Sale activado", { saleId: sale.id });
+    }
   } catch (e) {
-    console.error("[pagar/gracias] Fallo al capturar Order PayPal:", e);
-    // No bloqueamos el render — el user ve la pantalla de "estamos
-    // procesando" y si finalmente el webhook nunca llega, verá el error
-    // tras 60s de polling (mismo comportamiento que teníamos con Stripe).
+    console.error("[pagar/gracias] Fallo al capturar/activar Order PayPal:", e);
   }
 }
