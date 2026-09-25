@@ -91,6 +91,17 @@ export function SemaforoPanel({
   const [kpis, setKpis] = useState<Kpis | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // ─── Config del lead magnet ────────────────────────────────
+  // Se usa para decidir si mostrar la columna "WA" en la tabla — en
+  // modo funnel es la única señal que le queda al equipo para saber
+  // si el lead ha respondido; fuera de funnel, no aporta valor.
+  const [funnelMode, setFunnelMode] = useState(false);
+  useEffect(() => {
+    fetch("/api/semaforo/admin/config")
+      .then((r) => r.json())
+      .then((d) => { if (d?.ok && d.config) setFunnelMode(!!d.config.quizFunnelEnabled); })
+      .catch(() => {});
+  }, []);
 
   const queryString = useMemo(() => {
     const p = new URLSearchParams();
@@ -303,10 +314,7 @@ export function SemaforoPanel({
                   <th className="text-left py-2 px-2 font-medium">@Instagram</th>
                   <th className="text-left py-2 px-2 font-medium">Nombre</th>
                   <th className="text-left py-2 px-2 font-medium">Estado / Color</th>
-                  <th className="text-left py-2 px-2 font-medium">Movimientos</th>
-                  <th className="text-left py-2 px-2 font-medium">Banderas</th>
-                  <th className="text-center py-2 px-2 font-medium">WA</th>
-                  <th className="text-left py-2 px-2 font-medium">Campaña</th>
+                  {funnelMode && <th className="text-center py-2 px-2 font-medium">WA</th>}
                   <th className="text-center py-2 px-2 font-medium">Gest.</th>
                 </tr>
               </thead>
@@ -330,19 +338,11 @@ export function SemaforoPanel({
                     <td className="py-2 px-2">
                       <StatusChip row={r} />
                     </td>
-                    <td className="py-2 px-2">
-                      <MovDots mov={r.movimientos} />
-                    </td>
-                    <td className="py-2 px-2 text-[11px] text-neutral-600">
-                      {r.banderas.length > 0 ? r.banderas.map((b) => (
-                        <span key={b} className="inline-block px-1.5 py-0.5 rounded mr-1"
-                          style={{ background: "#FEE2E2", color: "#991B1B" }}>{b}</span>
-                      )) : <span className="text-neutral-400">—</span>}
-                    </td>
-                    <td className="py-2 px-2 text-center">
-                      {r.whatsappClickAt ? <span title={fmtDate(r.whatsappClickAt)}>✅</span> : <span className="text-neutral-400">—</span>}
-                    </td>
-                    <td className="py-2 px-2 text-[11px] text-neutral-600">{r.campana || <span className="text-neutral-400">—</span>}</td>
+                    {funnelMode && (
+                      <td className="py-2 px-2 text-center">
+                        {r.whatsappClickAt ? <span title={fmtDate(r.whatsappClickAt)}>✅</span> : <span className="text-neutral-400">—</span>}
+                      </td>
+                    )}
                     <td className="py-2 px-2 text-center">
                       {r.gestionado
                         ? <span title={r.gestionadoPor ?? ""}>✔</span>
