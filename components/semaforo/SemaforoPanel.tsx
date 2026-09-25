@@ -102,6 +102,24 @@ export function SemaforoPanel({
       .then((d) => { if (d?.ok && d.config) setFunnelMode(!!d.config.quizFunnelEnabled); })
       .catch(() => {});
   }, []);
+  // ─── Selección múltiple para borrado en lote (solo CEO) ─────
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function toggleSelectAll(currentIds: string[]) {
+    setSelected((prev) => {
+      // Si todos están seleccionados, deselecciona todos. Si no, selecciona todos.
+      const allSelected = currentIds.length > 0 && currentIds.every((id) => prev.has(id));
+      return allSelected ? new Set() : new Set(currentIds);
+    });
+  }
 
   const queryString = useMemo(() => {
     const p = new URLSearchParams();
@@ -137,6 +155,30 @@ export function SemaforoPanel({
     window.location.href = "/api/semaforo/admin/list?" + queryString + "&format=csv";
   }
 
+  async function deleteSelected() {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    if (!confirm(`Eliminar ${ids.length} registro${ids.length === 1 ? "" : "s"}? No se puede deshacer.`)) return;
+    setDeleting(true);
+    try {
+      // Borrado paralelo. Si alguno falla, seguimos con los demás y avisamos.
+      const results = await Promise.allSettled(
+        ids.map((id) => fetch(`/api/semaforo/admin/${id}`, { method: "DELETE" })),
+      );
+      const failures = results.filter((r) => r.status === "rejected" || (r.status === "fulfilled" && !r.value.ok));
+      if (failures.length > 0) {
+        alert(`Se eliminaron ${ids.length - failures.length} de ${ids.length}. ${failures.length} fallaron.`);
+      }
+      setSelected(new Set());
+      const res = await fetch("/api/semaforo/admin/list?" + queryString);
+      const data = await res.json();
+      setRows(data.rows);
+      setKpis(data.kpis);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   const maxAbandono = kpis ? Math.max(1, ...kpis.abandono.map((a) => a.count)) : 1;
 
   const Wrap = embedded ? "div" : "main";
@@ -152,6 +194,17 @@ export function SemaforoPanel({
           </p>
         </div>
         <div className="flex gap-2">
+          {canDelete && selected.size > 0 && (
+            <button
+              onClick={deleteSelected}
+              disabled={deleting}
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg disabled:opacity-60"
+              style={{ background: "#DC2626", color: "white", border: "1px solid #B91C1C" }}
+              title="Eliminar los registros seleccionados (irreversible)"
+            >
+              {deleting ? "Eliminando…" : `🗑 Eliminar ${selected.size}`}
+            </button>
+          )}
           <button
             onClick={() => setShowLinkGen(true)}
             className="text-xs font-medium px-3 py-1.5 rounded-lg"
@@ -168,13 +221,6 @@ export function SemaforoPanel({
           </button>
         </div>
       </header>
-
-      {!legalRevisado && (
-        <div className="rounded-lg p-3 text-xs mb-4"
-             style={{ background: "#FEF3C7", color: "#78350F", border: "1px solid #FCD34D" }}>
-          ⚠️ Textos legales pendientes de revisar. Repasa /privacidad y sube <code>LEGAL_REVISADO=true</code> en <code>lib/semaforo/config.ts</code> cuando el copy esté aprobado.
-        </div>
-      )}
 
       {/* ── Configuración del lead magnet ─────────────────────────────── */}
       <SemaforoConfigCard />
@@ -310,6 +356,17 @@ export function SemaforoPanel({
             <table className="w-full text-sm border-collapse">
               <thead>
                 <tr className="text-[11px] text-neutral-500 uppercase border-b border-neutral-200 bg-neutral-50">
+                  {canDelete && (
+                    <th className="text-center py-2 px-2 font-medium w-8">
+                      <input
+                        type="checkbox"
+                        checked={rows.length > 0 && rows.every((r) => selected.has(r.id))}
+                        onChange={() => toggleSelectAll(rows.map((r) => r.id))}
+                        className="h-3.5 w-3.5 accent-red-600 cursor-pointer"
+                        title="Seleccionar todos los visibles"
+                      />
+                    </th>
+                  )}
                   <th className="text-left py-2 px-2 font-medium">Fecha</th>
                   <th className="text-left py-2 px-2 font-medium">@Instagram</th>
                   <th className="text-left py-2 px-2 font-medium">Nombre</th>
@@ -323,6 +380,16 @@ export function SemaforoPanel({
                   <tr key={r.id}
                       className="border-b border-neutral-100 hover:bg-neutral-50 cursor-pointer"
                       onClick={() => setDrawerId(r.id)}>
+                    {canDelete && (
+                      <td className="py-2 px-2 text-center" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={selected.has(r.id)}
+                          onChange={() => toggleSelected(r.id)}
+                          className="h-3.5 w-3.5 accent-red-600 cursor-pointer"
+                        />
+                      </td>
+                    )}
                     <td className="py-2 px-2 whitespace-nowrap text-neutral-700">{fmtDate(r.createdAt)}</td>
                     <td className="py-2 px-2">
                       {r.instagram ? (
