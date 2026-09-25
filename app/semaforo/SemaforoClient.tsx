@@ -75,18 +75,16 @@ const STYLES = `
   background-color:#0A0A0A;
   background-image:url('/box.jpg');
   background-size:cover;background-position:center;background-attachment:fixed;
-  /* Filtro sutil para que el ruido de la foto no compita con el copy:
-   * ligero blur + baja saturación + oscurece. El texto y las cards ganan
-   * lecturabilidad sin perder el ambiente del box. */
-  filter:blur(3px) saturate(0.7) brightness(0.55);
+  /* Blur suave para que la foto no compita con el copy, pero sin bajar
+   * mucho el brillo — queremos mantener el ambiente del box visible. */
+  filter:blur(2px) saturate(0.85) brightness(0.8);
   transform:scale(1.02); /* compensa el blur en los bordes */
 }
 .sf-bg-overlay{
   position:fixed;inset:0;z-index:0;
-  /* Overlay con gradiente vertical: más oscuro por debajo del hero para
-   * que las cards ancladas al centro sean fáciles de leer, más ligero
-   * arriba para que se siga viendo la textura del box detrás del título. */
-  background:linear-gradient(180deg, rgba(10,10,10,0.62) 0%, rgba(10,10,10,0.82) 55%, rgba(10,10,10,0.88) 100%);
+  /* Gradiente muy ligero: apenas oscurece arriba, un pelín más abajo
+   * donde están las cards. Mantiene el branding visible. */
+  background:linear-gradient(180deg, rgba(10,10,10,0.30) 0%, rgba(10,10,10,0.50) 55%, rgba(10,10,10,0.60) 100%);
 }
 .sf-scope{
   position:relative;z-index:1;
@@ -127,6 +125,10 @@ const STYLES = `
 .sf-brand-accent{
   background:linear-gradient(135deg,var(--gold-1) 0%,var(--gold-2) 100%);
   -webkit-background-clip:text;background-clip:text;color:transparent;
+  /* Text-shadow del h1 padre "sangra" a este span y apaga el gradiente
+   * dorado. Lo anulamos aquí para que el color vivo brille. */
+  text-shadow:none;
+  filter:drop-shadow(0 2px 12px rgba(0,0,0,0.6));
 }
 .sf-scope h1,.sf-scope h2,.sf-scope h3{font-family:var(--font-display);line-height:1.08;margin:0;color:var(--ink-strong)}
 .sf-scope h1{line-height:0.98}
@@ -153,7 +155,7 @@ const STYLES = `
 .sf-scope :focus-visible{outline:3px solid var(--gold-1);outline-offset:3px;border-radius:6px}
 
 /* Traffic light */
-.sf-light{background:#0A0A0A;border-radius:28px;padding:14px;display:inline-flex;flex-direction:column;gap:12px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06),0 10px 40px rgba(0,0,0,.45)}
+.sf-light{background:#0A0A0A;border-radius:28px;padding:14px;display:inline-flex;flex-direction:column;gap:12px;border:2px solid rgba(255,255,255,0.85);box-shadow:inset 0 0 0 1px rgba(255,255,255,.08),0 0 0 4px rgba(255,255,255,0.08),0 10px 40px rgba(0,0,0,.45)}
 .sf-light.row{flex-direction:row}
 .sf-bulb{width:46px;height:46px;border-radius:50%;background:var(--off);transition:background .35s,box-shadow .35s}
 .sf-light.big .sf-bulb{width:78px;height:78px}
