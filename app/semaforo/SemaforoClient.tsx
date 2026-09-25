@@ -75,10 +75,18 @@ const STYLES = `
   background-color:#0A0A0A;
   background-image:url('/box.jpg');
   background-size:cover;background-position:center;background-attachment:fixed;
+  /* Filtro sutil para que el ruido de la foto no compita con el copy:
+   * ligero blur + baja saturación + oscurece. El texto y las cards ganan
+   * lecturabilidad sin perder el ambiente del box. */
+  filter:blur(3px) saturate(0.7) brightness(0.55);
+  transform:scale(1.02); /* compensa el blur en los bordes */
 }
 .sf-bg-overlay{
   position:fixed;inset:0;z-index:0;
-  background:rgba(10,10,10,0.72);
+  /* Overlay con gradiente vertical: más oscuro por debajo del hero para
+   * que las cards ancladas al centro sean fáciles de leer, más ligero
+   * arriba para que se siga viendo la textura del box detrás del título. */
+  background:linear-gradient(180deg, rgba(10,10,10,0.62) 0%, rgba(10,10,10,0.82) 55%, rgba(10,10,10,0.88) 100%);
 }
 .sf-scope{
   position:relative;z-index:1;
@@ -121,12 +129,24 @@ const STYLES = `
   -webkit-background-clip:text;background-clip:text;color:transparent;
 }
 .sf-scope h1,.sf-scope h2,.sf-scope h3{font-family:var(--font-display);line-height:1.08;margin:0;color:var(--ink-strong)}
-.sf-scope h1{line-height:1.02}
-.sf-scope h1{font-size:clamp(36px,7vw,56px);font-weight:800;letter-spacing:-.035em}
+.sf-scope h1{line-height:0.98}
+/* Título más grande y con más presencia — ocupa el mismo ancho que la
+ * card de abajo (max-width del .sf-wrap = 640px). Text-shadow suave
+ * para separar del fondo aunque tenga blur. */
+.sf-scope h1{
+  font-size:clamp(56px,11vw,88px);
+  font-weight:800;letter-spacing:-.035em;
+  text-shadow:0 2px 24px rgba(0,0,0,0.55);
+  max-width:9ch;
+}
 .sf-scope h2{font-size:clamp(28px,7.5vw,38px);font-weight:700;letter-spacing:-.02em}
 .sf-scope h3{font-size:22px;font-weight:700}
 .sf-scope p{margin:0 0 14px}
-.sf-lead{font-size:15px;color:var(--muted);max-width:40ch;margin:0}
+.sf-lead{
+  font-size:17px;line-height:1.5;
+  color:var(--muted);max-width:48ch;margin:0;
+  text-shadow:0 1px 12px rgba(0,0,0,0.5);
+}
 .sf-hero .sf-lead{margin:0 auto}
 .sf-small{font-size:13px;color:var(--muted-2)}
 .sf-scope button{font:inherit;cursor:pointer}
