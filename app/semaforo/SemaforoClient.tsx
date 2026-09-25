@@ -472,10 +472,22 @@ export function SemaforoClient({
     const nextStep = step + 1;
     if (nextStep >= Q.length) {
       // Cierre a COMPLETADO — el server recalcula el color.
+      // BUG FIX (2026-09-25): antes disparábamos dos patches en paralelo
+      // (uno con contacto, otro con cerrar:"completado") y había race:
+      // si el cierre llegaba primero, el servidor devolvía 409 al patch
+      // de contacto y se perdía instagram/telefono/nombre. Ahora hacemos
+      // UN solo patch con todo — atómico.
+      const country = findCountry(finalCountryLabel);
+      const fullPhone = quizFunnelMode && finalContact.trim()
+        ? `${country?.dialCode ?? ""} ${finalContact.trim()}`.trim()
+        : null;
+      const igClean = finalInstagram.trim().replace(/^@+/, "") || null;
       patchProgress({
         respuestas: answers as Record<string, unknown>,
         ultimoPaso: step,
-        nombre: answers.nombre ?? null,
+        nombre: finalName?.trim() || answers.nombre || null,
+        instagram: igClean,
+        telefono: fullPhone,
         cerrar: "completado",
       });
       // En modo funnel no mostramos el resultado — pantalla de "gracias"
@@ -534,17 +546,10 @@ export function SemaforoClient({
             setFinalCountryLabel={setFinalCountryLabel}
             finalContactType={finalContactType}
             setFinalContactType={setFinalContactType}
-            onFinalContactSaved={(name, instagram, phone, countryLabel) => {
-              // Persistimos el contacto justo antes de cerrar.
-              const country = findCountry(countryLabel);
-              const fullPhone = phone.trim()
-                ? `${country?.dialCode ?? ""} ${phone.trim()}`.trim()
-                : null;
-              patchProgress({
-                nombre: name || null,
-                instagram: instagram?.trim().replace(/^@+/, "") || null,
-                telefono: quizFunnelMode ? fullPhone : null,
-              });
+            onFinalContactSaved={(_name, _instagram, _phone, _countryLabel) => {
+              // No-op — el patch con contacto + cierre lo hace next() en
+              // una sola petición atómica (ver next() arriba). Este callback
+              // se mantiene para compat de firma.
             }}
           />
         )}
