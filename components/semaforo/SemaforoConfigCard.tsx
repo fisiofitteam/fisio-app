@@ -13,6 +13,7 @@
  * Se guarda con autosave (debounce 800ms + flush al blur).
  */
 import { useEffect, useRef, useState } from "react";
+import { DEFAULT_FUNNEL_TEMPLATE } from "@/lib/semaforo/get-config";
 
 type Config = {
   quizFunnelEnabled: boolean;
@@ -110,9 +111,23 @@ export function SemaforoConfigCard() {
       </label>
 
       <div>
-        <label className="text-xs font-medium text-neutral-700 block mb-1.5">
-          💬 Mensaje predefinido de WhatsApp (para el botón "Contactar" del CRM)
-        </label>
+        <div className="flex items-center justify-between mb-1.5">
+          <label className="text-xs font-medium text-neutral-700">
+            💬 Mensaje predefinido de WhatsApp (para el botón "Contactar" del CRM)
+          </label>
+          <button
+            type="button"
+            onClick={() => {
+              if (!confirm("Reemplazar el mensaje actual con la plantilla completa por defecto?")) return;
+              setConfig({ ...config, funnelWhatsappTemplate: DEFAULT_FUNNEL_TEMPLATE });
+              persist({ funnelWhatsappTemplate: DEFAULT_FUNNEL_TEMPLATE });
+            }}
+            className="text-[10px] font-medium px-2 py-1 rounded border border-neutral-200 hover:bg-neutral-50"
+            title="Sobrescribe con la plantilla completa que incluye la explicación del color"
+          >
+            🔄 Cargar plantilla completa
+          </button>
+        </div>
         <textarea
           value={config.funnelWhatsappTemplate}
           onChange={(e) => scheduleTemplate(e.target.value)}
@@ -123,16 +138,19 @@ export function SemaforoConfigCard() {
             }
             persist({ funnelWhatsappTemplate: config.funnelWhatsappTemplate });
           }}
-          rows={5}
+          rows={10}
           className="w-full text-sm p-2.5 rounded-lg border font-mono"
-          style={{ borderColor: "#E5E5E5", background: "#FAFAFA" }}
+          style={{ borderColor: "#E5E5E5", background: "#FAFAFA", lineHeight: 1.5 }}
         />
-        <p className="text-[10px] text-neutral-500 mt-1.5 leading-snug">
-          Placeholders disponibles:{" "}
-          <code className="bg-neutral-100 px-1 rounded">{`{{nombre}}`}</code>{" "}
-          <code className="bg-neutral-100 px-1 rounded">{`{{color}}`}</code>{" "}
-          <code className="bg-neutral-100 px-1 rounded">{`{{movimientos_problema}}`}</code>
-        </p>
+        <div className="text-[10px] text-neutral-500 mt-1.5 leading-relaxed">
+          <span className="font-medium text-neutral-700">Placeholders disponibles:</span><br />
+          <code className="bg-neutral-100 px-1 rounded">{`{{nombre}}`}</code> — primer nombre del lead.{" "}
+          <code className="bg-neutral-100 px-1 rounded">{`{{color}}`}</code> — verde / ámbar / rojo.{" "}
+          <code className="bg-neutral-100 px-1 rounded">{`{{color_titulo}}`}</code> — frase larga del resultado ("Tu hombro está listo para progresar").{" "}
+          <code className="bg-neutral-100 px-1 rounded">{`{{tips}}`}</code> — bullets con los 3 tips del color.{" "}
+          <code className="bg-neutral-100 px-1 rounded">{`{{explicacion}}`}</code> — bloque entero: título + tips + CTA (todo junto).{" "}
+          <code className="bg-neutral-100 px-1 rounded">{`{{movimientos_problema}}`}</code> — patrones con dolor/molestia.
+        </div>
       </div>
 
       {errorMsg && (

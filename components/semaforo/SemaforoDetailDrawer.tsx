@@ -19,7 +19,7 @@ type Detail = {
   estado: "EN_CURSO" | "COMPLETADO" | "ALARMA";
   ultimoPaso: number;
   color: "VERDE" | "AMBAR" | "ROJO" | null;
-  colorCopy: { verdict: string; title: string; waLine: string } | null;
+  colorCopy: { verdict: string; title: string; tips?: readonly string[]; waLine?: string } | null;
   why: { sev: number; k: "neg" | "mid" | "pos"; t: string }[];
   banderas: string[];
   banderasDecoded: string[];
@@ -129,15 +129,28 @@ export function SemaforoDetailDrawer({
     if (!data) return "";
     const nombre = (data.nombre ?? "").trim().split(" ")[0] || "";
     const color = data.colorCopy?.verdict ?? data.color ?? "";
+    const colorTitulo = data.colorCopy?.title ?? "";
     const mov = data.movimientosLegibles
       .filter((m) => m.value === "leve" || m.value === "duele")
       .map((m) => m.family.toLowerCase())
       .join(", ");
     const movResolved = mov || "los movimientos que marcaste";
+    // Tips formateados con guiones para que se vean bien en WhatsApp.
+    const tips = (data.colorCopy?.tips ?? []).map((t) => `• ${t}`).join("\n");
+    // Bloque de explicación completa: título + tips + CTA.
+    const cta = data.colorCopy?.waLine ?? "";
+    const explicacion = [
+      colorTitulo,
+      tips ? `\n${tips}` : "",
+      cta ? `\n${cta}` : "",
+    ].filter(Boolean).join("");
     return messageTemplate
       .replaceAll("{{nombre}}", nombre)
       .replaceAll("{{color}}", color)
-      .replaceAll("{{movimientos_problema}}", movResolved);
+      .replaceAll("{{color_titulo}}", colorTitulo)
+      .replaceAll("{{movimientos_problema}}", movResolved)
+      .replaceAll("{{tips}}", tips)
+      .replaceAll("{{explicacion}}", explicacion);
   }
 
   // WhatsApp del usuario si dio teléfono, con el mensaje predefinido.

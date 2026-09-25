@@ -26,11 +26,25 @@ export async function GET() {
     }
   }
 
+  // El DEFAULT del template en el schema es el completo (ver
+  // lib/semaforo/get-config.ts:DEFAULT_FUNNEL_TEMPLATE). Aquí duplicamos
+  // el string porque este DDL corre en Neon sin cliente Prisma disponible.
+  // Nota: los saltos de línea en dollar-quoted strings de Postgres son literales.
   await run(`
     CREATE TABLE IF NOT EXISTS "SemaforoConfig" (
       "id" TEXT PRIMARY KEY DEFAULT 'singleton',
       "quizFunnelEnabled" BOOLEAN NOT NULL DEFAULT false,
-      "funnelWhatsappTemplate" TEXT NOT NULL DEFAULT '¡Hola {{nombre}}! Vi que hiciste el Semáforo del Hombro y te salió {{color}}. Te escribo yo directamente para explicarte qué significa y qué hacer con {{movimientos_problema}}.',
+      "funnelWhatsappTemplate" TEXT NOT NULL DEFAULT $$¡Hola {{nombre}}! Soy Ales de FisioFitCross.
+
+Vi que hiciste el Semáforo del Hombro y te ha salido *{{color}}*:
+{{color_titulo}}
+
+Lo que interpretamos de tu resultado:
+{{tips}}
+
+Sobre los movimientos que ahora te dan guerra ({{movimientos_problema}}), te cuento cómo abordarlos concretamente para no perder progreso.
+
+¿Cuando puedas seguimos por aquí?$$,
       "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       "updatedById" TEXT
     )
