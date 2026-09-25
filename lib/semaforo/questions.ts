@@ -36,21 +36,21 @@ export const FAMILY_GROUPS: readonly FamilyGroupInfo[] = [
 
 export const FAMILIES: readonly Family[] = [
   // ─── Overhead (5) ─────────────────────────────────────────────
-  { id: "snatch",        name: "Snatch",                       group: "overhead" },
-  { id: "jerk",          name: "Jerk (envión)",                group: "overhead" },
-  { id: "ohs",           name: "Overhead squat (OHS)",         group: "overhead" },
-  { id: "thruster",      name: "Thruster",                     group: "overhead" },
-  { id: "wallball",      name: "Wall ball",                    group: "overhead" },
+  { id: "snatch",        name: "Snatch",         group: "overhead" },
+  { id: "jerk",          name: "Jerk",           group: "overhead" },
+  { id: "ohs",           name: "Overhead squat", group: "overhead" },
+  { id: "thruster",      name: "Thruster",       group: "overhead" },
+  { id: "wallball",      name: "Wall ball",      group: "overhead" },
   // ─── Colgado en la barra (4) ──────────────────────────────────
-  { id: "strict-pullup", name: "Dominadas estrictas",          group: "colgado" },
-  { id: "kipping",       name: "Kipping / butterfly",          group: "colgado" },
-  { id: "t2b",           name: "Toes to bar",                  group: "colgado" },
-  { id: "mu-barra",      name: "Muscle up de barra",           group: "colgado" },
+  { id: "strict-pullup", name: "Strict pull-ups", group: "colgado" },
+  { id: "kipping",       name: "Kipping",         group: "colgado" },
+  { id: "t2b",           name: "Toes to bar",     group: "colgado" },
+  { id: "mu-barra",      name: "Muscle up",       group: "colgado" },
   // ─── Empujes (4) ──────────────────────────────────────────────
-  { id: "hspu",          name: "HSPU (handstand push-up)",     group: "empujes" },
-  { id: "flexiones",     name: "Flexiones / push-ups",         group: "empujes" },
-  { id: "ring-dip",      name: "Fondos en anillas / dips",     group: "empujes" },
-  { id: "push-press",    name: "Push press",                   group: "empujes" },
+  { id: "hspu",          name: "HSPU",       group: "empujes" },
+  { id: "flexiones",     name: "Push-ups",   group: "empujes" },
+  { id: "ring-dip",      name: "Ring dips",  group: "empujes" },
+  { id: "push-press",    name: "Push press", group: "empujes" },
 ] as const;
 
 export type FamilyValue = "ok" | "leve" | "duele" | "na";
