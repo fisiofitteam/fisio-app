@@ -1,6 +1,7 @@
 import { Metadata } from "next";
 import { SemaforoClient } from "./SemaforoClient";
 import { WHATSAPP_NUMBER, VIDEO_URLS, LEGAL_REVISADO } from "@/lib/semaforo/config";
+import { getSemaforoConfig } from "@/lib/semaforo/get-config";
 
 export const metadata: Metadata = {
   title: "El Semáforo del Hombro · FisioFitCross",
@@ -22,12 +23,14 @@ export const dynamic = "force-dynamic";
  * El middleware ya excluye /semaforo. Es un client component grande
  * porque el test es 100 % interactivo.
  */
-export default function SemaforoPage() {
+export default async function SemaforoPage() {
+  const cfg = await getSemaforoConfig();
   return (
     <SemaforoClient
       whatsappNumber={WHATSAPP_NUMBER}
       videoUrls={VIDEO_URLS}
       legalRevisado={LEGAL_REVISADO}
+      quizFunnelMode={cfg.quizFunnelEnabled}
     />
   );
 }

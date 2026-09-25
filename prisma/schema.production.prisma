@@ -3946,3 +3946,17 @@ model StoryIdea {
 
   @@index([templateSlotId, done, order])
 }
+
+// Configuración editable del Lead Magnet "Semáforo del Hombro" (singleton).
+// Controla si la landing pública funciona como test público directo (default)
+// o como QUIZ FUNNEL (pide teléfono con selector país, muestra pantalla de
+// "gracias" en vez del resultado, la setter contacta manualmente).
+model SemaforoConfig {
+  id                     String   @id @default("singleton")
+  quizFunnelEnabled      Boolean  @default(false)
+  // Template WhatsApp del CRM cuando la setter clica "Contactar".
+  // Placeholders: {{nombre}}, {{color}}, {{movimientos_problema}}.
+  funnelWhatsappTemplate String   @default("¡Hola {{nombre}}! Vi que hiciste el Semáforo del Hombro y te salió {{color}}. Te escribo yo directamente para explicarte qué significa y qué hacer con {{movimientos_problema}}.")
+  updatedAt              DateTime @updatedAt
+  updatedById            String?
+}

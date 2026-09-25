@@ -109,14 +109,46 @@ export function SemaforoDetailDrawer({
     else { alert("No se pudo eliminar"); }
   }
 
-  // WhatsApp del usuario si dio teléfono, o mensaje pre-hecho al CEO.
+  // Template del mensaje WhatsApp editable desde el panel de config.
+  const [messageTemplate, setMessageTemplate] = useState<string>(
+    "¡Hola {{nombre}}! Vi que hiciste el Semáforo del Hombro y te salió {{color}}. Te escribo yo directamente para explicarte qué significa y qué hacer con {{movimientos_problema}}.",
+  );
+  useEffect(() => {
+    fetch("/api/semaforo/admin/config")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.ok && d.config?.funnelWhatsappTemplate) {
+          setMessageTemplate(d.config.funnelWhatsappTemplate);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Sustituye placeholders en el template.
+  function renderTemplate(): string {
+    if (!data) return "";
+    const nombre = (data.nombre ?? "").trim().split(" ")[0] || "";
+    const color = data.colorCopy?.verdict ?? data.color ?? "";
+    const mov = data.movimientosLegibles
+      .filter((m) => m.value === "leve" || m.value === "duele")
+      .map((m) => m.family.toLowerCase())
+      .join(", ");
+    const movResolved = mov || "los movimientos que marcaste";
+    return messageTemplate
+      .replaceAll("{{nombre}}", nombre)
+      .replaceAll("{{color}}", color)
+      .replaceAll("{{movimientos_problema}}", movResolved);
+  }
+
+  // WhatsApp del usuario si dio teléfono, con el mensaje predefinido.
   function waHref(): string | null {
     if (!data) return null;
     if (data.telefono) {
       const clean = data.telefono.replace(/[^0-9]/g, "");
-      return clean ? `https://wa.me/${clean}` : null;
+      if (!clean) return null;
+      const msg = encodeURIComponent(renderTemplate());
+      return `https://wa.me/${clean}?text=${msg}`;
     }
-    // Sin teléfono, no podemos abrir chat con el paciente.
     return null;
   }
 
@@ -188,9 +220,10 @@ export function SemaforoDetailDrawer({
             <div className="flex gap-2 flex-wrap">
               {waHref() && (
                 <a href={waHref()!} target="_blank" rel="noopener"
-                   className="text-xs font-medium px-3 py-1.5 rounded-lg"
-                   style={{ background: "#1FA855", color: "#fff" }}>
-                  💬 Abrir WhatsApp
+                   className="text-xs font-semibold px-3 py-1.5 rounded-lg"
+                   style={{ background: "#1FA855", color: "#fff" }}
+                   title="Abre WhatsApp con el mensaje predefinido del panel">
+                  💬 Contactar por WhatsApp
                 </a>
               )}
               {data.instagram && (

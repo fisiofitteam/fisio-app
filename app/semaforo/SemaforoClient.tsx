@@ -16,6 +16,7 @@ import {
 } from "@/lib/semaforo/questions";
 import { evaluate, type RespuestasSemaforo } from "@/lib/semaforo/evaluate";
 import { IG_PARAM_NAME, CAMPAIGN_PARAM_NAME, sanitizeInstagram, sanitizeCampaign } from "@/lib/semaforo/config";
+import { COUNTRIES, DEFAULT_COUNTRY, countryFlag, findCountry } from "@/lib/countries";
 
 const display = Barlow_Condensed({ subsets: ["latin"], weight: ["600", "700", "800"], variable: "--font-display" });
 const body = Archivo({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-body" });
@@ -39,7 +40,7 @@ const body = Archivo({ subsets: ["latin"], weight: ["400", "500", "600", "700"],
  *     antes de abrir wa.me.
  */
 
-type Screen = "intro" | "quiz" | "alarma" | "result";
+type Screen = "intro" | "quiz" | "alarma" | "result" | "funnel-thanks";
 
 type Answers = RespuestasSemaforo;
 
@@ -239,6 +240,18 @@ const STYLES = `
   font-family:var(--font-body);
 }
 .sf-field:focus{outline:none;border-color:var(--gold-1);background:#262626}
+.sf-country-select select{
+  height:100%;padding:14px 12px;border-radius:12px;
+  border:1px solid var(--line-2);background:#1F1F1F;color:var(--ink);
+  font-family:var(--font-body);font-size:16px;min-width:140px;
+  appearance:none;
+  background-image:linear-gradient(45deg,transparent 50%,#A3A3A3 50%),linear-gradient(-45deg,transparent 50%,#A3A3A3 50%);
+  background-position:calc(100% - 15px) 50%,calc(100% - 10px) 50%;
+  background-size:5px 5px,5px 5px;background-repeat:no-repeat;
+  padding-right:32px;
+}
+.sf-country-select select:focus{outline:none;border-color:var(--gold-1);background-color:#262626}
+@media (max-width:480px){.sf-country-select select{min-width:110px;font-size:14px}}
 .sf-field::placeholder{color:var(--muted-2)}
 .sf-next{margin-top:22px}
 
@@ -354,10 +367,12 @@ export function SemaforoClient({
   whatsappNumber,
   videoUrls,
   legalRevisado, // eslint-disable-line @typescript-eslint/no-unused-vars
+  quizFunnelMode = false,
 }: {
   whatsappNumber: string;
   videoUrls: Record<"verde" | "ambar" | "rojo" | "alarma", string>;
   legalRevisado: boolean;
+  quizFunnelMode?: boolean;
 }) {
   // ─── Estado principal ──
   const [screen, setScreen] = useState<Screen>("intro");
@@ -377,13 +392,17 @@ export function SemaforoClient({
     } catch { /* SSR safety */ }
   }, []);
 
-  // ─── Datos del paso final si no llegó ig por URL ──
+  // ─── Datos del paso final ──
+  // Los tres campos se piden en el paso final independientemente del modo:
+  //   · Modo default: nombre + instagram obligatorios (finalContact vacío).
+  //   · Modo quiz funnel: nombre + instagram + teléfono con selector país
+  //     obligatorios (finalContact = número, finalCountryLabel = país).
   const [finalName, setFinalName] = useState("");
+  const [finalInstagram, setFinalInstagram] = useState("");
   const [finalContact, setFinalContact] = useState("");
-  // finalContactType queda fijo a "telefono" (decisión de negocio del CEO
-  // 2026-09-23): la setter solo puede accionar contactos por WhatsApp, así
-  // que el UI ya no ofrece instagram como opción. Mantenemos el tipo por
-  // compatibilidad con la firma del componente FinalTextStep y del API.
+  const [finalCountryLabel, setFinalCountryLabel] = useState<string>(DEFAULT_COUNTRY.label);
+  // Legacy: firma antigua del componente FinalTextStep — teléfono es
+  // el tipo por defecto en modo funnel.
   const [finalContactType] = useState<"instagram" | "telefono">("telefono");
   const setFinalContactType = (_t: "instagram" | "telefono") => {};
 
@@ -457,12 +476,11 @@ export function SemaforoClient({
         respuestas: answers as Record<string, unknown>,
         ultimoPaso: step,
         nombre: answers.nombre ?? null,
-        // Si no había ig por URL y el paso final es nombre, no tenemos
-        // aún el contacto — se persiste en el resultado si el usuario
-        // lo introduce después. Aquí ya cerramos.
         cerrar: "completado",
       });
-      setScreen("result");
+      // En modo funnel no mostramos el resultado — pantalla de "gracias"
+      // y la setter contactará por WhatsApp con el mensaje predefinido.
+      setScreen(quizFunnelMode ? "funnel-thanks" : "result");
       return;
     }
     // Guardar progreso normal.
@@ -505,20 +523,27 @@ export function SemaforoClient({
             onNext={next}
             onBack={goBack}
             total={Q.length}
-            requireContactFinal={!igFromUrl.current}
+            quizFunnelMode={quizFunnelMode}
             finalName={finalName}
             setFinalName={setFinalName}
+            finalInstagram={finalInstagram}
+            setFinalInstagram={setFinalInstagram}
             finalContact={finalContact}
             setFinalContact={setFinalContact}
+            finalCountryLabel={finalCountryLabel}
+            setFinalCountryLabel={setFinalCountryLabel}
             finalContactType={finalContactType}
             setFinalContactType={setFinalContactType}
-            onFinalContactSaved={(name, contact, type) => {
+            onFinalContactSaved={(name, instagram, phone, countryLabel) => {
               // Persistimos el contacto justo antes de cerrar.
+              const country = findCountry(countryLabel);
+              const fullPhone = phone.trim()
+                ? `${country?.dialCode ?? ""} ${phone.trim()}`.trim()
+                : null;
               patchProgress({
                 nombre: name || null,
-                ...(type === "instagram"
-                  ? { instagram: contact || null, telefono: null }
-                  : { telefono: contact || null, instagram: null }),
+                instagram: instagram?.trim().replace(/^@+/, "") || null,
+                telefono: quizFunnelMode ? fullPhone : null,
               });
             }}
           />
@@ -549,6 +574,17 @@ export function SemaforoClient({
               setScreen("intro");
             }}
             trackWhatsappClick={trackWhatsappClick}
+          />
+        )}
+        {screen === "funnel-thanks" && (
+          <FunnelThanksScreen
+            name={answers.nombre ?? ""}
+            onRestart={() => {
+              setAnswers({});
+              setResponseId(null);
+              setStep(0);
+              setScreen("intro");
+            }}
           />
         )}
       </main>
@@ -607,14 +643,18 @@ function QuizScreen(props: {
   onNext: () => void;
   onBack: () => void;
   total: number;
-  requireContactFinal: boolean;
+  quizFunnelMode: boolean;
   finalName: string;
   setFinalName: (s: string) => void;
+  finalInstagram: string;
+  setFinalInstagram: (s: string) => void;
   finalContact: string;
   setFinalContact: (s: string) => void;
+  finalCountryLabel: string;
+  setFinalCountryLabel: (s: string) => void;
   finalContactType: "instagram" | "telefono";
   setFinalContactType: (t: "instagram" | "telefono") => void;
-  onFinalContactSaved: (name: string, contact: string, type: "instagram" | "telefono") => void;
+  onFinalContactSaved: (name: string, instagram: string, phone: string, countryLabel: string) => void;
 }) {
   const { step, question: q, answers, setAnswers, onNext, onBack, total } = props;
   const progressPct = (step / total) * 100;
@@ -665,17 +705,24 @@ function QuizScreen(props: {
           <FinalTextStep
             answers={answers}
             setAnswers={setAnswers}
-            requireContact={props.requireContactFinal}
+            quizFunnelMode={props.quizFunnelMode}
             finalName={props.finalName}
             setFinalName={props.setFinalName}
+            finalInstagram={props.finalInstagram}
+            setFinalInstagram={props.setFinalInstagram}
             finalContact={props.finalContact}
             setFinalContact={props.setFinalContact}
-            finalContactType={props.finalContactType}
-            setFinalContactType={props.setFinalContactType}
+            finalCountryLabel={props.finalCountryLabel}
+            setFinalCountryLabel={props.setFinalCountryLabel}
             onNext={() => {
-              // Al confirmar el paso final, primero persistimos contacto,
-              // luego avanzamos (que a su vez cierra el registro).
-              props.onFinalContactSaved(props.finalName, props.finalContact, props.finalContactType);
+              // Persistimos contacto justo antes de avanzar (que cierra
+              // el registro y salta a result o funnel-thanks).
+              props.onFinalContactSaved(
+                props.finalName,
+                props.finalInstagram,
+                props.finalContact,
+                props.finalCountryLabel,
+              );
               onNext();
             }}
           />
@@ -791,16 +838,19 @@ function MatrixOptions({
 }
 
 function FinalTextStep({
-  answers, setAnswers, requireContact,
-  finalName, setFinalName, finalContact, setFinalContact,
-  finalContactType, setFinalContactType,
+  answers, setAnswers, quizFunnelMode,
+  finalName, setFinalName,
+  finalInstagram, setFinalInstagram,
+  finalContact, setFinalContact,
+  finalCountryLabel, setFinalCountryLabel,
   onNext,
 }: {
   answers: Answers; setAnswers: (u: (prev: Answers) => Answers) => void;
-  requireContact: boolean;
+  quizFunnelMode: boolean;
   finalName: string; setFinalName: (s: string) => void;
+  finalInstagram: string; setFinalInstagram: (s: string) => void;
   finalContact: string; setFinalContact: (s: string) => void;
-  finalContactType: "instagram" | "telefono"; setFinalContactType: (t: "instagram" | "telefono") => void;
+  finalCountryLabel: string; setFinalCountryLabel: (s: string) => void;
   onNext: () => void;
 }) {
   useEffect(() => {
@@ -810,9 +860,10 @@ function FinalTextStep({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finalName]);
 
-  const canContinue = requireContact
-    ? Boolean(finalName.trim() && finalContact.trim())
-    : true;
+  const country = findCountry(finalCountryLabel);
+  const canContinue = quizFunnelMode
+    ? Boolean(finalName.trim() && finalInstagram.trim() && finalContact.trim())
+    : Boolean(finalName.trim() && finalInstagram.trim());
 
   return (
     <>
@@ -825,27 +876,89 @@ function FinalTextStep({
         onChange={(e) => setFinalName(e.target.value)}
         maxLength={80}
       />
-      {requireContact && (
+      <input
+        className="sf-field"
+        style={{ marginTop: 12 }}
+        type="text"
+        autoComplete="username"
+        placeholder="@tu_usuario_instagram"
+        value={finalInstagram}
+        onChange={(e) => setFinalInstagram(e.target.value)}
+        maxLength={40}
+      />
+      {quizFunnelMode && (
         <>
-          <input
-            className="sf-field"
-            style={{ marginTop: 12 }}
-            type="tel"
-            inputMode="tel"
-            autoComplete="tel"
-            placeholder="+34 600 000 000"
-            value={finalContact}
-            onChange={(e) => setFinalContact(e.target.value)}
-            maxLength={40}
-          />
+          <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "auto 1fr", gap: 8 }}>
+            <div className="sf-country-select">
+              <select
+                value={finalCountryLabel}
+                onChange={(e) => setFinalCountryLabel(e.target.value)}
+                aria-label="País"
+              >
+                {COUNTRIES.map((c) => (
+                  <option key={c.iso2 || c.label} value={c.label}>
+                    {countryFlag(c.iso2)} {c.label} {c.dialCode}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <input
+              className="sf-field"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel-national"
+              placeholder={`${country?.dialCode ?? "+34"} 600 000 000`}
+              value={finalContact}
+              onChange={(e) => setFinalContact(e.target.value)}
+              maxLength={40}
+              style={{ marginTop: 0 }}
+            />
+          </div>
           <p className="sf-small" style={{ marginTop: 8 }}>
-            Tu WhatsApp: te escribo yo directamente con tu resultado y qué hacer con tu hombro. No es una lista de correo ni spam.
+            Tu WhatsApp: te escribo yo con tu resultado personalizado. Nada de listas ni spam.
           </p>
         </>
       )}
       <button className="sf-btn sf-next" disabled={!canContinue} onClick={onNext}>
-        Ver mi resultado
+        {quizFunnelMode ? "Enviar" : "Ver mi resultado"}
       </button>
+    </>
+  );
+}
+
+// ═══════════ Funnel Thanks ═══════════
+
+function FunnelThanksScreen({
+  name, onRestart,
+}: {
+  name: string; onRestart: () => void;
+}) {
+  const firstName = name.trim().split(" ")[0] || "";
+  return (
+    <>
+      <header className="sf-hero">
+        <div className="sf-brand"><span className="sf-brand-accent">FisioFitCross</span></div>
+        <div className="sf-res-head">
+          <TrafficLight on="g" big />
+          <div>
+            <div className="sf-verdict g" style={{ color: "var(--gold-1)" }}>¡Recibido!</div>
+            <h2>{firstName ? `${firstName}, tu resultado va de camino` : "Tu resultado va de camino"}</h2>
+          </div>
+        </div>
+      </header>
+      <section className="sf-card">
+        <p>
+          Hemos guardado tus respuestas. <strong>Ales te escribirá personalmente por WhatsApp</strong> para
+          explicarte qué significa tu resultado y darte los siguientes pasos concretos para tu hombro.
+        </p>
+        <p style={{ marginBottom: 0 }}>
+          Normalmente respondemos en 24 horas.
+        </p>
+      </section>
+      <button className="sf-btn ghost sf-again" onClick={onRestart}>Volver al inicio</button>
+      <footer className="sf-footer">
+        <a href="https://instagram.com/fisiofitteam" target="_blank" rel="noopener">@fisiofitteam</a>
+      </footer>
     </>
   );
 }

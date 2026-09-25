@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { SemaforoDetailDrawer } from "./SemaforoDetailDrawer";
 import { SemaforoLinkGenerator } from "./SemaforoLinkGenerator";
+import { SemaforoConfigCard } from "./SemaforoConfigCard";
 
 /**
  * Panel interno del Semáforo del Hombro. Un solo componente cliente:
@@ -163,6 +164,9 @@ export function SemaforoPanel({
           ⚠️ Textos legales pendientes de revisar. Repasa /privacidad y sube <code>LEGAL_REVISADO=true</code> en <code>lib/semaforo/config.ts</code> cuando el copy esté aprobado.
         </div>
       )}
+
+      {/* ── Configuración del lead magnet ─────────────────────────────── */}
+      <SemaforoConfigCard />
 
       {/* ── Filtros ─────────────────────────────────────────────────── */}
       <section className="rounded-xl p-3 mb-4" style={{ background: "#FAFAFA", border: "1px solid #E5E5E5" }}>
