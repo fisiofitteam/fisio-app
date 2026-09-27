@@ -60,9 +60,9 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
   const [motivo, setMotivo] = useState("");
   const [tratamientosPrevios, setTratamientosPrevios] = useState("");
   const [impactoCrossfit, setImpactoCrossfit] = useState("");
-  // Checkbox para desplegar las 3 preguntas del caso. Por defecto DESMARCADO:
-  // reducir fricción del formulario; si el lead quiere contarlo ya, lo activa.
-  const [shareCase, setShareCase] = useState(false);
+  // Si el panel tiene el toggle "Pedir preguntas del caso" apagado, no
+  // pintamos ni validamos esas 3 preguntas — solo datos de contacto.
+  const askCaseQuestions = copy.askCaseQuestions !== false;
 
   // Step 2
   const [slots, setSlots] = useState<Slot[]>([]);
@@ -108,18 +108,16 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
     if (!country || country.trim() === "") {
       errs.country = "Selecciona tu país";
     }
-    // Las 3 preguntas del caso son OPCIONALES. Solo validamos que si el
-    // lead ha marcado el checkbox "contarnos ya mi caso", el mínimo lo
-    // rellene (si no, mejor que lo desmarque). Si no ha marcado el
-    // checkbox, no validamos nada de esos 3 campos.
-    if (shareCase) {
-      if (motivo.trim().length > 0 && motivo.trim().length < 3) {
+    // Las 3 preguntas del caso solo se validan si el equipo las tiene
+    // activadas en el panel (config global askCaseQuestions).
+    if (askCaseQuestions) {
+      if (motivo.trim().length < 3) {
         errs.motivo = "Cuéntanos brevemente tu lesión o molestia";
       }
-      if (tratamientosPrevios.trim().length > 0 && tratamientosPrevios.trim().length < 3) {
+      if (tratamientosPrevios.trim().length < 3) {
         errs.tratamientosPrevios = "Indícanos qué has probado hasta ahora";
       }
-      if (impactoCrossfit.trim().length > 0 && impactoCrossfit.trim().length < 3) {
+      if (impactoCrossfit.trim().length < 3) {
         errs.impactoCrossfit = "Indícanos cómo te afecta en tus entrenamientos";
       }
     }
@@ -138,7 +136,7 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
     if (Object.keys(cleaned).length !== Object.keys(fieldErrors).length) {
       setFieldErrors(cleaned);
     }
-  }, [fullName, email, phone, instagram, country, motivo, tratamientosPrevios, impactoCrossfit, shareCase]);
+  }, [fullName, email, phone, instagram, country, motivo, tratamientosPrevios, impactoCrossfit, askCaseQuestions]);
 
   async function loadSlots() {
     setLoadingSlots(true);
@@ -234,12 +232,10 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
           phone: composedPhone,
           country: country.trim(),
           instagram: instagram.trim(),
-          // Solo enviamos las respuestas del caso si el lead activó el
-          // checkbox — de lo contrario van como strings vacíos y el
-          // backend las guardará como null.
-          motivo: shareCase ? motivo.trim() : "",
-          tratamientosPrevios: shareCase ? tratamientosPrevios.trim() : "",
-          impactoCrossfit: shareCase ? impactoCrossfit.trim() : "",
+          // Solo enviamos las respuestas del caso si el panel las pidió.
+          motivo: askCaseQuestions ? motivo.trim() : "",
+          tratamientosPrevios: askCaseQuestions ? tratamientosPrevios.trim() : "",
+          impactoCrossfit: askCaseQuestions ? impactoCrossfit.trim() : "",
           startISO: selectedSlot.startISO,
           endISO: selectedSlot.endISO,
           ...utms,
@@ -508,36 +504,11 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
                 </div>
               </div>
 
-              {/* ─── Checkbox opcional: contar el caso ya ─── */}
-              <label
-                className="flex items-start gap-3 rounded-lg p-3 cursor-pointer select-none"
-                style={{
-                  background: shareCase ? "rgba(252, 211, 77, 0.08)" : "rgba(31, 31, 31, 0.5)",
-                  border: `1px solid ${shareCase ? "rgba(252, 211, 77, 0.35)" : "#262626"}`,
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={shareCase}
-                  onChange={(e) => setShareCase(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 cursor-pointer"
-                  style={{ accentColor: "#FCD34D" }}
-                />
-                <span>
-                  <span className="text-sm font-semibold block" style={{ color: "#FAFAFA" }}>
-                    Quiero contaros mi caso ahora (opcional)
-                  </span>
-                  <span className="text-xs block mt-0.5" style={{ color: "#A3A3A3" }}>
-                    Nos ayuda a preparar la llamada con más contexto. Si prefieres, también podemos hablarlo directamente al conocernos.
-                  </span>
-                </span>
-              </label>
-
-              {shareCase && (
+              {askCaseQuestions && (
                 <>
                   <div data-field="motivo">
                     <label className="text-xs block mb-1.5" style={{ color: "#A3A3A3" }}>
-                      ¿Qué te trae aquí? Cuéntanos tu lesión/molestia
+                      ¿Qué te trae aquí? Cuéntanos tu lesión/molestia *
                     </label>
                     <textarea
                       rows={3}
@@ -558,7 +529,7 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
 
                   <div data-field="tratamientosPrevios">
                     <label className="text-xs block mb-1.5" style={{ color: "#A3A3A3" }}>
-                      ¿Qué tratamientos has probado antes?
+                      ¿Qué tratamientos has probado antes? *
                     </label>
                     <textarea
                       rows={2}
@@ -579,7 +550,7 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
 
                   <div data-field="impactoCrossfit">
                     <label className="text-xs block mb-1.5" style={{ color: "#A3A3A3" }}>
-                      ¿Cómo te afecta en tu CrossFit?
+                      ¿Cómo te afecta en tu CrossFit? *
                     </label>
                     <textarea
                       rows={2}

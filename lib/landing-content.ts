@@ -133,6 +133,10 @@ export type AgendaLandingCopy = {
   groupImageUrl: string; // foto de grupo del equipo (prueba social); "" = placeholder
   stats: AgendaStat[]; // exactamente 3
   blocks: AgendaBlock[]; // bloques libres (casos de éxito, etc.)
+  // Cuando es false, la landing NO pide motivo/tratamientosPrevios/impactoCrossfit
+  // — solo los datos de contacto. El equipo lo recoge en la llamada. Default true
+  // para no romper landings ya guardadas.
+  askCaseQuestions: boolean;
 };
 
 export const AGENDA_LANDING_DEFAULTS: AgendaLandingCopy = {
@@ -150,6 +154,7 @@ export const AGENDA_LANDING_DEFAULTS: AgendaLandingCopy = {
     { value: "✓", label: "Fisios colegiados" },
   ],
   blocks: [],
+  askCaseQuestions: true,
 };
 
 // ============================================================================
@@ -280,6 +285,8 @@ export function normalizeAgendaCopy(raw: unknown): AgendaLandingCopy {
     groupImageUrl: optStr(o.groupImageUrl),
     stats,
     blocks,
+    // Landing legacy sin este campo → default true (comportamiento actual).
+    askCaseQuestions: typeof o.askCaseQuestions === "boolean" ? o.askCaseQuestions : d.askCaseQuestions,
   };
 }
 

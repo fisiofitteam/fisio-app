@@ -332,6 +332,26 @@ function AgendaEditor({ initial }: { initial: AgendaLandingCopy }) {
             <Field label="Subtítulo"><textarea className="input text-sm" rows={3} value={copy.heroSubtitle} onChange={(e) => set("heroSubtitle", e.target.value)} /></Field>
           </div>
           <div className="card space-y-3">
+            <h3 className="font-medium text-sm">Formulario</h3>
+            <label className="flex items-start gap-3 cursor-pointer select-none rounded-lg p-3"
+                   style={{ background: copy.askCaseQuestions ? "rgba(252,211,77,0.14)" : "#FAFAFA", border: `1px solid ${copy.askCaseQuestions ? "#FCD34D" : "#E5E5E5"}` }}>
+              <input
+                type="checkbox"
+                checked={copy.askCaseQuestions}
+                onChange={(e) => set("askCaseQuestions", e.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-neutral-900 cursor-pointer"
+              />
+              <span>
+                <span className="text-sm font-semibold text-neutral-800 block">📝 Pedir preguntas sobre el caso</span>
+                <span className="text-[11px] text-neutral-600 block leading-snug mt-0.5">
+                  Activado → la landing pide motivo, tratamientos previos e impacto en CrossFit (obligatorio).
+                  <br />
+                  Desactivado → solo nombre, email, teléfono, país e Instagram. El caso se recoge en la llamada.
+                </span>
+              </span>
+            </label>
+          </div>
+          <div className="card space-y-3">
             <h3 className="font-medium text-sm">Prueba social</h3>
             <Field label="Foto de grupo del equipo">
               <ImageUpload value={copy.groupImageUrl} onChange={(url) => set("groupImageUrl", url)} hint="Recomendado: horizontal, ~1200×675 px (16:9). Máx 5 MB." />
