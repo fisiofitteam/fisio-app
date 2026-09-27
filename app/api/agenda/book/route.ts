@@ -21,9 +21,11 @@ type BookBody = {
   phone: string;
   country: string;
   instagram: string;
-  motivo: string;
-  tratamientosPrevios: string;
-  impactoCrossfit: string;
+  // Opcionales desde 2026-09-27: el lead decide en la landing con un
+  // checkbox si quiere contar su caso ya o esperar a la llamada.
+  motivo?: string;
+  tratamientosPrevios?: string;
+  impactoCrossfit?: string;
   startISO: string; // ISO del slot elegido
   endISO: string;
   // Atribución de marketing: la landing los toma del query string ?utm_*=...
@@ -41,16 +43,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Body inválido" }, { status: 400 });
   }
 
-  // Validación campo a campo
+  // Validación campo a campo. Las 3 preguntas del caso (motivo,
+  // tratamientosPrevios, impactoCrossfit) son opcionales: el lead
+  // decide en la landing si quiere contar su caso ya o esperar a la
+  // llamada. Solo son obligatorios los datos de contacto y el slot.
   const required: (keyof BookBody)[] = [
     "fullName",
     "email",
     "phone",
     "country",
     "instagram",
-    "motivo",
-    "tratamientosPrevios",
-    "impactoCrossfit",
     "startISO",
     "endISO",
   ];
@@ -59,6 +61,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: `Falta el campo: ${k}` }, { status: 400 });
     }
   }
+  // Normalizamos las 3 opcionales a string (posiblemente vacío) para
+  // que el resto del handler no tenga que hacer optional chaining.
+  const motivoIn = typeof body.motivo === "string" ? body.motivo.trim() : "";
+  const tratamientosIn = typeof body.tratamientosPrevios === "string" ? body.tratamientosPrevios.trim() : "";
+  const impactoIn = typeof body.impactoCrossfit === "string" ? body.impactoCrossfit.trim() : "";
 
   const startDate = new Date(body.startISO);
   const endDate = new Date(body.endISO);
@@ -107,23 +114,22 @@ export async function POST(req: NextRequest) {
   // ─── Crear evento en Calendar ───
   let calendarEvent;
   try {
-    const description = [
+    const descriptionLines = [
       `Valoración FisioFit con ${fullName}`,
       ``,
       `Teléfono: ${phone}`,
       `Email: ${email}`,
-      ``,
-      `─── Cuestionario previo ───`,
-      ``,
-      `Motivo de consulta:`,
-      body.motivo.trim(),
-      ``,
-      `Tratamientos previos probados:`,
-      body.tratamientosPrevios.trim(),
-      ``,
-      `Cómo le afecta a su CrossFit:`,
-      body.impactoCrossfit.trim(),
-    ].join("\n");
+    ];
+    // Solo añadimos el cuestionario al evento si el lead lo rellenó.
+    if (motivoIn || tratamientosIn || impactoIn) {
+      descriptionLines.push(``, `─── Cuestionario previo ───`);
+      if (motivoIn) descriptionLines.push(``, `Motivo de consulta:`, motivoIn);
+      if (tratamientosIn) descriptionLines.push(``, `Tratamientos previos probados:`, tratamientosIn);
+      if (impactoIn) descriptionLines.push(``, `Cómo le afecta a su CrossFit:`, impactoIn);
+    } else {
+      descriptionLines.push(``, `(El lead prefirió no rellenar el cuestionario previo.)`);
+    }
+    const description = descriptionLines.join("\n");
 
     calendarEvent = await createEventWithMeet({
       title: `FisioFit Call · ${fullName}`,
@@ -156,9 +162,9 @@ export async function POST(req: NextRequest) {
       phone,
       country: body.country.trim(),
       instagram: instagram || null,
-      motivo: body.motivo.trim(),
-      tratamientosPrevios: body.tratamientosPrevios.trim(),
-      impactoCrossfit: body.impactoCrossfit.trim(),
+      motivo: motivoIn || null,
+      tratamientosPrevios: tratamientosIn || null,
+      impactoCrossfit: impactoIn || null,
       callScheduledAt: startDate,
       status: "scheduled",
       source: "landing",
@@ -166,7 +172,9 @@ export async function POST(req: NextRequest) {
       meetingUrl,
       googleEventId: calendarEvent.id,
       closerId: closerId || undefined,
-      aiSummary: `Reservado desde landing. Motivo: ${body.motivo.trim().slice(0, 200)}`,
+      aiSummary: motivoIn
+        ? `Reservado desde landing. Motivo: ${motivoIn.slice(0, 200)}`
+        : `Reservado desde landing. Sin cuestionario previo (lead lo rellenará en la llamada).`,
       // Atribución a anuncios (si la URL traía utms)
       adUtmCampaign: typeof body.utmCampaign === "string" && body.utmCampaign.trim() ? body.utmCampaign.trim().slice(0, 100) : null,
       adUtmSource: typeof body.utmSource === "string" && body.utmSource.trim() ? body.utmSource.trim().slice(0, 50) : null,

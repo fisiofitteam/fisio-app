@@ -60,6 +60,9 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
   const [motivo, setMotivo] = useState("");
   const [tratamientosPrevios, setTratamientosPrevios] = useState("");
   const [impactoCrossfit, setImpactoCrossfit] = useState("");
+  // Checkbox para desplegar las 3 preguntas del caso. Por defecto DESMARCADO:
+  // reducir fricción del formulario; si el lead quiere contarlo ya, lo activa.
+  const [shareCase, setShareCase] = useState(false);
 
   // Step 2
   const [slots, setSlots] = useState<Slot[]>([]);
@@ -105,14 +108,20 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
     if (!country || country.trim() === "") {
       errs.country = "Selecciona tu país";
     }
-    if (motivo.trim().length < 3) {
-      errs.motivo = "Cuéntanos brevemente tu lesión o molestia";
-    }
-    if (tratamientosPrevios.trim().length < 3) {
-      errs.tratamientosPrevios = "Indícanos qué has probado hasta ahora";
-    }
-    if (impactoCrossfit.trim().length < 3) {
-      errs.impactoCrossfit = "Indícanos cómo te afecta en tus entrenamientos";
+    // Las 3 preguntas del caso son OPCIONALES. Solo validamos que si el
+    // lead ha marcado el checkbox "contarnos ya mi caso", el mínimo lo
+    // rellene (si no, mejor que lo desmarque). Si no ha marcado el
+    // checkbox, no validamos nada de esos 3 campos.
+    if (shareCase) {
+      if (motivo.trim().length > 0 && motivo.trim().length < 3) {
+        errs.motivo = "Cuéntanos brevemente tu lesión o molestia";
+      }
+      if (tratamientosPrevios.trim().length > 0 && tratamientosPrevios.trim().length < 3) {
+        errs.tratamientosPrevios = "Indícanos qué has probado hasta ahora";
+      }
+      if (impactoCrossfit.trim().length > 0 && impactoCrossfit.trim().length < 3) {
+        errs.impactoCrossfit = "Indícanos cómo te afecta en tus entrenamientos";
+      }
     }
     return errs;
   }
@@ -129,7 +138,7 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
     if (Object.keys(cleaned).length !== Object.keys(fieldErrors).length) {
       setFieldErrors(cleaned);
     }
-  }, [fullName, email, phone, instagram, country, motivo, tratamientosPrevios, impactoCrossfit]);
+  }, [fullName, email, phone, instagram, country, motivo, tratamientosPrevios, impactoCrossfit, shareCase]);
 
   async function loadSlots() {
     setLoadingSlots(true);
@@ -225,9 +234,12 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
           phone: composedPhone,
           country: country.trim(),
           instagram: instagram.trim(),
-          motivo: motivo.trim(),
-          tratamientosPrevios: tratamientosPrevios.trim(),
-          impactoCrossfit: impactoCrossfit.trim(),
+          // Solo enviamos las respuestas del caso si el lead activó el
+          // checkbox — de lo contrario van como strings vacíos y el
+          // backend las guardará como null.
+          motivo: shareCase ? motivo.trim() : "",
+          tratamientosPrevios: shareCase ? tratamientosPrevios.trim() : "",
+          impactoCrossfit: shareCase ? impactoCrossfit.trim() : "",
           startISO: selectedSlot.startISO,
           endISO: selectedSlot.endISO,
           ...utms,
@@ -496,68 +508,97 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
                 </div>
               </div>
 
-              <div data-field="motivo">
-                <label className="text-xs block mb-1.5" style={{ color: "#A3A3A3" }}>
-                  ¿Qué te trae aquí? Cuéntanos tu lesión/molestia *
-                </label>
-                <textarea
-                  rows={3}
-                  className="w-full px-3 py-2.5 rounded-lg text-sm"
-                  style={{
-                    background: "#1F1F1F",
-                    border: `1px solid ${fieldErrors.motivo ? "#DC2626" : "#404040"}`,
-                    color: "#FAFAFA",
-                  }}
-                  placeholder="Ej. Llevo 3 meses con dolor de hombro al hacer snatches…"
-                  value={motivo}
-                  onChange={(e) => setMotivo(e.target.value)}
+              {/* ─── Checkbox opcional: contar el caso ya ─── */}
+              <label
+                className="flex items-start gap-3 rounded-lg p-3 cursor-pointer select-none"
+                style={{
+                  background: shareCase ? "rgba(252, 211, 77, 0.08)" : "rgba(31, 31, 31, 0.5)",
+                  border: `1px solid ${shareCase ? "rgba(252, 211, 77, 0.35)" : "#262626"}`,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={shareCase}
+                  onChange={(e) => setShareCase(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 cursor-pointer"
+                  style={{ accentColor: "#FCD34D" }}
                 />
-                {fieldErrors.motivo && (
-                  <p className="text-xs mt-1" style={{ color: "#FCA5A5" }}>{fieldErrors.motivo}</p>
-                )}
-              </div>
+                <span>
+                  <span className="text-sm font-semibold block" style={{ color: "#FAFAFA" }}>
+                    Quiero contaros mi caso ahora (opcional)
+                  </span>
+                  <span className="text-xs block mt-0.5" style={{ color: "#A3A3A3" }}>
+                    Nos ayuda a preparar la llamada con más contexto. Si prefieres, también podemos hablarlo directamente al conocernos.
+                  </span>
+                </span>
+              </label>
 
-              <div data-field="tratamientosPrevios">
-                <label className="text-xs block mb-1.5" style={{ color: "#A3A3A3" }}>
-                  ¿Qué tratamientos has probado antes? *
-                </label>
-                <textarea
-                  rows={2}
-                  className="w-full px-3 py-2.5 rounded-lg text-sm"
-                  style={{
-                    background: "#1F1F1F",
-                    border: `1px solid ${fieldErrors.tratamientosPrevios ? "#DC2626" : "#404040"}`,
-                    color: "#FAFAFA",
-                  }}
-                  placeholder="Ej. Fisio durante 2 meses, descanso, antiinflamatorios…"
-                  value={tratamientosPrevios}
-                  onChange={(e) => setTratamientosPrevios(e.target.value)}
-                />
-                {fieldErrors.tratamientosPrevios && (
-                  <p className="text-xs mt-1" style={{ color: "#FCA5A5" }}>{fieldErrors.tratamientosPrevios}</p>
-                )}
-              </div>
+              {shareCase && (
+                <>
+                  <div data-field="motivo">
+                    <label className="text-xs block mb-1.5" style={{ color: "#A3A3A3" }}>
+                      ¿Qué te trae aquí? Cuéntanos tu lesión/molestia
+                    </label>
+                    <textarea
+                      rows={3}
+                      className="w-full px-3 py-2.5 rounded-lg text-sm"
+                      style={{
+                        background: "#1F1F1F",
+                        border: `1px solid ${fieldErrors.motivo ? "#DC2626" : "#404040"}`,
+                        color: "#FAFAFA",
+                      }}
+                      placeholder="Ej. Llevo 3 meses con dolor de hombro al hacer snatches…"
+                      value={motivo}
+                      onChange={(e) => setMotivo(e.target.value)}
+                    />
+                    {fieldErrors.motivo && (
+                      <p className="text-xs mt-1" style={{ color: "#FCA5A5" }}>{fieldErrors.motivo}</p>
+                    )}
+                  </div>
 
-              <div data-field="impactoCrossfit">
-                <label className="text-xs block mb-1.5" style={{ color: "#A3A3A3" }}>
-                  ¿Cómo te afecta en tu CrossFit? *
-                </label>
-                <textarea
-                  rows={2}
-                  className="w-full px-3 py-2.5 rounded-lg text-sm"
-                  style={{
-                    background: "#1F1F1F",
-                    border: `1px solid ${fieldErrors.impactoCrossfit ? "#DC2626" : "#404040"}`,
-                    color: "#FAFAFA",
-                  }}
-                  placeholder="Ej. No puedo hacer movimientos por encima de la cabeza, pierdo entrenos…"
-                  value={impactoCrossfit}
-                  onChange={(e) => setImpactoCrossfit(e.target.value)}
-                />
-                {fieldErrors.impactoCrossfit && (
-                  <p className="text-xs mt-1" style={{ color: "#FCA5A5" }}>{fieldErrors.impactoCrossfit}</p>
-                )}
-              </div>
+                  <div data-field="tratamientosPrevios">
+                    <label className="text-xs block mb-1.5" style={{ color: "#A3A3A3" }}>
+                      ¿Qué tratamientos has probado antes?
+                    </label>
+                    <textarea
+                      rows={2}
+                      className="w-full px-3 py-2.5 rounded-lg text-sm"
+                      style={{
+                        background: "#1F1F1F",
+                        border: `1px solid ${fieldErrors.tratamientosPrevios ? "#DC2626" : "#404040"}`,
+                        color: "#FAFAFA",
+                      }}
+                      placeholder="Ej. Fisio durante 2 meses, descanso, antiinflamatorios…"
+                      value={tratamientosPrevios}
+                      onChange={(e) => setTratamientosPrevios(e.target.value)}
+                    />
+                    {fieldErrors.tratamientosPrevios && (
+                      <p className="text-xs mt-1" style={{ color: "#FCA5A5" }}>{fieldErrors.tratamientosPrevios}</p>
+                    )}
+                  </div>
+
+                  <div data-field="impactoCrossfit">
+                    <label className="text-xs block mb-1.5" style={{ color: "#A3A3A3" }}>
+                      ¿Cómo te afecta en tu CrossFit?
+                    </label>
+                    <textarea
+                      rows={2}
+                      className="w-full px-3 py-2.5 rounded-lg text-sm"
+                      style={{
+                        background: "#1F1F1F",
+                        border: `1px solid ${fieldErrors.impactoCrossfit ? "#DC2626" : "#404040"}`,
+                        color: "#FAFAFA",
+                      }}
+                      placeholder="Ej. No puedo hacer movimientos por encima de la cabeza, pierdo entrenos…"
+                      value={impactoCrossfit}
+                      onChange={(e) => setImpactoCrossfit(e.target.value)}
+                    />
+                    {fieldErrors.impactoCrossfit && (
+                      <p className="text-xs mt-1" style={{ color: "#FCA5A5" }}>{fieldErrors.impactoCrossfit}</p>
+                    )}
+                  </div>
+                </>
+              )}
 
               {error && (
                 <div
