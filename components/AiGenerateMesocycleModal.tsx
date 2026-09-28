@@ -136,8 +136,19 @@ export function AiGenerateMesocycleModal({
     return cells.filter((c) => c.weekNumber === w);
   }
 
-  /** Contexto acumulado para pasar a la IA: sesiones anteriores del mesociclo. */
-  function buildContext(currentWeek: 1|2|3|4, currentDay: WorkDay): string {
+  /**
+   * Contexto acumulado para pasar a la IA: sesiones anteriores del mesociclo.
+   *
+   * IMPORTANTE: recibe `previousCells` como argumento porque el `cells` del
+   * state de React NO se actualiza durante el bucle secuencial de `generateAll`
+   * (setState es async y el closure captura el snapshot inicial). Sin esto,
+   * cada sesión creía que no había ninguna previa → snatch lunes + snatch martes.
+   */
+  function buildContext(
+    currentWeek: 1|2|3|4,
+    currentDay: WorkDay,
+    previousCells: Cell[],
+  ): string {
     const phaseHint: Record<1|2|3|4, string> = {
       1: "Es la SEMANA 1 (introducción). Introduce el estímulo con volumen medio, técnica prioritaria, evita cargas máximas.",
       2: "Es la SEMANA 2 (progresión). Sube ~10% de volumen o intensidad respecto a la semana 1. Familias de ejercicios similares para consolidar patrones.",
@@ -151,7 +162,7 @@ export function AiGenerateMesocycleModal({
     ];
 
     // Sesiones previas del mesociclo (solo títulos + ejercicios, no body completo)
-    const previous = cells.filter((c) => {
+    const previous = previousCells.filter((c) => {
       if (c.status !== "ready" || !c.session) return false;
       if (c.weekNumber < currentWeek) return true;
       if (c.weekNumber === currentWeek && c.dayOfWeek < currentDay) return true;
@@ -166,7 +177,38 @@ export function AiGenerateMesocycleModal({
         return `  · S${c.weekNumber} ${DAY_LABELS[c.dayOfWeek].slice(0,3)}: "${title}"${exsUniq ? ` — ejercicios: ${exsUniq}` : ""}`;
       });
       parts.push(`SESIONES YA PROGRAMADAS EN EL MESOCICLO:\n${lines.join("\n")}`);
-      parts.push("Evita repetir la misma familia de ejercicios más de 2-3 veces en las 16 sesiones totales. Varía el estímulo entre días.");
+
+      // Regla dura sobre el día inmediatamente anterior — es donde la IA
+      // más falla ("snatch lunes + snatch martes", "remo lunes + remo martes").
+      const prevSameWeek = previous
+        .filter((c) => c.weekNumber === currentWeek)
+        .sort((a, b) => b.dayOfWeek - a.dayOfWeek)[0];
+      if (prevSameWeek?.session) {
+        const yesterdayExs = Array.from(new Set(prevSameWeek.session.blocks.flatMap((b) => b.exercises))).slice(0, 12);
+        const yesterdayTitle = prevSameWeek.session.title;
+        parts.push(
+          `⛔ REGLA DURA — NO REPITAS el patrón de AYER (${DAY_LABELS[prevSameWeek.dayOfWeek]}: "${yesterdayTitle}"). ` +
+          `Ayer se usaron estos ejercicios/máquinas: ${yesterdayExs.join(", ")}.\n` +
+          `Hoy PROHIBIDO usar como movimiento principal cualquiera de esos ejercicios ni sus variantes cercanas. ` +
+          `PROHIBIDO también repetir la misma máquina de cardio principal (si ayer fue remo, hoy asalto bike/ski/carrera; si ayer fue bici, hoy remo/ski/carrera). ` +
+          `PROHIBIDO repetir el mismo formato de metcon (si ayer fue AMRAP, hoy EMOM/For Time/intervalos). ` +
+          `El estímulo de hoy tiene que ser CLARAMENTE distinto al de ayer: si ayer fue Olympic lifts, hoy squat/press/deadlift o gimnástico; si ayer fue metcon largo, hoy fuerza pesada u OL; si ayer fue tirones, hoy empujes.`
+        );
+      }
+
+      // Regla suave sobre el resto del mesociclo.
+      parts.push(
+        "REGLA GENERAL — variedad del mesociclo: no repitas el mismo movimiento principal más de 2 veces por semana ni más de 5 veces en las 16 sesiones. " +
+        "Rota patrones (empuje / tirón vertical / tirón horizontal / bisagra / sentadilla / zancada / core / gimnástico / OL / metcon) para que cada día golpee un estímulo distinto al del día anterior."
+      );
+    } else if (currentDay > 1) {
+      // Defensivo: si por alguna razón no llega el contexto previo pero no
+      // es la primera sesión del mesociclo, aviso explícito para que la IA
+      // sepa que HAY sesiones anteriores y no le meta lo mismo.
+      parts.push(
+        `⚠️ Aunque no recibas aquí el detalle, YA hay ${(currentWeek - 1) * workDays.length + (workDays.indexOf(currentDay))} sesiones programadas antes de hoy en el mesociclo. ` +
+        "Asume que ya se ha trabajado snatch, clean, thruster, remo y bici en días previos y varía OBLIGATORIAMENTE el estímulo principal de hoy respecto a lo esperable."
+      );
     }
 
     const restLabel = DAY_LABELS[restDay];
@@ -181,9 +223,23 @@ export function AiGenerateMesocycleModal({
     return parts.join("\n\n");
   }
 
-  async function generateOne(w: 1|2|3|4, d: WorkDay): Promise<void> {
+  /**
+   * Genera una sesión y devuelve el resultado. Acepta `previousCells` para
+   * que el bucle secuencial de `generateAll` pueda mantener su propio
+   * snapshot fresco de lo generado hasta ahora (el `cells` del state
+   * puede no haberse re-renderizado todavía por el setState async).
+   *
+   * Si `previousCells` es null usamos el state — flujo del botón
+   * "Regenerar" de una celda concreta cuando ya hay otras listas.
+   */
+  async function generateOne(
+    w: 1|2|3|4,
+    d: WorkDay,
+    previousCells: Cell[] | null = null,
+  ): Promise<Session | null> {
     updateCell(w, d, { status: "loading", error: undefined });
     try {
+      const ctx = buildContext(w, d, previousCells ?? cells);
       const res = await fetch("/api/ai/generate-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -192,14 +248,16 @@ export function AiGenerateMesocycleModal({
           prompt: prompt.trim(),
           dayOfWeek: d,
           durationMin: durationForKind(kind),
-          extraContext: buildContext(w, d),
+          extraContext: ctx,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "Error");
       updateCell(w, d, { status: "ready", session: data.session, meta: data.meta });
+      return data.session as Session;
     } catch (e: any) {
       updateCell(w, d, { status: "error", error: e?.message ?? "Error de red" });
+      return null;
     }
   }
 
@@ -208,10 +266,21 @@ export function AiGenerateMesocycleModal({
     setBusy(true);
     setErr(null);
     try {
+      // Snapshot local que se actualiza sincrónicamente tras cada sesión,
+      // para pasárselo a la siguiente. Sin esto, el `cells` del state
+      // llega vacío/desactualizado por el ciclo async de React.
+      let acc: Cell[] = cells.map((c) => ({ ...c, status: "idle", session: undefined, meta: undefined, error: undefined }));
       for (const w of [1, 2, 3, 4] as const) {
         for (const d of workDays) {
           setProgress({ week: w, day: d });
-          await generateOne(w, d);
+          const session = await generateOne(w, d, acc);
+          if (session) {
+            acc = acc.map((c) =>
+              c.weekNumber === w && c.dayOfWeek === d
+                ? { ...c, status: "ready", session }
+                : c,
+            );
+          }
         }
       }
     } finally {
