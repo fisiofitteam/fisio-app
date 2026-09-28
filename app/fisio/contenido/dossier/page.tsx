@@ -86,7 +86,7 @@ export default async function DossierPage({
   const monthStart = new Date(Date.UTC(year, month - 1, 1));
   const monthEnd = new Date(Date.UTC(year, month, 0, 23, 59, 59));
 
-  const weeks = await prisma.contentWeek.findMany({
+  const rawWeeks = await prisma.contentWeek.findMany({
     where: {
       startDate: { lte: monthEnd },
       endDate: { gte: monthStart },
@@ -101,6 +101,21 @@ export default async function DossierPage({
     },
     orderBy: { startDate: "asc" },
   });
+
+  // Filtrar las piezas de cada semana a las que se PUBLICAN dentro de este
+  // mes. Si una semana pisa dos meses (últ. semana de sept → primeros días
+  // de oct), sus piezas se reparten según su día real, no aparecen dobles.
+  // Semanas que queden vacías tras el filtro se descartan del dossier.
+  const weeks = rawWeeks
+    .map((w) => ({
+      ...w,
+      pieces: w.pieces.filter((p) => {
+        const d = piecePublishDate(w.startDate, p.dayOfWeek);
+        if (!d) return false;
+        return d >= monthStart && d <= monthEnd;
+      }),
+    }))
+    .filter((w) => w.pieces.length > 0);
 
   return (
     <main>
