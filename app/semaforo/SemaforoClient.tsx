@@ -17,6 +17,7 @@ import {
 import { evaluate, type RespuestasSemaforo } from "@/lib/semaforo/evaluate";
 import { IG_PARAM_NAME, CAMPAIGN_PARAM_NAME, sanitizeInstagram, sanitizeCampaign } from "@/lib/semaforo/config";
 import { COUNTRIES, DEFAULT_COUNTRY, countryFlag, findCountry } from "@/lib/countries";
+import { youtubeEmbedUrl } from "@/lib/youtube";
 
 const display = Barlow_Condensed({ subsets: ["latin"], weight: ["600", "700", "800"], variable: "--font-display" });
 const body = Archivo({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-body" });
@@ -352,12 +353,16 @@ function VideoBlock({ url, label }: { url: string; label: string }) {
     );
   }
   const isMp4 = /\.mp4($|\?)/.test(url);
+  // Normalizamos cualquier URL de YouTube (watch, youtu.be, shorts) a
+  // formato embed. Si no matchea YouTube, se pasa la url tal cual —
+  // así siguen funcionando Vimeo u otros embeds ya montados.
+  const embedSrc = isMp4 ? url : (youtubeEmbedUrl(url) ?? url);
   return (
     <div className="sf-video">
       {isMp4 ? (
         <video src={url} controls playsInline preload="metadata" />
       ) : (
-        <iframe src={url} title={label} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen />
+        <iframe src={embedSrc} title={label} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen />
       )}
     </div>
   );

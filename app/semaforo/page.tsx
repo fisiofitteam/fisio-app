@@ -1,6 +1,6 @@
 import { Metadata } from "next";
 import { SemaforoClient } from "./SemaforoClient";
-import { WHATSAPP_NUMBER, VIDEO_URLS, LEGAL_REVISADO } from "@/lib/semaforo/config";
+import { WHATSAPP_NUMBER, LEGAL_REVISADO } from "@/lib/semaforo/config";
 import { getSemaforoConfig } from "@/lib/semaforo/get-config";
 
 export const metadata: Metadata = {
@@ -28,7 +28,7 @@ export default async function SemaforoPage() {
   return (
     <SemaforoClient
       whatsappNumber={WHATSAPP_NUMBER}
-      videoUrls={VIDEO_URLS}
+      videoUrls={cfg.videoUrls}
       legalRevisado={LEGAL_REVISADO}
       quizFunnelMode={cfg.quizFunnelEnabled}
     />

@@ -3944,6 +3944,13 @@ model SemaforoConfig {
   id                     String   @id @default("singleton")
   quizFunnelEnabled      Boolean  @default(false)
   funnelWhatsappTemplate String   @default("¡Hola {{nombre}}! Vi que hiciste el Semáforo del Hombro y te salió {{color}}. Te escribo yo directamente para explicarte qué significa y qué hacer con {{movimientos_problema}}.")
+  // URLs de YouTube que se pintan en la pantalla del resultado según el
+  // color del lead. Se aceptan tanto watch (?v=) como embed / short.
+  // Vacío = no se pinta vídeo. Los edita el CEO desde el panel.
+  videoUrlVerde          String?
+  videoUrlAmbar          String?
+  videoUrlRojo           String?
+  videoUrlAlarma         String?
   updatedAt              DateTime @updatedAt
   updatedById            String?
 }

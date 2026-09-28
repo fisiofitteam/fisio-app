@@ -5,10 +5,12 @@
  * migrado aún.
  */
 import { prisma } from "@/lib/prisma";
+import { VIDEO_URLS } from "@/lib/semaforo/config";
 
 export type SemaforoConfig = {
   quizFunnelEnabled: boolean;
   funnelWhatsappTemplate: string;
+  videoUrls: Record<"verde" | "ambar" | "rojo" | "alarma", string>;
 };
 
 // Plantilla completa por defecto: se envía como si Ales le hablara al lead
@@ -29,6 +31,9 @@ Sobre los movimientos que ahora te dan guerra ({{movimientos_problema}}), te cue
 const DEFAULT: SemaforoConfig = {
   quizFunnelEnabled: false,
   funnelWhatsappTemplate: DEFAULT_FUNNEL_TEMPLATE,
+  // Los defaults de vídeo vienen de la constante VIDEO_URLS (típicamente
+  // vacíos). La DB los sobreescribe cuando el CEO los define en el panel.
+  videoUrls: { ...VIDEO_URLS },
 };
 
 export async function getSemaforoConfig(): Promise<SemaforoConfig> {
@@ -38,9 +43,15 @@ export async function getSemaforoConfig(): Promise<SemaforoConfig> {
     return {
       quizFunnelEnabled: !!row.quizFunnelEnabled,
       funnelWhatsappTemplate: row.funnelWhatsappTemplate || DEFAULT.funnelWhatsappTemplate,
+      videoUrls: {
+        verde: (row.videoUrlVerde as string | null) || VIDEO_URLS.verde,
+        ambar: (row.videoUrlAmbar as string | null) || VIDEO_URLS.ambar,
+        rojo: (row.videoUrlRojo as string | null) || VIDEO_URLS.rojo,
+        alarma: (row.videoUrlAlarma as string | null) || VIDEO_URLS.alarma,
+      },
     };
   } catch {
-    // Tabla no existe todavía (migración pendiente) → default.
+    // Tabla o columnas no existen (migración pendiente) → default.
     return DEFAULT;
   }
 }

@@ -3957,6 +3957,13 @@ model SemaforoConfig {
   // Template WhatsApp del CRM cuando la setter clica "Contactar".
   // Placeholders: {{nombre}}, {{color}}, {{movimientos_problema}}.
   funnelWhatsappTemplate String   @default("¡Hola {{nombre}}! Vi que hiciste el Semáforo del Hombro y te salió {{color}}. Te escribo yo directamente para explicarte qué significa y qué hacer con {{movimientos_problema}}.")
+  // URLs de YouTube que se pintan en la pantalla del resultado según
+  // el color del lead. Acepta watch (?v=), embed y short. Vacío = no
+  // se pinta vídeo. Editables por el CEO desde el panel del semáforo.
+  videoUrlVerde          String?
+  videoUrlAmbar          String?
+  videoUrlRojo           String?
+  videoUrlAlarma         String?
   updatedAt              DateTime @updatedAt
   updatedById            String?
 }

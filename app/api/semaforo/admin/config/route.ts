@@ -31,12 +31,36 @@ export async function PATCH(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const data: { quizFunnelEnabled?: boolean; funnelWhatsappTemplate?: string; updatedById?: string } = {
+  const data: {
+    quizFunnelEnabled?: boolean;
+    funnelWhatsappTemplate?: string;
+    videoUrlVerde?: string | null;
+    videoUrlAmbar?: string | null;
+    videoUrlRojo?: string | null;
+    videoUrlAlarma?: string | null;
+    updatedById?: string;
+  } = {
     updatedById: user.id,
   };
   if (typeof body?.quizFunnelEnabled === "boolean") data.quizFunnelEnabled = body.quizFunnelEnabled;
   if (typeof body?.funnelWhatsappTemplate === "string") {
     data.funnelWhatsappTemplate = body.funnelWhatsappTemplate.slice(0, 2000);
+  }
+  // Vídeos por color. String vacío = "borrar" (guardamos null); resto se
+  // guarda tal cual con cap defensivo. La normalización a embed la hace
+  // el componente VideoBlock del cliente.
+  const videoKeys = [
+    ["videoUrlVerde", "videoUrlVerde"],
+    ["videoUrlAmbar", "videoUrlAmbar"],
+    ["videoUrlRojo", "videoUrlRojo"],
+    ["videoUrlAlarma", "videoUrlAlarma"],
+  ] as const;
+  for (const [inKey, outKey] of videoKeys) {
+    const v = body?.[inKey];
+    if (typeof v === "string") {
+      const trimmed = v.trim().slice(0, 500);
+      (data as any)[outKey] = trimmed.length > 0 ? trimmed : null;
+    }
   }
 
   try {

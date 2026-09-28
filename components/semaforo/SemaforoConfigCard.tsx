@@ -18,6 +18,7 @@ import { DEFAULT_FUNNEL_TEMPLATE } from "@/lib/semaforo/get-config";
 type Config = {
   quizFunnelEnabled: boolean;
   funnelWhatsappTemplate: string;
+  videoUrls: { verde: string; ambar: string; rojo: string; alarma: string };
 };
 
 export function SemaforoConfigCard() {
@@ -71,6 +72,31 @@ export function SemaforoConfigCard() {
     persist({ quizFunnelEnabled: v });
   }
 
+  const videoDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function scheduleVideo(color: "verde" | "ambar" | "rojo" | "alarma", next: string) {
+    if (!config) return;
+    const nextVideos = { ...config.videoUrls, [color]: next };
+    setConfig({ ...config, videoUrls: nextVideos });
+    if (videoDebounceRef.current) clearTimeout(videoDebounceRef.current);
+    const patchKey =
+      color === "verde" ? "videoUrlVerde" :
+      color === "ambar" ? "videoUrlAmbar" :
+      color === "rojo" ? "videoUrlRojo" : "videoUrlAlarma";
+    videoDebounceRef.current = setTimeout(() => persist({ [patchKey]: next } as any), 800);
+  }
+  function flushVideo(color: "verde" | "ambar" | "rojo" | "alarma") {
+    if (!config) return;
+    if (videoDebounceRef.current) {
+      clearTimeout(videoDebounceRef.current);
+      videoDebounceRef.current = null;
+    }
+    const patchKey =
+      color === "verde" ? "videoUrlVerde" :
+      color === "ambar" ? "videoUrlAmbar" :
+      color === "rojo" ? "videoUrlRojo" : "videoUrlAlarma";
+    persist({ [patchKey]: config.videoUrls[color] } as any);
+  }
+
   useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
 
   if (!config) {
@@ -109,6 +135,36 @@ export function SemaforoConfigCard() {
           </span>
         </span>
       </label>
+
+      {/* ── Vídeos por color ────────────────────────────────────────── */}
+      <div className="rounded-lg p-3 mb-3" style={{ background: "#FAFAFA", border: "1px solid #E5E5E5" }}>
+        <div className="mb-2">
+          <span className="text-xs font-semibold text-neutral-700">🎥 Vídeos del resultado</span>
+          <p className="text-[11px] text-neutral-500 leading-snug mt-0.5">
+            Se pintan embebidos en la pantalla del resultado (test público sin funnel). Pega la URL de YouTube — se acepta watch (?v=…), embed o youtu.be. Dejar vacío = no se muestra vídeo.
+          </p>
+        </div>
+        <div className="grid gap-2">
+          {(["verde", "ambar", "rojo", "alarma"] as const).map((c) => {
+            const dot = c === "verde" ? "#22C55E" : c === "ambar" ? "#F59E0B" : c === "rojo" ? "#EF4444" : "#111827";
+            const label = c === "verde" ? "🟢 Verde" : c === "ambar" ? "🟡 Ámbar" : c === "rojo" ? "🔴 Rojo" : "⚫ Alarma";
+            return (
+              <div key={c} className="flex items-center gap-2">
+                <span className="text-[11px] font-semibold w-20 shrink-0 flex items-center gap-1.5" style={{ color: dot }}>{label}</span>
+                <input
+                  type="url"
+                  value={config.videoUrls[c]}
+                  onChange={(e) => scheduleVideo(c, e.target.value)}
+                  onBlur={() => flushVideo(c)}
+                  placeholder="https://youtu.be/… o https://www.youtube.com/watch?v=…"
+                  className="flex-1 text-xs px-2 py-1.5 rounded border"
+                  style={{ borderColor: "#E5E5E5", background: "#FFFFFF" }}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       <details className="group rounded-lg border" style={{ borderColor: "#E5E5E5", background: "#FAFAFA" }}>
         <summary className="cursor-pointer select-none list-none px-3 py-2 flex items-center justify-between gap-2">
