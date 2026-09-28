@@ -56,6 +56,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "dayOfWeek fuera de rango (1-5)" }, { status: 400 });
   }
 
+  // Cargamos la semana con su programa para decidir si auto-vinculamos
+  // vídeos. En "advance-entrenamiento" los nombres de ejercicio son WODs,
+  // Olympic lifts y demás y el matching contra la biblioteca de accesorios
+  // se lía (mete vídeos que no son). En prevention/accesorios sí lo queremos.
+  const weekWithProgram = await prisma.rollingWeek.findUnique({
+    where: { id: weekId },
+    select: { program: { select: { role: true } } },
+  });
+  const programRole = weekWithProgram?.program?.role ?? "";
+  const shouldLinkExercises = programRole !== "advance-entrenamiento";
+
   // Asegurar que el día existe
   let day = await prisma.rollingDay.findUnique({
     where: { weekId_dayOfWeek: { weekId, dayOfWeek: dow } },
@@ -73,11 +84,13 @@ export async function POST(req: NextRequest) {
   // ejercicios que devuelve la IA con la biblioteca (id + youtubeUrl).
   // La biblioteca es pequeña, así que hacerlo en memoria es más barato
   // que N queries y respeta el mismo criterio que /api/exercises/match.
-  const library = await prisma.exerciseLibrary.findMany({
-    select: { id: true, name: true },
-  });
+  // Sólo si el programa lo requiere (skip para advance-entrenamiento).
+  const library = shouldLinkExercises
+    ? await prisma.exerciseLibrary.findMany({ select: { id: true, name: true } })
+    : [];
   const indexed = library.map((ex) => ({ id: ex.id, key: normalize(ex.name) }));
   function matchName(raw: string): string | null {
+    if (!shouldLinkExercises) return null;
     const key = normalize(raw);
     if (!key) return null;
     let hit = indexed.find((x) => x.key === key);
