@@ -273,6 +273,19 @@ export function RollingProgramDetail({
     await loadWeek(currentMonday);
   }
 
+  async function deleteWeek() {
+    if (!week) return;
+    const label = formatWeekLabel(currentMonday.toISOString());
+    if (!confirm(`Borrar la semana entera del ${label}? Se eliminarán TODAS las tareas de los 5 días. No se puede deshacer.`)) return;
+    const res = await fetch(`/api/rolling-weeks?id=${week.id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      alert(d?.error ?? "No se pudo borrar la semana");
+      return;
+    }
+    await loadWeek(currentMonday);
+  }
+
   // Mapear días por dayOfWeek para facilitar render
   const daysByDow: Record<number, Day | null> = {};
   for (let i = 1; i <= 5; i++) daysByDow[i] = null;
@@ -383,6 +396,14 @@ export function RollingProgramDetail({
               )}
               <button onClick={togglePublish} className="text-neutral-700 hover:underline">
                 {week.publishedAt ? "Despublicar" : "Publicar"}
+              </button>
+              <button
+                onClick={deleteWeek}
+                className="text-xs font-medium px-2.5 py-1 rounded-md border"
+                style={{ background: "#FEF2F2", color: "#B91C1C", borderColor: "#FCA5A5" }}
+                title="Borrar toda la programación de esta semana (irreversible)"
+              >
+                🗑 Borrar semana
               </button>
             </div>
           )}
