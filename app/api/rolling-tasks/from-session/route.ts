@@ -25,6 +25,20 @@ import { getActiveProfessional } from "@/lib/session";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+/**
+ * Normaliza a minúsculas sin acentos ni espacios extra. Idéntico al
+ * matcher de /api/exercises/match para que "Hip Thrust" y "hip thrust"
+ * casen igual.
+ */
+function normalize(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export async function POST(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -55,7 +69,25 @@ export async function POST(req: NextRequest) {
   const description: string = typeof session.description === "string" ? session.description.trim() : "";
   const sessionTitle: string = typeof session.title === "string" ? session.title.trim() : "";
 
-  const created = [] as string[];
+  // Cargamos la biblioteca una sola vez para matchear los nombres de
+  // ejercicios que devuelve la IA con la biblioteca (id + youtubeUrl).
+  // La biblioteca es pequeña, así que hacerlo en memoria es más barato
+  // que N queries y respeta el mismo criterio que /api/exercises/match.
+  const library = await prisma.exerciseLibrary.findMany({
+    select: { id: true, name: true },
+  });
+  const indexed = library.map((ex) => ({ id: ex.id, key: normalize(ex.name) }));
+  function matchName(raw: string): string | null {
+    const key = normalize(raw);
+    if (!key) return null;
+    let hit = indexed.find((x) => x.key === key);
+    if (!hit) hit = indexed.find((x) => x.key.includes(key));
+    if (!hit) hit = indexed.find((x) => key.includes(x.key));
+    return hit ? hit.id : null;
+  }
+
+  const created: string[] = [];
+  const matchStats: { taskId: string; matched: number; unmatched: string[] }[] = [];
   let i = 0;
   for (const b of session.blocks as Array<{ heading?: string; body?: string; exercises?: string[] }>) {
     const heading = (b?.heading ?? "").toString().trim() || `Bloque ${i + 1}`;
@@ -80,9 +112,35 @@ export async function POST(req: NextRequest) {
         bodyText,
       },
     });
+
+    // Auto-vincular ejercicios de la biblioteca. Matchea cada nombre
+    // devuelto por la IA; los que no encuentra los deja fuera y los
+    // devolvemos en matchStats para poder avisar en la UI si conviene.
+    const exerciseNames = Array.isArray(b?.exercises) ? b!.exercises! : [];
+    const seenIds = new Set<string>();
+    const orderedIds: string[] = [];
+    const unmatched: string[] = [];
+    for (const raw of exerciseNames) {
+      const name = String(raw ?? "").trim();
+      if (!name) continue;
+      const eid = matchName(name);
+      if (eid && !seenIds.has(eid)) {
+        seenIds.add(eid);
+        orderedIds.push(eid);
+      } else if (!eid) {
+        unmatched.push(name);
+      }
+    }
+    if (orderedIds.length > 0) {
+      await prisma.rollingTaskExercise.createMany({
+        data: orderedIds.map((eid, idx) => ({ rollingTaskId: task.id, exerciseId: eid, order: idx })),
+      });
+    }
+    matchStats.push({ taskId: task.id, matched: orderedIds.length, unmatched });
+
     created.push(task.id);
     i++;
   }
 
-  return NextResponse.json({ ok: true, taskIds: created });
+  return NextResponse.json({ ok: true, taskIds: created, matchStats });
 }
