@@ -300,6 +300,17 @@ model TeamMonthlyReport {
   submittedAt    DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
+  // Escalas 1-5 (5 = mejor). Se guardan como Int? para poder distinguir
+  // "sin responder" (null) de "0" — aunque en la práctica 0 no es válido.
+  scaleSatisfaction  Int?       // Satisfacción global con tu trabajo este mes
+  scaleWorkload      Int?       // Cómo te sientes con la carga de trabajo (5 = muy cómodo, 1 = ahogado)
+  scaleTaskWhatsapp  Int?       // Feedback / mensajes por WhatsApp
+  scaleTaskAssessment Int?      // Valoraciones iniciales
+  scaleTaskOptCall   Int?       // Videollamadas de optimización
+  scaleTaskRenewCall Int?       // Videollamadas de renovación
+  scaleTaskMeetings  Int?       // Reuniones internas
+  scaleTaskAppMgmt   Int?       // Gestión de programas y clientes en la app
+
   // Preguntas del formulario (orden idéntico al Google Forms).
   goodThings         String     // 4. ¿Qué ha ido bien este mes? (obligatorio)
   badThings          String?    // 5. ¿Qué ha ido mal este mes?

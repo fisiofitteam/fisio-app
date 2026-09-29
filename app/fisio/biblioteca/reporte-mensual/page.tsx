@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getActiveProfessional } from "@/lib/session";
-import { REPORT_FIELDS, shouldSubmitReport } from "@/lib/team-monthly-reports";
+import { REPORT_FIELDS, SCALE_FIELDS, shouldSubmitReport } from "@/lib/team-monthly-reports";
 import { TeamMonthlyReportForm } from "@/components/TeamMonthlyReportForm";
 
 /**
@@ -31,7 +31,24 @@ export default async function ReporteMensualBibliotecaPage() {
             Panel → Métricas equipo → Reporte mensual del equipo
           </Link>.
         </p>
-        <ol className="space-y-3 mt-4">
+        <h2 className="text-sm font-semibold mt-6 mb-2">📊 Escalas 1-5 (todas obligatorias)</h2>
+        <ol className="space-y-2">
+          {SCALE_FIELDS.map((f, i) => (
+            <li key={f.key} className="border rounded-lg p-3" style={{ borderColor: "#E5E5E5", background: "#FAFAFA" }}>
+              <div className="text-sm font-medium">
+                <span className="text-neutral-400 mr-1">{i + 1}.</span>
+                {f.label}
+                <span className="text-red-600 ml-1">*</span>
+              </div>
+              <div className="text-[11px] text-neutral-500 mt-1">
+                1 · {f.low} → 5 · {f.high}
+              </div>
+            </li>
+          ))}
+        </ol>
+
+        <h2 className="text-sm font-semibold mt-6 mb-2">📝 Preguntas abiertas</h2>
+        <ol className="space-y-2">
           {REPORT_FIELDS.map((f, i) => (
             <li key={f.key} className="border rounded-lg p-3" style={{ borderColor: "#E5E5E5", background: "#FAFAFA" }}>
               <div className="text-sm font-medium">

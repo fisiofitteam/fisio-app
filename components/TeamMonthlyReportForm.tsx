@@ -8,24 +8,29 @@
  * cuando el reporte del mes ya está enviado.
  */
 import { useEffect, useRef, useState } from "react";
-import { REPORT_FIELDS, monthLabel, type ReportFieldKey } from "@/lib/team-monthly-reports";
+import { REPORT_FIELDS, SCALE_FIELDS, monthLabel, type ReportFieldKey, type ScaleFieldKey } from "@/lib/team-monthly-reports";
 
 type ReportRow = {
   id: string;
   monthYear: string;
   submittedAt: string;
   updatedAt: string;
-} & Record<ReportFieldKey, string | null>;
+} & Record<ReportFieldKey, string | null> & Partial<Record<ScaleFieldKey, number | null>>;
 
 const EMPTY_VALUES: Record<ReportFieldKey, string> = REPORT_FIELDS.reduce(
   (acc, f) => ({ ...acc, [f.key]: "" }),
   {} as Record<ReportFieldKey, string>,
+);
+const EMPTY_SCALES: Record<ScaleFieldKey, number | null> = SCALE_FIELDS.reduce(
+  (acc, f) => ({ ...acc, [f.key]: null }),
+  {} as Record<ScaleFieldKey, number | null>,
 );
 
 export function TeamMonthlyReportForm() {
   const [monthYear, setMonthYear] = useState<string>("");
   const [existingReport, setExistingReport] = useState<ReportRow | null>(null);
   const [values, setValues] = useState<Record<ReportFieldKey, string>>(EMPTY_VALUES);
+  const [scales, setScales] = useState<Record<ScaleFieldKey, number | null>>(EMPTY_SCALES);
   const [status, setStatus] = useState<"idle" | "loading" | "saving" | "saved" | "error">("loading");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
@@ -50,6 +55,12 @@ export function TeamMonthlyReportForm() {
             if (typeof v === "string") filled[f.key] = v;
           }
           setValues(filled);
+          const filledScales = { ...EMPTY_SCALES };
+          for (const f of SCALE_FIELDS) {
+            const v = d.report[f.key];
+            if (typeof v === "number") filledScales[f.key] = v;
+          }
+          setScales(filledScales);
           setSubmitted(true);
         }
         setStatus("idle");
@@ -60,14 +71,18 @@ export function TeamMonthlyReportForm() {
       });
   }, []);
 
-  async function persist(next: Record<ReportFieldKey, string>, submit = false) {
+  async function persist(
+    next: Record<ReportFieldKey, string>,
+    nextScales: Record<ScaleFieldKey, number | null>,
+    submit = false,
+  ) {
     setStatus("saving");
     setErrorMsg(null);
     try {
       const r = await fetch("/api/team-monthly-reports", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...next, submit }),
+        body: JSON.stringify({ ...next, ...nextScales, submit }),
       });
       const d = await r.json();
       if (!r.ok || !d?.ok) {
@@ -91,14 +106,21 @@ export function TeamMonthlyReportForm() {
     const next = { ...values, [key]: v };
     setValues(next);
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => persist(next, false), 800);
+    saveTimer.current = setTimeout(() => persist(next, scales, false), 800);
+  }
+
+  function updateScale(key: ScaleFieldKey, v: number) {
+    const next = { ...scales, [key]: v };
+    setScales(next);
+    // Las escalas se guardan de inmediato (no hay que debouncear un click).
+    persist(values, next, false);
   }
 
   function flushOnBlur() {
     if (saveTimer.current) {
       clearTimeout(saveTimer.current);
       saveTimer.current = null;
-      persist(values, false);
+      persist(values, scales, false);
     }
   }
 
@@ -106,14 +128,18 @@ export function TeamMonthlyReportForm() {
     .filter((f) => f.required)
     .filter((f) => !(values[f.key] ?? "").trim())
     .map((f) => f.label);
+  const missingScales = SCALE_FIELDS
+    .filter((f) => !scales[f.key])
+    .map((f) => f.label);
+  const canSubmit = missingRequired.length === 0 && missingScales.length === 0;
 
   async function handleSubmit() {
-    if (missingRequired.length > 0) return;
+    if (!canSubmit) return;
     if (saveTimer.current) {
       clearTimeout(saveTimer.current);
       saveTimer.current = null;
     }
-    const ok = await persist(values, true);
+    const ok = await persist(values, scales, true);
     if (ok) setShowConfirm(false);
   }
 
@@ -150,6 +176,53 @@ export function TeamMonthlyReportForm() {
           </span>
         </div>
       )}
+
+      {/* ── Escalas 1-5 (satisfacción, carga, tareas) ───────────────── */}
+      <section className="mb-6 rounded-xl border p-4" style={{ borderColor: "#E5E5E5", background: "#FAFAFA" }}>
+        <div className="mb-3">
+          <div className="text-sm font-semibold">📊 Cómo te sientes este mes</div>
+          <div className="text-[11px] text-neutral-500 mt-0.5">
+            Escala 1 → 5. Van todas obligatorias — es lo que agregamos mes a mes para ver tendencias.
+          </div>
+        </div>
+        <div className="space-y-3">
+          {SCALE_FIELDS.map((f) => (
+            <div key={f.key} className="flex items-start justify-between gap-3 flex-wrap">
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium">
+                  {f.label}
+                  <span className="text-red-600 ml-1">*</span>
+                </div>
+                <div className="text-[10px] text-neutral-500 mt-0.5 flex items-center gap-1.5">
+                  <span>1 · {f.low}</span>
+                  <span>—</span>
+                  <span>5 · {f.high}</span>
+                </div>
+              </div>
+              <div className="flex gap-1 shrink-0">
+                {[1, 2, 3, 4, 5].map((n) => {
+                  const active = scales[f.key] === n;
+                  return (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => updateScale(f.key, n)}
+                      className="w-9 h-9 rounded-md text-sm font-semibold border transition"
+                      style={{
+                        background: active ? "#0A0A0A" : "#FFFFFF",
+                        color: active ? "#FAFAFA" : "#171717",
+                        borderColor: active ? "#0A0A0A" : "#E5E5E5",
+                      }}
+                    >
+                      {n}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <div className="space-y-5">
         {REPORT_FIELDS.map((f, i) => (
@@ -194,17 +267,17 @@ export function TeamMonthlyReportForm() {
 
       <div className="mt-6 flex items-center gap-3 flex-wrap">
         <button
-          onClick={() => (missingRequired.length === 0 ? setShowConfirm(true) : null)}
-          disabled={missingRequired.length > 0 || status === "saving"}
+          onClick={() => (canSubmit ? setShowConfirm(true) : null)}
+          disabled={!canSubmit || status === "saving"}
           className="text-sm font-semibold px-4 py-2.5 rounded-lg disabled:opacity-40"
           style={{ background: "#0A0A0A", color: "#FAFAFA" }}
-          title={missingRequired.length > 0 ? `Faltan: ${missingRequired.join(", ")}` : ""}
+          title={!canSubmit ? `Faltan: ${[...missingRequired, ...missingScales].join(", ")}` : ""}
         >
           {submitted ? "✓ Reenviar con cambios" : "Enviar reporte"}
         </button>
-        {missingRequired.length > 0 && (
+        {!canSubmit && (
           <span className="text-xs text-neutral-500">
-            Faltan {missingRequired.length} campo{missingRequired.length === 1 ? "" : "s"} obligatorio{missingRequired.length === 1 ? "" : "s"}.
+            Faltan {missingRequired.length + missingScales.length} campo{missingRequired.length + missingScales.length === 1 ? "" : "s"} obligatorio{missingRequired.length + missingScales.length === 1 ? "" : "s"} ({missingScales.length > 0 && `${missingScales.length} escala${missingScales.length === 1 ? "" : "s"}`}{missingScales.length > 0 && missingRequired.length > 0 && ", "}{missingRequired.length > 0 && `${missingRequired.length} texto${missingRequired.length === 1 ? "" : "s"}`}).
           </span>
         )}
       </div>

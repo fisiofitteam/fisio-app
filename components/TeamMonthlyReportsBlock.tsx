@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { monthKey, monthLabel, REPORT_FIELDS, REPORTING_ROLES, type ReportFieldKey } from "@/lib/team-monthly-reports";
+import { monthKey, monthLabel, REPORT_FIELDS, REPORTING_ROLES, SCALE_FIELDS, type ReportFieldKey, type ScaleFieldKey } from "@/lib/team-monthly-reports";
 
 /**
  * Bloque plegable con los reportes mensuales del equipo — se pinta debajo
@@ -22,7 +22,7 @@ export async function TeamMonthlyReportsBlock() {
     professionalId: string;
     submittedAt: Date;
     updatedAt: Date;
-  } & Record<ReportFieldKey, string | null>> = [];
+  } & Record<ReportFieldKey, string | null> & Partial<Record<ScaleFieldKey, number | null>>> = [];
   try {
     reports = (await prisma.teamMonthlyReport.findMany({
       where: { monthYear: mk },
@@ -43,6 +43,35 @@ export async function TeamMonthlyReportsBlock() {
   const submittedCount = reports.length;
   const pendingCount = allActive.length - submittedCount;
 
+  // Promedios de las escalas del mes (solo entre las respuestas enviadas).
+  const averages: Record<ScaleFieldKey, { avg: number | null; count: number }> = SCALE_FIELDS.reduce(
+    (acc, f) => ({ ...acc, [f.key]: { avg: null, count: 0 } }),
+    {} as Record<ScaleFieldKey, { avg: number | null; count: number }>,
+  );
+  for (const f of SCALE_FIELDS) {
+    const vals = reports.map((r) => r[f.key]).filter((v): v is number => typeof v === "number" && v >= 1 && v <= 5);
+    if (vals.length > 0) {
+      averages[f.key] = {
+        avg: vals.reduce((a, b) => a + b, 0) / vals.length,
+        count: vals.length,
+      };
+    }
+  }
+  function bgForAvg(avg: number | null): string {
+    if (avg === null) return "#F5F5F5";
+    if (avg >= 4) return "#ECFDF5"; // verde
+    if (avg >= 3) return "#FEF9C3"; // amarillo suave
+    if (avg >= 2) return "#FEF3C7"; // ámbar
+    return "#FEE2E2";              // rojo
+  }
+  function colorForAvg(avg: number | null): string {
+    if (avg === null) return "#737373";
+    if (avg >= 4) return "#065F46";
+    if (avg >= 3) return "#854D0E";
+    if (avg >= 2) return "#92400E";
+    return "#991B1B";
+  }
+
   return (
     <details
       className="rounded-xl border mt-4"
@@ -58,7 +87,36 @@ export async function TeamMonthlyReportsBlock() {
         </div>
         <span className="text-[11px] text-neutral-400">Abrir ▾</span>
       </summary>
-      <div className="px-4 pb-4 pt-1 space-y-3 border-t border-neutral-100">
+      <div className="px-4 pb-4 pt-1 border-t border-neutral-100">
+        {/* KPIs de escalas del mes */}
+        {submittedCount > 0 && (
+          <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+            {SCALE_FIELDS.map((f) => {
+              const a = averages[f.key];
+              const avgStr = a.avg === null ? "—" : a.avg.toFixed(1);
+              return (
+                <div
+                  key={f.key}
+                  className="rounded-lg p-2.5"
+                  style={{ background: bgForAvg(a.avg), border: `1px solid ${bgForAvg(a.avg)}` }}
+                >
+                  <div className="text-[10px] font-medium truncate" style={{ color: colorForAvg(a.avg) }} title={f.label}>
+                    {f.label}
+                  </div>
+                  <div className="text-lg font-bold tabular-nums mt-0.5" style={{ color: colorForAvg(a.avg) }}>
+                    {avgStr}
+                    <span className="text-[10px] font-normal opacity-60"> /5</span>
+                  </div>
+                  <div className="text-[9px] opacity-60" style={{ color: colorForAvg(a.avg) }}>
+                    {a.count} respuesta{a.count === 1 ? "" : "s"}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="space-y-3">
         {allActive.map((pro) => {
           const rep = reportByProId.get(pro.id);
           return (
@@ -95,6 +153,26 @@ export async function TeamMonthlyReportsBlock() {
                   <div className="text-[10px] text-neutral-400">
                     Última actualización: {new Date(rep.updatedAt).toLocaleDateString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
                   </div>
+                  {/* Escalas de esta persona */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5">
+                    {SCALE_FIELDS.map((f) => {
+                      const v = rep[f.key];
+                      const num = typeof v === "number" ? v : null;
+                      return (
+                        <div
+                          key={f.key}
+                          className="rounded p-1.5"
+                          style={{ background: bgForAvg(num), color: colorForAvg(num) }}
+                          title={f.label}
+                        >
+                          <div className="text-[9px] font-medium truncate opacity-80">{f.label}</div>
+                          <div className="text-sm font-bold tabular-nums">
+                            {num === null ? "—" : `${num}/5`}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                   {REPORT_FIELDS.map((f, i) => {
                     const raw = rep[f.key];
                     const val = typeof raw === "string" ? raw.trim() : "";
@@ -116,6 +194,7 @@ export async function TeamMonthlyReportsBlock() {
             </details>
           );
         })}
+        </div>
       </div>
     </details>
   );

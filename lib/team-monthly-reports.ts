@@ -2,6 +2,24 @@
  * Helpers para el reporte mensual del equipo (traído del antiguo
  * Google Forms). Un registro por profesional y mes.
  */
+/**
+ * Escalas 1-5 en cabecera del formulario. Semántica: 5 siempre es mejor
+ * (agregación consistente en el dashboard). Todas son obligatorias — sin
+ * ellas no hay señal cuantitativa mes a mes.
+ */
+export const SCALE_FIELDS = [
+  { key: "scaleSatisfaction",   label: "Satisfacción global con tu trabajo este mes",         low: "Fatal",     high: "Genial",   group: "wellbeing" as const },
+  { key: "scaleWorkload",       label: "Cómo te sientes con la carga de trabajo",             low: "Ahogado",   high: "Cómodo",   group: "wellbeing" as const },
+  { key: "scaleTaskWhatsapp",   label: "Feedback y mensajes por WhatsApp",                    low: "Muy mal",   high: "Muy bien", group: "task"      as const },
+  { key: "scaleTaskAssessment", label: "Valoraciones iniciales",                              low: "Muy mal",   high: "Muy bien", group: "task"      as const },
+  { key: "scaleTaskOptCall",    label: "Videollamadas de optimización",                       low: "Muy mal",   high: "Muy bien", group: "task"      as const },
+  { key: "scaleTaskRenewCall",  label: "Videollamadas de renovación",                         low: "Muy mal",   high: "Muy bien", group: "task"      as const },
+  { key: "scaleTaskMeetings",   label: "Reuniones internas",                                  low: "Muy mal",   high: "Muy bien", group: "task"      as const },
+  { key: "scaleTaskAppMgmt",    label: "Gestión de programas y clientes en la app",           low: "Muy mal",   high: "Muy bien", group: "task"      as const },
+] as const;
+export type ScaleFieldKey = typeof SCALE_FIELDS[number]["key"];
+
+/** Preguntas de texto libre (el formulario original del Google Forms). */
 export const REPORT_FIELDS = [
   { key: "goodThings",        label: "¿Qué ha ido bien este mes?",                                              required: true,  type: "long"  as const },
   { key: "badThings",         label: "¿Qué ha ido mal este mes?",                                               required: false, type: "long"  as const },
