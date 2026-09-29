@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { FisioSidebar } from "@/components/FisioSidebar";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { CommunityTodayBanner } from "@/components/CommunityTodayBanner";
+import { MonthlyReportBanner } from "@/components/MonthlyReportBanner";
 import { ActivityHeartbeat } from "@/components/ActivityHeartbeat";
 import { getActiveProfessional } from "@/lib/session";
 import { getThemeFromCookie } from "@/lib/theme";
@@ -38,6 +39,7 @@ export default async function FisioLayout({ children }: { children: React.ReactN
                 estaba marcado done desde otra vista. */}
             <div className="print:hidden">
               <CommunityTodayBanner />
+              <MonthlyReportBanner />
             </div>
             {children}
           </div>

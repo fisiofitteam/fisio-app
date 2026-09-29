@@ -25,7 +25,6 @@ import { hasPendingFormReview } from "@/lib/pending-form-review";
 import { activePatientCondition } from "@/lib/patient-active";
 import { getRenewalActivityInPeriod } from "@/lib/renewals";
 import { markFormReviewed } from "./formularios-pendientes/actions";
-import { MonthlyReportReminder } from "@/components/MonthlyReportReminder";
 import { TeamMonthlyReportsBlock } from "@/components/TeamMonthlyReportsBlock";
 import { canReadTeamReports } from "@/lib/team-monthly-reports";
 
@@ -640,7 +639,6 @@ export default async function FisioPanelPage({
 
     return (
       <main>
-        <MonthlyReportReminder professionalId={user.id} role={user.role} />
         {headerContent}
         {kpis}
         <div className="mb-4 flex justify-end">
@@ -803,7 +801,6 @@ export default async function FisioPanelPage({
 
   return (
     <main>
-      <MonthlyReportReminder professionalId={user.id} role={user.role} />
       {headerContent}
       {kpis}
       <FisioPanelTabs

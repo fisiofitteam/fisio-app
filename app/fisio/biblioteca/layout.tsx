@@ -1,12 +1,10 @@
 import { LibrarySidebar } from "@/components/LibrarySidebar";
 import { getActiveProfessional } from "@/lib/session";
-import { shouldSubmitReport } from "@/lib/team-monthly-reports";
 
 export default async function LibraryLayout({ children }: { children: React.ReactNode }) {
   const user = await getActiveProfessional();
   const isCeo = user?.role === "ceo";
   const canCatalog = isCeo || user?.role === "head_success";
-  const canReportMonthly = !!user && shouldSubmitReport(user.role);
 
   return (
     <div>
@@ -15,7 +13,10 @@ export default async function LibraryLayout({ children }: { children: React.Reac
         <p className="text-xs text-neutral-500 mt-0.5">Todo el contenido reutilizable</p>
       </header>
 
-      <LibrarySidebar showOnboarding={isCeo} showCatalog={canCatalog} showMonthlyReport={canReportMonthly} />
+      {/* Reporte mensual: solo CEO ve la pestaña (para revisar las
+          preguntas). Head coach y fisios entran al formulario desde
+          el banner del layout /fisio, sin pasar por la biblioteca. */}
+      <LibrarySidebar showOnboarding={isCeo} showCatalog={canCatalog} showMonthlyReport={isCeo} />
       <main className="mt-4 min-w-0">{children}</main>
     </div>
   );

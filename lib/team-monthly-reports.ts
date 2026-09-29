@@ -52,3 +52,43 @@ export function shouldSubmitReport(role: string): boolean {
 export function canReadTeamReports(role: string): boolean {
   return role === "ceo" || role === "head_success";
 }
+
+/**
+ * Fecha del primer lunes del mes indicado (en TZ Madrid). Ejemplo:
+ * si el mes empieza en domingo, devuelve el día 2 (lunes). Si empieza
+ * en martes, devuelve el día 7 (siguiente lunes). Siempre en la
+ * misma TZ que usamos para el resto.
+ */
+export function firstMondayOfMonth(year: number, month1to12: number): Date {
+  // Hallamos el weekday del día 1 en TZ Madrid.
+  const day1 = new Date(Date.UTC(year, month1to12 - 1, 1, 12, 0, 0));
+  const weekday = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Madrid",
+    weekday: "short",
+  }).format(day1);
+  const map: Record<string, number> = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 };
+  const dow = map[weekday] || 1;
+  // Días a sumar al 1 para llegar al lunes: (1 - dow + 7) % 7
+  const daysToAdd = ((1 - dow) + 7) % 7;
+  return new Date(Date.UTC(year, month1to12 - 1, 1 + daysToAdd, 0, 0, 0));
+}
+
+/**
+ * ¿Estamos en o después del primer lunes del mes actual? Es la ventana
+ * en la que se muestra el banner. Antes del primer lunes, silencio;
+ * a partir del primer lunes hasta que rellenen (o fin de mes).
+ */
+export function isReportingWindowOpen(now: Date = new Date()): boolean {
+  // Extraemos año/mes del "ahora" en TZ Madrid.
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Madrid",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const y = Number(parts.find((p) => p.type === "year")?.value);
+  const m = Number(parts.find((p) => p.type === "month")?.value);
+  if (!y || !m) return false;
+  const firstMon = firstMondayOfMonth(y, m);
+  return now.getTime() >= firstMon.getTime();
+}
