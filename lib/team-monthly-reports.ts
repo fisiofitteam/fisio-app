@@ -39,8 +39,10 @@ export function monthLabel(mk: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-/** Roles del equipo a los que se les pide el reporte mensual. */
-export const REPORTING_ROLES = ["ceo", "head_success", "fisio", "setter", "closer"] as const;
+/** Roles del equipo a los que se les pide el reporte mensual.
+ *  Deliberadamente sin "ceo": Ales no se reporta a sí mismo — LEE
+ *  los reportes en el bloque de métricas de equipo del panel. */
+export const REPORTING_ROLES = ["head_success", "fisio"] as const;
 
 export function shouldSubmitReport(role: string): boolean {
   return (REPORTING_ROLES as readonly string[]).includes(role);

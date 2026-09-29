@@ -82,8 +82,25 @@ const CASOS_EXITO_SECTION = {
   icon: "🏆",
   desc: "Testimonios reales para enviar a leads",
 };
+// Reporte mensual del equipo — lo rellenan head coach y fisios (una
+// vez al mes). El CEO no lo ve aquí; lee los reportes desde el bloque
+// de métricas del equipo en el panel principal.
+const REPORTE_MENSUAL_SECTION = {
+  id: "reporte-mensual",
+  label: "Reporte mensual",
+  icon: "📝",
+  desc: "Formulario mensual del equipo (Head coach + fisios)",
+};
 
-export function LibrarySidebar({ showOnboarding = false, showCatalog = false }: { showOnboarding?: boolean; showCatalog?: boolean }) {
+export function LibrarySidebar({
+  showOnboarding = false,
+  showCatalog = false,
+  showMonthlyReport = false,
+}: {
+  showOnboarding?: boolean;
+  showCatalog?: boolean;
+  showMonthlyReport?: boolean;
+}) {
   const pathname = usePathname() ?? "";
   const sections = [
     ...SECTIONS,
@@ -92,6 +109,8 @@ export function LibrarySidebar({ showOnboarding = false, showCatalog = false }: 
     // Catálogo de movimientos y casos de éxito: solo managers (CEO/head_success).
     ...(showCatalog ? [CATALOGO_SECTION, CASOS_EXITO_SECTION] : []),
     ...(showOnboarding ? [METRICAS_SECTION, ONBOARDING_SECTION, LANDINGS_SECTION, MENSAJES_SECTION] : []),
+    // Reporte mensual: solo aparece para roles que lo tienen que rellenar.
+    ...(showMonthlyReport ? [REPORTE_MENSUAL_SECTION] : []),
   ];
 
   function isActive(id: string) {

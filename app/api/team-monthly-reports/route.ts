@@ -18,7 +18,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
-import { canReadTeamReports, monthKey, REPORT_FIELDS, shouldSubmitReport, type ReportFieldKey } from "@/lib/team-monthly-reports";
+import { canReadTeamReports, monthKey, REPORT_FIELDS, REPORTING_ROLES, shouldSubmitReport, type ReportFieldKey } from "@/lib/team-monthly-reports";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
     // También devolvemos los profesionales pendientes (para pintar el estado
     // enviado/pendiente en la vista consolidada).
     const allActive = await prisma.professional.findMany({
-      where: { active: true, role: { in: ["ceo", "head_success", "fisio", "setter", "closer"] } },
+      where: { active: true, role: { in: [...REPORTING_ROLES] } },
       select: { id: true, fullName: true, role: true, photoUrl: true },
       orderBy: { fullName: "asc" },
     });

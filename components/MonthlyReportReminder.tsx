@@ -35,7 +35,7 @@ export async function MonthlyReportReminder({
 
   return (
     <Link
-      href="/fisio/reporte-mensual"
+      href="/fisio/biblioteca/reporte-mensual"
       className="block mb-4 rounded-xl px-4 py-3 border transition hover:shadow-sm"
       style={{
         background: "linear-gradient(135deg,#FEF3C7 0%,#FDE68A 100%)",

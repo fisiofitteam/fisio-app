@@ -32,7 +32,6 @@ import {
   Sunrise,
   Bot,
   TrafficCone,
-  ClipboardList,
   LucideIcon,
 } from "lucide-react";
 
@@ -81,11 +80,6 @@ const LEAD_MAGNETS: Item = {
   href: "/fisio/contenido/lead-magnets",
   match: (p) => p.startsWith("/fisio/contenido/lead-magnets") || p.startsWith("/fisio/semaforo"),
 };
-// Reporte mensual del equipo (Google Forms migrado): "Mi reporte"
-// lo tiene TODO miembro del equipo — se rellena una vez al mes.
-// "Reportes del equipo" (agregado) lo ven CEO y head_success.
-const MI_REPORTE: Item = { id: "mi-reporte", label: "Mi reporte", Icon: ClipboardList, href: "/fisio/reporte-mensual", match: (p) => p.startsWith("/fisio/reporte-mensual") };
-const REPORTES_EQUIPO: Item = { id: "reportes-equipo", label: "Reportes equipo", Icon: ClipboardList, href: "/fisio/equipo/reportes-mensuales", match: (p) => p.startsWith("/fisio/equipo/reportes-mensuales") };
 
 function itemsForRole(role: string, opts: { withResumenes: boolean }): Item[] {
   // Managers (CEO / head_success) SIEMPRE ven "Resúmenes", aunque no
@@ -98,21 +92,21 @@ function itemsForRole(role: string, opts: { withResumenes: boolean }): Item[] {
     // CEO no ve el buzon de Alertas (lo gestionan head_success y fisios).
     // Lead magnets vive dentro de Contenido → Lead magnets, no en el
     // sidebar (para no ensuciar la navegación principal).
-    return [PANEL, PACIENTES, ...R, ADVANCE, LLAMADAS_VENTA, CONTENIDO, ANUNCIOS, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, RECURSOS, FINANZAS, EQUIPO, REPORTES_EQUIPO, MI_REPORTE, CHAT, FISIO_IA, SETTER_IA, AJUSTES];
+    return [PANEL, PACIENTES, ...R, ADVANCE, LLAMADAS_VENTA, CONTENIDO, ANUNCIOS, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, RECURSOS, FINANZAS, EQUIPO, CHAT, FISIO_IA, SETTER_IA, AJUSTES];
   }
   if (role === "head_success") {
-    return [PANEL, PACIENTES, ALERTAS, ...R, ADVANCE, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, REPORTES_EQUIPO, MI_REPORTE, CHAT, FISIO_IA, AJUSTES];
+    return [PANEL, PACIENTES, ALERTAS, ...R, ADVANCE, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, CHAT, FISIO_IA, AJUSTES];
   }
   if (role === "setter") {
     // Setter tiene Lead magnets DIRECTO en el sidebar — es su fuente
     // principal de leads entrantes.
-    return [PANEL, LEADS, PACIENTES, LEAD_MAGNETS, REGALOS, CONTENIDO, COMUNIDAD, REUNIONES, CALENDARIO, EQUIPO, MI_REPORTE, CHAT, FISIO_IA, AJUSTES];
+    return [PANEL, LEADS, PACIENTES, LEAD_MAGNETS, REGALOS, CONTENIDO, COMUNIDAD, REUNIONES, CALENDARIO, EQUIPO, CHAT, FISIO_IA, AJUSTES];
   }
   if (role === "closer") {
-    return [PANEL, LLAMADAS_VENTA, FOLLOWUP, COMUNIDAD, REUNIONES, CALENDARIO, EQUIPO, MI_REPORTE, CHAT, FISIO_IA, AJUSTES];
+    return [PANEL, LLAMADAS_VENTA, FOLLOWUP, COMUNIDAD, REUNIONES, CALENDARIO, EQUIPO, CHAT, FISIO_IA, AJUSTES];
   }
   // fisio normal
-  return [PANEL, PACIENTES, ALERTAS, ...R, ROLLING_LECTURA, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, MI_REPORTE, CHAT, FISIO_IA, AJUSTES];
+  return [PANEL, PACIENTES, ALERTAS, ...R, ROLLING_LECTURA, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, CHAT, FISIO_IA, AJUSTES];
 }
 
 const ROLE_LABEL: Record<string, string> = {

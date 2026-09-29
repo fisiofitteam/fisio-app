@@ -26,6 +26,8 @@ import { activePatientCondition } from "@/lib/patient-active";
 import { getRenewalActivityInPeriod } from "@/lib/renewals";
 import { markFormReviewed } from "./formularios-pendientes/actions";
 import { MonthlyReportReminder } from "@/components/MonthlyReportReminder";
+import { TeamMonthlyReportsBlock } from "@/components/TeamMonthlyReportsBlock";
+import { canReadTeamReports } from "@/lib/team-monthly-reports";
 
 const TYPE_LABELS: Record<string, string> = {
   optimizacion: "Optimización",
@@ -569,17 +571,20 @@ export default async function FisioPanelPage({
 
   const isoDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const teamBlock = (
-    <TeamMetricsBlock
-      period={teamPeriod}
-      periodLabel={periodLabel}
-      from={searchParams.from ?? ""}
-      to={searchParams.to ?? ""}
-      periodFrom={isoDate(periodStart)}
-      periodTo={isoDate(periodEnd)}
-      renewals={teamRenewals}
-      perFisio={perFisio}
-      satisfaction={teamSatisfaction}
-    />
+    <>
+      <TeamMetricsBlock
+        period={teamPeriod}
+        periodLabel={periodLabel}
+        from={searchParams.from ?? ""}
+        to={searchParams.to ?? ""}
+        periodFrom={isoDate(periodStart)}
+        periodTo={isoDate(periodEnd)}
+        renewals={teamRenewals}
+        perFisio={perFisio}
+        satisfaction={teamSatisfaction}
+      />
+      {canReadTeamReports(user.role) && <TeamMonthlyReportsBlock />}
+    </>
   );
 
   // === CEO con pestañas (Ventas + Métricas equipo + Finanzas) ===
