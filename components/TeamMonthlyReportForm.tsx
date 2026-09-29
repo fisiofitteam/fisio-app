@@ -129,7 +129,8 @@ export function TeamMonthlyReportForm() {
     .filter((f) => !(values[f.key] ?? "").trim())
     .map((f) => f.label);
   const missingScales = SCALE_FIELDS
-    .filter((f) => !scales[f.key])
+    // "No rellenada" = null. El 0 sí es una respuesta válida.
+    .filter((f) => scales[f.key] === null || scales[f.key] === undefined)
     .map((f) => f.label);
   const canSubmit = missingRequired.length === 0 && missingScales.length === 0;
 
@@ -177,37 +178,33 @@ export function TeamMonthlyReportForm() {
         </div>
       )}
 
-      {/* ── Escalas 1-5 (satisfacción, carga, tareas) ───────────────── */}
+      {/* ── Escalas 0-10 (satisfacción, carga, tareas) ──────────────── */}
       <section className="mb-6 rounded-xl border p-4" style={{ borderColor: "#E5E5E5", background: "#FAFAFA" }}>
         <div className="mb-3">
           <div className="text-sm font-semibold">📊 Cómo te sientes este mes</div>
           <div className="text-[11px] text-neutral-500 mt-0.5">
-            Escala 1 → 5. Van todas obligatorias — es lo que agregamos mes a mes para ver tendencias.
+            Escala 0 → 10 (10 siempre es lo mejor). Van todas obligatorias — es lo que agregamos mes a mes para ver tendencias.
           </div>
         </div>
-        <div className="space-y-3">
+        <div className="space-y-4">
           {SCALE_FIELDS.map((f) => (
-            <div key={f.key} className="flex items-start justify-between gap-3 flex-wrap">
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium">
-                  {f.label}
-                  <span className="text-red-600 ml-1">*</span>
-                </div>
-                <div className="text-[10px] text-neutral-500 mt-0.5 flex items-center gap-1.5">
-                  <span>1 · {f.low}</span>
-                  <span>—</span>
-                  <span>5 · {f.high}</span>
-                </div>
+            <div key={f.key}>
+              <div className="text-sm font-medium">
+                {f.label}
+                <span className="text-red-600 ml-1">*</span>
               </div>
-              <div className="flex gap-1 shrink-0">
-                {[1, 2, 3, 4, 5].map((n) => {
+              <div className="text-[10px] text-neutral-500 mt-0.5 mb-1.5">
+                0 · {f.low} — 10 · {f.high}
+              </div>
+              <div className="grid grid-cols-11 gap-1">
+                {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => {
                   const active = scales[f.key] === n;
                   return (
                     <button
                       key={n}
                       type="button"
                       onClick={() => updateScale(f.key, n)}
-                      className="w-9 h-9 rounded-md text-sm font-semibold border transition"
+                      className="h-9 rounded-md text-sm font-semibold border transition tabular-nums"
                       style={{
                         background: active ? "#0A0A0A" : "#FFFFFF",
                         color: active ? "#FAFAFA" : "#171717",

@@ -3,7 +3,7 @@
  * Google Forms). Un registro por profesional y mes.
  */
 /**
- * Escalas 1-5 en cabecera del formulario. Semántica: 5 siempre es mejor
+ * Escalas 0-10 en cabecera del formulario. Semántica: 10 siempre es mejor
  * (agregación consistente en el dashboard). Todas son obligatorias — sin
  * ellas no hay señal cuantitativa mes a mes.
  */

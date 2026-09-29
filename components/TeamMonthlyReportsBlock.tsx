@@ -44,12 +44,13 @@ export async function TeamMonthlyReportsBlock() {
   const pendingCount = allActive.length - submittedCount;
 
   // Promedios de las escalas del mes (solo entre las respuestas enviadas).
+  // Escala 0-10; el 0 es una respuesta válida.
   const averages: Record<ScaleFieldKey, { avg: number | null; count: number }> = SCALE_FIELDS.reduce(
     (acc, f) => ({ ...acc, [f.key]: { avg: null, count: 0 } }),
     {} as Record<ScaleFieldKey, { avg: number | null; count: number }>,
   );
   for (const f of SCALE_FIELDS) {
-    const vals = reports.map((r) => r[f.key]).filter((v): v is number => typeof v === "number" && v >= 1 && v <= 5);
+    const vals = reports.map((r) => r[f.key]).filter((v): v is number => typeof v === "number" && v >= 0 && v <= 10);
     if (vals.length > 0) {
       averages[f.key] = {
         avg: vals.reduce((a, b) => a + b, 0) / vals.length,
@@ -57,18 +58,19 @@ export async function TeamMonthlyReportsBlock() {
       };
     }
   }
+  // Umbrales para 0-10 (misma semántica: verde ≥8, amarillo ≥6, ámbar ≥4, rojo <4).
   function bgForAvg(avg: number | null): string {
     if (avg === null) return "#F5F5F5";
-    if (avg >= 4) return "#ECFDF5"; // verde
-    if (avg >= 3) return "#FEF9C3"; // amarillo suave
-    if (avg >= 2) return "#FEF3C7"; // ámbar
+    if (avg >= 8) return "#ECFDF5"; // verde
+    if (avg >= 6) return "#FEF9C3"; // amarillo suave
+    if (avg >= 4) return "#FEF3C7"; // ámbar
     return "#FEE2E2";              // rojo
   }
   function colorForAvg(avg: number | null): string {
     if (avg === null) return "#737373";
-    if (avg >= 4) return "#065F46";
-    if (avg >= 3) return "#854D0E";
-    if (avg >= 2) return "#92400E";
+    if (avg >= 8) return "#065F46";
+    if (avg >= 6) return "#854D0E";
+    if (avg >= 4) return "#92400E";
     return "#991B1B";
   }
 
@@ -105,7 +107,7 @@ export async function TeamMonthlyReportsBlock() {
                   </div>
                   <div className="text-lg font-bold tabular-nums mt-0.5" style={{ color: colorForAvg(a.avg) }}>
                     {avgStr}
-                    <span className="text-[10px] font-normal opacity-60"> /5</span>
+                    <span className="text-[10px] font-normal opacity-60"> /10</span>
                   </div>
                   <div className="text-[9px] opacity-60" style={{ color: colorForAvg(a.avg) }}>
                     {a.count} respuesta{a.count === 1 ? "" : "s"}
@@ -167,7 +169,7 @@ export async function TeamMonthlyReportsBlock() {
                         >
                           <div className="text-[9px] font-medium truncate opacity-80">{f.label}</div>
                           <div className="text-sm font-bold tabular-nums">
-                            {num === null ? "—" : `${num}/5`}
+                            {num === null ? "—" : `${num}/10`}
                           </div>
                         </div>
                       );

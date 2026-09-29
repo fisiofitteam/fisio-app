@@ -93,7 +93,8 @@ export async function POST(req: NextRequest) {
     const trimmed = raw.trim().slice(0, 5000);
     data[key] = trimmed.length > 0 ? trimmed : null;
   }
-  // Escalas 1-5. Aceptamos number o string numérica; clampeamos al rango.
+  // Escalas 0-10. Aceptamos number o string numérica; clampeamos al rango.
+  // El 0 es un valor válido — "no rellenado" se representa con null.
   const scaleData: Record<string, number | null> = {};
   for (const key of SCALE_KEYS) {
     if (!(key in body)) continue;
@@ -104,7 +105,7 @@ export async function POST(req: NextRequest) {
     }
     const n = Number(raw);
     if (!Number.isFinite(n)) continue;
-    const clamped = Math.max(1, Math.min(5, Math.round(n)));
+    const clamped = Math.max(0, Math.min(10, Math.round(n)));
     scaleData[key] = clamped;
   }
 
@@ -114,7 +115,8 @@ export async function POST(req: NextRequest) {
   const isSubmit = body?.submit === true;
   if (isSubmit) {
     const missingText = REQUIRED_FIELDS.filter((k) => !data[k]);
-    const missingScale = SCALE_KEYS.filter((k) => !(scaleData[k] ?? undefined) || (scaleData[k] as number) < 1);
+    // "No rellenada" = null. El 0 SÍ vale como respuesta (fatal absoluto).
+    const missingScale = SCALE_KEYS.filter((k) => scaleData[k] === null || scaleData[k] === undefined);
     if (missingText.length > 0 || missingScale.length > 0) {
       return NextResponse.json(
         { ok: false, error: `Faltan campos obligatorios: ${[...missingText, ...missingScale].join(", ")}` },

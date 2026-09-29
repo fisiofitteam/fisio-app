@@ -300,10 +300,10 @@ model TeamMonthlyReport {
   submittedAt    DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  // Escalas 1-5 (5 = mejor). Se guardan como Int? para poder distinguir
-  // "sin responder" (null) de "0" — aunque en la práctica 0 no es válido.
+  // Escalas 0-10 (10 = mejor). Se guardan como Int? para poder distinguir
+  // "sin responder" (null) del 0 real (fatal absoluto).
   scaleSatisfaction  Int?       // Satisfacción global con tu trabajo este mes
-  scaleWorkload      Int?       // Cómo te sientes con la carga de trabajo (5 = muy cómodo, 1 = ahogado)
+  scaleWorkload      Int?       // Cómo te sientes con la carga de trabajo (10 = muy cómodo, 0 = ahogado)
   scaleTaskWhatsapp  Int?       // Feedback / mensajes por WhatsApp
   scaleTaskAssessment Int?      // Valoraciones iniciales
   scaleTaskOptCall   Int?       // Videollamadas de optimización
