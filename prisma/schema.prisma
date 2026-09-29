@@ -285,6 +285,35 @@ model Professional {
   chatMessages              ChatMessage[]              @relation("ChatMessageAuthor")
   alertsSeen                PatientAlert[]             @relation("AlertSeenBy")
   alertsDismissed           PatientAlert[]             @relation("AlertDismissedBy")
+  monthlyReports            TeamMonthlyReport[]        @relation("TeamMonthlyReportAuthor")
+}
+
+// Reporte mensual del equipo (traído del antiguo Google Forms de
+// satisfacción). Un registro por profesional y mes. Preguntas fijas,
+// 5 obligatorias, 5 opcionales. Los ve el propio autor + CEO + head_success.
+model TeamMonthlyReport {
+  id             String       @id @default(cuid())
+  professionalId String
+  professional   Professional @relation("TeamMonthlyReportAuthor", fields: [professionalId], references: [id], onDelete: Cascade)
+  // Formato "YYYY-MM" — un reporte por profesional y mes.
+  monthYear      String
+  submittedAt    DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  // Preguntas del formulario (orden idéntico al Google Forms).
+  goodThings         String     // 4. ¿Qué ha ido bien este mes? (obligatorio)
+  badThings          String?    // 5. ¿Qué ha ido mal este mes?
+  needHelp           String?    // 6. ¿Necesitas ayuda con algún aspecto de tu trabajo?
+  personalMood       String?    // 7. A nivel personal, ¿qué tal estás?
+  patientHelp        String     // 8. ¿Hay algún paciente con el que necesites ayuda? (obligatorio)
+  callToReview       String?    // 9. ¿Alguna llamada de renovación/seguimiento que quieras que revise?
+  callLink           String?    // 10. Enlace de la llamada si aplica
+  nonRenewalReasons  String     // 11. Motivo principal de no renovaciones (obligatorio)
+  successCases       String     // 12. Casos de éxito destacados del mes (obligatorio)
+  programIdeas       String?    // 13. Mejoras a nivel de programa
+
+  @@unique([professionalId, monthYear])
+  @@index([monthYear])
 }
 
 // Condiciones laborales / compensación de un profesional (1:1). Solo CEO edita.
