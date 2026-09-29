@@ -41,7 +41,7 @@ const body = Archivo({ subsets: ["latin"], weight: ["400", "500", "600", "700"],
  *     antes de abrir wa.me.
  */
 
-type Screen = "intro" | "quiz" | "alarma" | "result" | "funnel-thanks";
+type Screen = "intro" | "quiz" | "alarma-contact" | "alarma" | "result" | "funnel-thanks";
 
 type Answers = RespuestasSemaforo;
 
@@ -460,17 +460,22 @@ export function SemaforoClient({
 
   function next() {
     const q = Q[step];
-    // Bandera roja en la primera pregunta → cortar a alarma.
+    // Bandera roja → pantalla de captura de contacto ANTES de la pantalla
+    // de alarma. Sin el contacto no tenemos forma de saber quién es y
+    // avisarle, así que en este caso lo pedimos siempre (obligatorio),
+    // independientemente del modo funnel. El cierre se hace en la
+    // pantalla de contacto tras rellenarlo — no aquí.
     if (q.id === "seguridad") {
       const banderas = (answers.seguridad ?? []).filter((v) => v !== "ninguna");
       if (banderas.length > 0) {
+        // Guardamos progreso normal (aún abierto) para no perder respuestas
+        // si abandonan la pantalla de contacto.
         patchProgress({
           respuestas: answers as Record<string, unknown>,
           ultimoPaso: step,
-          cerrar: "alarma",
           banderas,
         });
-        setScreen("alarma");
+        setScreen("alarma-contact");
         return;
       }
     }
@@ -506,6 +511,30 @@ export function SemaforoClient({
       ultimoPaso: nextStep,
     });
     setStep(nextStep);
+  }
+
+  /**
+   * Cerrar como ALARMA con el contacto obligatorio recogido en la
+   * pantalla "alarma-contact". Un solo patch atómico para evitar el
+   * mismo race que el bug de 2026-09-25.
+   */
+  function submitAlarmContact() {
+    const banderas = (answers.seguridad ?? []).filter((v) => v !== "ninguna");
+    const country = findCountry(finalCountryLabel);
+    const fullPhone = finalContact.trim()
+      ? `${country?.dialCode ?? ""} ${finalContact.trim()}`.trim()
+      : null;
+    const igClean = finalInstagram.trim().replace(/^@+/, "") || null;
+    patchProgress({
+      respuestas: answers as Record<string, unknown>,
+      ultimoPaso: step,
+      nombre: finalName?.trim() || null,
+      instagram: igClean,
+      telefono: fullPhone,
+      cerrar: "alarma",
+      banderas,
+    });
+    setScreen("alarma");
   }
 
   // ─── WhatsApp click ─────────────────────────────────────────────
@@ -556,6 +585,19 @@ export function SemaforoClient({
               // una sola petición atómica (ver next() arriba). Este callback
               // se mantiene para compat de firma.
             }}
+          />
+        )}
+        {screen === "alarma-contact" && (
+          <AlarmContactScreen
+            finalName={finalName}
+            setFinalName={setFinalName}
+            finalInstagram={finalInstagram}
+            setFinalInstagram={setFinalInstagram}
+            finalContact={finalContact}
+            setFinalContact={setFinalContact}
+            finalCountryLabel={finalCountryLabel}
+            setFinalCountryLabel={setFinalCountryLabel}
+            onSubmit={submitAlarmContact}
           />
         )}
         {screen === "alarma" && (
@@ -871,9 +913,13 @@ function FinalTextStep({
   }, [finalName]);
 
   const country = findCountry(finalCountryLabel);
+  // Instagram siempre obligatorio y con formato válido (2+ chars alfanum,
+  // '.' o '_'). Si escriben solo "@" o basura, no dejamos pasar — sin
+  // Instagram no tenemos manera de contactarles.
+  const igValid = sanitizeInstagram(finalInstagram) !== null;
   const canContinue = quizFunnelMode
-    ? Boolean(finalName.trim() && finalInstagram.trim() && finalContact.trim())
-    : Boolean(finalName.trim() && finalInstagram.trim());
+    ? Boolean(finalName.trim() && igValid && finalContact.trim())
+    : Boolean(finalName.trim() && igValid);
 
   return (
     <>
@@ -969,6 +1015,101 @@ function FunnelThanksScreen({
       <footer className="sf-footer">
         <a href="https://instagram.com/fisiofitteam" target="_blank" rel="noopener">@fisiofitteam</a>
       </footer>
+    </>
+  );
+}
+
+// ═══════════ Alarma · Captura de contacto ═══════════
+//
+// Se muestra ANTES de la pantalla de alarma cuando el usuario marca
+// banderas rojas. Sin nombre + Instagram + WhatsApp no podemos avisarle,
+// así que aquí son OBLIGATORIOS aunque el modo funnel esté desactivado.
+
+function AlarmContactScreen({
+  finalName, setFinalName,
+  finalInstagram, setFinalInstagram,
+  finalContact, setFinalContact,
+  finalCountryLabel, setFinalCountryLabel,
+  onSubmit,
+}: {
+  finalName: string; setFinalName: (s: string) => void;
+  finalInstagram: string; setFinalInstagram: (s: string) => void;
+  finalContact: string; setFinalContact: (s: string) => void;
+  finalCountryLabel: string; setFinalCountryLabel: (s: string) => void;
+  onSubmit: () => void;
+}) {
+  const country = findCountry(finalCountryLabel);
+  const igValid = sanitizeInstagram(finalInstagram) !== null;
+  const canSubmit = Boolean(finalName.trim() && igValid && finalContact.trim());
+  return (
+    <>
+      <header className="sf-hero">
+        <div className="sf-brand"><span className="sf-brand-accent">FisioFitCross</span></div>
+        <div className="sf-res-head">
+          <TrafficLight on="r" big />
+          <div>
+            <div className="sf-verdict r">Para aquí un momento</div>
+            <h2>Necesitamos saber quién eres para responderte</h2>
+          </div>
+        </div>
+      </header>
+      <section className="sf-card">
+        <p style={{ marginTop: 0 }}>
+          Por lo que has marcado, <strong>Ales te va a escribir personalmente</strong> — nada de listas ni bots.
+          Déjanos tu contacto y te llegará el mensaje en menos de 24 horas.
+        </p>
+        <input
+          className="sf-field"
+          type="text"
+          autoComplete="given-name"
+          placeholder="Tu nombre"
+          value={finalName}
+          onChange={(e) => setFinalName(e.target.value)}
+          maxLength={80}
+        />
+        <input
+          className="sf-field"
+          style={{ marginTop: 12 }}
+          type="text"
+          autoComplete="username"
+          placeholder="@tu_usuario_instagram"
+          value={finalInstagram}
+          onChange={(e) => setFinalInstagram(e.target.value)}
+          maxLength={40}
+        />
+        <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "auto 1fr", gap: 8 }}>
+          <div className="sf-country-select">
+            <select
+              value={finalCountryLabel}
+              onChange={(e) => setFinalCountryLabel(e.target.value)}
+              aria-label="País"
+            >
+              {COUNTRIES.map((c) => (
+                <option key={c.iso2 || c.label} value={c.label}>
+                  {countryFlag(c.iso2)} {c.label} {c.dialCode}
+                </option>
+              ))}
+            </select>
+          </div>
+          <input
+            className="sf-field"
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel-national"
+            placeholder={`${country?.dialCode ?? "+34"} 600 000 000`}
+            value={finalContact}
+            onChange={(e) => setFinalContact(e.target.value)}
+            maxLength={40}
+            style={{ marginTop: 0 }}
+          />
+        </div>
+        <p className="sf-small" style={{ marginTop: 8 }}>
+          Datos obligatorios — sin ellos no podemos contactarte con tu resultado.
+        </p>
+      </section>
+      <button className="sf-btn sf-next" disabled={!canSubmit} onClick={onSubmit}>
+        Enviar y ver siguientes pasos
+      </button>
     </>
   );
 }

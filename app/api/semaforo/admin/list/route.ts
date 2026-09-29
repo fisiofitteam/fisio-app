@@ -211,6 +211,17 @@ export async function GET(req: NextRequest) {
     pct: alarmBucket.length > 0 ? Math.round((alarmClicks / alarmBucket.length) * 100) : 0,
   };
 
+  // CTR total: cualquier respuesta que llegó a una pantalla con botón de
+  // WhatsApp (los 3 colores completados + la de alarma) y clicó el CTA.
+  // Es el KPI que se muestra arriba en el header del panel.
+  const ctrTotalDenom = ctrByColor.VERDE.total + ctrByColor.AMBAR.total + ctrByColor.ROJO.total + ctrAlarma.total;
+  const ctrTotalClicks = ctrByColor.VERDE.clicks + ctrByColor.AMBAR.clicks + ctrByColor.ROJO.clicks + ctrAlarma.clicks;
+  const ctrTotal = {
+    total: ctrTotalDenom,
+    clicks: ctrTotalClicks,
+    pct: ctrTotalDenom > 0 ? Math.round((ctrTotalClicks / ctrTotalDenom) * 100) : 0,
+  };
+
   // Gráfico de abandono: cuántos EN_CURSO se quedaron en cada paso.
   const abandonoRaw = new Map<number, number>();
   for (const r of rows) {
@@ -234,6 +245,7 @@ export async function GET(req: NextRequest) {
       colorCount,
       ctrByColor,
       ctrAlarma,
+      ctrTotal,
       abandono,
     },
   });

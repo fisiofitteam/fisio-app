@@ -39,6 +39,7 @@ type Kpis = {
   pctCompletado: number;
   colorCount: { VERDE: number; AMBAR: number; ROJO: number };
   ctrByColor: Record<string, { total: number; clicks: number; pct: number }>;
+  ctrTotal: { total: number; clicks: number; pct: number };
   ctrAlarma: { total: number; clicks: number; pct: number };
   abandono: { step: number; title: string; count: number }[];
 };
@@ -302,9 +303,9 @@ export function SemaforoPanel({
             <Tile label="Alarmas" value={kpis.alarmas} color={kpis.alarmas > 0 ? "#DC2626" : undefined} />
             <Tile label="Verde / Ámbar / Rojo"
               value={`${kpis.colorCount.VERDE} · ${kpis.colorCount.AMBAR} · ${kpis.colorCount.ROJO}`} />
-            <Tile label="CTR WhatsApp (rojo)"
-              value={`${kpis.ctrByColor.ROJO?.pct ?? 0}%`}
-              hint={`${kpis.ctrByColor.ROJO?.clicks ?? 0}/${kpis.ctrByColor.ROJO?.total ?? 0}`} />
+            <Tile label="CTR WhatsApp (total)"
+              value={`${kpis.ctrTotal?.pct ?? 0}%`}
+              hint={`${kpis.ctrTotal?.clicks ?? 0}/${kpis.ctrTotal?.total ?? 0} · verde+ámbar+rojo+alarma`} />
           </div>
 
           {/* CTR por color en detalle */}
