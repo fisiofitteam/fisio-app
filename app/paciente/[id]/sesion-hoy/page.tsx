@@ -66,9 +66,14 @@ export default async function SesionHoyPage({ params, searchParams }: { params: 
       && week.sessions.some((s) => s.sessionIndex === requestedIndex)
       ? requestedIndex
       : null;
+    // Default cuando no viene ?session en la URL:
+    //  - Si la semana aún tiene sesiones pendientes → la siguiente (nextIndex).
+    //  - Si todas están completadas → la primera (sessionIndex=1), para
+    //    que el atleta pueda revisarlas de nuevo en orden desde el principio
+    //    si entra directo al "Sesión de hoy" sin pasar por la vista semana.
     const targetIndex = validRequested
       ?? week.nextIndex
-      ?? week.sessions[week.sessions.length - 1]?.sessionIndex
+      ?? week.sessions[0]?.sessionIndex
       ?? null;
     const target = targetIndex ? week.sessions.find((s) => s.sessionIndex === targetIndex) ?? null : null;
 
@@ -126,36 +131,48 @@ export default async function SesionHoyPage({ params, searchParams }: { params: 
               Semana {week.completedCount}/{week.totalCount} completada
             </div>
             <h1 className="text-3xl font-bold flex items-center gap-2" style={{ letterSpacing: "-0.03em" }}>
-              {week.allCompleted
-                ? <>🎉 ¡Semana completada!</>
-                : target
-                  ? <>💪 Sesión {target.sessionIndex}</>
+              {target
+                ? <>💪 Sesión {target.sessionIndex}</>
+                : week.allCompleted
+                  ? <>🎉 ¡Semana completada!</>
                   : <>💪 Aún no hay sesiones programadas</>}
             </h1>
-            {!week.allCompleted && target?.completed && (
+            {target?.completed && (
               <p className="text-xs mt-1" style={{ color: "var(--p-text-dim)" }}>
-                Ya la marcaste como completada — puedes editar tus sensaciones.
+                Ya la marcaste como completada — puedes revisarla y editar tus sensaciones.
               </p>
             )}
           </header>
 
+          {/* Banner de celebración cuando la semana está entera completada.
+              Se muestra ARRIBA, no sustituye al contenido: el atleta sigue
+              pudiendo abrir cualquier sesión para repasarla. */}
           {week.allCompleted && (
             <section
-              className="rounded-2xl p-5 text-center py-8"
+              className="rounded-2xl p-4 mb-4 flex items-start gap-3"
               style={{
                 background: "var(--p-green-bg)",
                 border: "1px solid var(--p-green-border)",
                 color: "var(--p-green-text)",
               }}
             >
-              <CheckCircle2 size={32} className="mx-auto mb-2" />
-              <p className="text-sm">
+              <CheckCircle2 size={22} className="flex-shrink-0 mt-0.5" />
+              <div className="text-sm flex-1">
                 Has completado las {week.totalCount} sesiones de esta semana. El lunes tendrás nuevas.
-              </p>
+                <div className="mt-1.5">
+                  <Link
+                    href={`/paciente/${patient.id}/semana-completa`}
+                    className="text-xs underline"
+                    style={{ color: "var(--p-green-text)" }}
+                  >
+                    Ver todas las sesiones de la semana →
+                  </Link>
+                </div>
+              </div>
             </section>
           )}
 
-          {!week.allCompleted && target && (
+          {target && (
             <>
               {accTasks.length > 0 && (
                 <SectionBlock label="Accesorios" color="#3B82F6" tasks={accTasks} />
@@ -166,7 +183,7 @@ export default async function SesionHoyPage({ params, searchParams }: { params: 
             </>
           )}
 
-          {hasAny && !week.allCompleted && target && (
+          {hasAny && target && (
             <section className="mt-6">
               <div className="text-[10px] font-bold tracking-wider uppercase mb-2" style={{ color: "var(--p-text-faint)" }}>
                 🏁 Al terminar
@@ -180,7 +197,7 @@ export default async function SesionHoyPage({ params, searchParams }: { params: 
             </section>
           )}
 
-          {(hasAny || week.allCompleted) && (
+          {hasAny && (
             <section className="mt-6">
               <div className="text-[10px] font-bold tracking-wider uppercase mb-2" style={{ color: "var(--p-text-faint)" }}>
                 ✍️ ¿Cómo te ha ido?
