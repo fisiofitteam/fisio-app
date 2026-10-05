@@ -99,9 +99,18 @@ export default async function FisioPanelPage({
     periodStart = r.start; periodEnd = r.end; periodLabel = r.label;
   }
 
-  // KPIs excluyen pacientes fantasma (isTest=true) — el listado
-  // /fisio/pacientes sigue mostrandolos con badge, aqui no cuentan.
-  const patientWhere: any = isManager ? { isTest: false } : { isTest: false, assignedProfessionalId: user.id };
+  // KPIs excluyen:
+  //   · Pacientes fantasma (isTest=true) — el listado /fisio/pacientes
+  //     sigue mostrándolos con badge, aquí no cuentan.
+  //   · Terminados — vía activePatientCondition(): tienen al menos un
+  //     SubscriptionRenewal con status "active" y endDate futuro.
+  //     Esto arregla el descuadre antiguo: antes solo filtrábamos
+  //     isTest, y "Pacientes totales" acababa muy por encima del
+  //     número de activos de Capacidad operativa (que usa el mismo
+  //     criterio de renewal vigente).
+  const patientWhere: any = isManager
+    ? { isTest: false, ...activePatientCondition() }
+    : { isTest: false, assignedProfessionalId: user.id, ...activePatientCondition() };
   const patients = await prisma.patient.findMany({ where: patientWhere, orderBy: { fullName: "asc" } });
 
   // Tareas: excluimos las asociadas a pacientes fantasma (isTest). Las
@@ -247,8 +256,8 @@ export default async function FisioPanelPage({
   const detailMyPatients: KpiDetail = {
     title: isManager ? "Pacientes totales" : "Mis pacientes",
     description: isManager
-      ? `${patients.length} activos (excluye Prevention, fantasma y terminados).`
-      : `${patients.length} pacientes asignados actualmente.`,
+      ? `${patients.length} activos (con renewal vigente; excluye fantasma y terminados). Mismo criterio que Capacidad operativa.`
+      : `${patients.length} pacientes activos asignados a ti.`,
     rows: [...patients]
       .sort((a, b) => a.fullName.localeCompare(b.fullName))
       .map((p) => ({
