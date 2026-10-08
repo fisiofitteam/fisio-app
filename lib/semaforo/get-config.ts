@@ -1,13 +1,20 @@
 /**
- * Helper para leer la config del semáforo (singleton). Si la tabla no
+ * Helper para leer la config del Semáforo por `tipo`. Si la tabla no
  * existe todavía o el registro no está creado, devuelve valores por
  * defecto — así la landing pública nunca se cae aunque no hayamos
  * migrado aún.
+ *
+ * Antes de la generalización multi-zona, la tabla era singleton
+ * (id = "singleton"). Ahora cada tipo tiene su propia fila con el
+ * id igual al slug ("hombro", "lumbar"). La migración se encarga de
+ * convertir la fila "singleton" existente en la de "hombro".
  */
 import { prisma } from "@/lib/prisma";
 import { VIDEO_URLS } from "@/lib/semaforo/config";
+import { parseTipo, type SemaforoTipo } from "@/lib/semaforo/tipos";
 
 export type SemaforoConfig = {
+  tipo: SemaforoTipo;
   quizFunnelEnabled: boolean;
   funnelWhatsappTemplate: string;
   videoUrls: Record<"verde" | "ambar" | "rojo" | "alarma", string>;
@@ -18,7 +25,7 @@ export type SemaforoConfig = {
 // verdict — la setter no necesita añadir nada, solo pulsar enviar.
 export const DEFAULT_FUNNEL_TEMPLATE = `¡Hola {{nombre}}! Soy Ales de FisioFitCross.
 
-Vi que hiciste el Semáforo del Hombro y te ha salido *{{color}}*:
+Vi que hiciste el Semáforo y te ha salido *{{color}}*:
 {{color_titulo}}
 
 Lo que interpretamos de tu resultado:
@@ -28,21 +35,35 @@ Sobre los movimientos que ahora te dan guerra ({{movimientos_problema}}), te cue
 
 ¿Cuando puedas seguimos por aquí?`;
 
-const DEFAULT: SemaforoConfig = {
-  quizFunnelEnabled: false,
-  funnelWhatsappTemplate: DEFAULT_FUNNEL_TEMPLATE,
-  // Los defaults de vídeo vienen de la constante VIDEO_URLS (típicamente
-  // vacíos). La DB los sobreescribe cuando el CEO los define en el panel.
-  videoUrls: { ...VIDEO_URLS },
-};
+function defaultFor(tipo: SemaforoTipo): SemaforoConfig {
+  return {
+    tipo,
+    quizFunnelEnabled: false,
+    funnelWhatsappTemplate: DEFAULT_FUNNEL_TEMPLATE,
+    videoUrls: { ...VIDEO_URLS },
+  };
+}
 
-export async function getSemaforoConfig(): Promise<SemaforoConfig> {
+/**
+ * Lee la config de un tipo concreto. Hace un primer intento buscando por
+ * `tipo` (schema nuevo multi-zona) y cae al legacy `id="singleton"`
+ * cuando el tipo pedido es "hombro" (compat con la fila original).
+ */
+export async function getSemaforoConfig(tipoInput: unknown = "hombro"): Promise<SemaforoConfig> {
+  const tipo = parseTipo(tipoInput);
   try {
-    const row = await (prisma as any).semaforoConfig.findUnique({ where: { id: "singleton" } });
-    if (!row) return DEFAULT;
+    let row = await (prisma as any).semaforoConfig.findFirst({ where: { tipo } });
+    // Fallback: la primera migración mantuvo la fila con id="singleton"
+    // antes del backfill a tipo="hombro". Si no la encontramos por tipo
+    // y es la del hombro, intentamos por el id legacy.
+    if (!row && tipo === "hombro") {
+      row = await (prisma as any).semaforoConfig.findUnique({ where: { id: "singleton" } });
+    }
+    if (!row) return defaultFor(tipo);
     return {
+      tipo,
       quizFunnelEnabled: !!row.quizFunnelEnabled,
-      funnelWhatsappTemplate: row.funnelWhatsappTemplate || DEFAULT.funnelWhatsappTemplate,
+      funnelWhatsappTemplate: row.funnelWhatsappTemplate || DEFAULT_FUNNEL_TEMPLATE,
       videoUrls: {
         verde: (row.videoUrlVerde as string | null) || VIDEO_URLS.verde,
         ambar: (row.videoUrlAmbar as string | null) || VIDEO_URLS.ambar,
@@ -52,6 +73,6 @@ export async function getSemaforoConfig(): Promise<SemaforoConfig> {
     };
   } catch {
     // Tabla o columnas no existen (migración pendiente) → default.
-    return DEFAULT;
+    return defaultFor(tipo);
   }
 }

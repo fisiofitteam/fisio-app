@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { sanitizeInstagram, sanitizeCampaign, CONSENT_VERSION } from "@/lib/semaforo/config";
 import { getClientIp, maybeCleanupBuckets, rateLimit } from "@/lib/semaforo/rate-limit";
+import { parseTipo } from "@/lib/semaforo/tipos";
 
 /**
  * POST /api/semaforo — crea el registro al pulsar "Empezar el test".
@@ -20,6 +21,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const CreateSchema = z.object({
+  // Zona corporal del test. Default "hombro" por compat con la landing
+  // original. parseTipo() se encarga de validarlo contra el catálogo.
+  tipo: z.string().optional().nullable(),
   instagram: z.string().optional().nullable(),
   campana: z.string().optional().nullable(),
   // z.literal(true) obliga a que sea === true.
@@ -53,10 +57,12 @@ export async function POST(req: NextRequest) {
 
   const instagram = sanitizeInstagram(parsed.data.instagram);
   const campana = sanitizeCampaign(parsed.data.campana);
+  const tipo = parseTipo(parsed.data.tipo);
   const userAgent = req.headers.get("user-agent")?.slice(0, 500) ?? null;
 
   const created = await prisma.semaforoRespuesta.create({
     data: {
+      tipo,
       instagram,
       campana,
       estado: "EN_CURSO",
@@ -66,7 +72,7 @@ export async function POST(req: NextRequest) {
       consentimientoAt: new Date(),
       consentimientoVersion: CONSENT_VERSION,
       userAgent,
-    },
+    } as any,
     select: { id: true },
   });
 

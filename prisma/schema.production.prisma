@@ -1207,6 +1207,9 @@ model SemaforoRespuesta {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
+  // Zona corporal del test ("hombro" default por compat, "lumbar", …).
+  tipo                  String   @default("hombro")
+
   // Identificación. Si viene de Instagram (Skalex), ig llega por
   // querystring; si no, el paso final del test pide nombre + contacto.
   instagram             String?
@@ -1250,6 +1253,7 @@ model SemaforoRespuesta {
   @@index([estado])
   @@index([instagram])
   @@index([leadId])
+  @@index([tipo])
 }
 
 model VideoLibrary {
@@ -3997,11 +4001,15 @@ model StoryIdea {
 // o como QUIZ FUNNEL (pide teléfono con selector país, muestra pantalla de
 // "gracias" en vez del resultado, la setter contacta manualmente).
 model SemaforoConfig {
+  // Config independiente por zona del semáforo (hombro, lumbar, ...).
+  // El `id` se mantiene como PK por compat; los endpoints lo pueblan
+  // igual que `tipo`. `tipo` también tiene unique para evitar duplicados.
   id                     String   @id @default("singleton")
+  tipo                   String   @default("hombro") @unique
   quizFunnelEnabled      Boolean  @default(false)
   // Template WhatsApp del CRM cuando la setter clica "Contactar".
   // Placeholders: {{nombre}}, {{color}}, {{movimientos_problema}}.
-  funnelWhatsappTemplate String   @default("¡Hola {{nombre}}! Vi que hiciste el Semáforo del Hombro y te salió {{color}}. Te escribo yo directamente para explicarte qué significa y qué hacer con {{movimientos_problema}}.")
+  funnelWhatsappTemplate String   @default("¡Hola {{nombre}}! Vi que hiciste el Semáforo y te salió {{color}}. Te escribo yo directamente para explicarte qué significa y qué hacer con {{movimientos_problema}}.")
   // URLs de YouTube que se pintan en la pantalla del resultado según
   // el color del lead. Acepta watch (?v=), embed y short. Vacío = no
   // se pinta vídeo. Editables por el CEO desde el panel del semáforo.

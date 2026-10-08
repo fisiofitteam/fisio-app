@@ -25,6 +25,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type Params = {
+  tipo: string;
   from?: Date;
   to?: Date;
   color?: "VERDE" | "AMBAR" | "ROJO";
@@ -36,7 +37,9 @@ type Params = {
 };
 
 function parseParams(url: URL): Params {
-  const p: Params = {};
+  // tipo default "hombro" por compat con el panel original (sin ?tipo).
+  const rawTipo = url.searchParams.get("tipo");
+  const p: Params = { tipo: rawTipo && /^[a-z]{3,20}$/.test(rawTipo) ? rawTipo : "hombro" };
   const from = url.searchParams.get("from");
   const to = url.searchParams.get("to");
   if (from && /^\d{4}-\d{2}-\d{2}$/.test(from)) p.from = new Date(from + "T00:00:00Z");
@@ -64,7 +67,7 @@ function parseParams(url: URL): Params {
 }
 
 function buildWhere(p: Params) {
-  const where: any = {};
+  const where: any = { tipo: p.tipo };
   if (p.from || p.to) {
     where.createdAt = {};
     if (p.from) where.createdAt.gte = p.from;
