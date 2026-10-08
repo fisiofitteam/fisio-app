@@ -214,12 +214,7 @@ model Professional {
   id        String   @id @default(cuid())
   fullName  String
   email     String?  @unique
-  role      String                                     // "ceo" | "head_success" | "fisio" | "setter" | "closer" — rol principal
-  // Roles adicionales. Mismo vocabulario que `role`. Útil para gente
-  // que combina dos cargos (ej. una fisio que además cierra ventas).
-  // Los helpers de autorización (hasRole / allRoles en lib/auth) hacen
-  // la unión: `role` + `extraRoles` sin duplicados.
-  extraRoles String[] @default([])
+  role      String                                     // "ceo" | "head_success" | "fisio" | "setter" | "closer"
   createdAt DateTime @default(now())
 
   // Auth: hash de contraseña bcrypt; null si aún no la ha establecido (recién invitado)

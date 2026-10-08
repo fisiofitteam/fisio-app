@@ -93,18 +93,9 @@ export async function computeCapacityReport(): Promise<CapacityReport> {
   const config = await getOpsConfig();
   const now = new Date();
 
-  // 1) Coaches — fisios + head_success activos, incluyendo a quienes
-  //    tengan esos cargos como rol adicional (ej. closer que a la vez
-  //    es fisio). Si la columna extraRoles no está migrada todavía en
-  //    la BD la query lo tolera: el OR entra por la primera rama.
+  // 1) Coaches — fisios + head_success activos.
   const coaches = await prisma.professional.findMany({
-    where: {
-      active: true,
-      OR: [
-        { role: { in: ["fisio", "head_success"] } },
-        { extraRoles: { hasSome: ["fisio", "head_success"] } },
-      ],
-    },
+    where: { role: { in: ["fisio", "head_success"] }, active: true },
     orderBy: [{ role: "desc" }, { fullName: "asc" }],
     select: { id: true, fullName: true, role: true, photoUrl: true, maxPatients: true },
   });

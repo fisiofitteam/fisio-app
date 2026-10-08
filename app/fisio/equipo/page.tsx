@@ -26,7 +26,7 @@ export default async function EquipoPage({
   const pros = await prisma.professional.findMany({
     orderBy: [{ active: "desc" }, { fullName: "asc" }],
     select: {
-      id: true, fullName: true, email: true, role: true, extraRoles: true, active: true,
+      id: true, fullName: true, email: true, role: true, active: true,
       passwordHash: true, passwordResetToken: true, passwordResetExpires: true,
       lastLoginAt: true, workSchedule: true,
     },
@@ -38,7 +38,6 @@ export default async function EquipoPage({
     fullName: p.fullName,
     email: p.email,
     role: p.role,
-    extraRoles: (p as any).extraRoles ?? [],
     active: p.active,
     hasPassword: !!p.passwordHash,
     pendingInvite: !p.passwordHash && !!p.passwordResetToken && !!p.passwordResetExpires && p.passwordResetExpires > now,

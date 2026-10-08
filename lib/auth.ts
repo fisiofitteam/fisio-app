@@ -10,36 +10,12 @@ export type ActiveProfessional = {
   email: string | null;
   photoUrl: string | null;
   role: Role;
-  // Roles adicionales que esta persona desempeña además del principal
-  // (ej. una fisio que también cierra ventas tendrá role="fisio" y
-  // extraRoles=["closer"]). Siempre son del mismo vocabulario que Role.
-  extraRoles: Role[];
   isManager: boolean;
   canSeeLeads: boolean;
   canEditLeads: boolean;
   // true cuando el CEO está viendo el panel como este miembro (superadmin)
   impersonating?: boolean;
 };
-
-/**
- * Lista única de roles que desempeña el usuario (principal + extras).
- * Es el input canónico para componer sidebar, permisos y filtros de
- * datos cuando una persona combina cargos.
- */
-export function allRoles(user: ActiveProfessional): Role[] {
-  const set = new Set<Role>([user.role, ...user.extraRoles]);
-  return Array.from(set);
-}
-
-/** True si el usuario tiene este rol (principal o adicional). */
-export function hasRole(user: ActiveProfessional, role: Role): boolean {
-  return user.role === role || user.extraRoles.includes(role);
-}
-
-/** True si el usuario tiene AL MENOS UNO de los roles pedidos. */
-export function hasAnyRole(user: ActiveProfessional, roles: Role[]): boolean {
-  return roles.some((r) => hasRole(user, r));
-}
 
 export type ActivePatient = {
   id: string;
@@ -240,26 +216,18 @@ export async function getRealSessionUser(): Promise<SessionUser | null> {
   return null;
 }
 
-function toActivePro(pro: { id: string; fullName: string; email: string | null; role: string; extraRoles?: string[] | null; photoUrl?: string | null }): ActiveProfessional {
+function toActivePro(pro: { id: string; fullName: string; email: string | null; role: string; photoUrl?: string | null }): ActiveProfessional {
   const role = pro.role as Role;
-  const extraRoles = (pro.extraRoles ?? [])
-    .filter((r): r is string => typeof r === "string" && r !== role)
-    .map((r) => r as Role);
-  // Union para los helpers derivados (isManager, canSeeLeads, …): si el
-  // usuario tiene cualquiera de los roles válidos (principal o extra),
-  // hereda las capacidades asociadas a ese rol.
-  const effectiveRoles = new Set<Role>([role, ...extraRoles]);
-  const isManager = effectiveRoles.has("ceo") || effectiveRoles.has("head_success");
+  const isManager = role === "ceo" || role === "head_success";
   return {
     id: pro.id,
     fullName: pro.fullName,
     email: pro.email,
     photoUrl: pro.photoUrl ?? null,
     role,
-    extraRoles,
     isManager,
-    canSeeLeads: isManager || effectiveRoles.has("setter") || effectiveRoles.has("closer"),
-    canEditLeads: isManager || effectiveRoles.has("setter"),
+    canSeeLeads: isManager || role === "setter" || role === "closer",
+    canEditLeads: isManager || role === "setter",
   };
 }
 
