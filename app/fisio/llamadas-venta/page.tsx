@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
+import { hasAnyRole } from "@/lib/auth";
 import { CallsListView } from "@/components/CallsListView";
 import { FollowUpView } from "@/components/FollowUpView";
 import { parseTargetRoles, templateVisibleFor, type ResourceRole } from "@/lib/resource-roles";
@@ -11,7 +12,9 @@ export default async function LlamadasVentaPage({
   searchParams: { status?: string; closer?: string; view?: string };
 }) {
   const user = (await getActiveProfessional())!;
-  if (user.role !== "ceo" && user.role !== "closer" && user.role !== "setter") redirect("/fisio");
+  // Admite tanto rol principal como extraRoles — gente que combina
+  // cargos (p.ej. una fisio que además cierra) entra por sus extras.
+  if (!hasAnyRole(user, ["ceo", "closer", "setter"])) redirect("/fisio");
 
   const status = ["scheduled", "won", "lost", "cancelled", "no_show"].includes(searchParams.status ?? "")
     ? searchParams.status!

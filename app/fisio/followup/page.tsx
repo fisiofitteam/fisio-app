@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
+import { hasAnyRole } from "@/lib/auth";
 import { FollowUpView } from "@/components/FollowUpView";
 
 export default async function FollowUpPage({
@@ -9,7 +10,8 @@ export default async function FollowUpPage({
   searchParams: { closer?: string };
 }) {
   const user = (await getActiveProfessional())!;
-  if (user.role !== "ceo" && user.role !== "closer") redirect("/fisio");
+  // Admite extraRoles: una fisio con closer como rol extra puede entrar aquí.
+  if (!hasAnyRole(user, ["ceo", "closer"])) redirect("/fisio");
 
   const closers = await prisma.professional.findMany({
     where: { role: { in: ["ceo", "closer"] } },
