@@ -9,8 +9,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
+import { hasAnyRole, type Role } from "@/lib/auth";
 
-const ALLOWED_ROLES = ["ceo", "setter", "closer", "head_success"];
+const ALLOWED_ROLES: Role[] = ["ceo", "setter", "closer", "head_success"];
 
 function timeToMinutes(hhmm: string): number {
   const [h, m] = hhmm.split(":").map((n) => parseInt(n, 10));
@@ -20,7 +21,7 @@ function timeToMinutes(hhmm: string): number {
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  if (!ALLOWED_ROLES.includes(user.role)) {
+  if (!hasAnyRole(user, ALLOWED_ROLES)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -51,7 +52,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  if (!ALLOWED_ROLES.includes(user.role)) {
+  if (!hasAnyRole(user, ALLOWED_ROLES)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   await prisma.closingShift.delete({ where: { id: params.id } });

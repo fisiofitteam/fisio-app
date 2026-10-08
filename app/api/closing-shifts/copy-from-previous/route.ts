@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
+import { hasAnyRole } from "@/lib/auth";
 import { weekStartOf } from "@/lib/scheduleResolver";
 
 /**
@@ -13,7 +14,7 @@ import { weekStartOf } from "@/lib/scheduleResolver";
 export async function POST(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  if (!["ceo", "closer", "setter"].includes(user.role)) {
+  if (!hasAnyRole(user, ["ceo", "closer", "setter"])) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

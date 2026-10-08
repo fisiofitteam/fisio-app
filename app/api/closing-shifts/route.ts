@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
+import { hasAnyRole, type ActiveProfessional } from "@/lib/auth";
 import { timeToMinutes, weekStartOf } from "@/lib/scheduleResolver";
 
 /**
  * Permisos:
- *  - VER y EDITAR: ceo, closer, setter
- *  - NO acceden: head_success, fisio
+ *  - VER y EDITAR: ceo, closer, setter (en rol principal O extraRoles).
+ *  - NO acceden: head_success, fisio.
  */
-function canManage(role: string): boolean {
-  return role === "ceo" || role === "closer" || role === "setter";
+function canManage(user: ActiveProfessional): boolean {
+  return hasAnyRole(user, ["ceo", "closer", "setter"]);
 }
 
 // ============================================================================
@@ -19,7 +20,7 @@ function canManage(role: string): boolean {
 export async function GET(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  if (!canManage(user.role)) {
+  if (!canManage(user)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -59,7 +60,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  if (!canManage(user.role)) {
+  if (!canManage(user)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -146,7 +147,7 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  if (!canManage(user.role)) {
+  if (!canManage(user)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -216,7 +217,7 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  if (!canManage(user.role)) {
+  if (!canManage(user)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

@@ -6,14 +6,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
+import { hasAnyRole, type Role } from "@/lib/auth";
 import { weekStartOf } from "@/lib/agendaTemplate";
 
-const ALLOWED_ROLES = ["ceo", "setter", "closer", "head_success"];
+const ALLOWED_ROLES: Role[] = ["ceo", "setter", "closer", "head_success"];
 
 export async function GET(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  if (!ALLOWED_ROLES.includes(user.role)) {
+  if (!hasAnyRole(user, ALLOWED_ROLES)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -77,7 +78,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  if (!ALLOWED_ROLES.includes(user.role)) {
+  if (!hasAnyRole(user, ALLOWED_ROLES)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -136,7 +137,7 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  if (!ALLOWED_ROLES.includes(user.role)) {
+  if (!hasAnyRole(user, ALLOWED_ROLES)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
