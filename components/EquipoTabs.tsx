@@ -61,6 +61,7 @@ export function EquipoTabs({
   activeTab,
   isManager,
   currentUserRole,
+  currentUserExtraRoles = [],
   currentUserId,
   team,
   leaves,
@@ -69,6 +70,7 @@ export function EquipoTabs({
   activeTab: string;
   isManager: boolean;
   currentUserRole: string;
+  currentUserExtraRoles?: string[];
   currentUserId: string;
   team: TeamMember[];
   leaves: Leave[];
@@ -90,8 +92,10 @@ export function EquipoTabs({
     router.push(url.pathname + url.search);
   }
 
-  // ¿Tiene acceso al Calendario de llamadas?
-  const canSeeClosingShifts = ["ceo", "closer", "setter"].includes(currentUserRole);
+  // ¿Tiene acceso al Calendario de llamadas? Mira rol principal y extras —
+  // así una fisio que lleva también de closer entra sin problema.
+  const effectiveRoles = new Set([currentUserRole, ...currentUserExtraRoles]);
+  const canSeeClosingShifts = ["ceo", "closer", "setter"].some((r) => effectiveRoles.has(r));
 
   return (
     <>

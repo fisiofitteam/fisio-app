@@ -187,6 +187,7 @@ export default async function EquipoPage({
         activeTab={tab}
         isManager={isManager}
         currentUserRole={user.role}
+        currentUserExtraRoles={user.extraRoles ?? []}
         currentUserId={user.id}
         team={team}
         leaves={leaves.map((l) => ({

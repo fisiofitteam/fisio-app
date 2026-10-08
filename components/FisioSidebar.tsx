@@ -47,6 +47,13 @@ const PANEL: Item = { id: "panel", label: "Panel", Icon: LayoutDashboard, href: 
 const PACIENTES: Item = { id: "pacientes", label: "Pacientes", Icon: Users, href: "/fisio/pacientes", match: (p) => p.startsWith("/fisio/pacientes") || p.startsWith("/fisio/paciente/") };
 const LEADS: Item = { id: "leads", label: "Llamadas", Icon: Target, href: "/fisio/leads", match: (p) => p.startsWith("/fisio/leads") };
 const LLAMADAS_VENTA: Item = { id: "llamadas-venta", label: "Llamadas", Icon: PhoneCall, href: "/fisio/llamadas-venta", match: (p) => p.startsWith("/fisio/llamadas-venta") };
+// Config de disponibilidad de llamadas de VENTA (ClosingShift /
+// DefaultClosingShift). La UI vive dentro de /fisio/equipo?tab=llamadas;
+// el acceso directo aquí evita que el closer tenga que bucear por Equipo.
+// match: () => false → el highlight activo se lo queda la pestaña "Equipo"
+// (que ya matchea /fisio/equipo). Este es un acceso directo, no una ruta
+// propia, así que no competimos por el active state.
+const CALENDARIO_LLAMADAS: Item = { id: "calendario-llamadas", label: "Calendario llamadas", Icon: CalendarDays, href: "/fisio/equipo?tab=llamadas", match: () => false };
 const FOLLOWUP: Item = { id: "followup", label: "Follow-up", Icon: Repeat, href: "/fisio/followup", match: (p) => p.startsWith("/fisio/followup") };
 const REGALOS: Item = { id: "regalos", label: "Regalos", Icon: Gift, href: "/fisio/regalos", match: (p) => p.startsWith("/fisio/regalos") || p.startsWith("/fisio/parches") };
 const CONTENIDO: Item = { id: "contenido", label: "Contenido", Icon: Sparkles, href: "/fisio/contenido/calendario", match: (p) => p.startsWith("/fisio/contenido") };
@@ -108,7 +115,7 @@ function itemsForRole(role: string, opts: { withResumenes: boolean }): Item[] {
     return [PANEL, LEADS, PACIENTES, LEAD_MAGNETS, REGALOS, CONTENIDO, COMUNIDAD, REUNIONES, CALENDARIO, EQUIPO, CHAT, FISIO_IA, AJUSTES];
   }
   if (role === "closer") {
-    return [PANEL, LLAMADAS_VENTA, FOLLOWUP, COMUNIDAD, REUNIONES, CALENDARIO, EQUIPO, CHAT, FISIO_IA, AJUSTES];
+    return [PANEL, LLAMADAS_VENTA, FOLLOWUP, CALENDARIO_LLAMADAS, COMUNIDAD, REUNIONES, CALENDARIO, EQUIPO, CHAT, FISIO_IA, AJUSTES];
   }
   // fisio normal
   return [PANEL, PACIENTES, ALERTAS, ...R, ROLLING_LECTURA, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, CHAT, FISIO_IA, AJUSTES];
