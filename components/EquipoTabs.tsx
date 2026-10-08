@@ -154,7 +154,13 @@ export function EquipoTabs({
       )}
 
       {activeTab === "llamadas" && canSeeClosingShifts && (
-        <AgendaScheduleView team={team.filter((m) => m.active && ["ceo", "closer", "setter"].includes(m.role))} />
+        <AgendaScheduleView team={team.filter((m) => {
+          if (!m.active) return false;
+          // Incluir a quien tenga ceo / closer / setter en rol principal
+          // O en extraRoles (así una fisio con closer de extra aparece).
+          const roles = new Set([m.role, ...(m.extraRoles ?? [])]);
+          return ["ceo", "closer", "setter"].some((r) => roles.has(r));
+        })} />
       )}
 
       {activeTab === "calendario" && (
