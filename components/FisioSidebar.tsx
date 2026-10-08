@@ -81,6 +81,11 @@ const LEAD_MAGNETS: Item = {
   match: (p) => p.startsWith("/fisio/contenido/lead-magnets") || p.startsWith("/fisio/semaforo"),
 };
 
+/**
+ * Devuelve la lista de items para UN rol concreto. Es un helper interno.
+ * Las personas con varios roles usan `itemsForRoles` (abajo), que hace
+ * unión + dedup sin perder el orden del rol principal.
+ */
 function itemsForRole(role: string, opts: { withResumenes: boolean }): Item[] {
   // Managers (CEO / head_success) SIEMPRE ven "Resúmenes", aunque no
   // haya contenido pendiente — desde ahí pueden disparar la regeneración
@@ -109,6 +114,30 @@ function itemsForRole(role: string, opts: { withResumenes: boolean }): Item[] {
   return [PANEL, PACIENTES, ALERTAS, ...R, ROLLING_LECTURA, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, CHAT, FISIO_IA, AJUSTES];
 }
 
+/**
+ * Compose items para una persona que puede tener varios roles. Mantiene
+ * el ORDEN del rol principal y añade al final los items del resto de
+ * roles que aún no estén presentes. Dedupe por `item.id`.
+ *
+ * Ejemplo: fisio (principal) + closer → aparece la navegación completa
+ * de fisio, y al final se suman las pestañas que solo tenga closer
+ * (Llamadas venta, Follow-up).
+ */
+function itemsForRoles(mainRole: string, extraRoles: string[], opts: { withResumenes: boolean }): Item[] {
+  const main = itemsForRole(mainRole, opts);
+  const seen = new Set(main.map((i) => i.id));
+  const out = [...main];
+  for (const r of extraRoles) {
+    if (r === mainRole) continue;
+    for (const item of itemsForRole(r, opts)) {
+      if (seen.has(item.id)) continue;
+      seen.add(item.id);
+      out.push(item);
+    }
+  }
+  return out;
+}
+
 const ROLE_LABEL: Record<string, string> = {
   ceo: "CEO",
   head_success: "Head-success",
@@ -126,7 +155,7 @@ function getInitials(fullName: string): string {
 export function FisioSidebar({
   user,
 }: {
-  user: { id: string; fullName: string; role: string; photoUrl?: string | null } | null;
+  user: { id: string; fullName: string; role: string; extraRoles?: string[]; photoUrl?: string | null } | null;
 }) {
   const pathname = usePathname() ?? "";
   const [notifCount, setNotifCount] = useState(0);
@@ -208,7 +237,7 @@ export function FisioSidebar({
   if (pathname.startsWith("/fisio/paciente/")) return null;
 
   const items = user
-    ? itemsForRole(user.role, { withResumenes: reportsCount > 0 })
+    ? itemsForRoles(user.role, user.extraRoles ?? [], { withResumenes: reportsCount > 0 })
     : [PANEL, PACIENTES, BIBLIOTECA, TAREAS, LLAMADAS, RECURSOS];
   const initials = user ? getInitials(user.fullName) : "??";
 
