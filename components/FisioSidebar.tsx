@@ -138,6 +138,31 @@ function itemsForRoles(mainRole: string, extraRoles: string[], opts: { withResum
   return out;
 }
 
+/**
+ * Igual que itemsForRoles pero DEVUELVE AGRUPADO POR ROL. Cada sección
+ * trae los items propios de ese rol que NO han aparecido en secciones
+ * anteriores (dedup entre secciones, no dentro). Si una persona tiene
+ * un único rol, devuelve una sola sección sin "roleKey" visible.
+ *
+ * El consumidor decide si pintar los headers (desktop sí, móvil no por
+ * UX en scroll horizontal).
+ */
+function itemsGroupedByRole(mainRole: string, extraRoles: string[], opts: { withResumenes: boolean }): Array<{ roleKey: string; items: Item[] }> {
+  const groups: Array<{ roleKey: string; items: Item[] }> = [];
+  const seen = new Set<string>();
+  const allRoles = [mainRole, ...extraRoles.filter((r) => r !== mainRole)];
+  for (const r of allRoles) {
+    const roleItems = itemsForRole(r, opts).filter((it) => {
+      if (seen.has(it.id)) return false;
+      seen.add(it.id);
+      return true;
+    });
+    if (roleItems.length === 0) continue;
+    groups.push({ roleKey: r, items: roleItems });
+  }
+  return groups;
+}
+
 const ROLE_LABEL: Record<string, string> = {
   ceo: "CEO",
   head_success: "Head-success",
@@ -239,6 +264,14 @@ export function FisioSidebar({
   const items = user
     ? itemsForRoles(user.role, user.extraRoles ?? [], { withResumenes: reportsCount > 0 })
     : [PANEL, PACIENTES, BIBLIOTECA, TAREAS, LLAMADAS, RECURSOS];
+  // Mismo contenido que `items` pero segmentado por rol — para pintar
+  // secciones con header en el sidebar desktop cuando la persona
+  // combina cargos (ej. fisio + closer). En móvil seguimos usando
+  // `items` plano porque es un scroll horizontal.
+  const groups = user
+    ? itemsGroupedByRole(user.role, user.extraRoles ?? [], { withResumenes: reportsCount > 0 })
+    : [{ roleKey: "", items }];
+  const showGroupHeaders = groups.length > 1;
   const initials = user ? getInitials(user.fullName) : "??";
 
   // ¿Qué items deben mostrar el badge de notificaciones?
@@ -345,31 +378,43 @@ export function FisioSidebar({
         )}
 
         <nav className="space-y-0.5">
-          {items.map((it) => {
-            const active = it.match(pathname);
-            const Icon = it.Icon;
-            const badge = badgeFor(it.id);
-            return (
-              <Link
-                key={it.id}
-                href={it.href}
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
-                  active ? "bg-neutral-900 text-white font-medium dark:bg-white dark:text-neutral-900" : "text-neutral-600 hover:bg-neutral-100"
-                }`}
-              >
-                <Icon size={17} strokeWidth={active ? 2.25 : 2} />
-                <span style={{ letterSpacing: "-0.015em" }} className="flex-1">{it.label}</span>
-                {badge !== null && badge > 0 && (
-                  <span
-                    className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center"
-                    style={{ background: "#DC2626", color: "#FFFFFF" }}
+          {groups.map((g, gi) => (
+            <div key={g.roleKey || `g${gi}`} className={gi > 0 ? "mt-3" : ""}>
+              {showGroupHeaders && g.roleKey && (
+                <div
+                  className="px-3 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-neutral-400"
+                  style={{ letterSpacing: "0.08em" }}
+                >
+                  {ROLE_LABEL[g.roleKey] ?? g.roleKey}
+                </div>
+              )}
+              {g.items.map((it) => {
+                const active = it.match(pathname);
+                const Icon = it.Icon;
+                const badge = badgeFor(it.id);
+                return (
+                  <Link
+                    key={it.id}
+                    href={it.href}
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+                      active ? "bg-neutral-900 text-white font-medium dark:bg-white dark:text-neutral-900" : "text-neutral-600 hover:bg-neutral-100"
+                    }`}
                   >
-                    {badge > 99 ? "99+" : badge}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
+                    <Icon size={17} strokeWidth={active ? 2.25 : 2} />
+                    <span style={{ letterSpacing: "-0.015em" }} className="flex-1">{it.label}</span>
+                    {badge !== null && badge > 0 && (
+                      <span
+                        className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center"
+                        style={{ background: "#DC2626", color: "#FFFFFF" }}
+                      >
+                        {badge > 99 ? "99+" : badge}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
       </aside>
     </>
