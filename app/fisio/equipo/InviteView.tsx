@@ -8,6 +8,7 @@ type TeamMember = {
   fullName: string;
   email: string | null;
   role: string;
+  extraRoles: string[];
   active: boolean;
   hasPassword: boolean;
   pendingInvite: boolean;
@@ -29,10 +30,11 @@ const ROLE_OPTIONS = [
   { value: "closer", label: "Closer" },
 ];
 
-export function InviteView({ team, canEditCompensation = false }: { team: TeamMember[]; canEditCompensation?: boolean }) {
+export function InviteView({ team, canEditCompensation = false, canEditRoles = false }: { team: TeamMember[]; canEditCompensation?: boolean; canEditRoles?: boolean }) {
   const router = useRouter();
   const [showNew, setShowNew] = useState(false);
   const [compFor, setCompFor] = useState<TeamMember | null>(null);
+  const [extraRolesFor, setExtraRolesFor] = useState<TeamMember | null>(null);
 
   async function impersonate(m: TeamMember) {
     if (!confirm(`Vas a entrar en el panel de ${m.fullName} como si fueras esa persona. Podrás volver a tu cuenta en cualquier momento. ¿Continuar?`)) return;
@@ -90,9 +92,20 @@ export function InviteView({ team, canEditCompensation = false }: { team: TeamMe
                 <td className="py-2 px-2 font-medium">{m.fullName}</td>
                 <td className="py-2 px-2 text-neutral-600 font-mono text-xs">{m.email ?? <span className="text-neutral-300">—</span>}</td>
                 <td className="py-2 px-2">
-                  <span className="text-[10px] uppercase bg-neutral-100 text-neutral-700 px-2 py-0.5 rounded">
-                    {ROLE_LABELS[m.role] ?? m.role}
-                  </span>
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <span className="text-[10px] uppercase bg-neutral-100 text-neutral-700 px-2 py-0.5 rounded">
+                      {ROLE_LABELS[m.role] ?? m.role}
+                    </span>
+                    {m.extraRoles.map((r) => (
+                      <span
+                        key={r}
+                        className="text-[10px] uppercase bg-amber-100 text-amber-800 px-2 py-0.5 rounded"
+                        title="Rol adicional"
+                      >
+                        + {ROLE_LABELS[r] ?? r}
+                      </span>
+                    ))}
+                  </div>
                 </td>
                 <td className="py-2 px-2">
                   {!m.active ? (
@@ -117,6 +130,11 @@ export function InviteView({ team, canEditCompensation = false }: { team: TeamMe
                   {canEditCompensation && m.active && m.role !== "ceo" && (
                     <button onClick={() => impersonate(m)} className="text-[11px] text-blue-600 hover:underline mr-3">
                       ↪ Entrar como
+                    </button>
+                  )}
+                  {canEditRoles && m.active && m.role !== "ceo" && (
+                    <button onClick={() => setExtraRolesFor(m)} className="text-[11px] text-neutral-600 hover:underline mr-3">
+                      🎭 Roles
                     </button>
                   )}
                   {canEditCompensation && (
@@ -144,7 +162,96 @@ export function InviteView({ team, canEditCompensation = false }: { team: TeamMe
       {compFor && (
         <CompensationModal member={compFor} onClose={() => setCompFor(null)} />
       )}
+
+      {extraRolesFor && (
+        <ExtraRolesModal
+          member={extraRolesFor}
+          onClose={() => setExtraRolesFor(null)}
+          onSaved={() => { setExtraRolesFor(null); router.refresh(); }}
+        />
+      )}
     </>
+  );
+}
+
+function ExtraRolesModal({ member, onClose, onSaved }: { member: TeamMember; onClose: () => void; onSaved: () => void }) {
+  // El rol principal no se edita aquí (se muestra como info); los extras
+  // son el array editable. Las opciones son todos los roles menos el
+  // principal (sería redundante).
+  const options = ROLE_OPTIONS.filter((o) => o.value !== member.role);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(member.extraRoles));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function toggle(v: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(v)) next.delete(v);
+      else next.add(v);
+      return next;
+    });
+  }
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+    try {
+      const r = await fetch(`/api/professionals/${member.id}/extra-roles`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ extraRoles: Array.from(selected) }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d?.ok) {
+        setError(d?.error ?? "No se pudo guardar");
+        setSaving(false);
+        return;
+      }
+      onSaved();
+    } catch (e: any) {
+      setError(e?.message ?? "Error de red");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl max-w-md w-full p-5" onClick={(e) => e.stopPropagation()}>
+        <h3 className="font-semibold text-base mb-1">🎭 Roles de {member.fullName}</h3>
+        <p className="text-xs text-neutral-500 mb-3">
+          Rol principal: <b>{ROLE_LABELS[member.role] ?? member.role}</b> (no editable). Marca aquí los roles adicionales — las pestañas y permisos de todos ellos se suman en el panel de esta persona.
+        </p>
+        <div className="space-y-2 mb-4">
+          {options.map((o) => (
+            <label key={o.value} className="flex items-center gap-2 cursor-pointer select-none p-2 rounded hover:bg-neutral-50">
+              <input
+                type="checkbox"
+                checked={selected.has(o.value)}
+                onChange={() => toggle(o.value)}
+                className="h-4 w-4 accent-neutral-900"
+              />
+              <span className="text-sm">{o.label}</span>
+            </label>
+          ))}
+        </div>
+        {error && (
+          <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-md px-2 py-1.5 mb-3">⚠ {error}</div>
+        )}
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="text-sm px-3 py-2 rounded-lg border border-neutral-200 hover:bg-neutral-50">
+            Cancelar
+          </button>
+          <button
+            onClick={save}
+            disabled={saving}
+            className="text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-40"
+            style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+          >
+            {saving ? "Guardando…" : "Guardar"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -11,6 +11,7 @@ type TeamMember = {
   fullName: string;
   email: string | null;
   role: string;
+  extraRoles: string[];
   active: boolean;
   hasPassword: boolean;
   pendingInvite: boolean;
@@ -145,7 +146,7 @@ export function EquipoTabs({
       </div>
 
       {activeTab === "miembros" && isManager && (
-        <InviteView team={team} canEditCompensation={currentUserRole === "ceo"} />
+        <InviteView team={team} canEditCompensation={currentUserRole === "ceo"} canEditRoles={currentUserRole === "ceo"} />
       )}
 
       {activeTab === "llamadas" && canSeeClosingShifts && (

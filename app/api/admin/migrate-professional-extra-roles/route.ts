@@ -7,11 +7,9 @@
  * Esta columna soporta a gente del equipo que combina cargos (ej. una
  * fisio que también cierra ventas) sin necesidad de duplicar cuenta.
  *
- * IMPORTANTE: este endpoint se despliega SOLO en el Deploy A, antes de
- * tocar prisma/schema.prisma. Deliberadamente usa $executeRawUnsafe en
- * vez del cliente Prisma typed para no requerir que la columna ya
- * exista en el modelo generado (eso rompería toda la app, como pasó
- * en el intento del 2026-10-08).
+ * NOTA: originalmente desplegado SOLO en una fase previa (Deploy A),
+ * antes de tocar prisma/schema.prisma. Deliberadamente usa
+ * $executeRawUnsafe para no depender del cliente Prisma typed.
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -42,7 +40,7 @@ export async function GET() {
     ok: allOk,
     steps,
     message: allOk
-      ? "Columna extraRoles añadida. Avísame cuando lo veas y despliego la Fase B (schema + UI)."
+      ? "Columna extraRoles añadida. Ya puedes asignar roles adicionales desde la ficha del equipo."
       : "Alguno falló — revisa los errores.",
   });
 }
