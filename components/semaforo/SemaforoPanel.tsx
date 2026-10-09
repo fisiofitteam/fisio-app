@@ -67,6 +67,7 @@ const COLORS = {
 
 export function SemaforoPanel({
   canDelete, legalRevisado, igParamName, campaignParamName, embedded = false,
+  tipoInicial = "hombro",
 }: {
   canDelete: boolean;
   legalRevisado: boolean;
@@ -75,11 +76,13 @@ export function SemaforoPanel({
   /** true si va montado dentro de otra página con su propio layout;
    *  omite el <main> con padding para no doblarlo. */
   embedded?: boolean;
+  /** Tab a abrir por defecto (lo pasa el server desde ?tipo=). */
+  tipoInicial?: SemaforoTipo;
 }) {
   // ─── Tipo activo (hombro / lumbar / …) ──────────────────────
   // Un solo panel con tabs. Al cambiar de tab recargamos la lista, los
   // KPIs y la config del tipo elegido (SemaforoConfigCard también).
-  const [tipo, setTipo] = useState<SemaforoTipo>("hombro");
+  const [tipo, setTipo] = useState<SemaforoTipo>(tipoInicial);
   const tipoMeta = useMemo(
     () => TIPOS_ACTIVOS.find((t) => t.slug === tipo) ?? TIPOS_ACTIVOS[0],
     [tipo],
