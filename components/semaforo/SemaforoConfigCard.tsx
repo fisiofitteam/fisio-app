@@ -21,26 +21,27 @@ type Config = {
   videoUrls: { verde: string; ambar: string; rojo: string; alarma: string };
 };
 
-export function SemaforoConfigCard() {
+export function SemaforoConfigCard({ tipo = "hombro" }: { tipo?: string }) {
   const [config, setConfig] = useState<Config | null>(null);
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    fetch("/api/semaforo/admin/config")
+    setConfig(null);
+    fetch(`/api/semaforo/admin/config?tipo=${encodeURIComponent(tipo)}`)
       .then((r) => r.json())
       .then((d) => {
         if (d?.ok) setConfig(d.config);
       })
       .catch(() => {});
-  }, []);
+  }, [tipo]);
 
   async function persist(next: Partial<Config>) {
     setStatus("saving");
     setErrorMsg(null);
     try {
-      const r = await fetch("/api/semaforo/admin/config", {
+      const r = await fetch(`/api/semaforo/admin/config?tipo=${encodeURIComponent(tipo)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(next),

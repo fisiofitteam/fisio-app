@@ -24,7 +24,7 @@ export default async function SemaforoLeadMagnetPage() {
       <div className="text-[11px] text-neutral-500 mb-2">
         <Link href="/fisio/contenido/lead-magnets" className="hover:underline">Lead magnets</Link>
         {" · "}
-        <span>🚦 Semáforo del Hombro</span>
+        <span>🚦 Semáforo</span>
       </div>
       <SemaforoPanel
         canDelete={canDeleteSemaforo(user.role)}

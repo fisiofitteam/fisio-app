@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 import { canAccessSemaforoPanel, canDeleteSemaforo } from "@/lib/semaforo/access";
 import { evaluate, type RespuestasSemaforo } from "@/lib/semaforo/evaluate";
-import { Q, FAMILIES, COPY, FAM_ADVICE, COLOR_NAME, labelForOption, titleForQuestion, type FamilyValue } from "@/lib/semaforo/questions";
+import { COLOR_NAME, labelForOption, titleForQuestion, getQuestionsForTipo, type FamilyValue } from "@/lib/semaforo/questions";
 
 /**
  * GET /api/semaforo/admin/[id] — detalle "legible" para el panel:
@@ -46,8 +46,14 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   try { movimientos = row.movimientos ? JSON.parse(row.movimientos) : {}; } catch {}
 
   // Recompute why (motivos del color) para no depender de si la fila
-  // se cerró con una versión antigua de evaluate.
-  const rerun = evaluate(respuestas);
+  // se cerró con una versión antigua de evaluate. Respeta el tipo de
+  // semáforo de esta fila (hombro, lumbar, …).
+  const tipo = (row as any).tipo ?? "hombro";
+  const rerun = evaluate(respuestas, tipo);
+  // Resolvemos las preguntas y familias del tipo correcto para que los
+  // labels del detalle (readable) salgan en los textos del tipo real,
+  // no en los del hombro por defecto.
+  const { Q, FAMILIES, COPY, FAM_ADVICE } = getQuestionsForTipo(tipo);
 
   // Respuestas legibles pregunta a pregunta.
   const readable = Q.map((q) => {
@@ -55,9 +61,9 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     let value: string | null = null;
     if (raw == null) value = null;
     else if (q.type === "single" && raw && typeof raw === "object" && "v" in (raw as any)) {
-      value = labelForOption(q.id, (raw as { v: unknown }).v);
+      value = labelForOption(q.id, (raw as { v: unknown }).v, tipo);
     } else if (q.type === "multi" && Array.isArray(raw)) {
-      value = raw.map((v) => labelForOption(q.id, v)).join(" · ");
+      value = raw.map((v) => labelForOption(q.id, v, tipo)).join(" · ");
     } else if (q.type === "matrix" && raw && typeof raw === "object") {
       value = FAMILIES.map((f) => {
         const v = (raw as Record<string, string>)[f.id];

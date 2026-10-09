@@ -24,13 +24,14 @@ export const dynamic = "force-dynamic";
  * porque el test es 100 % interactivo.
  */
 export default async function SemaforoPage() {
-  const cfg = await getSemaforoConfig();
+  const cfg = await getSemaforoConfig("hombro");
   return (
     <SemaforoClient
       whatsappNumber={WHATSAPP_NUMBER}
       videoUrls={cfg.videoUrls}
       legalRevisado={LEGAL_REVISADO}
       quizFunnelMode={cfg.quizFunnelEnabled}
+      tipo="hombro"
     />
   );
 }

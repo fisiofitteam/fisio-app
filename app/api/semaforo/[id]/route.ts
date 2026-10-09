@@ -67,8 +67,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const existing = await prisma.semaforoRespuesta.findUnique({
     where: { id: params.id },
-    select: { id: true, estado: true, createdAt: true, respuestas: true },
-  });
+    select: { id: true, estado: true, createdAt: true, respuestas: true, tipo: true } as any,
+  }) as any;
   if (!existing) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
   if (existing.estado !== "EN_CURSO") {
     return NextResponse.json({ error: "Este registro ya está cerrado" }, { status: 409 });
@@ -117,7 +117,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     } catch {
       respuestasParaEvaluar = {};
     }
-    const result = evaluate(respuestasParaEvaluar);
+    const result = evaluate(respuestasParaEvaluar, existing.tipo ?? "hombro");
     data.estado = "COMPLETADO";
     data.color = colorToStored(result.color);
     data.banderas = JSON.stringify(result.flags);

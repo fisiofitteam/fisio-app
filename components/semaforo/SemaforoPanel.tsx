@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { SemaforoDetailDrawer } from "./SemaforoDetailDrawer";
 import { SemaforoLinkGenerator } from "./SemaforoLinkGenerator";
 import { SemaforoConfigCard } from "./SemaforoConfigCard";
+import { TIPOS_ACTIVOS, type SemaforoTipo } from "@/lib/semaforo/tipos";
 
 /**
  * Panel interno del Semáforo del Hombro. Un solo componente cliente:
@@ -75,6 +76,15 @@ export function SemaforoPanel({
    *  omite el <main> con padding para no doblarlo. */
   embedded?: boolean;
 }) {
+  // ─── Tipo activo (hombro / lumbar / …) ──────────────────────
+  // Un solo panel con tabs. Al cambiar de tab recargamos la lista, los
+  // KPIs y la config del tipo elegido (SemaforoConfigCard también).
+  const [tipo, setTipo] = useState<SemaforoTipo>("hombro");
+  const tipoMeta = useMemo(
+    () => TIPOS_ACTIVOS.find((t) => t.slug === tipo) ?? TIPOS_ACTIVOS[0],
+    [tipo],
+  );
+
   // ─── Filtros ─────────────────────────────────────────────────
   const [from, setFrom] = useState(isoDaysAgo(30));
   const [to, setTo] = useState(isoToday());
@@ -98,11 +108,11 @@ export function SemaforoPanel({
   // si el lead ha respondido; fuera de funnel, no aporta valor.
   const [funnelMode, setFunnelMode] = useState(false);
   useEffect(() => {
-    fetch("/api/semaforo/admin/config")
+    fetch(`/api/semaforo/admin/config?tipo=${encodeURIComponent(tipo)}`)
       .then((r) => r.json())
       .then((d) => { if (d?.ok && d.config) setFunnelMode(!!d.config.quizFunnelEnabled); })
       .catch(() => {});
-  }, []);
+  }, [tipo]);
   // ─── Selección múltiple para borrado en lote (solo CEO) ─────
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
@@ -124,6 +134,7 @@ export function SemaforoPanel({
 
   const queryString = useMemo(() => {
     const p = new URLSearchParams();
+    p.set("tipo", tipo);
     if (from) p.set("from", from);
     if (to) p.set("to", to);
     if (color) p.set("color", color);
@@ -133,7 +144,7 @@ export function SemaforoPanel({
     if (campana.trim()) p.set("campana", campana.trim());
     if (q.trim()) p.set("q", q.trim());
     return p.toString();
-  }, [from, to, color, estado, whatsapp, gestionado, campana, q]);
+  }, [tipo, from, to, color, estado, whatsapp, gestionado, campana, q]);
 
   useEffect(() => {
     let cancelled = false;
@@ -189,7 +200,7 @@ export function SemaforoPanel({
     <Wrap className={wrapClass}>
       <header className="flex justify-between items-end gap-2 flex-wrap mb-4">
         <div>
-          <h1 className="text-xl font-semibold">🚦 Semáforo del Hombro</h1>
+          <h1 className="text-xl font-semibold">🚦 Semáforo {tipoMeta.nombreConArticulo}</h1>
           <p className="text-xs text-neutral-500 mt-0.5">
             Respuestas del test público, embudo y gestión de leads.
           </p>
@@ -223,8 +234,36 @@ export function SemaforoPanel({
         </div>
       </header>
 
+      {/* ── Selector de tipo (hombro/lumbar/…) ─────────────────────────── */}
+      {TIPOS_ACTIVOS.length > 1 && (
+        <div className="flex gap-1 mb-3" role="tablist" aria-label="Tipo de semáforo">
+          {TIPOS_ACTIVOS.map((t) => {
+            const active = tipo === t.slug;
+            return (
+              <button
+                key={t.slug}
+                role="tab"
+                aria-selected={active}
+                onClick={() => {
+                  setTipo(t.slug);
+                  setSelected(new Set());
+                }}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                style={{
+                  background: active ? "#171717" : "#F5F5F5",
+                  color: active ? "white" : "#404040",
+                  border: `1px solid ${active ? "#171717" : "#E5E5E5"}`,
+                }}
+              >
+                🚦 {t.nombre}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* ── Configuración del lead magnet ─────────────────────────────── */}
-      <SemaforoConfigCard />
+      <SemaforoConfigCard tipo={tipo} />
 
       {/* ── Filtros ─────────────────────────────────────────────────── */}
       <section className="rounded-xl p-3 mb-4" style={{ background: "#FAFAFA", border: "1px solid #E5E5E5" }}>
@@ -443,6 +482,7 @@ export function SemaforoPanel({
         <SemaforoLinkGenerator
           igParamName={igParamName}
           campaignParamName={campaignParamName}
+          landingPath={tipoMeta.landingPath}
           onClose={() => setShowLinkGen(false)}
         />
       )}

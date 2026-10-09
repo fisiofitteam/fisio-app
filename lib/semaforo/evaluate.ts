@@ -14,7 +14,7 @@
  *   - mov:   mapa de familia → valor (para pintar el mapa de movimientos)
  */
 
-import { FAMILIES, TESTS, type FamilyValue } from "@/lib/semaforo/questions";
+import { getQuestionsForTipo, type FamilyValue } from "@/lib/semaforo/questions";
 
 export type RespuestasSemaforo = {
   seguridad?: string[];
@@ -59,7 +59,15 @@ function listaEs(a: string[]): string {
   return a.slice(0, -1).join(", ") + " y " + a[a.length - 1];
 }
 
-export function evaluate(answers: RespuestasSemaforo): EvaluationResult {
+export function evaluate(answers: RespuestasSemaforo, tipo: string = "hombro"): EvaluationResult {
+  // Resolve per-tipo las familias y los tests. Las reglas del algoritmo
+  // (umbrales de rojo/ámbar/verde) son las mismas para todos los tipos;
+  // lo que cambia es qué movimientos entran en la matrix y qué textos
+  // de "why" se pintan — eso lo maneja el consumidor con getQuestionsForTipo.
+  const set = getQuestionsForTipo(tipo);
+  const familiesForTipo = set.FAMILIES;
+  const testsForTipo = set.TESTS;
+
   const flags = (answers.seguridad ?? []).filter((v) => v !== "ninguna");
   const probado = answers.probado ?? [];
   const tiempo = sc(answers, "tiempo");
@@ -70,7 +78,7 @@ export function evaluate(answers: RespuestasSemaforo): EvaluationResult {
   const overhead = sc(answers, "overhead-subjetivo");
   const asim = sc(answers, "asimetria");
 
-  const testScores = TESTS.map((t) => {
+  const testScores = testsForTipo.map((t) => {
     const raw = (answers as Record<string, unknown>)[t.id] as
       | { v: string | number; score: number }
       | undefined;
@@ -95,7 +103,7 @@ export function evaluate(answers: RespuestasSemaforo): EvaluationResult {
   const sub1 = subjectiveAxes.filter((a) => a.score === 1);
 
   const mov = answers.movimientos ?? {};
-  const famRed = FAMILIES.filter((f) => mov[f.id] === "duele");
+  const famRed = familiesForTipo.filter((f) => mov[f.id] === "duele");
 
   // Reglas de color — versión adaptada tras retirar auto-tests. Los
   // subjectiveAxes toman el rol de t2/t1 anteriores.

@@ -9,19 +9,21 @@ import { useEffect, useMemo, useState } from "react";
  * viene cada respuesta (`?c=…`).
  */
 export function SemaforoLinkGenerator({
-  campaignParamName, onClose,
+  campaignParamName, onClose, landingPath = "/semaforo",
 }: {
   igParamName: string;
   campaignParamName: string;
   onClose: () => void;
+  /** Ruta de la landing — "/semaforo", "/semaforo/lumbar", etc. */
+  landingPath?: string;
 }) {
   const [campana, setCampana] = useState("");
   const [copied, setCopied] = useState(false);
 
   const baseUrl = useMemo(() => {
-    if (typeof window !== "undefined") return `${window.location.origin}/semaforo`;
-    return "/semaforo";
-  }, []);
+    if (typeof window !== "undefined") return `${window.location.origin}${landingPath}`;
+    return landingPath;
+  }, [landingPath]);
 
   const url = useMemo(() => {
     const c = campana.trim();

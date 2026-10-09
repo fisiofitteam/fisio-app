@@ -304,9 +304,13 @@ export const COLOR_NAME: Record<"g" | "a" | "r" | "n", string> = {
 
 // ═══════════ HELPERS DE ETIQUETAS (para pintar en el panel interno) ═══════════
 
-/** Devuelve el label legible de una opción dada su pregunta y valor. */
-export function labelForOption(questionId: string, value: unknown): string {
-  const q = Q.find((x) => x.id === questionId);
+/**
+ * Devuelve el label legible de una opción dada su pregunta y valor.
+ * `tipo` opcional default "hombro" para compat con callers viejos.
+ */
+export function labelForOption(questionId: string, value: unknown, tipo: string = "hombro"): string {
+  const QForTipo = tipo === "hombro" ? Q : getQuestionsForTipo(tipo).Q;
+  const q = QForTipo.find((x) => x.id === questionId);
   if (!q) return String(value);
   if (q.type === "single") {
     const opt = q.options.find((o) => o.v === value);
@@ -319,7 +323,63 @@ export function labelForOption(questionId: string, value: unknown): string {
   return String(value);
 }
 
-/** Título humano de una pregunta por id. */
-export function titleForQuestion(questionId: string): string {
-  return Q.find((x) => x.id === questionId)?.title ?? questionId;
+/** Título humano de una pregunta por id. `tipo` opcional default hombro. */
+export function titleForQuestion(questionId: string, tipo: string = "hombro"): string {
+  const QForTipo = tipo === "hombro" ? Q : getQuestionsForTipo(tipo).Q;
+  return QForTipo.find((x) => x.id === questionId)?.title ?? questionId;
+}
+
+// ═══════════ DISPATCHER POR TIPO ═══════════
+//
+// Resuelve las preguntas, familias y textos de un tipo de semáforo
+// concreto. Default: hombro (compat con callers antiguos que importan
+// las constantes `Q`, `FAMILIES`, etc. directamente).
+//
+// Al añadir un tipo nuevo:
+//   1. Crear `lib/semaforo/questions-<tipo>.ts` con sus Q, FAMILIES,
+//      FAM_ADVICE, COPY, FAMILY_GROUPS.
+//   2. Importarlo abajo y añadirlo al switch.
+//   3. El resto del código (`evaluate`, `SemaforoClient`, panel) ya
+//      consume este dispatcher sin cambios.
+
+import {
+  Q_LUMBAR,
+  FAMILIES_LUMBAR,
+  FAMILY_GROUPS_LUMBAR,
+  COPY_LUMBAR,
+  FAM_ADVICE_LUMBAR,
+} from "@/lib/semaforo/questions-lumbar";
+
+export type QuestionsSet = {
+  Q: readonly Question[];
+  FAMILIES: readonly Family[];
+  FAMILY_GROUPS: readonly FamilyGroupInfo[];
+  FAM_OPTS: readonly FamilyOption[];
+  COPY: Record<ColorKey, ColorCopy>;
+  FAM_ADVICE: Record<FamilyValue, { c: "g" | "a" | "r" | "n"; t: string }>;
+  TESTS: readonly { id: string; name: string }[];
+};
+
+const QUESTIONS_HOMBRO: QuestionsSet = {
+  Q, FAMILIES, FAMILY_GROUPS, FAM_OPTS, COPY, FAM_ADVICE, TESTS,
+};
+
+const QUESTIONS_LUMBAR: QuestionsSet = {
+  Q: Q_LUMBAR,
+  FAMILIES: FAMILIES_LUMBAR,
+  FAMILY_GROUPS: FAMILY_GROUPS_LUMBAR,
+  FAM_OPTS, // mismas opciones de la matrix para todos los tipos
+  COPY: COPY_LUMBAR,
+  FAM_ADVICE: FAM_ADVICE_LUMBAR,
+  TESTS, // vacío igual que hombro
+};
+
+export function getQuestionsForTipo(tipo: string): QuestionsSet {
+  switch (tipo) {
+    case "lumbar":
+      return QUESTIONS_LUMBAR;
+    case "hombro":
+    default:
+      return QUESTIONS_HOMBRO;
+  }
 }

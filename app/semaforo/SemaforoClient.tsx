@@ -3,18 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Barlow_Condensed, Archivo } from "next/font/google";
 import {
-  Q,
-  FAMILIES,
-  FAMILY_GROUPS,
-  FAM_OPTS,
-  TESTS,
-  COPY,
-  FAM_ADVICE,
   COLOR_NAME,
+  getQuestionsForTipo,
   type FamilyValue,
   type Question,
+  type QuestionsSet,
 } from "@/lib/semaforo/questions";
 import { evaluate, type RespuestasSemaforo } from "@/lib/semaforo/evaluate";
+import { SEMAFORO_TIPOS, parseTipo } from "@/lib/semaforo/tipos";
 import { IG_PARAM_NAME, CAMPAIGN_PARAM_NAME, sanitizeInstagram, sanitizeCampaign } from "@/lib/semaforo/config";
 import { COUNTRIES, DEFAULT_COUNTRY, countryFlag, findCountry } from "@/lib/countries";
 import { youtubeEmbedUrl } from "@/lib/youtube";
@@ -373,12 +369,20 @@ export function SemaforoClient({
   videoUrls,
   legalRevisado, // eslint-disable-line @typescript-eslint/no-unused-vars
   quizFunnelMode = false,
+  tipo = "hombro",
 }: {
   whatsappNumber: string;
   videoUrls: Record<"verde" | "ambar" | "rojo" | "alarma", string>;
   legalRevisado: boolean;
   quizFunnelMode?: boolean;
+  tipo?: string;
 }) {
+  // Resolvemos preguntas, familias y textos del tipo activo. Se memoiza
+  // por `tipo` para evitar recrearlos en cada render.
+  const { Q, FAMILIES, FAMILY_GROUPS, FAM_OPTS, COPY, FAM_ADVICE } = useMemo(
+    () => getQuestionsForTipo(tipo),
+    [tipo],
+  );
   // ─── Estado principal ──
   const [screen, setScreen] = useState<Screen>("intro");
   const [step, setStep] = useState(0);
@@ -437,6 +441,7 @@ export function SemaforoClient({
           campana: campaignFromUrl.current,
           consentimiento: true,
           website: "",
+          tipo,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -558,10 +563,11 @@ export function SemaforoClient({
       <div className="sf-bg-overlay" aria-hidden />
       <main className="sf-wrap sf-screen sf-enter" key={screen + "-" + step} aria-live="polite">
         {screen === "intro" && (
-          <IntroScreen start={start} starting={starting} />
+          <IntroScreen tipo={tipo} start={start} starting={starting} />
         )}
         {screen === "quiz" && (
           <QuizScreen
+            tipo={tipo}
             step={step}
             question={Q[step]}
             answers={answers}
@@ -602,6 +608,7 @@ export function SemaforoClient({
         )}
         {screen === "alarma" && (
           <AlarmScreen
+            tipo={tipo}
             answers={answers}
             whatsappNumber={whatsappNumber}
             videoUrl={videoUrls.alarma}
@@ -616,6 +623,7 @@ export function SemaforoClient({
         )}
         {screen === "result" && (
           <ResultScreen
+            tipo={tipo}
             answers={answers}
             whatsappNumber={whatsappNumber}
             videoUrls={videoUrls}
@@ -647,17 +655,21 @@ export function SemaforoClient({
 // ═══════════ Intro ═══════════
 
 function IntroScreen({
-  start, starting,
+  tipo, start, starting,
 }: {
-  start: () => void; starting: boolean;
+  tipo: string; start: () => void; starting: boolean;
 }) {
+  // Resolvemos los textos del tipo activo para que la landing diga "del
+  // Hombro" o "del Lumbar" sin tocar el layout del componente.
+  const meta = SEMAFORO_TIPOS[parseTipo(tipo)];
+  const zonaBajo = meta.nombre.toLowerCase();
   return (
     <>
       <header className="sf-hero">
         <div className="sf-brand"><span className="sf-brand-accent">FisioFitCross</span></div>
         <h1>
           El Semáforo<br />
-          <span className="sf-brand-accent">del Hombro</span>
+          <span className="sf-brand-accent">{meta.nombreConArticulo}</span>
         </h1>
         <p className="sf-lead">
           Descubre qué movimientos del WOD puedes seguir haciendo, cuáles adaptar y cuáles parar. Sin quitar ejercicios a ciegas.
@@ -668,7 +680,7 @@ function IntroScreen({
         <div className="sf-need">
           <p>
             <strong>3 minutos. </strong>
-            Unas preguntas rápidas para saber cómo está tu hombro antes de tu próximo WOD.
+            Unas preguntas rápidas para saber cómo está tu {zonaBajo} antes de tu próximo WOD.
           </p>
         </div>
         <button className="sf-btn" onClick={start} disabled={starting}>
@@ -688,6 +700,7 @@ function IntroScreen({
 // ═══════════ Quiz ═══════════
 
 function QuizScreen(props: {
+  tipo: string;
   step: number;
   question: Question;
   answers: Answers;
@@ -708,8 +721,14 @@ function QuizScreen(props: {
   setFinalContactType: (t: "instagram" | "telefono") => void;
   onFinalContactSaved: (name: string, instagram: string, phone: string, countryLabel: string) => void;
 }) {
-  const { step, question: q, answers, setAnswers, onNext, onBack, total } = props;
+  const { tipo, step, question: q, answers, setAnswers, onNext, onBack, total } = props;
   const progressPct = (step / total) * 100;
+  // Resolvemos families/familyGroups/famOpts del tipo activo para pasarlos
+  // a MatrixOptions (no son constantes de módulo porque dependen del tipo).
+  const { FAMILIES, FAMILY_GROUPS, FAM_OPTS } = useMemo(
+    () => getQuestionsForTipo(tipo),
+    [tipo],
+  );
 
   return (
     <>
@@ -748,6 +767,9 @@ function QuizScreen(props: {
         )}
         {q.type === "matrix" && (
           <MatrixOptions
+            families={FAMILIES}
+            familyGroups={FAMILY_GROUPS}
+            famOpts={FAM_OPTS}
             current={(answers.movimientos ?? {}) as Partial<Record<string, FamilyValue>>}
             onChange={(v) => setAnswers((prev) => ({ ...prev, movimientos: v }))}
             onNext={onNext}
@@ -848,18 +870,22 @@ function MultiOptions({
 }
 
 function MatrixOptions({
+  families, familyGroups, famOpts,
   current, onChange, onNext,
 }: {
+  families: QuestionsSet["FAMILIES"];
+  familyGroups: QuestionsSet["FAMILY_GROUPS"];
+  famOpts: QuestionsSet["FAM_OPTS"];
   current: Partial<Record<string, FamilyValue>>;
   onChange: (v: Partial<Record<string, FamilyValue>>) => void;
   onNext: () => void;
 }) {
-  const complete = FAMILIES.every((f) => current[f.id]);
+  const complete = families.every((f) => current[f.id]);
   return (
     <>
       <div className="sf-matrix">
-        {FAMILY_GROUPS.map((g) => {
-          const items = FAMILIES.filter((f) => f.group === g.id);
+        {familyGroups.map((g) => {
+          const items = families.filter((f) => f.group === g.id);
           return (
             <div key={g.id} className="sf-group">
               <div className="sf-group-label">{g.label}</div>
@@ -867,7 +893,7 @@ function MatrixOptions({
                 <div key={f.id} className="sf-fam">
                   <strong>{f.name}</strong>
                   <div className="sf-seg" role="group" aria-label={f.name}>
-                    {FAM_OPTS.map((o) => (
+                    {famOpts.map((o) => (
                       <button
                         key={o.v}
                         aria-pressed={current[f.id] === o.v}
@@ -1117,16 +1143,19 @@ function AlarmContactScreen({
 // ═══════════ Alarma ═══════════
 
 function AlarmScreen({
-  answers, whatsappNumber, videoUrl, onRestart, trackWhatsappClick,
+  tipo, answers, whatsappNumber, videoUrl, onRestart, trackWhatsappClick,
 }: {
+  tipo: string;
   answers: Answers; whatsappNumber: string; videoUrl: string;
   onRestart: () => void; trackWhatsappClick: () => void;
 }) {
+  const { Q } = useMemo(() => getQuestionsForTipo(tipo), [tipo]);
+  const meta = SEMAFORO_TIPOS[parseTipo(tipo)];
   const q = Q.find((x) => x.id === "seguridad") as Extract<Question, { type: "multi" }>;
   const marked = q.options
     .filter((o) => (answers.seguridad ?? []).includes(o.v) && !o.exclusive)
     .map((o) => o.label);
-  const msg = `¡Hola Ales! He empezado el Semáforo del Hombro y he marcado:\n- ${marked.join("\n- ")}\nMe gustaría hablar contigo.`;
+  const msg = `¡Hola Ales! He empezado el Semáforo ${meta.nombreConArticulo} y he marcado:\n- ${marked.join("\n- ")}\nMe gustaría hablar contigo.`;
   const wa = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(msg)}`;
 
   return (
@@ -1172,13 +1201,18 @@ function AlarmScreen({
 // ═══════════ Resultado ═══════════
 
 function ResultScreen({
-  answers, whatsappNumber, videoUrls, onRestart, trackWhatsappClick,
+  tipo, answers, whatsappNumber, videoUrls, onRestart, trackWhatsappClick,
 }: {
+  tipo: string;
   answers: Answers; whatsappNumber: string;
   videoUrls: Record<"verde" | "ambar" | "rojo" | "alarma", string>;
   onRestart: () => void; trackWhatsappClick: () => void;
 }) {
-  const r = useMemo(() => evaluate(answers), [answers]);
+  const { FAMILIES, FAMILY_GROUPS, COPY, FAM_ADVICE } = useMemo(
+    () => getQuestionsForTipo(tipo),
+    [tipo],
+  );
+  const r = useMemo(() => evaluate(answers, tipo), [answers, tipo]);
   const k = COPY[r.color];
   const name = answers.nombre ?? "";
 
@@ -1193,7 +1227,8 @@ function ResultScreen({
         .map((x) => `${x.f.name} (${COLOR_NAME[FAM_ADVICE[x.v as FamilyValue].c]})`)
         .join(", ")
     : "Los movimientos del box los llevo bien de momento.";
-  const msg = `¡Hola! ${name ? `Soy ${name}. ` : ""}He hecho el Semáforo del Hombro y me ha salido ${k.verdict.toUpperCase()}.\n${movLine}\n${k.waLine}`;
+  const meta = SEMAFORO_TIPOS[parseTipo(tipo)];
+  const msg = `¡Hola! ${name ? `Soy ${name}. ` : ""}He hecho el Semáforo ${meta.nombreConArticulo} y me ha salido ${k.verdict.toUpperCase()}.\n${movLine}\n${k.waLine}`;
   const wa = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(msg)}`;
 
   return (
