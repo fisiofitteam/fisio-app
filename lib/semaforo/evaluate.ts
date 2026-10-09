@@ -15,6 +15,7 @@
  */
 
 import { getQuestionsForTipo, type FamilyValue } from "@/lib/semaforo/questions";
+import { SEMAFORO_TIPOS, parseTipo } from "@/lib/semaforo/tipos";
 
 export type RespuestasSemaforo = {
   seguridad?: string[];
@@ -67,6 +68,10 @@ export function evaluate(answers: RespuestasSemaforo, tipo: string = "hombro"): 
   const set = getQuestionsForTipo(tipo);
   const familiesForTipo = set.FAMILIES;
   const testsForTipo = set.TESTS;
+  // Nombre de la zona en minúsculas para los textos de "why" ("hombro",
+  // "lumbar", …). Mantiene la escritura natural tanto en hombro como en
+  // lumbar sin tocar la lógica.
+  const zona = SEMAFORO_TIPOS[parseTipo(tipo)].nombre.toLowerCase();
 
   const flags = (answers.seguridad ?? []).filter((v) => v !== "ninguna");
   const probado = answers.probado ?? [];
@@ -136,7 +141,7 @@ export function evaluate(answers: RespuestasSemaforo, tipo: string = "hombro"): 
     why.push({
       sev: 3,
       k: "neg",
-      t: "Después de entrenar, tu hombro tarda más de 24–48 h en volver a como estaba. Es la señal más clara de que la carga actual le supera.",
+      t: `Después de entrenar, tu ${zona} tarda más de 24–48 h en volver a como estaba. Es la señal más clara de que la carga actual le supera.`,
     });
   if (dia === 1)
     why.push({
@@ -148,14 +153,14 @@ export function evaluate(answers: RespuestasSemaforo, tipo: string = "hombro"): 
     why.push({
       sev: -1,
       k: "pos",
-      t: "Tu hombro se recupera bien de un entreno a otro. Eso significa que tolera la carga que le estás dando.",
+      t: `Tu ${zona} se recupera bien de un entreno a otro. Eso significa que tolera la carga que le estás dando.`,
     });
 
   if (noche === 2)
     why.push({
       sev: 3,
       k: "neg",
-      t: "El dolor te despierta por la noche: el hombro está irritado incluso sin carga.",
+      t: `El dolor te despierta por la noche: el ${zona} está irritado incluso sin carga.`,
     });
   if (noche === 1)
     why.push({
@@ -170,8 +175,8 @@ export function evaluate(answers: RespuestasSemaforo, tipo: string = "hombro"): 
       sev: 2.5,
       k: "neg",
       t: pas
-        ? "Has descansado o tratado la zona y el dolor ha vuelto al volver a cargar. Calmar el hombro no es lo mismo que prepararlo para el box."
-        : "El dolor ha vuelto o nunca se ha ido del todo. Eso indica que al hombro le falta tolerancia a la carga, no solo reposo.",
+        ? `Has descansado o tratado la zona y el dolor ha vuelto al volver a cargar. Calmar el ${zona} no es lo mismo que prepararlo para el box.`
+        : `El dolor ha vuelto o nunca se ha ido del todo. Eso indica que al ${zona} le falta tolerancia a la carga, no solo reposo.`,
     });
   }
 

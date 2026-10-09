@@ -638,6 +638,7 @@ export function SemaforoClient({
         )}
         {screen === "funnel-thanks" && (
           <FunnelThanksScreen
+            tipo={tipo}
             name={answers.nombre ?? ""}
             onRestart={() => {
               setAnswers({});
@@ -1011,11 +1012,12 @@ function FinalTextStep({
 // ═══════════ Funnel Thanks ═══════════
 
 function FunnelThanksScreen({
-  name, onRestart,
+  tipo, name, onRestart,
 }: {
-  name: string; onRestart: () => void;
+  tipo: string; name: string; onRestart: () => void;
 }) {
   const firstName = name.trim().split(" ")[0] || "";
+  const zona = SEMAFORO_TIPOS[parseTipo(tipo)].nombre.toLowerCase();
   return (
     <>
       <header className="sf-hero">
@@ -1031,7 +1033,7 @@ function FunnelThanksScreen({
       <section className="sf-card">
         <p>
           Hemos guardado tus respuestas. <strong>Ales te escribirá personalmente por WhatsApp</strong> para
-          explicarte qué significa tu resultado y darte los siguientes pasos concretos para tu hombro.
+          explicarte qué significa tu resultado y darte los siguientes pasos concretos para tu {zona}.
         </p>
         <p style={{ marginBottom: 0 }}>
           Normalmente respondemos en 24 horas.
@@ -1239,7 +1241,7 @@ function ResultScreen({
           <TrafficLight on={k.c} big />
           <div>
             <div className={"sf-verdict " + k.c}>
-              {name ? `${name}, tu hombro está en ${k.verdict.toLowerCase()}` : k.verdict}
+              {name ? `${name}, tu ${meta.nombre.toLowerCase()} está en ${k.verdict.toLowerCase()}` : k.verdict}
             </div>
             <h2>{k.title}</h2>
           </div>
