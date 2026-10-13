@@ -49,13 +49,19 @@ export async function POST(_req: Request, { params }: { params: { token: string 
 
   const installments = checkout.installmentCount ?? 0;
   const useSubscription = installments >= 2;
+  // Pago suelto: labels sin "Renovación X meses" para no confundir al
+  // paciente ni al equipo cuando revisen el movimiento en PayPal.
+  const isAdhoc = checkout.programType === "ADHOC";
+  const labelBase = isAdhoc
+    ? "Pago FisioFitCross"
+    : `Renovación ${checkout.programType} ${checkout.durationMonths}m`;
 
   try {
     if (useSubscription) {
       // ─── Rama Subscription: N cobros mensuales ───────────────────────────
       const plan = await createPlan({
         requestId: `renewal-plan-${checkout.id}`,
-        name: `Renovación ${checkout.programType} ${checkout.durationMonths}m — ${installments} cuotas`,
+        name: `${labelBase} — ${installments} cuotas`,
         totalAmountEur: totalEur,
         totalCycles: installments,
       });
@@ -86,11 +92,11 @@ export async function POST(_req: Request, { params }: { params: { token: string 
     const order = await createOrder({
       requestId: `renewal-${checkout.id}`,
       amountEur: totalEur,
-      description: `Renovación ${checkout.programType} ${checkout.durationMonths}m`,
+      description: labelBase,
       returnUrl,
       cancelUrl,
       customId,
-      referenceLabel: `Renovación ${checkout.programType} ${checkout.durationMonths}m`,
+      referenceLabel: labelBase,
       locale: "es-ES",
     });
     await prisma.renewalCheckout.update({

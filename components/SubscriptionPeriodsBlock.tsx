@@ -58,6 +58,9 @@ export function SubscriptionPeriodsBlock({
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Renewal | null>(null);
+  // Cobro suelto (CEO): enlace de pago que no abre periodo. Para re-cobrar
+  // suscripciones fallidas, pagos de reserva pendientes, recargos ad-hoc.
+  const [addingAdhoc, setAddingAdhoc] = useState(false);
 
   async function load(silent = false) {
     if (!silent) setLoading(true);
@@ -108,15 +111,27 @@ export function SubscriptionPeriodsBlock({
 
   return (
     <div className="mt-4 pt-4" style={{ borderTop: "1px dashed #E5E5E5" }}>
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
         <h3 className="text-sm font-medium">Periodos de suscripción</h3>
-        <button
-          onClick={() => setAdding(true)}
-          className="text-xs font-medium px-2.5 py-1.5 rounded-md"
-          style={{ background: "#0A0A0A", color: "#FAFAFA" }}
-        >
-          + Generar enlace de renovación
-        </button>
+        <div className="flex items-center gap-1.5">
+          {isCeo && (
+            <button
+              onClick={() => setAddingAdhoc(true)}
+              className="text-xs font-medium px-2.5 py-1.5 rounded-md"
+              style={{ background: "#FFFFFF", color: "#171717", border: "1px solid #E5E5E5" }}
+              title="Cobro suelto, no abre periodo nuevo (reservas fallidas, recargos, etc.)"
+            >
+              💳 Enlace de pago suelto
+            </button>
+          )}
+          <button
+            onClick={() => setAdding(true)}
+            className="text-xs font-medium px-2.5 py-1.5 rounded-md"
+            style={{ background: "#0A0A0A", color: "#FAFAFA" }}
+          >
+            + Generar enlace de renovación
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -253,6 +268,13 @@ export function SubscriptionPeriodsBlock({
             load();
             window.location.reload();
           }}
+        />
+      )}
+
+      {addingAdhoc && (
+        <AddAdhocPaymentModal
+          patientId={patientId}
+          onClose={() => setAddingAdhoc(false)}
         />
       )}
 
@@ -806,6 +828,174 @@ function EditRenewalModal({
             {saving ? "Guardando..." : "Guardar cambios"}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Modal "Enlace de pago suelto" (solo CEO). No crea periodo nuevo: solo
+ * un RenewalCheckout ADHOC con importe libre + nº de cuotas + pasarela.
+ * Al pagar se registra en Finanzas como ingreso pero el programa del
+ * paciente queda intacto (ver lib/paypal/activation.ts rama isAdhoc).
+ */
+function AddAdhocPaymentModal({
+  patientId,
+  onClose,
+}: {
+  patientId: string;
+  onClose: () => void;
+}) {
+  const [amountEuros, setAmountEuros] = useState("");
+  const [installmentCount, setInstallmentCount] = useState<number | null>(null);
+  const [paymentProvider, setPaymentProvider] = useState<"paypal" | "stripe">("paypal");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [link, setLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  async function generate() {
+    setError("");
+    setSaving(true);
+    const res = await fetch(`/api/patients/${patientId}/payment-link`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amountEuros: Number(amountEuros),
+        installmentCount,
+        paymentProvider,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.url) {
+      setLink(`${window.location.origin}${data.url}`);
+    } else {
+      setError(data.error || "No se pudo generar el enlace");
+    }
+    setSaving(false);
+  }
+
+  async function copy() {
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
+  }
+
+  const amountInvalid = !amountEuros || Number(amountEuros) <= 0;
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl max-w-md w-full p-5 max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-1">
+          <h3 className="font-semibold">💳 Enlace de pago suelto</h3>
+          <button onClick={onClose} className="text-neutral-400 text-xl leading-none">✕</button>
+        </div>
+
+        {link ? (
+          <div className="space-y-3 mt-2">
+            <p className="text-xs text-neutral-500">
+              Comparte este enlace con el paciente. Cuando pague, se registrará
+              como ingreso en Finanzas <strong>sin tocar su programa actual</strong>.
+            </p>
+            <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-2 text-xs break-all font-mono">
+              {link}
+            </div>
+            <div className="flex gap-2">
+              <button onClick={copy} className="btn btn-primary text-sm flex-1">
+                {copied ? "¡Copiado!" : "Copiar enlace"}
+              </button>
+              <a href={link} target="_blank" rel="noopener noreferrer" className="btn text-sm flex-1 text-center">
+                Abrir
+              </a>
+            </div>
+            <p className="text-[11px] text-neutral-400">El enlace caduca en 7 días.</p>
+          </div>
+        ) : (
+          <div className="space-y-3 mt-2">
+            <p className="text-xs text-neutral-500">
+              Para cobros fuera del flujo normal: suscripción inicial fallida,
+              diferencia de una reserva, recargos puntuales. No abre un periodo
+              nuevo ni cambia el programa del paciente.
+            </p>
+
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">Importe (€)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                className="input text-sm w-full"
+                value={amountEuros}
+                onChange={(e) => setAmountEuros(e.target.value)}
+                placeholder="0,00"
+                autoFocus
+              />
+            </div>
+
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">Pasarela</label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {(["paypal", "stripe"] as const).map((p) => {
+                  const active = paymentProvider === p;
+                  const label = p === "paypal" ? "🅿️ PayPal" : "💳 Stripe";
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setPaymentProvider(p)}
+                      className={`px-3 py-2 rounded-lg border text-xs font-medium ${
+                        active ? "bg-neutral-900 text-white border-neutral-900" : "bg-white border-neutral-200 hover:bg-neutral-50"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs text-neutral-500 block mb-1">¿Cómo lo cobramos?</label>
+              <div className="grid grid-cols-5 gap-1.5">
+                {[null, 2, 3, 4, 6].map((n) => {
+                  const active = installmentCount === n;
+                  const label = n === null ? "1 pago" : `${n} cuotas`;
+                  return (
+                    <button
+                      key={n ?? "one"}
+                      type="button"
+                      onClick={() => setInstallmentCount(n)}
+                      className={`px-2 py-2 rounded-lg border text-xs font-medium ${
+                        active ? "bg-neutral-900 text-white border-neutral-900" : "bg-white border-neutral-200 hover:bg-neutral-50"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+              {installmentCount !== null && amountEuros && Number(amountEuros) > 0 && (
+                <p className="text-[11px] text-neutral-500 italic mt-1.5">
+                  PayPal cobrará {installmentCount} × {(Number(amountEuros) / installmentCount).toFixed(2).replace(".", ",")} € mensuales.
+                </p>
+              )}
+            </div>
+
+            {error && <p className="text-sm text-red-600">{error}</p>}
+
+            <button
+              onClick={generate}
+              disabled={saving || amountInvalid}
+              className="w-full text-sm font-medium"
+              style={{ background: "#0A0A0A", color: "#FAFAFA", padding: 11, borderRadius: 10, border: "none", opacity: saving || amountInvalid ? 0.5 : 1 }}
+            >
+              {saving ? "Generando..." : "Generar enlace de pago"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

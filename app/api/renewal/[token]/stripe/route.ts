@@ -39,9 +39,12 @@ export async function POST(_req: Request, { params }: { params: { token: string 
   const installments = checkout.installmentCount ?? 0;
   const useSubscription = installments >= 2;
 
-  const label = isReservation
-    ? `Reserva de plaza · ${checkout.programType}`
-    : `Renovación ${checkout.programType} · ${checkout.durationMonths}m`;
+  const isAdhoc = checkout.programType === "ADHOC";
+  const label = isAdhoc
+    ? "Pago FisioFitCross"
+    : isReservation
+      ? `Reserva de plaza · ${checkout.programType}`
+      : `Renovación ${checkout.programType} · ${checkout.durationMonths}m`;
 
   try {
     if (useSubscription) {

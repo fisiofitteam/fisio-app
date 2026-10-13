@@ -23,5 +23,9 @@ export async function GET(_req: Request, { params }: { params: { token: string }
     installmentCount: checkout.installmentCount ?? null,
     paymentProvider: (checkout as any).paymentProvider ?? "paypal",
     isReservation: (checkout as any).isReservation ?? false,
+    // Pago suelto generado desde la pestaña de suscripción (ver
+    // app/api/patients/[id]/payment-link). La landing lo usa para
+    // simplificar el copy (sin programa ni meses).
+    isAdhoc: checkout.programType === "ADHOC",
   });
 }

@@ -12,6 +12,9 @@ type Data = {
   amountCents: number;
   currency: string;
   installmentCount: number | null;
+  // Pago suelto (sin programa): simplifica la landing para no mencionar
+  // "renovación X meses RECUPERA" cuando el CEO genera un cobro ad hoc.
+  isAdhoc?: boolean;
 };
 
 function formatEuros(cents: number): string {
@@ -127,8 +130,12 @@ export function RenewalLandingClient({ token, copy }: { token: string; copy: Ren
                 <Panel>
                   <div className="text-center">
                     <div className="text-4xl mb-3">✅</div>
-                    <h1 className="text-2xl font-bold mb-1" style={{ color: "#FAFAFA" }}>Renovación completada</h1>
-                    <p className="text-sm" style={{ color: "#A3A3A3" }}>Esta renovación ya está pagada. ¡Gracias!</p>
+                    <h1 className="text-2xl font-bold mb-1" style={{ color: "#FAFAFA" }}>
+                      {data.isAdhoc ? "Pago completado" : "Renovación completada"}
+                    </h1>
+                    <p className="text-sm" style={{ color: "#A3A3A3" }}>
+                      {data.isAdhoc ? "Este pago ya está cobrado. ¡Gracias!" : "Esta renovación ya está pagada. ¡Gracias!"}
+                    </p>
                   </div>
                 </Panel>
               ) : data.expired ? (
@@ -154,33 +161,39 @@ export function RenewalLandingClient({ token, copy }: { token: string; copy: Ren
                       {/* Cabecera */}
                       <div className="text-center mb-8">
                         <p className="text-sm uppercase tracking-widest mb-2" style={{ color: "#737373" }}>
-                          Tu renovación
+                          {data.isAdhoc ? "Tu pago" : "Tu renovación"}
                         </p>
                         <h1 className="text-3xl sm:text-4xl font-bold mb-2 tracking-tight" style={{ color: "#FAFAFA" }}>
-                          {v(copy.headline)}
+                          {data.isAdhoc
+                            ? `Hola ${data.patientName.split(" ")[0]}, aquí tienes tu enlace de pago`
+                            : v(copy.headline)}
                         </h1>
-                        <p className="text-sm" style={{ color: "#A3A3A3" }}>{v(copy.subheadline)}</p>
+                        {!data.isAdhoc && (
+                          <p className="text-sm" style={{ color: "#A3A3A3" }}>{v(copy.subheadline)}</p>
+                        )}
                       </div>
 
                       <Panel>
-                        {/* Badges */}
-                        <div className="flex items-center justify-between mb-5">
-                          <span
-                            className="inline-block px-3 py-1 rounded-full text-[10px] font-semibold tracking-wider"
-                            style={{ background: badge.bg, color: badge.color, border: `1px solid ${badge.border}` }}
-                          >
-                            {data.programType.toUpperCase()}
-                          </span>
-                          <span
-                            className="inline-block px-2.5 py-1 rounded-md text-[10px] font-semibold"
-                            style={{ background: "rgba(255, 212, 0, 0.1)", color: "#FFD400", border: "1px solid rgba(255, 212, 0, 0.3)" }}
-                          >
-                            {data.durationMonths} {data.durationMonths === 1 ? "MES" : "MESES"}
-                          </span>
-                        </div>
+                        {/* Badges — solo con contexto de programa / duración */}
+                        {!data.isAdhoc && (
+                          <div className="flex items-center justify-between mb-5">
+                            <span
+                              className="inline-block px-3 py-1 rounded-full text-[10px] font-semibold tracking-wider"
+                              style={{ background: badge.bg, color: badge.color, border: `1px solid ${badge.border}` }}
+                            >
+                              {data.programType.toUpperCase()}
+                            </span>
+                            <span
+                              className="inline-block px-2.5 py-1 rounded-md text-[10px] font-semibold"
+                              style={{ background: "rgba(255, 212, 0, 0.1)", color: "#FFD400", border: "1px solid rgba(255, 212, 0, 0.3)" }}
+                            >
+                              {data.durationMonths} {data.durationMonths === 1 ? "MES" : "MESES"}
+                            </span>
+                          </div>
+                        )}
 
-                        {/* Mensajes */}
-                        {copy.bullets.length > 0 && (
+                        {/* Mensajes de valor — solo en renovaciones reales */}
+                        {!data.isAdhoc && copy.bullets.length > 0 && (
                           <ul className="space-y-2.5 mb-6">
                             {copy.bullets.map((b, i) => (
                               <li key={i} className="flex items-start gap-2.5 text-sm" style={{ color: "#D4D4D4" }}>
@@ -191,20 +204,24 @@ export function RenewalLandingClient({ token, copy }: { token: string; copy: Ren
                           </ul>
                         )}
 
-                        <div className="my-6 h-px" style={{ background: "linear-gradient(to right, transparent, #404040, transparent)" }} />
+                        {!data.isAdhoc && (
+                          <div className="my-6 h-px" style={{ background: "linear-gradient(to right, transparent, #404040, transparent)" }} />
+                        )}
 
-                        {/* Precio + duración */}
+                        {/* Precio + duración (duración se oculta en pago suelto) */}
                         <div className="flex items-baseline justify-between mb-6">
                           <div>
-                            <p className="text-xs uppercase tracking-wider mb-1" style={{ color: "#737373" }}>Total</p>
+                            <p className="text-xs uppercase tracking-wider mb-1" style={{ color: "#737373" }}>Total a pagar</p>
                             <p className="text-3xl font-bold tabular-nums" style={{ color: "#FAFAFA" }}>{amount}</p>
                           </div>
-                          <div className="text-right">
-                            <p className="text-xs uppercase tracking-wider mb-1" style={{ color: "#737373" }}>Duración</p>
-                            <p className="text-lg font-semibold tabular-nums" style={{ color: "#FAFAFA" }}>
-                              {data.durationMonths} {data.durationMonths === 1 ? "mes" : "meses"}
-                            </p>
-                          </div>
+                          {!data.isAdhoc && (
+                            <div className="text-right">
+                              <p className="text-xs uppercase tracking-wider mb-1" style={{ color: "#737373" }}>Duración</p>
+                              <p className="text-lg font-semibold tabular-nums" style={{ color: "#FAFAFA" }}>
+                                {data.durationMonths} {data.durationMonths === 1 ? "mes" : "meses"}
+                              </p>
+                            </div>
+                          )}
                         </div>
 
                         {cancelled && (

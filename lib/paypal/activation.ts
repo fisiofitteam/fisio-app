@@ -226,6 +226,43 @@ export async function applyRenewalCheckoutPaid(opts: {
   const totalEur = checkout.amountCents / 100;
 
   const isReservation = (checkout as any).isReservation === true;
+  // Pago suelto creado desde la pestaña de suscripción (ver
+  // app/api/patients/[id]/payment-link/route.ts): no abre periodo, solo
+  // registra el ingreso para que el CEO lo vea en Finanzas.
+  const isAdhoc = checkout.programType === "ADHOC";
+
+  if (isAdhoc) {
+    await prisma.renewalCheckout.update({
+      where: { id: checkout.id },
+      data: {
+        status: "paid",
+        paidAt: new Date(),
+        paymentMethod: opts.paymentMethod,
+        paypalCaptureId: opts.paypalCaptureId ?? checkout.paypalCaptureId,
+        paypalSubscriptionId: opts.paypalSubscriptionId ?? checkout.paypalSubscriptionId,
+      },
+    });
+    if (!opts.isSubscription) {
+      await prisma.transaction.create({
+        data: {
+          type: "income_renewal",
+          category: "ADHOC",
+          amount: totalEur,
+          description: "Pago suelto PayPal",
+          occurredAt: new Date(),
+          patientId: checkout.patientId,
+          professionalId: checkout.createdById,
+        },
+      });
+    }
+    console.log("[paypal-activation] Pago suelto aplicado", {
+      checkoutId: checkout.id,
+      patient: checkout.patient.fullName,
+      amountEur: totalEur,
+    });
+    return { renewalId: "" };
+  }
+
   const { renewalId } = await applyRenewal({
     patientId: checkout.patientId,
     programType: checkout.programType,
