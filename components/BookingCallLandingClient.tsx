@@ -30,27 +30,38 @@ const TYPE_INTRO: Record<CallType, string> = {
 
 const WINDOW_DAYS = 14;
 
-function formatDateHeader(iso: string): string {
+// Formato de fecha/hora respetando la zona del paciente. Default Madrid
+// para render SSR estable; en cliente se resuelve a la TZ real del navegador
+// vía getUserTimezone() + useEffect, igual que en AgendaLanding.
+function formatDateHeader(iso: string, tz: string = "Europe/Madrid"): string {
   return new Intl.DateTimeFormat("es-ES", {
-    timeZone: "Europe/Madrid",
+    timeZone: tz,
     weekday: "long",
     day: "numeric",
     month: "long",
   }).format(new Date(iso));
 }
-function formatTime(iso: string): string {
+function formatTime(iso: string, tz: string = "Europe/Madrid"): string {
   return new Intl.DateTimeFormat("es-ES", {
-    timeZone: "Europe/Madrid",
+    timeZone: tz,
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
   }).format(new Date(iso));
 }
-function madridDayKey(iso: string): string {
+function dayKey(iso: string, tz: string = "Europe/Madrid"): string {
   return new Intl.DateTimeFormat("sv-SE", {
-    timeZone: "Europe/Madrid",
+    timeZone: tz,
     year: "numeric", month: "2-digit", day: "2-digit",
   }).format(new Date(iso));
+}
+
+function getUserTimezone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return null;
+  }
 }
 
 type PreCallQuestion = {
@@ -89,6 +100,17 @@ export function BookingCallLandingClient(props: {
   const [emailInput, setEmailInput] = useState(props.patient.email ?? "");
   const [reserving, setReserving] = useState(false);
   const [reserveError, setReserveError] = useState<string | null>(null);
+
+  // Huso horario del paciente que reserva. En SSR y primer paint usamos
+  // Madrid para que no haya salto visible; en cuanto corre el useEffect
+  // caemos a la TZ real del navegador. Si no es Madrid, al pintar la hora
+  // añadimos un hint "(X en Madrid)" para que no se despiste.
+  const [userTz, setUserTz] = useState<string | null>(null);
+  useEffect(() => {
+    setUserTz(getUserTimezone());
+  }, []);
+  const effectiveTz = userTz || "Europe/Madrid";
+  const isUserInMadrid = userTz === "Europe/Madrid";
 
   // Formulario previo (si el fisio lo activó al generar el link). Mientras
   // needsForm === true, ocultamos el selector de huecos.
@@ -181,13 +203,13 @@ export function BookingCallLandingClient(props: {
   const slotsByDay = useMemo(() => {
     const map = new Map<string, string[]>();
     for (const s of slots) {
-      const k = madridDayKey(s);
+      const k = dayKey(s, effectiveTz);
       const arr = map.get(k) ?? [];
       arr.push(s);
       map.set(k, arr);
     }
     return Array.from(map.entries()).sort();
-  }, [slots]);
+  }, [slots, effectiveTz]);
 
   async function reserve() {
     if (!selected) return;
@@ -281,7 +303,10 @@ export function BookingCallLandingClient(props: {
             <div className="text-3xl mb-1 text-center">✅</div>
             <h2 className="font-semibold text-center">¡Reserva confirmada!</h2>
             <p className="text-sm text-neutral-700 text-center mt-1">
-              Nos vemos el <b>{formatDateHeader(activeScheduledAt)}</b> a las <b>{formatTime(activeScheduledAt)}</b>.
+              Nos vemos el <b>{formatDateHeader(activeScheduledAt, effectiveTz)}</b> a las <b>{formatTime(activeScheduledAt, effectiveTz)}</b>
+              {!isUserInMadrid && userTz && (
+                <>{" "}<span className="text-neutral-500">· {formatTime(activeScheduledAt, "Europe/Madrid")} en Madrid</span></>
+              )}.
             </p>
             {activeMeetingUrl && (
               <div className="mt-4 text-center">
@@ -451,10 +476,15 @@ export function BookingCallLandingClient(props: {
               </div>
             ) : (
               <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
-                {slotsByDay.map(([dayKey, daySlots]) => (
-                  <div key={dayKey}>
+                {!isUserInMadrid && userTz && (
+                  <div className="text-[11px] text-neutral-500 italic -mt-1 mb-1">
+                    Horas mostradas en tu zona ({userTz.replace("_", " ")}). El fisio está en Madrid.
+                  </div>
+                )}
+                {slotsByDay.map(([dkey, daySlots]) => (
+                  <div key={dkey}>
                     <div className="text-xs font-medium text-neutral-500 mb-1.5 capitalize">
-                      {formatDateHeader(daySlots[0])}
+                      {formatDateHeader(daySlots[0], effectiveTz)}
                     </div>
                     <div className="grid grid-cols-4 gap-1.5">
                       {daySlots.map((s) => {
@@ -470,7 +500,7 @@ export function BookingCallLandingClient(props: {
                               border: isSel ? "1px solid #0A0A0A" : "1px solid transparent",
                             }}
                           >
-                            {formatTime(s)}
+                            {formatTime(s, effectiveTz)}
                           </button>
                         );
                       })}
@@ -484,8 +514,13 @@ export function BookingCallLandingClient(props: {
               <div className="mt-4 pt-4 border-t" style={{ borderColor: "#E5E5E5" }}>
                 <div className="text-xs text-neutral-500 mb-1">Reservarás</div>
                 <div className="text-sm font-semibold capitalize">
-                  {formatDateHeader(selected)} · {formatTime(selected)}
+                  {formatDateHeader(selected, effectiveTz)} · {formatTime(selected, effectiveTz)}
                 </div>
+                {!isUserInMadrid && userTz && (
+                  <div className="text-[11px] text-neutral-500 mt-0.5">
+                    Equivale a {formatTime(selected, "Europe/Madrid")} en Madrid.
+                  </div>
+                )}
 
                 {!props.patient.email && (
                   <div className="mt-3">
