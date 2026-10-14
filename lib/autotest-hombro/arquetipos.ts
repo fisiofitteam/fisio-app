@@ -46,7 +46,18 @@ export const ARQUETIPOS: readonly Arquetipo[] = [
     title: "Hombro Competitivo",
     summary:
       "Tienes buena base en todo. Tu hombro no es el eslabón débil: aguanta carga, se mueve con soltura y lo controlas. Toca pulir detalles y meter volumen bien pautado para seguir subiendo marcas sin tocar techo por lesión.",
-    match: (s) => avg(s) >= 68 && low(s, 45) === 0,
+    match: (s) => avg(s) >= 68 && low(s, 50) === 0,
+  },
+  {
+    id: "RECONSTRUCCION",
+    emoji: "🧩",
+    title: "En Reconstrucción",
+    summary:
+      "El hombro no está preparado para la carga del box todavía. Varias capacidades están claramente por debajo de lo que necesita para entrenar sin que empieces a arrastrar molestias. No es un problema, es tu punto de partida: primero construimos base, después progresamos a lo técnico.",
+    // Solo salta cuando el hombro de verdad está mal — necesitamos al
+    // menos 4 áreas muy bajas (<30) y una media global <40. Antes era
+    // demasiado laxo y absorbía a la mayoría de atletas.
+    match: (s) => low(s, 30) >= 4 && avg(s) < 40,
   },
   {
     id: "CABALLO_DESCONTROLADO",
@@ -54,7 +65,7 @@ export const ARQUETIPOS: readonly Arquetipo[] = [
     title: "Caballo Descontrolado",
     summary:
       "Mueves pesado y empujas fuerte, pero el hombro aguanta de milagro, no por control. Eres el típico atleta que \"tira de huevos\" en el WOD y luego se queja al día siguiente. Trabaja estabilidad escapular antes de que te pase factura.",
-    match: (s) => s.fuerzaEmpuje >= 60 && s.estabilidadEscapular < 45,
+    match: (s) => s.fuerzaEmpuje >= 55 && s.estabilidadEscapular < 50,
   },
   {
     id: "RIGIDO",
@@ -62,15 +73,7 @@ export const ARQUETIPOS: readonly Arquetipo[] = [
     title: "Rígido Vertical",
     summary:
       "Tienes músculo pero el hombro no tiene recorrido para colocarse donde necesita. Compensas con lumbar en los overhead y pierdes la cabeza del húmero en el snatch. La movilidad arriba te está limitando más que la fuerza.",
-    match: (s) => s.movilidadOverhead < 40 && s.fuerzaEmpuje >= 50,
-  },
-  {
-    id: "INESTABLE",
-    emoji: "🌀",
-    title: "Atleta Inestable",
-    summary:
-      "Te mueves con soltura pero el hombro pierde control cuando añades kipping o velocidad. En gymnastics vas a tirones, no fluido. El techo real para tus pull-ups y muscle-ups está en el control escapular, no en la fuerza.",
-    match: (s) => s.movilidadOverhead >= 50 && (s.controlDinamico < 40 || s.estabilidadEscapular < 40),
+    match: (s) => s.movilidadOverhead < 50 && s.fuerzaEmpuje >= 45,
   },
   {
     id: "FLUIDO_DEBIL",
@@ -78,20 +81,23 @@ export const ARQUETIPOS: readonly Arquetipo[] = [
     title: "Fluido pero Débil",
     summary:
       "La técnica la tienes: te mueves bien, el hombro va donde tiene que ir. Lo que te falta es fuerza para mantenerla cuando el WOD se pone pesado. Toca empujar carga vertical específica — HSPU, press, jerk — con progresiones claras.",
-    match: (s) => s.movilidadOverhead >= 55 && s.rotacionExterna >= 50 && s.fuerzaEmpuje < 45,
+    match: (s) => s.movilidadOverhead >= 50 && s.rotacionExterna >= 45 && s.fuerzaEmpuje < 50,
   },
   {
-    id: "RECONSTRUCCION",
-    emoji: "🧩",
-    title: "En Reconstrucción",
+    id: "INESTABLE",
+    emoji: "🌀",
+    title: "Atleta Inestable",
     summary:
-      "El hombro no está preparado para la carga del box todavía. Varias capacidades están por debajo de lo que necesita para entrenar sin que empieces a arrastrar molestias. No es un problema, es tu punto de partida: primero construimos base, después progresamos a lo técnico.",
-    match: (s) => low(s, 40) >= 3 || avg(s) < 42,
+      "Te mueves con soltura pero el hombro pierde control cuando añades kipping o velocidad. En gymnastics vas a tirones, no fluido. El techo real para tus pull-ups y muscle-ups está en el control escapular, no en la fuerza.",
+    // Pasa a ser el "cajón de sastre" para atletas con control o
+    // estabilidad limitada — el perfil más frecuente en CrossFit.
+    match: (s) => s.controlDinamico < 55 || s.estabilidadEscapular < 55,
   },
 ];
 
-/** Fallback si nada matchea (defensa en depth). */
-const DEFAULT: Arquetipo = ARQUETIPOS.find((a) => a.id === "RECONSTRUCCION")!;
+/** Fallback si nada matchea (defensa en depth). En la práctica es muy raro
+ *  porque INESTABLE captura casi todo lo que no ha caído en bucket específico. */
+const DEFAULT: Arquetipo = ARQUETIPOS.find((a) => a.id === "INESTABLE")!;
 
 export function selectArquetipo(scores: Scores): Arquetipo {
   for (const a of ARQUETIPOS) {

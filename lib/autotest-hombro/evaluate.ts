@@ -21,7 +21,11 @@ export type EvaluationResult = {
   arquetipoId: ArquetipoId;
 };
 
-const BASELINE = 50;
+// Baseline neutral de cada área. Subimos a 55 (antes 50) para que un
+// atleta medio no caiga a "En Reconstrucción" por sumar unos cuantos
+// deltas negativos leves; los perfiles problemáticos reales siguen
+// bajando por debajo de los umbrales de ese arquetipo.
+const BASELINE = 55;
 
 function emptyScores(): Scores {
   return {

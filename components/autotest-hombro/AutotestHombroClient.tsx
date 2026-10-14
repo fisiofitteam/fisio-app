@@ -26,7 +26,7 @@ const body = Archivo({ subsets: ["latin"], weight: ["400", "500", "600", "700"],
 
 type Screen = "intro" | "quiz" | "result";
 
-const WHATSAPP_NUMBER = "34640987765"; // mismo del Semáforo
+const WHATSAPP_NUMBER = "34621495367";
 
 const STYLES = `
 [data-scope="autotest"] {
