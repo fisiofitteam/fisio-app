@@ -59,9 +59,44 @@ const STYLES = `
 .at-hero{text-align:center;margin-bottom:22px;color:var(--ink);}
 .at-brand{font-family:var(--font-body);font-size:12px;letter-spacing:.3em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;}
 .at-brand-accent{color:var(--gold-1);font-weight:700;}
+.at-chip{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-body);font-size:12px;color:var(--ink);background:rgba(252,211,77,0.08);border:1px solid rgba(252,211,77,0.35);padding:6px 14px;border-radius:999px;margin-bottom:14px;letter-spacing:.02em;}
+.at-chip-dot{width:6px;height:6px;border-radius:50%;background:var(--gold-1);display:inline-block;}
 .at-hero h1{font-family:var(--font-display);font-weight:800;font-size:60px;line-height:1;margin:0 0 14px;letter-spacing:-.025em;}
 @media (max-width: 480px) { .at-hero h1{font-size:48px;} }
 .at-lead{font-family:var(--font-body);color:var(--muted);font-size:14px;line-height:1.5;max-width:420px;margin:0 auto;}
+
+/* Preview de las 6 áreas en la intro — teaser visual de qué vas a medir */
+.at-preview-areas{display:grid;grid-template-columns:repeat(3, 1fr);gap:8px;margin:14px 0 4px;}
+@media (min-width: 520px) { .at-preview-areas{grid-template-columns:repeat(6, 1fr);} }
+.at-preview-area{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;background:rgba(0,0,0,0.3);border:1px solid var(--line);border-radius:10px;font-family:var(--font-body);color:var(--muted);font-size:10px;text-align:center;line-height:1.2;}
+.at-preview-area-emoji{font-size:20px;line-height:1;}
+
+/* Animaciones fade-up escalonadas. Clase + style={animationDelay} por índice. */
+@keyframes atFadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.at-fade {
+  opacity: 0;
+  animation: atFadeUp .55s cubic-bezier(.22,.9,.3,1) forwards;
+}
+/* Para quitar el bloqueo visual si el user prefiere menos movimiento. */
+@media (prefers-reduced-motion: reduce) {
+  .at-fade { animation: none; opacity: 1; }
+  .at-bar-fill-anim { animation: none; width: var(--target-w, 0%); }
+}
+
+/* Crecimiento secuencial de las barras del resultado. --target-w y
+ * --target-delay se pasan por style={} desde el JSX. */
+@keyframes atBarGrow {
+  from { width: 0%; }
+  to { width: var(--target-w, 0%); }
+}
+.at-bar-fill-anim {
+  width: 0%;
+  animation: atBarGrow .9s cubic-bezier(.22,.9,.3,1) forwards;
+  animation-delay: var(--target-delay, 0ms);
+}
 
 .at-card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px;color:var(--ink);backdrop-filter:blur(8px);}
 .at-section{font-family:var(--font-body);font-size:11px;letter-spacing:.25em;text-transform:uppercase;color:var(--gold-1);margin-bottom:8px;font-weight:700;}
@@ -225,7 +260,7 @@ export function AutotestHombroClient({
       <style dangerouslySetInnerHTML={{ __html: STYLES }} />
       <div className="at-bg" aria-hidden />
       <div className="at-bg-overlay" aria-hidden />
-      <main className="at-wrap" aria-live="polite">
+      <main className="at-wrap" aria-live="polite" key={`${screen}-${step}`}>
         {screen === "intro" && (
           <IntroScreen start={start} starting={starting} />
         )}
@@ -266,30 +301,50 @@ function IntroScreen({
   start: () => void;
   starting: boolean;
 }) {
+  // Delays escalonados en milisegundos para dar aire al "aparecer" de
+  // cada bloque. Mantenemos los pasos cortos (90-120ms) para que no
+  // parezca lento.
+  const delays = [0, 90, 180, 290, 400, 510, 620];
   return (
     <>
       <header className="at-hero">
-        <div className="at-brand"><span className="at-brand-accent">FisioFitCross</span></div>
-        <h1>
+        <div className="at-brand at-fade" style={{ animationDelay: `${delays[0]}ms` }}>
+          <span className="at-brand-accent">FisioFitCross</span>
+        </div>
+        <div className="at-fade" style={{ animationDelay: `${delays[1]}ms` }}>
+          <span className="at-chip">
+            <span className="at-chip-dot" />
+            7 min · sin material · gratis
+          </span>
+        </div>
+        <h1 className="at-fade" style={{ animationDelay: `${delays[2]}ms` }}>
           Autotest funcional del hombro
           <br />
           <span style={{ color: "var(--gold-1)" }}>para CrossFit</span>
         </h1>
-        <p className="at-lead">
+        <p className="at-lead at-fade" style={{ animationDelay: `${delays[3]}ms` }}>
           Descubre tus 6 capacidades de hombro en 7 minutos, sin material. Al final te decimos a qué tipo de atleta perteneces y qué toca mejorar primero.
         </p>
       </header>
-      <section className="at-card">
+      <section className="at-card at-fade" style={{ animationDelay: `${delays[4]}ms` }}>
         <div className="at-section">Lo que vas a hacer</div>
         <ol style={{ paddingLeft: 18, margin: "0 0 14px", color: "var(--ink)", fontFamily: "var(--font-body)", fontSize: 14, lineHeight: 1.55 }}>
           <li>5 preguntas rápidas sobre tu snatch, tus gymnastics y tus números.</li>
           <li>3 mini-tests en vídeo que haces en casa (sin barra, sin pullup bar).</li>
           <li>Tu resultado: 6 barras + tu arquetipo + siguiente paso.</li>
         </ol>
-        <button className="at-btn" onClick={start} disabled={starting}>
+        <div className="at-preview-areas">
+          {AREAS.map((a) => (
+            <div key={a.id} className="at-preview-area">
+              <span className="at-preview-area-emoji">{a.emoji}</span>
+              <span>{a.short}</span>
+            </div>
+          ))}
+        </div>
+        <button className="at-btn at-fade" style={{ animationDelay: `${delays[5]}ms` }} onClick={start} disabled={starting}>
           {starting ? "Cargando…" : "Empezar el autotest →"}
         </button>
-        <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--muted)", textAlign: "center", margin: "10px 0 0" }}>
+        <p className="at-fade" style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--muted)", textAlign: "center", margin: "10px 0 0", animationDelay: `${delays[6]}ms` }}>
           Este test te orienta, no sustituye una valoración profesional. Si algo te duele mucho mientras lo haces, para.
         </p>
       </section>
@@ -323,12 +378,12 @@ function QuizScreen({
 
   return (
     <>
-      <div className="at-top">
+      <div className="at-top at-fade">
         <button className="at-back" onClick={onBack}>‹ Atrás</button>
         <div className="at-progress" aria-hidden><span style={{ width: `${progressPct}%` }} /></div>
         <div className="at-count">{step + 1} / {total}</div>
       </div>
-      <section className="at-card">
+      <section className="at-card at-fade" style={{ animationDelay: "80ms" }}>
         <div className="at-section">{q.section}</div>
         <h2 className="at-qtitle">{q.title}</h2>
         {q.help && <p className="at-help">{q.help}</p>}
@@ -414,7 +469,7 @@ function ResultScreen({
 
   return (
     <>
-      <header className="at-hero">
+      <header className="at-hero at-fade">
         <div className="at-brand"><span className="at-brand-accent">FisioFitCross</span> · Tu resultado</div>
         <div className="at-arq-head">
           <div className="at-arq-emoji">{arq.emoji}</div>
@@ -425,10 +480,10 @@ function ResultScreen({
         </div>
       </header>
 
-      <section className="at-card">
+      <section className="at-card at-fade" style={{ animationDelay: "160ms" }}>
         <div className="at-section">Tus 6 capacidades</div>
         <div className="at-bars">
-          {AREAS.map((a) => {
+          {AREAS.map((a, i) => {
             const score = result.scores[a.id as AreaId];
             const level = levelFromScore(score);
             const showHint = score < 40;
@@ -439,7 +494,13 @@ function ResultScreen({
                   <span className="at-bar-score">{score}<span style={{ fontSize: 12, color: "var(--muted)", marginLeft: 2 }}>/100</span></span>
                 </div>
                 <div className="at-bar-track">
-                  <div className={`at-bar-fill ${level}`} style={{ width: `${score}%` }} />
+                  <div
+                    className={`at-bar-fill at-bar-fill-anim ${level}`}
+                    style={{
+                      ["--target-w" as any]: `${score}%`,
+                      ["--target-delay" as any]: `${400 + i * 120}ms`,
+                    }}
+                  />
                 </div>
                 {showHint && <div className="at-bar-hint">{a.weakHint}</div>}
               </div>
@@ -448,7 +509,7 @@ function ResultScreen({
         </div>
       </section>
 
-      <section className="at-card" style={{ marginTop: 14 }}>
+      <section className="at-card at-fade" style={{ marginTop: 14, animationDelay: "320ms" }}>
         <div className="at-section">Siguiente paso</div>
         <p style={{ fontFamily: "var(--font-body)", color: "var(--ink)", fontSize: 14, lineHeight: 1.55, margin: "0 0 12px" }}>
           Si quieres, podemos ayudarte de forma personal con tu caso. Revisamos tu resultado contigo y vemos qué hacer concretamente — sin plantillas ni ejercicios genéricos.
