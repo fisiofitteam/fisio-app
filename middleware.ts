@@ -34,6 +34,8 @@ const PUBLIC_PATHS = [
   "/semaforo",      // lead magnet "El Semáforo del Hombro" — landing pública
                     //   sin login, distribuido por Instagram/Skalex.
   "/api/semaforo",  // endpoints del semáforo (create, update, whatsapp click)
+  "/autotest-hombro",     // lead magnet "Autotest Funcional del Hombro para CrossFit"
+  "/api/autotest-hombro", // endpoints del autotest (create, update, whatsapp click)
 ];
 
 const STATIC_PREFIXES = ["/_next", "/api/_internal", "/favicon", "/icon-", "/box.jpg", "/manifest.json"];

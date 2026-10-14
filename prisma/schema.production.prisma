@@ -279,6 +279,7 @@ model Professional {
   derivationsReceived PatientDerivation[]          @relation("DerivationTo")
 
   semaforosGestionados SemaforoRespuesta[]         @relation("SemaforoGestionadoPor")
+  autotestsGestionados AutotestHombroResponse[]    @relation("AutotestGestionadoPor")
   compensation      Compensation?
   communityFeedPosts     CommunityFeedPost[] @relation("FeedPostAuthor")
   communityFeedComments  CommunityComment[]  @relation("FeedCommentAuthor")
@@ -491,6 +492,7 @@ model Lead {
   // Respuestas del Semáforo del Hombro que dieron origen a este lead
   // (idealmente 0 o 1, pero permitimos array por si acaso).
   semaforoRespuestas SemaforoRespuesta[]
+  autotestRespuestas AutotestHombroResponse[]
 
   @@index([status])
   @@index([callScheduledAt])
@@ -4019,4 +4021,60 @@ model SemaforoConfig {
   videoUrlAlarma         String?
   updatedAt              DateTime @updatedAt
   updatedById            String?
+}
+
+// ============================================================================
+// AUTOTEST FUNCIONAL DEL HOMBRO PARA CROSSFIT (lead magnet)
+// ============================================================================
+// Lead magnet independiente del Semáforo. Evalúa 6 capacidades 0-100 y
+// asigna un arquetipo narrativo. Ver lib/autotest-hombro/*.
+
+model AutotestHombroResponse {
+  id                    String   @id @default(cuid())
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  instagram             String?
+  nombre                String?
+  telefono              String?
+  campana               String?
+
+  estado                String   @default("EN_CURSO")  // "EN_CURSO" | "COMPLETADO"
+  ultimoPaso            Int      @default(0)
+
+  respuestas            String   @default("{}")        // JSON con las respuestas
+  scores                String?                        // JSON con 6 áreas 0-100
+  arquetipo             String?                        // slug del arquetipo
+
+  whatsappClickAt       DateTime?
+
+  consentimientoAt      DateTime
+  consentimientoVersion String
+
+  userAgent             String?
+
+  gestionado            Boolean  @default(false)
+  gestionadoPorId       String?
+  gestionadoPor         Professional? @relation("AutotestGestionadoPor", fields: [gestionadoPorId], references: [id], onDelete: SetNull)
+  notas                 String?
+
+  leadId                String?
+  lead                  Lead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([estado])
+  @@index([arquetipo])
+  @@index([instagram])
+  @@index([leadId])
+}
+
+model AutotestHombroConfig {
+  id                String   @id @default("singleton")
+  videoUrlTest1     String?
+  videoUrlTest2     String?
+  videoUrlTest3     String?
+  whatsappTemplate  String?
+  quizFunnelEnabled Boolean  @default(false)
+  updatedAt         DateTime @updatedAt
+  updatedById       String?
 }

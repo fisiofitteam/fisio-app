@@ -44,6 +44,19 @@ export default async function LeadMagnetsIndexPage() {
     }),
   );
 
+  // Contadores del Autotest Funcional del Hombro (lead magnet aparte).
+  // Si la tabla no existe aún (deploy A pendiente) caemos a 0.
+  let autotest = { total30d: 0, completadas30d: 0, waClicks30d: 0 };
+  try {
+    const where = { createdAt: { gte: from } };
+    const [t, c, w] = await Promise.all([
+      (prisma as any).autotestHombroResponse.count({ where }),
+      (prisma as any).autotestHombroResponse.count({ where: { ...where, estado: "COMPLETADO" } }),
+      (prisma as any).autotestHombroResponse.count({ where: { ...where, whatsappClickAt: { not: null } } }),
+    ]);
+    autotest = { total30d: t, completadas30d: c, waClicks30d: w };
+  } catch { /* tabla aún no creada */ }
+
   return (
     <main className="p-4 md:p-6 max-w-[1200px] mx-auto">
       <ContentNav active="lead-magnets" role={user.role} />
@@ -82,14 +95,30 @@ export default async function LeadMagnetsIndexPage() {
           </Link>
         ))}
 
-        {cardsData.length % 2 === 1 && (
-          <div
-            className="rounded-xl p-5 flex items-center justify-center text-center text-neutral-400 italic"
-            style={{ background: "#FAFAFA", border: "1px dashed #D4D4D4" }}
-          >
-            Próximos lead magnets aparecerán aquí.
+        <Link
+          href="/fisio/contenido/lead-magnets/autotest-hombro"
+          className="block rounded-xl p-5 transition-colors"
+          style={{ background: "white", border: "1px solid #E5E5E5" }}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-neutral-500 mb-1">Test interactivo</div>
+              <h2 className="text-lg font-semibold">🧪 Autotest Funcional del Hombro para CrossFit</h2>
+              <p className="text-sm text-neutral-600 mt-1">
+                Clasifica al atleta en un arquetipo según 6 capacidades (movilidad, estabilidad, fuerza, control, rotación, confianza).
+              </p>
+            </div>
+            <span className="text-neutral-400 text-xl">→</span>
           </div>
-        )}
+          <div className="grid grid-cols-3 gap-2 mt-4">
+            <MiniTile label="30d" value={autotest.total30d} />
+            <MiniTile label="Completados" value={autotest.completadas30d} />
+            <MiniTile label="Click WA" value={autotest.waClicks30d} />
+          </div>
+          <div className="text-[11px] text-neutral-500 mt-3">
+            URL pública: <code>/autotest-hombro</code>
+          </div>
+        </Link>
       </div>
     </main>
   );
