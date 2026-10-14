@@ -85,7 +85,7 @@ export const ARQUETIPOS: readonly Arquetipo[] = [
     emoji: "🧩",
     title: "En Reconstrucción",
     summary:
-      "El hombro no está preparado para la carga del box todavía. Varias capacidades están por debajo de lo que necesita para entrenar sin dejarse pelos. No es un problema, es tu punto de partida: primero construimos base, después progresamos a lo técnico.",
+      "El hombro no está preparado para la carga del box todavía. Varias capacidades están por debajo de lo que necesita para entrenar sin que empieces a arrastrar molestias. No es un problema, es tu punto de partida: primero construimos base, después progresamos a lo técnico.",
     match: (s) => low(s, 40) >= 3 || avg(s) < 42,
   },
 ];

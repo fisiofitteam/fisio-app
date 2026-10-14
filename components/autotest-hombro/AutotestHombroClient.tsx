@@ -59,7 +59,8 @@ const STYLES = `
 .at-hero{text-align:center;margin-bottom:22px;color:var(--ink);}
 .at-brand{font-family:var(--font-body);font-size:12px;letter-spacing:.3em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;}
 .at-brand-accent{color:var(--gold-1);font-weight:700;}
-.at-hero h1{font-family:var(--font-display);font-weight:800;font-size:40px;line-height:1.05;margin:0 0 10px;letter-spacing:-.02em;}
+.at-hero h1{font-family:var(--font-display);font-weight:800;font-size:60px;line-height:1;margin:0 0 14px;letter-spacing:-.025em;}
+@media (max-width: 480px) { .at-hero h1{font-size:48px;} }
 .at-lead{font-family:var(--font-body);color:var(--muted);font-size:14px;line-height:1.5;max-width:420px;margin:0 auto;}
 
 .at-card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px;color:var(--ink);backdrop-filter:blur(8px);}
@@ -125,7 +126,6 @@ export function AutotestHombroClient({
   const [answers, setAnswers] = useState<Respuestas>({});
   const [responseId, setResponseId] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
-  const [consent, setConsent] = useState(false);
 
   const igFromUrl = useRef<string | null>(null);
   const campaignFromUrl = useRef<string | null>(null);
@@ -227,12 +227,7 @@ export function AutotestHombroClient({
       <div className="at-bg-overlay" aria-hidden />
       <main className="at-wrap" aria-live="polite">
         {screen === "intro" && (
-          <IntroScreen
-            consent={consent}
-            setConsent={setConsent}
-            start={start}
-            starting={starting}
-          />
+          <IntroScreen start={start} starting={starting} />
         )}
         {screen === "quiz" && (
           <QuizScreen
@@ -266,10 +261,8 @@ export function AutotestHombroClient({
 // ═══════════ Intro ═══════════
 
 function IntroScreen({
-  consent, setConsent, start, starting,
+  start, starting,
 }: {
-  consent: boolean;
-  setConsent: (b: boolean) => void;
   start: () => void;
   starting: boolean;
 }) {
@@ -293,18 +286,7 @@ function IntroScreen({
           <li>3 mini-tests en vídeo que haces en casa (sin barra, sin pullup bar).</li>
           <li>Tu resultado: 6 barras + tu arquetipo + siguiente paso.</li>
         </ol>
-        <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer", fontFamily: "var(--font-body)", color: "var(--muted)", fontSize: 12, lineHeight: 1.5, marginBottom: 6 }}>
-          <input
-            type="checkbox"
-            checked={consent}
-            onChange={(e) => setConsent(e.target.checked)}
-            style={{ marginTop: 3 }}
-          />
-          <span>
-            Acepto que FisioFitCross trate mis respuestas para darme el resultado y, si lo pido, contactar conmigo por WhatsApp. Puedo pedir eliminar mis datos escribiéndoles.
-          </span>
-        </label>
-        <button className="at-btn" onClick={start} disabled={!consent || starting}>
+        <button className="at-btn" onClick={start} disabled={starting}>
           {starting ? "Cargando…" : "Empezar el autotest →"}
         </button>
         <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--muted)", textAlign: "center", margin: "10px 0 0" }}>
@@ -421,15 +403,13 @@ function ResultScreen({
 }) {
   const result = useMemo(() => evaluate(answers), [answers]);
   const arq = arquetipoById(result.arquetipoId)!;
-  const name = typeof answers.nombre === "string" ? (answers.nombre as string).trim().split(" ")[0] : "";
+  const nombreCompleto = typeof answers.nombre === "string" ? (answers.nombre as string).trim() : "";
+  const name = nombreCompleto.split(" ")[0];
 
-  // Áreas más débiles, para incluirlas en el mensaje de WhatsApp.
-  const debiles = [...AREAS]
-    .map((a) => ({ ...a, score: result.scores[a.id] }))
-    .sort((a, b) => a.score - b.score)
-    .slice(0, 2);
-
-  const msg = `¡Hola Ales! ${name ? `Soy ${name}. ` : ""}Hice el Autotest Funcional del Hombro y me ha salido *${arq.title}*.\nMis dos áreas más flojas: ${debiles.map((d) => d.name.toLowerCase()).join(" y ")}.\nMe gustaría que me pasaras un par de cosas concretas para mejorarlas.`;
+  // Mensaje predefinido corto: se abre WhatsApp con la intención del lead
+  // y su nombre ya rellenado — no describe el resultado para no sesgar
+  // la primera respuesta del equipo.
+  const msg = `¡Hola Ales! Me gustaría que hablásemos sobre mi dolor/lesión para ver si me podéis ayudar🙏🏼\n\nMi nombre es: ${nombreCompleto}`;
   const wa = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`;
 
   return (
@@ -471,7 +451,7 @@ function ResultScreen({
       <section className="at-card" style={{ marginTop: 14 }}>
         <div className="at-section">Siguiente paso</div>
         <p style={{ fontFamily: "var(--font-body)", color: "var(--ink)", fontSize: 14, lineHeight: 1.55, margin: "0 0 12px" }}>
-          Si quieres te paso un par de ejercicios concretos para tus 2 áreas más débiles ({debiles.map((d) => d.name.toLowerCase()).join(" y ")}) y te cuento cómo encajarlos sin tocar tu rutina del box.
+          Si quieres, podemos ayudarte de forma personal con tu caso. Revisamos tu resultado contigo y vemos qué hacer concretamente — sin plantillas ni ejercicios genéricos.
         </p>
         <a
           className="at-btn wa"

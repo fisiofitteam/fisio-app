@@ -31,7 +31,7 @@ export const AREAS: readonly AreaMeta[] = [
     short: "Movilidad",
     emoji: "🎯",
     weakHint:
-      "Te falta recorrido para colocar bien el brazo arriba, así que compensas con lumbar o caderas en snatch/jerk.",
+      "Te falta recorrido para colocar bien el brazo arriba, así que compensas con lumbar o caderas en snatch y jerk.",
   },
   {
     id: "estabilidadEscapular",
@@ -39,7 +39,7 @@ export const AREAS: readonly AreaMeta[] = [
     short: "Estabilidad",
     emoji: "🛡",
     weakHint:
-      "El hombro aguanta por ósea, no por control. Es la base del dolor \"detrás del WOD\" al día siguiente.",
+      "El hombro aguanta por estructura, no por control muscular. Suele ser el origen de la molestia que aparece al día siguiente del WOD.",
   },
   {
     id: "fuerzaEmpuje",
@@ -47,7 +47,7 @@ export const AREAS: readonly AreaMeta[] = [
     short: "Fuerza",
     emoji: "💪",
     weakHint:
-      "Fuerza por encima de la cabeza corta. Afecta a HSPU, press, jerk y a la capacidad de recibir pesos en snatch.",
+      "Te falta fuerza para empujar por encima de la cabeza. Limita HSPU, press, jerk y la recepción de pesos en snatch.",
   },
   {
     id: "controlDinamico",
@@ -55,7 +55,7 @@ export const AREAS: readonly AreaMeta[] = [
     short: "Control",
     emoji: "🤸",
     weakHint:
-      "Pierdes el hombro cuando añades kipping o velocidad. Suele ser el techo real en pull-ups y muscle-ups.",
+      "El hombro se descontrola cuando metes kipping o velocidad. Suele ser el techo real en pull-ups y muscle-ups.",
   },
   {
     id: "rotacionExterna",
@@ -63,7 +63,7 @@ export const AREAS: readonly AreaMeta[] = [
     short: "Rotación",
     emoji: "🔄",
     weakHint:
-      "La recepción del snatch sufre: te vas por delante o cedes el brazo en vez de rotar y bloquear.",
+      "La recepción del snatch sufre: te vas por delante o cedes el brazo en vez de rotar y bloquear arriba.",
   },
   {
     id: "confianza",
@@ -71,7 +71,7 @@ export const AREAS: readonly AreaMeta[] = [
     short: "Confianza",
     emoji: "🧠",
     weakHint:
-      "No confías en tu hombro bajo carga. La parte técnica probablemente mejoraría si la cabeza acompañara.",
+      "No confías en tu hombro bajo carga. La parte técnica mejoraría si la cabeza acompañase lo que el cuerpo ya puede hacer.",
   },
 ] as const;
 
