@@ -61,8 +61,8 @@ const STYLES = `
 .at-brand-accent{color:var(--gold-1);font-weight:700;}
 .at-chip{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-body);font-size:12px;color:var(--ink);background:rgba(252,211,77,0.08);border:1px solid rgba(252,211,77,0.35);padding:6px 14px;border-radius:999px;margin-bottom:14px;letter-spacing:.02em;}
 .at-chip-dot{width:6px;height:6px;border-radius:50%;background:var(--gold-1);display:inline-block;}
-.at-hero h1{font-family:var(--font-display);font-weight:800;font-size:60px;line-height:1;margin:0 0 14px;letter-spacing:-.025em;}
-@media (max-width: 480px) { .at-hero h1{font-size:48px;} }
+.at-hero h1{font-family:var(--font-display);font-weight:800;font-size:72px;line-height:0.98;margin:0 0 14px;letter-spacing:-.03em;}
+@media (max-width: 480px) { .at-hero h1{font-size:54px;} }
 .at-lead{font-family:var(--font-body);color:var(--muted);font-size:14px;line-height:1.5;max-width:420px;margin:0 auto;}
 
 /* Preview de las 6 áreas en la intro — teaser visual de qué vas a medir */
