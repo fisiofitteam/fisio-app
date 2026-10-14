@@ -135,7 +135,9 @@ const STYLES = `
 /* Resultado */
 .at-arq-head{text-align:center;color:var(--ink);margin-bottom:18px;}
 .at-arq-emoji{font-size:56px;line-height:1;margin-bottom:6px;}
-.at-arq-title{font-family:var(--font-display);font-weight:800;font-size:32px;line-height:1.1;color:var(--gold-1);margin:0 0 8px;letter-spacing:-.01em;}
+.at-arq-label{font-family:var(--font-body);font-size:15px;line-height:1.4;color:var(--ink);margin:0 auto 6px;max-width:520px;}
+.at-arq-title{font-family:var(--font-display);font-weight:800;font-size:44px;line-height:1.02;color:var(--gold-1);margin:0 0 12px;letter-spacing:-.015em;}
+@media (max-width: 480px) { .at-arq-title{font-size:36px;} }
 .at-arq-summary{font-family:var(--font-body);color:var(--ink);font-size:14px;line-height:1.55;max-width:520px;margin:0 auto;}
 
 .at-bars{display:flex;flex-direction:column;gap:12px;margin-top:4px;}
@@ -473,9 +475,12 @@ function ResultScreen({
         <div className="at-brand"><span className="at-brand-accent">FisioFitCross</span> · Tu resultado</div>
         <div className="at-arq-head">
           <div className="at-arq-emoji">{arq.emoji}</div>
-          <h2 className="at-arq-title">
-            {name ? `${name}, eres` : "Eres un"} <br />{arq.title}
-          </h2>
+          <p className="at-arq-label">
+            {name
+              ? <>¡{name}, este es tu arquetipo funcional del hombro:</>
+              : <>¡Este es tu arquetipo funcional del hombro:</>}
+          </p>
+          <h2 className="at-arq-title">{arq.title}</h2>
           <p className="at-arq-summary">{arq.summary}</p>
         </div>
       </header>
