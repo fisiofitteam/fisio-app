@@ -40,6 +40,7 @@ export function AutotestConfigCard() {
     videoUrlTest3: string | null;
     videoUrlTest4: string | null;
     whatsappTemplate: string | null;
+    quizFunnelEnabled: boolean;
   }>) {
     setStatus("saving");
     setErrorMsg(null);
@@ -95,6 +96,12 @@ export function AutotestConfigCard() {
     if (templateDebounceRef.current) clearTimeout(templateDebounceRef.current);
     templateDebounceRef.current = setTimeout(() => persist({ whatsappTemplate: next }), 800);
   }
+
+  function toggleFunnel(v: boolean) {
+    if (!config) return;
+    setConfig({ ...config, quizFunnelEnabled: v });
+    persist({ quizFunnelEnabled: v });
+  }
   function flushTemplate() {
     if (!config) return;
     if (templateDebounceRef.current) {
@@ -126,6 +133,31 @@ export function AutotestConfigCard() {
           {status === "error" && <span className="text-red-600">✕ error</span>}
         </span>
       </div>
+
+      {/* Toggle Quiz Funnel */}
+      <label
+        className="flex items-start gap-3 cursor-pointer select-none rounded-lg p-3 mb-3"
+        style={{
+          background: config.quizFunnelEnabled ? "rgba(252,211,77,0.14)" : "#FAFAFA",
+          border: `1px solid ${config.quizFunnelEnabled ? "#FCD34D" : "#E5E5E5"}`,
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={config.quizFunnelEnabled}
+          onChange={(e) => toggleFunnel(e.target.checked)}
+          className="mt-0.5 h-4 w-4 accent-neutral-900 cursor-pointer"
+        />
+        <span>
+          <span className="text-sm font-semibold text-neutral-800 block">🎯 Convertir en Quiz Funnel</span>
+          <span className="text-[11px] text-neutral-600 block leading-snug mt-0.5">
+            Cuando está activo, en el paso final la landing pide <b>nombre + país (con prefijo) + número de WhatsApp</b>.
+            El resultado se sigue mostrando. Útil cuando quieres captar el teléfono para hablar luego por WhatsApp.
+            <br />
+            Si está desactivado, solo pide el nombre.
+          </span>
+        </span>
+      </label>
 
       <div className="rounded-lg p-3 mb-3" style={{ background: "#FAFAFA", border: "1px solid #E5E5E5" }}>
         <div className="mb-2">

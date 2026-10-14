@@ -7,6 +7,7 @@ import { Q, type Question } from "@/lib/autotest-hombro/preguntas";
 import { evaluate, type Respuestas } from "@/lib/autotest-hombro/evaluate";
 import { arquetipoById } from "@/lib/autotest-hombro/arquetipos";
 import { youtubeEmbedUrl } from "@/lib/youtube";
+import { COUNTRIES, DEFAULT_COUNTRY, countryFlag, findCountry } from "@/lib/countries";
 
 const display = Barlow_Condensed({ subsets: ["latin"], weight: ["600", "700", "800"], variable: "--font-display" });
 const body = Archivo({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-body" });
@@ -155,14 +156,23 @@ const STYLES = `
 
 export function AutotestHombroClient({
   videoUrls,
+  quizFunnelMode = false,
 }: {
   videoUrls: { test1: string; test2: string; test3: string; test4: string };
+  /** Si true, el paso final pide también país (con prefijo) + número de WhatsApp. */
+  quizFunnelMode?: boolean;
 }) {
   const [screen, setScreen] = useState<Screen>("intro");
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Respuestas>({});
   const [responseId, setResponseId] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  // Modo funnel: paso final pide país + teléfono además del nombre.
+  // El selector de país muestra bandera + prefijo (ej. "🇪🇸 +34 España").
+  // Guardamos el label en el state para preservarlo al navegar atrás,
+  // pero al cerrar enviamos sólo "+<prefijo> <phone>" como `telefono`.
+  const [funnelCountryLabel, setFunnelCountryLabel] = useState<string>(DEFAULT_COUNTRY.label);
+  const [funnelPhone, setFunnelPhone] = useState<string>("");
 
   const igFromUrl = useRef<string | null>(null);
   const campaignFromUrl = useRef<string | null>(null);
@@ -229,13 +239,20 @@ export function AutotestHombroClient({
       nombre: typeof answers.nombre === "string" ? answers.nombre : undefined,
     });
     if (nextStep >= Q.length) {
-      // Cerrar
+      // Si está activo el modo funnel y hay teléfono, lo mandamos
+      // concatenado con el prefijo del país elegido ("+34 612345678").
+      let telefono: string | undefined;
+      if (quizFunnelMode && funnelPhone.trim()) {
+        const country = findCountry(funnelCountryLabel);
+        telefono = `${country?.dialCode ?? ""} ${funnelPhone.trim()}`.trim();
+      }
       await fetch(`/api/autotest-hombro/${responseId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           respuestas: answers as Record<string, unknown>,
           nombre: typeof answers.nombre === "string" ? answers.nombre : undefined,
+          telefono,
           cerrar: "completado",
         }),
       });
@@ -276,6 +293,11 @@ export function AutotestHombroClient({
             onBack={goBack}
             total={Q.length}
             videoUrls={videoUrls}
+            quizFunnelMode={quizFunnelMode}
+            funnelCountryLabel={funnelCountryLabel}
+            setFunnelCountryLabel={setFunnelCountryLabel}
+            funnelPhone={funnelPhone}
+            setFunnelPhone={setFunnelPhone}
           />
         )}
         {screen === "result" && (
@@ -358,6 +380,7 @@ function IntroScreen({
 
 function QuizScreen({
   step, question: q, answers, setAnswers, onNext, onBack, total, videoUrls,
+  quizFunnelMode, funnelCountryLabel, setFunnelCountryLabel, funnelPhone, setFunnelPhone,
 }: {
   step: number;
   question: Question;
@@ -367,6 +390,11 @@ function QuizScreen({
   onBack: () => void;
   total: number;
   videoUrls: { test1: string; test2: string; test3: string; test4: string };
+  quizFunnelMode: boolean;
+  funnelCountryLabel: string;
+  setFunnelCountryLabel: (s: string) => void;
+  funnelPhone: string;
+  setFunnelPhone: (s: string) => void;
 }) {
   const progressPct = ((step + 1) / total) * 100;
   const videoUrl = q.type === "single" && q.videoKey
@@ -374,8 +402,12 @@ function QuizScreen({
     : null;
   const embed = useMemo(() => (videoUrl ? youtubeEmbedUrl(videoUrl) : null), [videoUrl]);
 
+  const hasName = typeof answers.nombre === "string" && (answers.nombre as string).trim().length >= 2;
+  // Teléfono: entre 6 y 15 dígitos (ignorando espacios/guiones).
+  const phoneDigits = funnelPhone.replace(/\D/g, "");
+  const hasPhone = phoneDigits.length >= 6 && phoneDigits.length <= 15;
   const canContinue = q.type === "text"
-    ? typeof answers.nombre === "string" && (answers.nombre as string).trim().length >= 2
+    ? hasName && (!quizFunnelMode || hasPhone)
     : !!(answers as any)[q.id];
 
   return (
@@ -430,15 +462,46 @@ function QuizScreen({
         )}
 
         {q.type === "text" && (
-          <input
-            className="at-input"
-            type="text"
-            placeholder="Tu nombre"
-            value={typeof answers.nombre === "string" ? (answers.nombre as string) : ""}
-            onChange={(e) => setAnswers((prev) => ({ ...prev, nombre: e.target.value }))}
-            maxLength={60}
-            autoFocus
-          />
+          <>
+            <input
+              className="at-input"
+              type="text"
+              placeholder="Tu nombre"
+              value={typeof answers.nombre === "string" ? (answers.nombre as string) : ""}
+              onChange={(e) => setAnswers((prev) => ({ ...prev, nombre: e.target.value }))}
+              maxLength={60}
+              autoFocus
+            />
+            {quizFunnelMode && (
+              <>
+                <select
+                  className="at-input"
+                  style={{ marginTop: 10 }}
+                  value={funnelCountryLabel}
+                  onChange={(e) => setFunnelCountryLabel(e.target.value)}
+                >
+                  {COUNTRIES.map((c) => (
+                    <option key={c.label} value={c.label} style={{ color: "#171717" }}>
+                      {countryFlag(c.iso2)} {c.dialCode} · {c.label}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  className="at-input"
+                  style={{ marginTop: 10 }}
+                  type="tel"
+                  inputMode="tel"
+                  placeholder="Número de WhatsApp (sin prefijo)"
+                  value={funnelPhone}
+                  onChange={(e) => setFunnelPhone(e.target.value)}
+                  maxLength={20}
+                />
+                <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--muted)", margin: "8px 0 0" }}>
+                  Te escribo yo con tu resultado personalizado por WhatsApp. Sin spam ni listas.
+                </p>
+              </>
+            )}
+          </>
         )}
 
         <button className="at-btn" disabled={!canContinue} onClick={onNext}>

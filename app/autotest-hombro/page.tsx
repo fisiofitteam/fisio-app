@@ -19,5 +19,10 @@ export const dynamic = "force-dynamic";
 
 export default async function AutotestHombroPage() {
   const cfg = await getAutotestConfig();
-  return <AutotestHombroClient videoUrls={cfg.videoUrls} />;
+  return (
+    <AutotestHombroClient
+      videoUrls={cfg.videoUrls}
+      quizFunnelMode={cfg.quizFunnelEnabled}
+    />
+  );
 }
