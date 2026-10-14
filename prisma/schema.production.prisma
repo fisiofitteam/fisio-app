@@ -4073,6 +4073,7 @@ model AutotestHombroConfig {
   videoUrlTest1     String?
   videoUrlTest2     String?
   videoUrlTest3     String?
+  videoUrlTest4     String?
   whatsappTemplate  String?
   quizFunnelEnabled Boolean  @default(false)
   updatedAt         DateTime @updatedAt

@@ -156,7 +156,7 @@ const STYLES = `
 export function AutotestHombroClient({
   videoUrls,
 }: {
-  videoUrls: { test1: string; test2: string; test3: string };
+  videoUrls: { test1: string; test2: string; test3: string; test4: string };
 }) {
   const [screen, setScreen] = useState<Screen>("intro");
   const [step, setStep] = useState(0);
@@ -332,7 +332,7 @@ function IntroScreen({
         <div className="at-section">Lo que vas a hacer</div>
         <ol style={{ paddingLeft: 18, margin: "0 0 14px", color: "var(--ink)", fontFamily: "var(--font-body)", fontSize: 14, lineHeight: 1.55 }}>
           <li>5 preguntas rápidas sobre tu snatch, tus gymnastics y tus números.</li>
-          <li>3 mini-tests en vídeo que haces en casa (sin barra, sin pullup bar).</li>
+          <li>4 mini-tests en vídeo que haces en casa (uno con un palo de escoba, el resto sin material).</li>
           <li>Tu resultado: 6 barras + tu arquetipo + siguiente paso.</li>
         </ol>
         <div className="at-preview-areas">
@@ -366,11 +366,11 @@ function QuizScreen({
   onNext: () => void;
   onBack: () => void;
   total: number;
-  videoUrls: { test1: string; test2: string; test3: string };
+  videoUrls: { test1: string; test2: string; test3: string; test4: string };
 }) {
   const progressPct = ((step + 1) / total) * 100;
   const videoUrl = q.type === "single" && q.videoKey
-    ? videoUrls[`test${q.videoKey}` as "test1" | "test2" | "test3"]
+    ? videoUrls[`test${q.videoKey}` as "test1" | "test2" | "test3" | "test4"]
     : null;
   const embed = useMemo(() => (videoUrl ? youtubeEmbedUrl(videoUrl) : null), [videoUrl]);
 

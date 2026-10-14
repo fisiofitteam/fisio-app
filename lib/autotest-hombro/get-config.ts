@@ -6,7 +6,7 @@
 import { prisma } from "@/lib/prisma";
 
 export type AutotestConfig = {
-  videoUrls: { test1: string; test2: string; test3: string };
+  videoUrls: { test1: string; test2: string; test3: string; test4: string };
   whatsappTemplate: string;
   quizFunnelEnabled: boolean;
 };
@@ -23,7 +23,7 @@ Si quieres, te paso un par de ejercicios concretos para tus 2 áreas más débil
 ¿Cuando puedas seguimos por aquí?`;
 
 const DEFAULTS: AutotestConfig = {
-  videoUrls: { test1: "", test2: "", test3: "" },
+  videoUrls: { test1: "", test2: "", test3: "", test4: "" },
   whatsappTemplate: DEFAULT_WHATSAPP_TEMPLATE,
   quizFunnelEnabled: false,
 };
@@ -39,6 +39,7 @@ export async function getAutotestConfig(): Promise<AutotestConfig> {
         test1: row.videoUrlTest1 || "",
         test2: row.videoUrlTest2 || "",
         test3: row.videoUrlTest3 || "",
+        test4: row.videoUrlTest4 || "",
       },
       whatsappTemplate: row.whatsappTemplate || DEFAULT_WHATSAPP_TEMPLATE,
       quizFunnelEnabled: !!row.quizFunnelEnabled,

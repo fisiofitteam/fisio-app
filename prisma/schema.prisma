@@ -4064,11 +4064,12 @@ model AutotestHombroResponse {
 }
 
 model AutotestHombroConfig {
-  // Singleton. URLs de los 3 vídeos de tests + plantilla WhatsApp.
+  // Singleton. URLs de los 4 vídeos de tests + plantilla WhatsApp.
   id                String   @id @default("singleton")
   videoUrlTest1     String?
   videoUrlTest2     String?
   videoUrlTest3     String?
+  videoUrlTest4     String?
   whatsappTemplate  String?
   quizFunnelEnabled Boolean  @default(false)
   updatedAt         DateTime @updatedAt

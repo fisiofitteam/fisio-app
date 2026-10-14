@@ -25,6 +25,7 @@ export type QuestionId =
   // Bloque B — con vídeo
   | "test_wall_slide"
   | "test_thoracic_rotation"
+  | "test_ohs"
   | "test_flexion_iso"
   // Final — captura
   | "nombre";
@@ -45,8 +46,8 @@ export type BaseQ = {
 export type SingleQ = BaseQ & {
   type: "single";
   options: readonly Option[];
-  /** videoKey=1|2|3 → URL de YouTube en AutotestHombroConfig.videoUrlTestN. */
-  videoKey?: 1 | 2 | 3;
+  /** videoKey=1|2|3|4 → URL de YouTube en AutotestHombroConfig.videoUrlTestN. */
+  videoKey?: 1 | 2 | 3 | 4;
   /** Guía corta "cómo se hace" para los tests con vídeo. */
   howto?: readonly string[];
 };
@@ -191,7 +192,7 @@ export const Q: readonly Question[] = [
   // ─── BLOQUE B: tests con vídeo (sin material, en casa) ─────────────
   {
     id: "test_wall_slide",
-    section: "Test 1 de 3 · Wall slide",
+    section: "Test 1 de 4 · Wall slide",
     title: "¿Con cuál te identificas al hacer el wall slide?",
     help: "Mira el vídeo. Lo haces una vez, pegado a la pared, y marcas lo que te pasa.",
     type: "single",
@@ -221,7 +222,7 @@ export const Q: readonly Question[] = [
   },
   {
     id: "test_thoracic_rotation",
-    section: "Test 2 de 3 · Rotación torácica",
+    section: "Test 2 de 4 · Rotación torácica",
     title: "¿Qué pasa cuando giras el codo hacia el techo?",
     help: "A cuatro patas, mano en la nuca, giras el codo buscando el techo. 5 reps cada lado.",
     type: "single",
@@ -250,12 +251,47 @@ export const Q: readonly Question[] = [
     ],
   },
   {
+    id: "test_ohs",
+    section: "Test 3 de 4 · Overhead squat con palo",
+    title: "Haz una overhead squat con un palo de escoba. ¿Qué pasa?",
+    help: "Un palo ligero sobre la cabeza, agarre amplio, baja a sentadilla completa. Lo haces una o dos veces y marcas lo que te pasa.",
+    type: "single",
+    videoKey: 3,
+    howto: [
+      "Agarre amplio en el palo, brazos extendidos arriba (bloqueados).",
+      "Pies ligeramente más abiertos que los hombros, puntas afuera.",
+      "Baja a sentadilla completa manteniendo el palo justo encima o detrás de la cabeza, sin que caiga hacia delante.",
+    ],
+    options: [
+      {
+        v: "ok",
+        label: "Cómoda, bajo del paralelo con el palo justo encima y sin compensar",
+        deltas: { movilidadOverhead: 25, rotacionExterna: 15, estabilidadEscapular: 10, confianza: 10 },
+      },
+      {
+        v: "paralelo",
+        label: "El palo me aguanta arriba, pero no bajo del paralelo",
+        deltas: { movilidadOverhead: -5, rotacionExterna: -5 },
+      },
+      {
+        v: "compensa",
+        label: "Compenso con la lumbar o las caderas se me van hacia atrás",
+        deltas: { movilidadOverhead: -20, estabilidadEscapular: -10 },
+      },
+      {
+        v: "palo_delante",
+        label: "El palo se me va hacia delante o no lo aguanto encima",
+        deltas: { movilidadOverhead: -25, rotacionExterna: -20, confianza: -5 },
+      },
+    ],
+  },
+  {
     id: "test_flexion_iso",
-    section: "Test 3 de 3 · Flexión isométrica a 90°",
+    section: "Test 4 de 4 · Flexión isométrica a 90°",
     title: "¿Cuánto aguantas la flexión a 90° sin perder la forma?",
     help: "En posición de plancha, baja hasta tener los codos a 90° y aguanta ahí. Cronométrate.",
     type: "single",
-    videoKey: 3,
+    videoKey: 4,
     howto: [
       "Plancha alta, cuerpo en línea.",
       "Baja hasta que los codos estén a 90° (brazo paralelo al suelo).",

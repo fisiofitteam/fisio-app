@@ -33,6 +33,7 @@ export async function PATCH(req: NextRequest) {
     videoUrlTest1?: string | null;
     videoUrlTest2?: string | null;
     videoUrlTest3?: string | null;
+    videoUrlTest4?: string | null;
     whatsappTemplate?: string | null;
     quizFunnelEnabled?: boolean;
   };
@@ -42,6 +43,7 @@ export async function PATCH(req: NextRequest) {
     ["videoUrlTest1", "videoUrlTest1"],
     ["videoUrlTest2", "videoUrlTest2"],
     ["videoUrlTest3", "videoUrlTest3"],
+    ["videoUrlTest4", "videoUrlTest4"],
   ] as const) {
     const v = (body as any)[in_];
     if (typeof v === "string") {

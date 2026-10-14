@@ -84,6 +84,8 @@ export async function GET() {
       "updatedById"            TEXT
     )
   `);
+  // Añadido 2026-10 — 4º test (flexión iso) después de meter OHS como 3º.
+  await run(`ALTER TABLE "AutotestHombroConfig" ADD COLUMN IF NOT EXISTS "videoUrlTest4" TEXT`);
 
   const allOk = steps.every((s) => s.ok);
   return NextResponse.json({

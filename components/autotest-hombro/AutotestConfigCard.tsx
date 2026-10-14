@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { DEFAULT_WHATSAPP_TEMPLATE } from "@/lib/autotest-hombro/get-config";
 
 type Config = {
-  videoUrls: { test1: string; test2: string; test3: string };
+  videoUrls: { test1: string; test2: string; test3: string; test4: string };
   whatsappTemplate: string;
   quizFunnelEnabled: boolean;
 };
@@ -16,7 +16,8 @@ type Config = {
 const TEST_LABELS = {
   test1: { label: "🧱 Test 1 · Wall slide", help: "Movilidad overhead + estabilidad escapular" },
   test2: { label: "🔄 Test 2 · Rotación torácica", help: "Rotación externa / recepción snatch" },
-  test3: { label: "💪 Test 3 · Flexión isométrica", help: "Fuerza de empuje + estabilidad" },
+  test3: { label: "🏋 Test 3 · Overhead squat", help: "Movilidad overhead + rotación externa" },
+  test4: { label: "💪 Test 4 · Flexión isométrica", help: "Fuerza de empuje + estabilidad" },
 } as const;
 
 export function AutotestConfigCard() {
@@ -37,6 +38,7 @@ export function AutotestConfigCard() {
     videoUrlTest1: string | null;
     videoUrlTest2: string | null;
     videoUrlTest3: string | null;
+    videoUrlTest4: string | null;
     whatsappTemplate: string | null;
   }>) {
     setStatus("saving");
@@ -61,22 +63,30 @@ export function AutotestConfigCard() {
     }
   }
 
-  function scheduleVideo(testKey: "test1" | "test2" | "test3", next: string) {
+  type TestKey = "test1" | "test2" | "test3" | "test4";
+  function patchKeyFor(k: TestKey) {
+    return k === "test1"
+      ? "videoUrlTest1"
+      : k === "test2"
+        ? "videoUrlTest2"
+        : k === "test3"
+          ? "videoUrlTest3"
+          : "videoUrlTest4";
+  }
+  function scheduleVideo(testKey: TestKey, next: string) {
     if (!config) return;
     const nextVideos = { ...config.videoUrls, [testKey]: next };
     setConfig({ ...config, videoUrls: nextVideos });
     if (videoDebounceRef.current) clearTimeout(videoDebounceRef.current);
-    const patchKey = testKey === "test1" ? "videoUrlTest1" : testKey === "test2" ? "videoUrlTest2" : "videoUrlTest3";
-    videoDebounceRef.current = setTimeout(() => persist({ [patchKey]: next } as any), 800);
+    videoDebounceRef.current = setTimeout(() => persist({ [patchKeyFor(testKey)]: next } as any), 800);
   }
-  function flushVideo(testKey: "test1" | "test2" | "test3") {
+  function flushVideo(testKey: TestKey) {
     if (!config) return;
     if (videoDebounceRef.current) {
       clearTimeout(videoDebounceRef.current);
       videoDebounceRef.current = null;
     }
-    const patchKey = testKey === "test1" ? "videoUrlTest1" : testKey === "test2" ? "videoUrlTest2" : "videoUrlTest3";
-    persist({ [patchKey]: config.videoUrls[testKey] } as any);
+    persist({ [patchKeyFor(testKey)]: config.videoUrls[testKey] } as any);
   }
 
   function scheduleTemplate(next: string) {
@@ -125,7 +135,7 @@ export function AutotestConfigCard() {
           </p>
         </div>
         <div className="grid gap-2">
-          {(["test1", "test2", "test3"] as const).map((k) => {
+          {(["test1", "test2", "test3", "test4"] as const).map((k) => {
             const meta = TEST_LABELS[k];
             return (
               <div key={k} className="flex flex-col gap-1">
