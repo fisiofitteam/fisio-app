@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import type { SalaryResult } from "@/lib/compensation";
 
 function eur(n: number): string {
@@ -9,6 +8,13 @@ function eur(n: number): string {
 
 type Emisor = { name: string; taxId: string | null; address: string | null; iban: string | null; email: string | null };
 type Receptor = { name: string; taxId: string | null; address: string | null };
+
+// Retención IRPF fija y obligatoria del 15% para todas las facturas del
+// equipo. Antes era editable (0-15% con default 7%) y el CEO reporta que
+// no cumplía con la obligación fiscal — ahora no se puede modificar
+// desde el UI; si en el futuro hay que cambiarla (p. ej. 7% primer año
+// autónomo), se toca aquí.
+const IRPF_RATE = 15;
 
 export function InvoiceClient({
   emisor,
@@ -25,8 +31,6 @@ export function InvoiceClient({
   month: number;
   salary: SalaryResult;
 }) {
-  const [irpf, setIrpf] = useState(7); // % retención IRPF, editable al generar la factura
-
   const monthLabel = new Date(Date.UTC(year, month, 1)).toLocaleDateString("es-ES", { month: "long", year: "numeric", timeZone: "UTC" });
   const today = new Date().toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" });
   // Concepto único y genérico en TODAS las facturas (no se desglosa la compensación
@@ -36,7 +40,7 @@ export function InvoiceClient({
   const base = salary.total;
   const VAT_RATE = 21;
   const ivaAmount = vatExempt ? 0 : base * (VAT_RATE / 100);
-  const irpfAmount = base * (irpf / 100);
+  const irpfAmount = base * (IRPF_RATE / 100);
   const totalFactura = base + ivaAmount - irpfAmount;
 
   return (
@@ -46,14 +50,9 @@ export function InvoiceClient({
       <div className="no-print sticky top-0 bg-neutral-50 border-b border-neutral-200 px-4 py-3 flex justify-between items-center gap-3 flex-wrap">
         <a href="/fisio" className="text-sm text-neutral-500 hover:underline">← Volver</a>
         <div className="flex items-center gap-3">
-          <label className="text-sm text-neutral-600 flex items-center gap-1.5">
-            Retención IRPF:
-            <select className="input text-sm py-1 w-auto" value={irpf} onChange={(e) => setIrpf(Number(e.target.value))}>
-              {Array.from({ length: 16 }, (_, n) => (
-                <option key={n} value={n}>{n}%</option>
-              ))}
-            </select>
-          </label>
+          <span className="text-sm text-neutral-600">
+            Retención IRPF: <strong className="text-neutral-900">{IRPF_RATE}%</strong> <span className="text-neutral-400">(obligatoria)</span>
+          </span>
           <button onClick={() => window.print()} className="btn btn-primary text-sm">🖨️ Imprimir / Guardar PDF</button>
         </div>
       </div>
@@ -106,12 +105,10 @@ export function InvoiceClient({
               <td className="py-1 text-neutral-500" colSpan={2}>{vatExempt ? "IVA (exento)" : `IVA (${VAT_RATE}%)`}</td>
               <td className="py-1 text-right tabular-nums">{vatExempt ? "—" : eur(ivaAmount)}</td>
             </tr>
-            {irpf > 0 && (
-              <tr>
-                <td className="py-1 text-neutral-500" colSpan={2}>Retención IRPF (-{irpf}%)</td>
-                <td className="py-1 text-right tabular-nums text-red-700">-{eur(irpfAmount)}</td>
-              </tr>
-            )}
+            <tr>
+              <td className="py-1 text-neutral-500" colSpan={2}>Retención IRPF (-{IRPF_RATE}%)</td>
+              <td className="py-1 text-right tabular-nums text-red-700">-{eur(irpfAmount)}</td>
+            </tr>
             <tr className="border-t-2 border-neutral-900">
               <td className="py-3 font-bold" colSpan={2}>TOTAL</td>
               <td className="py-3 text-right font-bold text-lg tabular-nums">{eur(totalFactura)}</td>
