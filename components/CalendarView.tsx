@@ -433,10 +433,10 @@ function MonthGrid({
 
           return (
             <div key={rowIdx} className="grid grid-cols-7 border-b border-neutral-100 last:border-b-0">
-              {/* Franja tema (ocupa columnas 1-7 de la fila si hay semana) */}
-              {rowWeek && (
-                <WeekThemeBanner week={rowWeek} />
-              )}
+              {/* Antes había una franja con "W12 · Tema · zona · tipo" encima
+                  de cada fila. Se retiró a petición del CEO porque no la
+                  usaba. Mantenemos el "+ Crear semana" cuando aún no existe
+                  la semana porque sin ella no se pueden añadir piezas. */}
               {!rowWeek && (
                 <button
                   onClick={() => createWeekForMonday(rowMonday)}
