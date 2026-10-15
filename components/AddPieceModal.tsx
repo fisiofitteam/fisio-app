@@ -64,8 +64,15 @@ export function AddPieceModal({
       if (!res.ok || !data?.piece?.id) {
         throw new Error(data?.error || "No se pudo crear la pieza");
       }
-      // Redirección al editor de la pieza nueva para que la rellenes
-      router.push(`/fisio/contenido/pieza/${data.piece.id}`);
+      // Las historias son contenido ligero: no abren editor, se quedan
+      // en el calendario con la idea principal como título. Para el resto
+      // de formatos sí redirigimos al editor para que lo rellenen.
+      if (format === "story") {
+        onClose();
+        router.refresh();
+      } else {
+        router.push(`/fisio/contenido/pieza/${data.piece.id}`);
+      }
     } catch (e: any) {
       setError(e?.message || "Error creando la pieza");
       setBusy(false);

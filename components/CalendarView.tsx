@@ -547,13 +547,22 @@ function MonthGrid({
                         // en qué fase está cada pieza sin abrirla.
                         const statusMeta = PIECE_STATUS_BADGE[dp.piece.status] ?? { icon: "•", label: dp.piece.status, color: "#737373" };
                         const goals = parseGoals(dp.piece.goals);
+                        // Las historias no abren editor — con la idea
+                        // principal en el calendario basta. Si es story
+                        // renderizamos un <div> en vez de <Link> para que
+                        // el click no navegue; conserva drag/borrar/mover.
+                        const isStory = dp.piece.format === "story";
+                        const TileTag: any = isStory ? "div" : Link;
+                        const tileProps: any = isStory
+                          ? {}
+                          : { href: `/fisio/contenido/pieza/${dp.piece.id}` };
                         return (
-                          <Link
+                          <TileTag
                             key={dp.piece.id}
-                            href={`/fisio/contenido/pieza/${dp.piece.id}`}
-                            onClick={(e) => e.stopPropagation()}
+                            {...tileProps}
+                            onClick={(e: any) => e.stopPropagation()}
                             draggable
-                            onDragStart={(e) => {
+                            onDragStart={(e: any) => {
                               e.dataTransfer.setData("text/piece-id", dp.piece.id);
                               e.dataTransfer.setData("text/source-week-id", dp.weekId);
                               e.dataTransfer.setData("text/source-dayofweek", String(dp.piece.dayOfWeek));
@@ -633,7 +642,7 @@ function MonthGrid({
                                 ))}
                               </div>
                             )}
-                          </Link>
+                          </TileTag>
                         );
                       })}
                     </div>
