@@ -21,7 +21,15 @@ type Patient = {
   shippingProvince: string | null;
   shippingPostalCode: string | null;
   shippingPhone: string | null;
+  startedAt: string | null;
 };
+
+const SORT_OPTIONS: { value: string; label: string }[] = [
+  { value: "name-asc", label: "Nombre A → Z" },
+  { value: "name-desc", label: "Nombre Z → A" },
+  { value: "startedAt-desc", label: "Alta en la app (recientes)" },
+  { value: "startedAt-asc", label: "Alta en la app (antiguos)" },
+];
 
 function buildAddressLine1(p: Patient): string {
   if (p.shippingStreet) {
@@ -52,11 +60,29 @@ function hasShipping(p: Patient): boolean {
  * de TODOS los pacientes. Pensada como "agenda de envíos" — no entra a la
  * ficha clínica ni a programas.
  */
-export function SetterPatientsView({ patients }: { patients: Patient[] }) {
+export function SetterPatientsView({
+  patients,
+  sort = "name-asc",
+}: {
+  patients: Patient[];
+  sort?: string;
+}) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [showOnlyMissing, setShowOnlyMissing] = useState(false);
   const [editing, setEditing] = useState<Patient | null>(null);
+
+  // El orden lo resuelve el server via Prisma (ver page.tsx) para que el
+  // dropdown funcione también si el setter paginase o filtrase por URL.
+  // Aquí el select solo navega a la misma ruta con el nuevo ?sort=.
+  function changeSort(next: string) {
+    const params = new URLSearchParams(window.location.search);
+    if (next === "name-asc") params.delete("sort");
+    else params.set("sort", next);
+    const qs = params.toString();
+    router.push(qs ? `?${qs}` : "?");
+  }
+  const showStartedAt = sort === "startedAt-desc" || sort === "startedAt-asc";
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -96,6 +122,18 @@ export function SetterPatientsView({ patients }: { patients: Patient[] }) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
+        <label className="text-xs text-neutral-600 flex items-center gap-1.5 whitespace-nowrap">
+          <span className="text-neutral-500">Ordenar por</span>
+          <select
+            className="input text-sm py-1.5 pr-7"
+            value={sort}
+            onChange={(e) => changeSort(e.target.value)}
+          >
+            {SORT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </label>
         <button
           onClick={() => setShowOnlyMissing((v) => !v)}
           className={`text-xs px-3 py-2 rounded-lg whitespace-nowrap flex items-center gap-1.5 ${
@@ -120,7 +158,7 @@ export function SetterPatientsView({ patients }: { patients: Patient[] }) {
         ) : (
           <div className="divide-y divide-neutral-100">
             {filtered.map((p) => (
-              <PatientRow key={p.id} patient={p} onEdit={() => setEditing(p)} />
+              <PatientRow key={p.id} patient={p} onEdit={() => setEditing(p)} showStartedAt={showStartedAt} />
             ))}
           </div>
         )}
@@ -140,8 +178,11 @@ export function SetterPatientsView({ patients }: { patients: Patient[] }) {
   );
 }
 
-function PatientRow({ patient, onEdit }: { patient: Patient; onEdit: () => void }) {
+function PatientRow({ patient, onEdit, showStartedAt }: { patient: Patient; onEdit: () => void; showStartedAt?: boolean }) {
   const has = hasShipping(patient);
+  const startedAtLabel = patient.startedAt
+    ? new Date(patient.startedAt).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })
+    : null;
   return (
     <div className="py-3 px-2 -mx-2">
       <div className="flex items-baseline gap-2 flex-wrap mb-1.5">
@@ -159,6 +200,11 @@ function PatientRow({ patient, onEdit }: { patient: Patient; onEdit: () => void 
         {patient.shirtSize && (
           <span className="text-[10px] font-bold text-neutral-700 bg-neutral-100 border border-neutral-300 px-1.5 py-0.5 rounded">
             Camiseta {patient.shirtSize}
+          </span>
+        )}
+        {showStartedAt && startedAtLabel && (
+          <span className="text-[10px] text-neutral-500 bg-neutral-50 border border-neutral-200 px-1.5 py-0.5 rounded">
+            📅 Alta: {startedAtLabel}
           </span>
         )}
         <button

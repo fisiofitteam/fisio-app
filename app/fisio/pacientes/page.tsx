@@ -8,15 +8,25 @@ import { getSubscriptionProgressBatch } from "@/lib/subscription-progress";
 export default async function PatientsListPage({
   searchParams,
 }: {
-  searchParams: { tab?: string };
+  searchParams: { tab?: string; sort?: string };
 }) {
   const user = (await getActiveProfessional())!;
 
   // Setter ve una vista simplificada: solo info de envío y fiscal de TODOS los
   // pacientes. No ve diagnóstico, programa, adherencia, etc.
   if (user.role === "setter") {
+    // Dropdown "Ordenar por" soportado via ?sort=. Default sigue siendo
+    // alfabético por retrocompat con links viejos y ergonomía (buscar
+    // "García" en una lista larga).
+    const sort = searchParams.sort ?? "name-asc";
+    const orderBy =
+      sort === "name-desc" ? { fullName: "desc" as const }
+      : sort === "startedAt-desc" ? { startedAt: "desc" as const }
+      : sort === "startedAt-asc" ? { startedAt: "asc" as const }
+      : { fullName: "asc" as const };
+
     const patients = await prisma.patient.findMany({
-      orderBy: { fullName: "asc" },
+      orderBy,
       select: {
         id: true,
         fullName: true,
@@ -35,10 +45,12 @@ export default async function PatientsListPage({
         shippingProvince: true,
         shippingPostalCode: true,
         shippingPhone: true,
+        startedAt: true,
       },
     });
     return (
       <SetterPatientsView
+        sort={sort}
         patients={patients.map((p) => ({
           id: p.id,
           fullName: p.fullName,
@@ -57,6 +69,7 @@ export default async function PatientsListPage({
           shippingProvince: p.shippingProvince,
           shippingPostalCode: p.shippingPostalCode,
           shippingPhone: p.shippingPhone,
+          startedAt: p.startedAt?.toISOString() ?? null,
         }))}
       />
     );
