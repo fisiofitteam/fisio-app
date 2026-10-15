@@ -32,6 +32,25 @@ export default async function FacturaPage({
 
   const salary = await computeMonthlySalary(params.id, year, month);
 
+  // Número de factura correlativo dentro del año fiscal del emisor.
+  // Formato "YYYY/NNN" (ej. 2026/003). Si el pago de este mes ya existe
+  // como PayrollPayment, su posición en la serie del año es el ordinal.
+  // Si aún no se ha emitido, es el siguiente a los ya pagados en meses
+  // previos del mismo año — así no hay huecos entre facturas sucesivas.
+  const [prevPaidThisYear, currentMonthPayment] = await Promise.all([
+    prisma.payrollPayment.count({
+      where: { professionalId: params.id, year, month: { lt: month } },
+    }),
+    prisma.payrollPayment.findUnique({
+      where: {
+        professionalId_year_month: { professionalId: params.id, year, month },
+      },
+      select: { id: true },
+    }),
+  ]);
+  const ordinal = currentMonthPayment ? prevPaidThisYear + 1 : prevPaidThisYear + 1;
+  const invoiceNumber = `${year}/${String(ordinal).padStart(3, "0")}`;
+
   return (
     <InvoiceClient
       emisor={{
@@ -49,6 +68,7 @@ export default async function FacturaPage({
       vatExempt={pro.vatExempt}
       year={year}
       month={month}
+      invoiceNumber={invoiceNumber}
       salary={JSON.parse(JSON.stringify(salary))}
     />
   );

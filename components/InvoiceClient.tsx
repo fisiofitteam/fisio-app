@@ -22,6 +22,7 @@ export function InvoiceClient({
   vatExempt,
   year,
   month,
+  invoiceNumber,
   salary,
 }: {
   emisor: Emisor;
@@ -29,6 +30,8 @@ export function InvoiceClient({
   vatExempt: boolean;
   year: number;
   month: number;
+  /** Número correlativo "YYYY/NNN" calculado en el server. */
+  invoiceNumber: string;
   salary: SalaryResult;
 }) {
   const monthLabel = new Date(Date.UTC(year, month, 1)).toLocaleDateString("es-ES", { month: "long", year: "numeric", timeZone: "UTC" });
@@ -60,7 +63,7 @@ export function InvoiceClient({
       <div className="max-w-2xl mx-auto px-8 py-10">
         <div className="flex justify-between items-start mb-8">
           <div>
-            <div className="text-2xl font-bold tracking-tight">Factura</div>
+            <div className="text-2xl font-bold tracking-tight">Factura Nº {invoiceNumber}</div>
             <div className="text-sm text-neutral-500 capitalize mt-1">{monthLabel}</div>
           </div>
           <div className="text-right text-sm text-neutral-500">Fecha de emisión: {today}</div>
