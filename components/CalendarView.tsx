@@ -18,6 +18,7 @@ import {
   goalLabel,
   GOAL_COLOR_CLASSES,
   goalTileStyle,
+  pieceTileStyle,
 } from "@/lib/content-formats";
 import { AddPieceModal } from "@/components/AddPieceModal";
 
@@ -568,7 +569,7 @@ function MonthGrid({
                               }
                             }}
                             className="relative flex flex-col gap-0.5 text-[10px] px-1.5 py-1 pr-5 rounded leading-tight cursor-move overflow-hidden hover:brightness-95 transition"
-                            style={goalTileStyle(goals)}
+                            style={pieceTileStyle(dp.piece.format, goals)}
                             title={`${fmtLabel}${dp.piece.hook ? " · " + dp.piece.hook : ""}${dp.weekTheme ? " · " + dp.weekTheme : ""}`}
                           >
                             <span

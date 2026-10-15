@@ -135,19 +135,23 @@ export function AddPieceModal({
 
           <div>
             <label className="text-xs text-neutral-600 block mb-1">
-              Título (opcional)
+              {format === "story" ? "Idea principal a transmitir" : "Título (opcional)"}
             </label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className="input text-sm w-full"
-              placeholder="Ej. Mito del estiramiento de hombro"
+              placeholder={format === "story"
+                ? "Ej. Recordar que mañana cerramos inscripciones"
+                : "Ej. Mito del estiramiento de hombro"}
               disabled={busy}
               autoFocus
             />
             <p className="text-[11px] text-neutral-500 mt-1">
-              Puedes dejarlo en blanco — la pieza se llamará por su formato hasta que la edites.
+              {format === "story"
+                ? "Lo que quieres que el espectador se lleve de la historia."
+                : "Puedes dejarlo en blanco — la pieza se llamará por su formato hasta que la edites."}
             </p>
           </div>
 

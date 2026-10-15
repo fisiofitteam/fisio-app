@@ -9,11 +9,12 @@
  */
 import type React from "react";
 
-export type FormatKey = "reel" | "carousel" | "infographic" | "image" | "live";
+export type FormatKey = "reel" | "carousel" | "infographic" | "image" | "live" | "story";
 
 export const FORMATS: { value: FormatKey; label: string; icon: string }[] = [
   { value: "reel", label: "Reel", icon: "🎬" },
   { value: "carousel", label: "Carrusel", icon: "🎞️" },
+  { value: "story", label: "Historia", icon: "📱" },
   { value: "infographic", label: "Infografía", icon: "📝" },
   { value: "image", label: "Imagen/foto", icon: "📸" },
   { value: "live", label: "Directo", icon: "🔴" },
@@ -103,6 +104,31 @@ export function goalTileStyle(goals: GoalKey[]): React.CSSProperties {
     background: `linear-gradient(135deg, ${first.bg} 0%, ${last.bg} 100%)`,
     border: `1px solid ${first.border}`,
   };
+}
+
+/**
+ * Estilo específico para piezas de formato "story" (Instagram historia).
+ * Las historias son contenido efímero y volátil, así que las sacamos del
+ * código de colores por objetivo y les damos un look propio inspirado en
+ * el degradado morado→rosa→naranja de la UI de IG. Así se ven de un
+ * vistazo distinto al resto en el calendario.
+ */
+export function storyTileStyle(): React.CSSProperties {
+  return {
+    background: "linear-gradient(135deg, #833AB4 0%, #E1306C 55%, #F77737 100%)",
+    border: "1px solid #C13584",
+    color: "#FFFFFF",
+  };
+}
+
+/**
+ * Devuelve el estilo del cuadro de una pieza en el calendario. Centraliza
+ * la decisión "¿es historia o es pieza normal?" para que los componentes
+ * no tengan que repetir el if en cada punto.
+ */
+export function pieceTileStyle(format: string | null | undefined, goals: GoalKey[]): React.CSSProperties {
+  if (format === "story") return storyTileStyle();
+  return goalTileStyle(goals);
 }
 
 /**
