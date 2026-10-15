@@ -45,6 +45,7 @@ export default async function PatientsListPage({
         shippingProvince: true,
         shippingPostalCode: true,
         shippingPhone: true,
+        phone: true,
         startedAt: true,
       },
     });
@@ -68,7 +69,11 @@ export default async function PatientsListPage({
           shippingCity: p.shippingCity,
           shippingProvince: p.shippingProvince,
           shippingPostalCode: p.shippingPostalCode,
-          shippingPhone: p.shippingPhone,
+          // Para la setter, el "teléfono visible" es el de envío si existe
+          // y, si no, el teléfono general de la ficha clínica (que es el
+          // que rellenan los leads en el formulario de /agenda). Así los
+          // pacientes antiguos sin shippingPhone también salen con número.
+          shippingPhone: p.shippingPhone ?? p.phone ?? null,
           startedAt: p.startedAt?.toISOString() ?? null,
         }))}
       />
