@@ -49,7 +49,22 @@ export default async function FacturaPage({
     }),
   ]);
   const ordinal = currentMonthPayment ? prevPaidThisYear + 1 : prevPaidThisYear + 1;
-  const invoiceNumber = `${year}/${String(ordinal).padStart(3, "0")}`;
+  const autoInvoiceNumber = `${year}/${String(ordinal).padStart(3, "0")}`;
+
+  // Si el usuario ha editado manualmente el número (TeamInvoiceMeta), ése
+  // gana sobre el autocalculado. Envuelto en try/catch por si la migración
+  // aún no se ha corrido en Neon — en ese caso usamos el automático.
+  let overrideNumber: string | null = null;
+  try {
+    const meta = await (prisma as any).teamInvoiceMeta.findUnique({
+      where: {
+        professionalId_year_month: { professionalId: params.id, year, month },
+      },
+      select: { invoiceNumber: true },
+    });
+    overrideNumber = meta?.invoiceNumber ?? null;
+  } catch { /* tabla aún no creada → cae al automático */ }
+  const invoiceNumber = overrideNumber ?? autoInvoiceNumber;
 
   return (
     <InvoiceClient
@@ -69,6 +84,8 @@ export default async function FacturaPage({
       year={year}
       month={month}
       invoiceNumber={invoiceNumber}
+      autoInvoiceNumber={autoInvoiceNumber}
+      professionalId={params.id}
       salary={JSON.parse(JSON.stringify(salary))}
     />
   );

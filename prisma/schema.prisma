@@ -365,6 +365,22 @@ model PayrollPayment {
   @@index([year, month])
 }
 
+// Overrides manuales del número de factura del equipo. Si existe fila
+// para (professionalId, year, month), su invoiceNumber reemplaza al
+// calculado automáticamente en app/fisio/factura/[id]/page.tsx. Si no
+// existe, se usa el default "YYYY/NNN" correlativo. Separado de
+// PayrollPayment porque la factura puede estar aún sin pagar.
+model TeamInvoiceMeta {
+  professionalId String
+  year           Int
+  month          Int                              // 0-11
+  invoiceNumber  String
+  updatedAt      DateTime @updatedAt
+  updatedById    String?
+
+  @@id([professionalId, year, month])
+}
+
 // ============================================================================
 // FINANZAS (transacciones manuales + renovaciones cuentan automáticamente)
 // ============================================================================

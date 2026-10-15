@@ -365,6 +365,17 @@ model PayrollPayment {
   @@index([year, month])
 }
 
+model TeamInvoiceMeta {
+  professionalId String
+  year           Int
+  month          Int
+  invoiceNumber  String
+  updatedAt      DateTime @updatedAt
+  updatedById    String?
+
+  @@id([professionalId, year, month])
+}
+
 // ============================================================================
 // FINANZAS (transacciones manuales + renovaciones cuentan automáticamente)
 // ============================================================================

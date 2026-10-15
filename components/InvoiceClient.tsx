@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { SalaryResult } from "@/lib/compensation";
 
 function eur(n: number): string {
@@ -23,6 +24,8 @@ export function InvoiceClient({
   year,
   month,
   invoiceNumber,
+  autoInvoiceNumber,
+  professionalId,
   salary,
 }: {
   emisor: Emisor;
@@ -30,10 +33,43 @@ export function InvoiceClient({
   vatExempt: boolean;
   year: number;
   month: number;
-  /** Número correlativo "YYYY/NNN" calculado en el server. */
+  /** Número actual que se pinta (override manual si existe, si no el auto). */
   invoiceNumber: string;
+  /** Número correlativo que se calcula automáticamente — por si el user
+   *  quiere resetear al default escribiendo este valor. */
+  autoInvoiceNumber: string;
+  professionalId: string;
   salary: SalaryResult;
 }) {
+  const [number, setNumber] = useState(invoiceNumber);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  async function saveNumber(next: string) {
+    setSaveState("saving");
+    setSaveError(null);
+    try {
+      // Si el user deja el input igual al automático, mandamos vacío
+      // para borrar el override y seguir con el calculado por defecto.
+      const value = next.trim() === autoInvoiceNumber ? "" : next.trim();
+      const res = await fetch("/api/team-invoice-meta", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ professionalId, year, month, invoiceNumber: value }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok) {
+        setSaveState("error");
+        setSaveError(data?.hint || data?.error || "No se pudo guardar");
+        return;
+      }
+      setSaveState("saved");
+      setTimeout(() => setSaveState((s) => (s === "saved" ? "idle" : s)), 1200);
+    } catch (e: any) {
+      setSaveState("error");
+      setSaveError(e?.message || "Error de red");
+    }
+  }
   const monthLabel = new Date(Date.UTC(year, month, 1)).toLocaleDateString("es-ES", { month: "long", year: "numeric", timeZone: "UTC" });
   const today = new Date().toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" });
   // Concepto único y genérico en TODAS las facturas (no se desglosa la compensación
@@ -63,8 +99,30 @@ export function InvoiceClient({
       <div className="max-w-2xl mx-auto px-8 py-10">
         <div className="flex justify-between items-start mb-8">
           <div>
-            <div className="text-2xl font-bold tracking-tight">Factura Nº {invoiceNumber}</div>
-            <div className="text-sm text-neutral-500 capitalize mt-1">{monthLabel}</div>
+            <div className="text-2xl font-bold tracking-tight flex items-baseline gap-1">
+              <span>Factura Nº</span>
+              <input
+                type="text"
+                value={number}
+                onChange={(e) => setNumber(e.target.value)}
+                onBlur={() => {
+                  if (number !== invoiceNumber) saveNumber(number);
+                }}
+                maxLength={50}
+                className="no-print bg-amber-50 border-b border-dashed border-amber-400 px-1 rounded-sm focus:outline-none focus:border-amber-600 min-w-[7ch] max-w-[16ch] font-bold tracking-tight"
+                style={{ width: `${Math.max(number.length + 1, 7)}ch` }}
+                title="Edita el número; se guarda al salir del campo"
+              />
+              <span className="hidden print:inline">{number}</span>
+            </div>
+            <div className="text-sm text-neutral-500 capitalize mt-1 flex items-center gap-2">
+              <span>{monthLabel}</span>
+              <span className="no-print text-[10px] text-neutral-400">
+                {saveState === "saving" && "guardando…"}
+                {saveState === "saved" && <span className="text-emerald-600">✓ guardado</span>}
+                {saveState === "error" && <span className="text-red-600" title={saveError ?? undefined}>✕ error</span>}
+              </span>
+            </div>
           </div>
           <div className="text-right text-sm text-neutral-500">Fecha de emisión: {today}</div>
         </div>
