@@ -32,6 +32,17 @@ export default async function FacturaPage({
 
   const salary = await computeMonthlySalary(params.id, year, month);
 
+  // IRPF del profesional desde su Compensation. Default 15% si no hay fila
+  // o la columna aún no se ha creado. Editable desde el header de la factura.
+  let irpfRate = 15;
+  try {
+    const comp = await (prisma as any).compensation.findUnique({
+      where: { professionalId: params.id },
+      select: { irpfRate: true },
+    });
+    if (comp && typeof comp.irpfRate === "number") irpfRate = comp.irpfRate;
+  } catch { /* columna aún no existe → 15 por defecto */ }
+
   // Número de factura correlativo dentro del año fiscal del emisor.
   // Formato "YYYY/NNN" (ej. 2026/003). Si el pago de este mes ya existe
   // como PayrollPayment, su posición en la serie del año es el ordinal.
@@ -86,6 +97,8 @@ export default async function FacturaPage({
       invoiceNumber={invoiceNumber}
       autoInvoiceNumber={autoInvoiceNumber}
       professionalId={params.id}
+      irpfRate={irpfRate}
+      canEditIrpf={user.role === "ceo" || user.id === params.id}
       salary={JSON.parse(JSON.stringify(salary))}
     />
   );

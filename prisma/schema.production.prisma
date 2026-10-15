@@ -344,6 +344,7 @@ model Compensation {
   renewalOthersPct     Float    @default(0)   // % sobre renovaciones del resto del equipo
   newSaleCommissionPct Float    @default(0)   // % sobre importe de ventas nuevas
   newSaleScope         String   @default("own") // "own" (cerradas por él) | "all"
+  irpfRate             Int      @default(15)
   notes                String?
   updatedAt            DateTime @updatedAt
   updatedById          String?

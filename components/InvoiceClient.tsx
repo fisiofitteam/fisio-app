@@ -10,13 +10,6 @@ function eur(n: number): string {
 type Emisor = { name: string; taxId: string | null; address: string | null; iban: string | null; email: string | null };
 type Receptor = { name: string; taxId: string | null; address: string | null };
 
-// Retención IRPF fija y obligatoria del 15% para todas las facturas del
-// equipo. Antes era editable (0-15% con default 7%) y el CEO reporta que
-// no cumplía con la obligación fiscal — ahora no se puede modificar
-// desde el UI; si en el futuro hay que cambiarla (p. ej. 7% primer año
-// autónomo), se toca aquí.
-const IRPF_RATE = 15;
-
 export function InvoiceClient({
   emisor,
   receptor,
@@ -26,6 +19,8 @@ export function InvoiceClient({
   invoiceNumber,
   autoInvoiceNumber,
   professionalId,
+  irpfRate,
+  canEditIrpf,
   salary,
 }: {
   emisor: Emisor;
@@ -39,11 +34,36 @@ export function InvoiceClient({
    *  quiere resetear al default escribiendo este valor. */
   autoInvoiceNumber: string;
   professionalId: string;
+  /** % IRPF leído de Compensation. Editable si el usuario tiene permiso. */
+  irpfRate: number;
+  canEditIrpf: boolean;
   salary: SalaryResult;
 }) {
   const [number, setNumber] = useState(invoiceNumber);
+  const [irpf, setIrpf] = useState<number>(irpfRate);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [irpfState, setIrpfState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+
+  async function saveIrpf(next: number) {
+    setIrpfState("saving");
+    try {
+      const res = await fetch("/api/professional/compensation-irpf", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ professionalId, irpfRate: next }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok) {
+        setIrpfState("error");
+        return;
+      }
+      setIrpfState("saved");
+      setTimeout(() => setIrpfState((s) => (s === "saved" ? "idle" : s)), 1200);
+    } catch {
+      setIrpfState("error");
+    }
+  }
 
   async function saveNumber(next: string) {
     setSaveState("saving");
@@ -79,7 +99,7 @@ export function InvoiceClient({
   const base = salary.total;
   const VAT_RATE = 21;
   const ivaAmount = vatExempt ? 0 : base * (VAT_RATE / 100);
-  const irpfAmount = base * (IRPF_RATE / 100);
+  const irpfAmount = base * (irpf / 100);
   const totalFactura = base + ivaAmount - irpfAmount;
 
   return (
@@ -90,7 +110,32 @@ export function InvoiceClient({
         <a href="/fisio" className="text-sm text-neutral-500 hover:underline">← Volver</a>
         <div className="flex items-center gap-3">
           <span className="text-sm text-neutral-600">
-            Retención IRPF: <strong className="text-neutral-900">{IRPF_RATE}%</strong> <span className="text-neutral-400">(obligatoria)</span>
+            Retención IRPF:{" "}
+            {canEditIrpf ? (
+              <>
+                <input
+                  type="number"
+                  min={0}
+                  max={30}
+                  step={1}
+                  value={irpf}
+                  onChange={(e) => setIrpf(Math.max(0, Math.min(30, Number(e.target.value) || 0)))}
+                  onBlur={() => {
+                    if (irpf !== irpfRate) saveIrpf(irpf);
+                  }}
+                  className="inline-block w-14 text-center font-semibold border-b border-dashed border-neutral-400 bg-amber-50 rounded-sm focus:outline-none focus:border-amber-600"
+                  title="Editable — guarda el valor por defecto de este profesional al salir del campo"
+                />
+                <span>%</span>
+                <span className="text-[10px] text-neutral-400 ml-1">
+                  {irpfState === "saving" && "guardando…"}
+                  {irpfState === "saved" && <span className="text-emerald-600">✓</span>}
+                  {irpfState === "error" && <span className="text-red-600">✕</span>}
+                </span>
+              </>
+            ) : (
+              <strong className="text-neutral-900">{irpf}%</strong>
+            )}
           </span>
           <button onClick={() => window.print()} className="btn btn-primary text-sm">🖨️ Imprimir / Guardar PDF</button>
         </div>
@@ -167,7 +212,7 @@ export function InvoiceClient({
               <td className="py-1 text-right tabular-nums">{vatExempt ? "—" : eur(ivaAmount)}</td>
             </tr>
             <tr>
-              <td className="py-1 text-neutral-500" colSpan={2}>Retención IRPF (-{IRPF_RATE}%)</td>
+              <td className="py-1 text-neutral-500" colSpan={2}>Retención IRPF (-{irpf}%)</td>
               <td className="py-1 text-right tabular-nums text-red-700">-{eur(irpfAmount)}</td>
             </tr>
             <tr className="border-t-2 border-neutral-900">

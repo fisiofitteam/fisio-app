@@ -344,6 +344,10 @@ model Compensation {
   renewalOthersPct     Float    @default(0)   // % sobre renovaciones del resto del equipo
   newSaleCommissionPct Float    @default(0)   // % sobre importe de ventas nuevas
   newSaleScope         String   @default("own") // "own" (cerradas por él) | "all"
+  // Retención IRPF por defecto en las facturas de este profesional.
+  // Default 15 — Sofía u otros autónomos con primer año reducido pueden
+  // tener 7. Editable desde el header de la propia factura.
+  irpfRate             Int      @default(15)
   notes                String?
   updatedAt            DateTime @updatedAt
   updatedById          String?

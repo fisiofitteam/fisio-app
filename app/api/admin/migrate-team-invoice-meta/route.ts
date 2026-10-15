@@ -38,13 +38,15 @@ export async function GET() {
       PRIMARY KEY ("professionalId", "year", "month")
     )
   `);
+  // Añadido 2026-10 — IRPF por profesional (default 15%, Sofía 7%).
+  await run(`ALTER TABLE "Compensation" ADD COLUMN IF NOT EXISTS "irpfRate" INTEGER NOT NULL DEFAULT 15`);
 
   const allOk = steps.every((s) => s.ok);
   return NextResponse.json({
     ok: allOk,
     steps,
     message: allOk
-      ? "Tabla TeamInvoiceMeta lista. Ya puedes editar el número de factura."
+      ? "Tabla TeamInvoiceMeta y columna irpfRate listas."
       : "Alguno de los pasos falló — revisa los errores.",
   });
 }
