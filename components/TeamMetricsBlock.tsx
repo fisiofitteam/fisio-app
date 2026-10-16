@@ -73,6 +73,14 @@ export function TeamMetricsBlock({
   const [fromDate, setFromDate] = useState(from || "");
   const [toDate, setToDate] = useState(to || "");
   const [detail, setDetail] = useState<DetailFilter | null>(null);
+  // Modal de detalle de respuestas de satisfacción (satisfacción programa / NPS equipo).
+  // fisioId undefined = todo el equipo; con fisioId filtra por el pro
+  // asignado al paciente.
+  const [satDetail, setSatDetail] = useState<{
+    metric: "satisfaction" | "nps";
+    fisioId?: string;
+    title: string;
+  } | null>(null);
 
   function switchPeriod(p: "month" | "quarter" | "year") {
     const url = new URL(window.location.href);
@@ -210,7 +218,16 @@ export function TeamMetricsBlock({
 
         {satisfaction && (
           <div className="grid grid-cols-2 gap-3 pl-2 mt-4 pt-4 border-t border-neutral-100">
-            <div>
+            <button
+              type="button"
+              onClick={() =>
+                satisfaction.responsesCount > 0 &&
+                setSatDetail({ metric: "satisfaction", title: "Satisfacción con el programa" })
+              }
+              disabled={satisfaction.responsesCount === 0}
+              className="text-left rounded-lg px-2 py-1 -mx-2 -my-1 hover:bg-blue-50 transition-colors disabled:hover:bg-transparent disabled:cursor-default"
+              title={satisfaction.responsesCount > 0 ? "Ver detalle de respuestas" : undefined}
+            >
               <div className="text-xs text-neutral-500 mb-1">Satisfacción media</div>
               <div className="text-2xl font-semibold text-blue-700">
                 {satisfaction.satisfactionAvg !== null
@@ -219,11 +236,20 @@ export function TeamMetricsBlock({
               </div>
               {satisfaction.responsesCount > 0 && (
                 <div className="text-xs text-neutral-400 mt-0.5">
-                  sobre {satisfaction.responsesCount} {satisfaction.responsesCount === 1 ? "respuesta" : "respuestas"}
+                  sobre {satisfaction.responsesCount} {satisfaction.responsesCount === 1 ? "respuesta" : "respuestas"} · 🔍 ver quién
                 </div>
               )}
-            </div>
-            <div>
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                satisfaction.responsesCount > 0 &&
+                setSatDetail({ metric: "nps", title: "NPS con el equipo" })
+              }
+              disabled={satisfaction.responsesCount === 0}
+              className="text-left rounded-lg px-2 py-1 -mx-2 -my-1 hover:bg-emerald-50 transition-colors disabled:hover:bg-transparent disabled:cursor-default"
+              title={satisfaction.responsesCount > 0 ? "Ver detalle de respuestas con fisio asignado" : undefined}
+            >
               <div className="text-xs text-neutral-500 mb-1">NPS medio del equipo</div>
               <div className="text-2xl font-semibold text-emerald-700">
                 {satisfaction.npsAvg !== null
@@ -232,10 +258,10 @@ export function TeamMetricsBlock({
               </div>
               {satisfaction.responsesCount > 0 && (
                 <div className="text-xs text-neutral-400 mt-0.5">
-                  del formulario previo a la llamada
+                  del formulario previo a la llamada · 🔍 ver quién
                 </div>
               )}
-            </div>
+            </button>
           </div>
         )}
       </section>
@@ -303,15 +329,29 @@ export function TeamMetricsBlock({
                         }>{f.adherence}%</span>
                       ) : <span className="text-neutral-300">—</span>}
                     </td>
-                    <td className="text-right py-2 px-2" title={f.responsesCount > 0 ? `${f.responsesCount} respuesta${f.responsesCount === 1 ? "" : "s"}` : ""}>
-                      {f.satisfactionAvg !== null
-                        ? <span className="font-medium text-blue-700">{f.satisfactionAvg}</span>
-                        : <span className="text-neutral-300">—</span>}
+                    <td className="text-right py-2 px-2">
+                      {f.satisfactionAvg !== null ? (
+                        <button
+                          type="button"
+                          onClick={() => setSatDetail({ metric: "satisfaction", fisioId: f.id, title: `Satisfacción · ${f.fullName}` })}
+                          className="font-medium text-blue-700 hover:underline"
+                          title={`Ver ${f.responsesCount} respuesta${f.responsesCount === 1 ? "" : "s"}`}
+                        >
+                          {f.satisfactionAvg}
+                        </button>
+                      ) : <span className="text-neutral-300">—</span>}
                     </td>
-                    <td className="text-right py-2 px-2" title={f.responsesCount > 0 ? `${f.responsesCount} respuesta${f.responsesCount === 1 ? "" : "s"}` : ""}>
-                      {f.npsAvg !== null
-                        ? <span className="font-medium text-emerald-700">{f.npsAvg}</span>
-                        : <span className="text-neutral-300">—</span>}
+                    <td className="text-right py-2 px-2">
+                      {f.npsAvg !== null ? (
+                        <button
+                          type="button"
+                          onClick={() => setSatDetail({ metric: "nps", fisioId: f.id, title: `NPS · ${f.fullName}` })}
+                          className="font-medium text-emerald-700 hover:underline"
+                          title={`Ver ${f.responsesCount} respuesta${f.responsesCount === 1 ? "" : "s"}`}
+                        >
+                          {f.npsAvg}
+                        </button>
+                      ) : <span className="text-neutral-300">—</span>}
                     </td>
                   </tr>
                 ))}
@@ -329,7 +369,121 @@ export function TeamMetricsBlock({
           onClose={() => setDetail(null)}
         />
       )}
+
+      {satDetail && (
+        <TeamSatisfactionDetailModal
+          metric={satDetail.metric}
+          fisioId={satDetail.fisioId}
+          title={satDetail.title}
+          from={periodFrom}
+          to={periodTo}
+          onClose={() => setSatDetail(null)}
+        />
+      )}
     </>
+  );
+}
+
+// ─── Modal detalle de satisfacción/NPS ─────────────────────────
+
+type SatRow = {
+  id: string;
+  patientId: string;
+  patientName: string;
+  programType: string | null;
+  assignedFisio: { id: string; fullName: string } | null;
+  score: number | null;
+  submittedAt: string;
+};
+
+function TeamSatisfactionDetailModal({
+  metric, fisioId, title, from, to, onClose,
+}: {
+  metric: "satisfaction" | "nps";
+  fisioId?: string;
+  title: string;
+  from: string;
+  to: string;
+  onClose: () => void;
+}) {
+  const [rows, setRows] = useState<SatRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setRows(null);
+    setError(null);
+    const params = new URLSearchParams();
+    params.set("from", from);
+    params.set("to", to);
+    params.set("metric", metric);
+    if (fisioId) params.set("fisioId", fisioId);
+    fetch("/api/team-satisfaction?" + params.toString())
+      .then((r) => r.json().then((d) => ({ ok: r.ok, d })))
+      .then(({ ok, d }) => {
+        if (cancelled) return;
+        if (!ok) { setError(d?.error ?? "Error"); setRows([]); return; }
+        setRows(d.details ?? []);
+      })
+      .catch((e) => { if (!cancelled) { setError(e?.message ?? "Error"); setRows([]); } });
+    return () => { cancelled = true; };
+  }, [from, to, metric, fisioId]);
+
+  const scoreColor = (s: number | null): string => {
+    if (s === null) return "text-neutral-300";
+    if (metric === "nps") {
+      return s >= 9 ? "text-emerald-700" : s >= 7 ? "text-amber-700" : "text-red-600";
+    }
+    return s >= 8 ? "text-emerald-700" : s >= 6 ? "text-amber-700" : "text-red-600";
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[85vh] overflow-y-auto p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-semibold">{title}</h3>
+          <button onClick={onClose} className="text-neutral-400 text-xl leading-none">✕</button>
+        </div>
+        <p className="text-[11px] text-neutral-500 mb-3">
+          Del {new Date(from).toLocaleDateString("es-ES")} al {new Date(to).toLocaleDateString("es-ES")}
+          {rows && rows.length > 0 && ` · ${rows.length} respuesta${rows.length === 1 ? "" : "s"}`}
+        </p>
+
+        {rows === null && <p className="text-xs text-neutral-400 italic py-6 text-center">Cargando…</p>}
+        {error && <p className="text-xs text-red-600 py-4">{error}</p>}
+        {rows && rows.length === 0 && !error && (
+          <p className="text-xs text-neutral-400 italic py-6 text-center">
+            Sin respuestas en este periodo.
+          </p>
+        )}
+        {rows && rows.length > 0 && (
+          <div className="divide-y divide-neutral-100">
+            {rows.map((r) => (
+              <div key={r.id} className="py-2.5 flex items-start gap-3">
+                <div className={`text-xl font-bold tabular-nums min-w-[2.5rem] text-right ${scoreColor(r.score)}`}>
+                  {r.score ?? "—"}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <Link
+                    href={`/fisio/paciente/${r.patientId}`}
+                    className="text-sm font-medium hover:underline"
+                  >
+                    {r.patientName}
+                  </Link>
+                  <div className="text-[11px] text-neutral-500 flex gap-2 flex-wrap">
+                    {r.programType && <span>{r.programType}</span>}
+                    {r.assignedFisio && (
+                      <span>· Fisio: <span className="text-neutral-700">{r.assignedFisio.fullName}</span></span>
+                    )}
+                    <span>· {new Date(r.submittedAt).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
