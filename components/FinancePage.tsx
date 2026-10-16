@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
-  PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
+  ResponsiveContainer, Tooltip,
   LineChart, Line, XAxis, YAxis, CartesianGrid, Legend,
 } from "recharts";
 
@@ -66,7 +66,7 @@ const INCOME_TYPES = ["income_new", "income_renewal", "income_other"] as const;
 const MONTH_NAMES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 
 function eur(n: number): string {
-  return `${n.toLocaleString("es-ES", { maximumFractionDigits: 0 })} €`;
+  return `${n.toLocaleString("es-ES", { maximumFractionDigits: 2 })} €`;
 }
 
 export function FinancePage({
@@ -80,6 +80,7 @@ export function FinancePage({
   yearAutoRenewals,
   professionals,
   patients,
+  hidePeriodControls = false,
 }: {
   year: number;
   period: Period;
@@ -91,17 +92,24 @@ export function FinancePage({
   yearAutoRenewals: YearAutoR[];
   professionals: Pro[];
   patients: Pat[];
+  hidePeriodControls?: boolean;
 }) {
   const router = useRouter();
-  const [tab, setTab] = useState<"dashboard" | "register">("dashboard");
   const [showNew, setShowNew] = useState(false);
+  const [initialType, setInitialType] = useState<"income_new" | "expense">("income_new");
   const [editing, setEditing] = useState<Tx | null>(null);
 
   function switchPeriod(p: Period) {
     const url = new URL(window.location.href);
     url.searchParams.set("period", p);
+    url.searchParams.delete("specificMonth");
     router.push(url.pathname + url.search);
     router.refresh();
+  }
+
+  function openNew(type: "income_new" | "expense") {
+    setInitialType(type);
+    setShowNew(true);
   }
 
   const allTx = useMemo(
@@ -110,149 +118,120 @@ export function FinancePage({
   );
   const incomeTx = useMemo(() => allTx.filter((t) => t.type !== "expense"), [allTx]);
   const expenseTx = useMemo(() => allTx.filter((t) => t.type === "expense"), [allTx]);
+  const expenseCategories = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const tx of expenseTx) {
+      const category = tx.category ?? "otros";
+      totals.set(category, (totals.get(category) ?? 0) + tx.amount);
+    }
+    return [...totals.entries()].sort((a, b) => b[1] - a[1]);
+  }, [expenseTx]);
 
-  const pieData = [
-    { name: "Nuevas altas", value: summary.incomeNew, color: "#10B981", count: summary.countNew },
-    { name: "Renovaciones", value: summary.incomeRenewal, color: "#3B82F6", count: summary.countRenewal },
-    { name: "Otros ingresos", value: summary.incomeOther, color: "#A855F7", count: summary.countOther },
-  ].filter((d) => d.value > 0);
+  const incomeCategories = [
+    { label: "Nuevas altas", total: summary.incomeNew, count: summary.countNew },
+    { label: "Renovaciones", total: summary.incomeRenewal, count: summary.countRenewal },
+    { label: "Otros ingresos", total: summary.incomeOther, count: summary.countOther },
+  ].filter((category) => category.total !== 0 || category.count > 0);
 
   return (
-    <main>
-      <header className="mb-4 flex justify-between items-end flex-wrap gap-2">
-        <p className="text-xs text-neutral-500 capitalize">{periodLabel}</p>
-        <div className="flex items-center gap-2">
-          <div className="flex bg-neutral-100 rounded-lg p-0.5">
-            {(["month", "quarter", "year"] as Period[]).map((p) => (
-              <button
-                key={p}
-                onClick={() => switchPeriod(p)}
-                className={`px-3 py-1 text-xs rounded-md transition-colors ${
-                  period === p ? "bg-white shadow-sm font-medium" : "text-neutral-600 hover:text-neutral-900"
-                }`}
-              >
-                {p === "month" ? "Mensual" : p === "quarter" ? "Trimestral" : "Anual"}
-              </button>
-            ))}
+    <main className="space-y-4">
+      <header className="flex justify-between items-center flex-wrap gap-3">
+        {!hidePeriodControls ? (
+          <div className="flex items-center gap-3 flex-wrap">
+            <p className="text-xs text-neutral-500 capitalize">{periodLabel}</p>
+            <div className="flex bg-neutral-100 rounded-lg p-0.5">
+              {(["month", "quarter", "year"] as Period[]).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => switchPeriod(p)}
+                  className={`px-3 py-1 text-xs rounded-md transition-colors ${
+                    period === p ? "bg-white shadow-sm font-medium" : "text-neutral-600 hover:text-neutral-900"
+                  }`}
+                >
+                  {p === "month" ? "Mensual" : p === "quarter" ? "Trimestral" : "Anual"}
+                </button>
+              ))}
+            </div>
           </div>
-          <button onClick={() => setShowNew(true)} className="btn btn-primary text-xs">
-            + Transacción
+        ) : <p className="text-xs text-neutral-500">Ingresos, gastos y movimientos del período</p>}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={() => openNew("income_new")} className="btn btn-primary text-xs">
+            + Añadir ingreso
+          </button>
+          <button onClick={() => openNew("expense")} className="btn text-xs border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50">
+            + Añadir gasto
           </button>
         </div>
       </header>
 
-      {/* Pestañas internas */}
-      <div className="mb-4 flex gap-1 border-b border-neutral-200">
-        <TabButton active={tab === "dashboard"} onClick={() => setTab("dashboard")} label="📊 Panel de control" />
-        <TabButton active={tab === "register"} onClick={() => setTab("register")} label="🧾 Registro" />
-      </div>
+      <section aria-label="Resultado del período" className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <FinanceKpi label="Facturación" value={summary.income} tone="income" />
+        <FinanceKpi label="Gastos" value={summary.expense} tone="expense" />
+        <FinanceKpi
+          label="Beneficio"
+          value={summary.profit}
+          tone={summary.profit < 0 ? "expense" : "neutral"}
+          sub={summary.profitPct !== null ? `${summary.profitPct}% sobre ingresos` : undefined}
+        />
+      </section>
 
-      {tab === "dashboard" && (
-        <>
-          {/* KPIs principales */}
-          <section className="card mb-4 relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-1 h-full" style={{ background: "linear-gradient(180deg, #FCD34D 0%, #F59E0B 100%)" }} />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-3">
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <div className="text-xs text-neutral-500 mb-1">Ingresos</div>
-                  <div className="text-2xl font-semibold text-emerald-700">{eur(summary.income)}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-neutral-500 mb-1">Gastos</div>
-                  <div className="text-2xl font-semibold text-red-700">{eur(summary.expense)}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-neutral-500 mb-1">Beneficio</div>
-                  <div className={`text-2xl font-semibold ${summary.profit >= 0 ? "text-neutral-900" : "text-red-700"}`}>
-                    {eur(summary.profit)}
-                  </div>
-                  {summary.profitPct !== null && (
-                    <div className={`text-xs mt-0.5 ${summary.profit >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                      {summary.profitPct >= 0 ? "+" : ""}{summary.profitPct}% sobre ingresos
-                    </div>
-                  )}
-                </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <section className="rounded-xl border border-neutral-200 bg-white overflow-hidden">
+          <h2 className="px-4 py-3 border-b border-neutral-200 text-sm font-semibold">Ingresos por categoría</h2>
+          <div className="p-4">
+            {incomeCategories.length > 0 ? incomeCategories.map((category) => (
+              <div key={category.label} className="flex justify-between items-baseline gap-3 py-2 border-b border-neutral-100 last:border-0 text-sm">
+                <span className="text-neutral-700">{category.label} <span className="text-xs text-neutral-400">({category.count})</span></span>
+                <span className="tabular-nums font-medium whitespace-nowrap">{eur(category.total)}</span>
               </div>
-
-              <div className="border-l border-neutral-200 pl-4">
-                <div className="text-xs text-neutral-500 mb-1">Origen de ingresos</div>
-                {pieData.length === 0 ? (
-                  <p className="text-xs text-neutral-400 italic text-center py-8">Sin ingresos en este período</p>
-                ) : (
-                  <div className="flex items-center gap-3">
-                    <div style={{ width: 120, height: 120 }}>
-                      <ResponsiveContainer>
-                        <PieChart>
-                          <Pie data={pieData} dataKey="value" innerRadius={32} outerRadius={56} paddingAngle={2}>
-                            {pieData.map((d, i) => <Cell key={i} fill={d.color} />)}
-                          </Pie>
-                          <Tooltip
-                            formatter={(v: any) => eur(Number(v))}
-                            contentStyle={{ fontSize: "12px", borderRadius: 8 }}
-                          />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-                    <div className="flex-1 space-y-1.5">
-                      {pieData.map((d, i) => {
-                        const pct = summary.income > 0 ? Math.round((d.value / summary.income) * 100) : 0;
-                        return (
-                          <div key={i} className="text-xs flex items-center gap-2">
-                            <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: d.color }} />
-                            <span className="text-neutral-700 flex-1">{d.name}</span>
-                            <span className="font-medium tabular-nums">{pct}%</span>
-                            <span className="text-neutral-400 text-[10px] tabular-nums">({d.count})</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </section>
-
-          {/* Gráfico anual */}
-          <YearChart
-            year={year}
-            yearTransactions={yearTransactions}
-            yearAutoRenewals={yearAutoRenewals}
-          />
-        </>
-      )}
-
-      {tab === "register" && (
-        <section className="card">
-          <div className="flex justify-between items-center mb-3">
-            <div>
-              <h2 className="font-medium text-sm">Transacciones del período</h2>
-              <p className="text-xs text-neutral-500">{allTx.length} movimientos · click para editar</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <div>
-              <div className="flex items-baseline justify-between mb-2 pb-1.5 border-b-2 border-emerald-200">
-                <h3 className="font-semibold text-sm text-emerald-700">Ingresos</h3>
-                <span className="text-xs text-neutral-500">{incomeTx.length} · <span className="font-medium text-emerald-700">{eur(summary.income)}</span></span>
-              </div>
-              <TxTable rows={incomeTx} kind="income" onEdit={setEditing} emptyText="Sin ingresos en este período." />
-            </div>
-            <div>
-              <div className="flex items-baseline justify-between mb-2 pb-1.5 border-b-2 border-red-200">
-                <h3 className="font-semibold text-sm text-red-700">Gastos</h3>
-                <span className="text-xs text-neutral-500">{expenseTx.length} · <span className="font-medium text-red-700">{eur(summary.expense)}</span></span>
-              </div>
-              <TxTable rows={expenseTx} kind="expense" onEdit={setEditing} emptyText="Sin gastos en este período." />
-            </div>
+            )) : <p className="text-sm text-neutral-500">Sin ingresos en este período.</p>}
           </div>
         </section>
-      )}
+        <section className="rounded-xl border border-neutral-200 bg-white overflow-hidden">
+          <h2 className="px-4 py-3 border-b border-neutral-200 text-sm font-semibold">Gastos por categoría</h2>
+          <div className="p-4">
+            {expenseCategories.length > 0 ? expenseCategories.map(([category, total]) => (
+              <div key={category} className="flex justify-between items-baseline gap-3 py-2 border-b border-neutral-100 last:border-0 text-sm">
+                <span className="text-neutral-700">{EXPENSE_CAT_LABELS[category] ?? category}</span>
+                <span className="tabular-nums font-medium whitespace-nowrap">{eur(total)}</span>
+              </div>
+            )) : <p className="text-sm text-neutral-500">Sin gastos en este período.</p>}
+          </div>
+        </section>
+      </div>
+
+      <section className="rounded-xl border border-neutral-200 bg-white overflow-hidden">
+        <header className="flex justify-between items-center flex-wrap gap-2 px-4 py-3 border-b border-neutral-200">
+          <h2 className="font-semibold text-sm">Movimientos del período <span className="font-normal text-neutral-500">({allTx.length})</span></h2>
+          <p className="text-xs text-neutral-500">Los movimientos manuales se pueden editar</p>
+        </header>
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 p-4">
+          <div className="min-w-0">
+            <div className="flex items-baseline justify-between gap-2 mb-3">
+              <h3 className="font-medium text-sm">Ingresos</h3>
+              <span className="text-xs text-neutral-500">{incomeTx.length} movimientos · <span className="font-medium text-emerald-700">{eur(summary.income)}</span></span>
+            </div>
+            <TxTable rows={incomeTx} kind="income" onEdit={setEditing} emptyText="Sin ingresos en este período." />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-baseline justify-between gap-2 mb-3">
+              <h3 className="font-medium text-sm">Gastos</h3>
+              <span className="text-xs text-neutral-500">{expenseTx.length} movimientos · <span className="font-medium text-red-700">{eur(summary.expense)}</span></span>
+            </div>
+            <TxTable rows={expenseTx} kind="expense" onEdit={setEditing} emptyText="Sin gastos en este período." />
+          </div>
+        </div>
+      </section>
+
+      <details className="rounded-xl border border-neutral-200 bg-white overflow-hidden">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-medium">Gráfico anual con filtros · {year}</summary>
+        <YearChart year={year} yearTransactions={yearTransactions} yearAutoRenewals={yearAutoRenewals} />
+      </details>
 
       {(showNew || editing) && (
         <TransactionModal
           editingTx={editing}
+          initialType={initialType}
           professionals={professionals}
           patients={patients}
           onClose={() => { setShowNew(false); setEditing(null); }}
@@ -267,16 +246,14 @@ export function FinancePage({
   );
 }
 
-function TabButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+function FinanceKpi({ label, value, tone, sub }: { label: string; value: number; tone: "income" | "expense" | "neutral"; sub?: string }) {
+  const color = tone === "income" ? "text-emerald-700" : tone === "expense" ? "text-red-700" : "text-neutral-900";
   return (
-    <button
-      onClick={onClick}
-      className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-        active ? "border-neutral-900 text-neutral-900" : "border-transparent text-neutral-500 hover:text-neutral-900"
-      }`}
-    >
-      {label}
-    </button>
+    <div className="rounded-xl border border-neutral-200 bg-white p-3 sm:p-4 min-w-0">
+      <div className="text-xs text-neutral-500">{label}</div>
+      <div className={`mt-1 text-[22px] sm:text-2xl leading-8 font-semibold tabular-nums break-words ${color}`}>{eur(value)}</div>
+      {sub && <div className="mt-1 text-xs text-neutral-500">{sub}</div>}
+    </div>
   );
 }
 
@@ -447,12 +424,14 @@ function FilterChip({ active, onClick, label }: { active: boolean; onClick: () =
 
 function TransactionModal({
   editingTx,
+  initialType,
   professionals,
   patients,
   onClose,
   onSaved,
 }: {
   editingTx: Tx | null;
+  initialType: "income_new" | "expense";
   professionals: Pro[];
   patients: Pat[];
   onClose: () => void;
@@ -460,7 +439,7 @@ function TransactionModal({
 }) {
   const isEdit = !!editingTx;
   const [type, setType] = useState<"income_new" | "income_renewal" | "income_other" | "expense">(
-    (editingTx?.type as any) ?? "income_new"
+    (editingTx?.type as any) ?? initialType
   );
   const [category, setCategory] = useState(editingTx?.category ?? "software");
   const [amount, setAmount] = useState(editingTx ? String(editingTx.amount) : "");
@@ -638,12 +617,14 @@ function TxTable({ rows, kind, onEdit, emptyText }: { rows: Tx[]; kind: "income"
           ))}
         </div>
       )}
-      <table className="w-full text-sm">
+      <table className="w-full text-sm border-collapse">
         <thead>
-          <tr className="text-xs text-neutral-500 uppercase border-b border-neutral-200">
+          <tr className="text-xs text-neutral-500 bg-neutral-50 border-b border-neutral-200">
             <th className="text-left py-2 px-2 font-medium">Fecha</th>
             <th className="text-left py-2 px-2 font-medium">Concepto</th>
+            <th className="text-left py-2 px-2 font-medium">Categoría</th>
             <th className="text-right py-2 px-2 font-medium">Importe</th>
+            <th className="text-right py-2 px-2 font-medium">Acciones</th>
           </tr>
         </thead>
         <tbody>
@@ -662,21 +643,27 @@ function TxTable({ rows, kind, onEdit, emptyText }: { rows: Tx[]; kind: "income"
                   {new Date(t.occurredAt).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
                 </td>
                 <td className="py-2 px-2 text-xs">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${TYPE_COLORS[t.type] ?? "bg-neutral-100"}`}>
-                      {TYPE_LABELS[t.type] ?? t.type}
-                    </span>
-                    {t.source === "auto" && <span className="text-[10px] text-neutral-400 italic">auto</span>}
-                  </div>
-                  <div className="mt-0.5">
-                    {t.category && <span className="text-neutral-500">{EXPENSE_CAT_LABELS[t.category] ?? t.category}</span>}
-                    {t.category && t.description && <span className="text-neutral-300"> · </span>}
-                    {t.description}
-                  </div>
+                  <div className="text-neutral-700">{t.description || TYPE_LABELS[t.type] || t.type}</div>
                   {who && <div className="text-[11px] text-neutral-400 mt-0.5">{who}</div>}
+                </td>
+                <td className="py-2 px-2 text-xs align-top">
+                  <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded-full ${isExpense ? "bg-neutral-100 text-neutral-600" : TYPE_COLORS[t.type] ?? "bg-neutral-100"}`}>
+                    {isExpense ? EXPENSE_CAT_LABELS[t.category ?? "otros"] ?? t.category : TYPE_LABELS[t.type] ?? t.type}
+                  </span>
                 </td>
                 <td className={`py-2 px-2 text-right tabular-nums font-medium align-top ${isExpense ? "text-red-700" : "text-emerald-700"}`}>
                   {isExpense ? "−" : "+"}{eur(t.amount)}
+                </td>
+                <td className="py-2 px-2 text-right align-top">
+                  {isEditable ? (
+                    <button
+                      onClick={(event) => { event.stopPropagation(); onEdit(t); }}
+                      className="text-xs text-neutral-600 underline underline-offset-2 hover:text-neutral-900"
+                      aria-label={`Editar ${t.description || TYPE_LABELS[t.type] || "movimiento"}`}
+                    >
+                      Editar
+                    </button>
+                  ) : <span className="text-[10px] text-neutral-400">Automático</span>}
                 </td>
               </tr>
             );
@@ -685,10 +672,11 @@ function TxTable({ rows, kind, onEdit, emptyText }: { rows: Tx[]; kind: "income"
         {filter !== "all" && (
           <tfoot>
             <tr className="border-t border-neutral-200">
-              <td className="py-2 px-2 text-xs text-neutral-500" colSpan={2}>{labelOf(filter)} · {shown.length}</td>
+              <td className="py-2 px-2 text-xs text-neutral-500" colSpan={3}>{labelOf(filter)} · {shown.length}</td>
               <td className={`py-2 px-2 text-right tabular-nums font-semibold ${kind === "expense" ? "text-red-700" : "text-emerald-700"}`}>
                 {kind === "expense" ? "−" : "+"}{eur(shownTotal)}
               </td>
+              <td />
             </tr>
           </tfoot>
         )}

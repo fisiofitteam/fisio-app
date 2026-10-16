@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Fragment } from "react";
+import { useState, useRef, useEffect, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import type { BusinessMetrics, MonthlyMetrics, MonthlyRow } from "@/lib/business-metrics";
 
@@ -10,7 +10,7 @@ const eur = (n: number) => `${n.toLocaleString("es-ES", { maximumFractionDigits:
 const MONTH_ABBR = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
 export function BusinessMetricsView({
-  period, periodLabel, specificMonth, m, monthly, goals,
+  period, periodLabel, specificMonth, m, monthly, goals, initialView = "resumen", hideYearControls = false, monthlyOnly = false,
 }: {
   period: Period;
   periodLabel: string;
@@ -18,9 +18,12 @@ export function BusinessMetricsView({
   m: BusinessMetrics;
   monthly: MonthlyMetrics;
   goals: Record<string, Record<number, number>>;
+  initialView?: "resumen" | "meses";
+  hideYearControls?: boolean;
+  monthlyOnly?: boolean;
 }) {
   const router = useRouter();
-  const [view, setView] = useState<"resumen" | "meses">("resumen");
+  const [view, setView] = useState<"resumen" | "meses">(initialView);
 
   function setQuery(key: string, value: string) {
     const url = new URL(window.location.href);
@@ -48,7 +51,7 @@ export function BusinessMetricsView({
   return (
     <main>
       {/* Toggle de vista */}
-      <div className="flex gap-2 mb-4">
+      {!monthlyOnly && <div className="flex gap-2 mb-4">
         {(["resumen", "meses"] as const).map((v) => (
           <button
             key={v}
@@ -60,9 +63,9 @@ export function BusinessMetricsView({
             {v === "resumen" ? "Resumen" : "Por meses"}
           </button>
         ))}
-      </div>
+      </div>}
 
-      {view === "resumen" ? (
+      {!monthlyOnly && view === "resumen" ? (
         <ResumenView
           period={period}
           periodLabel={periodLabel}
@@ -72,7 +75,7 @@ export function BusinessMetricsView({
           onSpecificMonth={setSpecificMonth}
         />
       ) : (
-        <MesesView monthly={monthly} goals={goals} onYear={(y) => setQuery("year", String(y))} />
+        <MesesView monthly={monthly} goals={goals} onYear={(y) => setQuery("year", String(y))} hideYearControls={hideYearControls} />
       )}
     </main>
   );
@@ -181,7 +184,7 @@ function prettyProgram(p: string): string {
   return p.charAt(0) + p.slice(1).toLowerCase();
 }
 
-function MesesView({ monthly, goals, onYear }: { monthly: MonthlyMetrics; goals: Record<string, Record<number, number>>; onYear: (y: number) => void }) {
+function MesesView({ monthly, goals, onYear, hideYearControls = false }: { monthly: MonthlyMetrics; goals: Record<string, Record<number, number>>; onYear: (y: number) => void; hideYearControls?: boolean }) {
   const { months, annual, programTypes, year } = monthly;
 
   const ventasRows: RowDef[] = [
@@ -210,11 +213,15 @@ function MesesView({ monthly, goals, onYear }: { monthly: MonthlyMetrics; goals:
   return (
     <>
       <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <button onClick={() => onYear(year - 1)} className="text-sm px-2.5 py-1 border border-neutral-200 rounded hover:bg-neutral-50">←</button>
-        <span className="text-sm font-medium">{year}</span>
-        <button onClick={() => onYear(year + 1)} className="text-sm px-2.5 py-1 border border-neutral-200 rounded hover:bg-neutral-50">→</button>
+        {!hideYearControls && (
+          <>
+            <button onClick={() => onYear(year - 1)} className="text-sm px-2.5 py-1 border border-neutral-200 rounded hover:bg-neutral-50">←</button>
+            <span className="text-sm font-medium">{year}</span>
+            <button onClick={() => onYear(year + 1)} className="text-sm px-2.5 py-1 border border-neutral-200 rounded hover:bg-neutral-50">→</button>
+          </>
+        )}
         <div className="ml-auto">
-          <MetaSyncButton year={year} />
+          <MetaSyncButton key={year} year={year} />
         </div>
       </div>
 
@@ -230,11 +237,11 @@ function MesesView({ monthly, goals, onYear }: { monthly: MonthlyMetrics; goals:
             </tr>
           </thead>
           <tbody>
-            <PublicidadRows year={year} months={months} />
+            <PublicidadRows key={`publicidad:${year}`} year={year} months={months} />
             <BlockRows title="Ventas (Convertir)" rows={ventasRows} months={months} annual={annual} />
             <BlockRows title="Finanzas (Recoger)" rows={finanzasRows} months={months} annual={annual} />
             <BlockRows title="Servicio (Entregar)" rows={servicioRows} months={months} annual={annual} />
-            <EditableSingleRow year={year} months={months} field="refunds" label="Devoluciones" />
+            <EditableSingleRow key={`refunds:${year}`} year={year} months={months} field="refunds" label="Devoluciones" />
           </tbody>
         </table>
       </section>
@@ -242,7 +249,7 @@ function MesesView({ monthly, goals, onYear }: { monthly: MonthlyMetrics; goals:
         Las filas de Publicidad son editables (escribe y sal de la celda para guardar). La inversión ADS alimenta el CAC del resumen.
       </p>
 
-      <GoalsSection year={year} months={months} goals={goals} />
+      <GoalsSection key={year} year={year} months={months} goals={goals} />
     </>
   );
 }
@@ -271,6 +278,7 @@ const QMONTHS: Record<number, number[]> = { 1: [0, 1, 2], 2: [3, 4, 5], 3: [6, 7
 
 function GoalsSection({ year, months, goals }: { year: number; months: MonthlyRow[]; goals: Record<string, Record<number, number>> }) {
   const [g, setG] = useState(goals);
+  const saves = useMetricSaves("/api/business-metrics/goals");
 
   async function saveGoal(metricKey: string, quarter: number, raw: string) {
     setG((prev) => {
@@ -279,16 +287,13 @@ function GoalsSection({ year, months, goals }: { year: number; months: MonthlyRo
       else next[metricKey][quarter] = Number(raw);
       return next;
     });
-    await fetch("/api/business-metrics/goals", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ year, quarter, metricKey, value: raw === "" ? null : Number(raw) }),
-    }).catch(() => {});
+    await saves.save(`${metricKey}:${quarter}`, { year, quarter, metricKey, value: raw === "" ? null : Number(raw) });
   }
 
   return (
     <section className="mt-6">
       <h2 className="text-xs uppercase tracking-wide text-neutral-500 font-medium mb-2">Objetivos por trimestre (REAL vs GOAL)</h2>
+      <SaveFeedback count={saves.failedCount} saving={saves.saving} onRetry={saves.retry} />
       <div className="card p-0 overflow-x-auto">
         <table className="w-full text-sm border-collapse">
           <thead>
@@ -403,20 +408,36 @@ function BlockRows({ title, rows, months, annual }: { title: string; rows: RowDe
 
 // Bloque Publicidad con celdas editables (datos manuales).
 type ManualField = "newFollowers" | "adsSpend" | "adsConversion" | "totalFollowers";
+const MANUAL_FIELDS: ManualField[] = ["newFollowers", "adsSpend", "adsConversion", "totalFollowers"];
 function PublicidadRows({ year, months }: { year: number; months: MonthlyRow[] }) {
   const [vals, setVals] = useState(() =>
     months.map((m) => ({ newFollowers: m.newFollowers, adsSpend: m.adsSpend, adsConversion: m.adsConversion, totalFollowers: m.totalFollowers }))
   );
 
+  const drafts = useRef(new Map<string, number | null>());
+  const saves = useMetricSaves("/api/business-metrics/inputs", (key, payload) => {
+    const field = key.split(":")[1];
+    if (drafts.current.get(key) === payload[field]) drafts.current.delete(key);
+  });
+
+  // Refresh Meta values for the same year without replacing edits still awaiting a save.
+  useEffect(() => {
+    setVals((current) => months.map((month) => {
+      const next = { newFollowers: month.newFollowers, adsSpend: month.adsSpend, adsConversion: month.adsConversion, totalFollowers: month.totalFollowers };
+      for (const field of MANUAL_FIELDS) {
+        if (drafts.current.has(`${month.month}:${field}`)) next[field] = current[month.month][field];
+      }
+      return next;
+    }));
+  }, [months]);
+
   function setCell(month: number, field: ManualField, raw: string) {
-    setVals((arr) => arr.map((v, i) => (i === month ? { ...v, [field]: raw === "" ? null : Number(raw) } : v)));
+    const value = raw === "" ? null : Number(raw);
+    drafts.current.set(`${month}:${field}`, value);
+    setVals((arr) => arr.map((v, i) => (i === month ? { ...v, [field]: value } : v)));
   }
   async function save(month: number, field: ManualField, raw: string) {
-    await fetch("/api/business-metrics/inputs", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ year, month, [field]: raw === "" ? null : Number(raw) }),
-    }).catch(() => {});
+    await saves.save(`${month}:${field}`, { year, month, [field]: raw === "" ? null : Number(raw) });
   }
 
   const sum = (f: ManualField) => vals.reduce((a, v) => a + (v[f] ?? 0), 0);
@@ -436,6 +457,9 @@ function PublicidadRows({ year, months }: { year: number; months: MonthlyRow[] }
   return (
     <>
       <BlockHeader title="Publicidad (Atraer)" />
+      {saves.failedCount > 0 && (
+        <tr><td colSpan={14} className="px-3 py-2"><SaveFeedback count={saves.failedCount} saving={saves.saving} onRetry={saves.retry} /></td></tr>
+      )}
       {FIELDS.map((f, i) => (
         <tr key={f.key} className={i % 2 === 1 ? "zebra" : undefined}>
           <td className="py-1.5 px-3 text-neutral-700 sticky left-0 bg-white z-10 whitespace-nowrap">{f.label}</td>
@@ -478,37 +502,103 @@ function PublicidadRows({ year, months }: { year: number; months: MonthlyRow[] }
 // Fila editable de un único dato manual (ej. Devoluciones). Anual = suma.
 function EditableSingleRow({ year, months, field, label, money = false }: { year: number; months: MonthlyRow[]; field: string; label: string; money?: boolean }) {
   const [vals, setVals] = useState<(number | null)[]>(() => months.map((m) => (m as any)[field] ?? null));
+  const saves = useMetricSaves("/api/business-metrics/inputs");
 
   function setCell(month: number, raw: string) {
     setVals((arr) => arr.map((v, i) => (i === month ? (raw === "" ? null : Number(raw)) : v)));
   }
   async function save(month: number, raw: string) {
-    await fetch("/api/business-metrics/inputs", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ year, month, [field]: raw === "" ? null : Number(raw) }),
-    }).catch(() => {});
+    await saves.save(String(month), { year, month, [field]: raw === "" ? null : Number(raw) });
   }
-  const total = vals.reduce((a, v) => a + (v ?? 0), 0);
+  const total = vals.reduce<number>((a, v) => a + (v ?? 0), 0);
 
   return (
-    <tr>
-      <td className="py-1.5 px-3 text-neutral-700 sticky left-0 bg-white z-10 whitespace-nowrap">{label}</td>
-      {months.map((mo) => (
-        <td key={mo.month} className="py-1 px-1 text-right">
-          <input
-            type="number"
-            value={vals[mo.month] ?? ""}
-            onChange={(e) => setCell(mo.month, e.target.value)}
-            onBlur={(e) => save(mo.month, e.target.value)}
-            className="w-16 text-right tabular-nums bg-transparent border border-transparent hover:border-neutral-200 focus:border-neutral-400 rounded px-1 py-0.5 outline-none text-xs"
-          />
+    <>
+      {saves.failedCount > 0 && (
+        <tr><td colSpan={14} className="px-3 py-2"><SaveFeedback count={saves.failedCount} saving={saves.saving} onRetry={saves.retry} /></td></tr>
+      )}
+      <tr>
+        <td className="py-1.5 px-3 text-neutral-700 sticky left-0 bg-white z-10 whitespace-nowrap">{label}</td>
+        {months.map((mo) => (
+          <td key={mo.month} className="py-1 px-1 text-right">
+            <input
+              type="number"
+              value={vals[mo.month] ?? ""}
+              onChange={(e) => setCell(mo.month, e.target.value)}
+              onBlur={(e) => save(mo.month, e.target.value)}
+              className="w-16 text-right tabular-nums bg-transparent border border-transparent hover:border-neutral-200 focus:border-neutral-400 rounded px-1 py-0.5 outline-none text-xs"
+            />
+          </td>
+        ))}
+        <td className="py-1.5 px-3 text-right tabular-nums font-semibold border-l-2 border-neutral-300 bg-neutral-50 whitespace-nowrap">
+          {money ? eur(total) : total}
         </td>
-      ))}
-      <td className="py-1.5 px-3 text-right tabular-nums font-semibold border-l-2 border-neutral-300 bg-neutral-50 whitespace-nowrap">
-        {money ? eur(total) : total}
-      </td>
-    </tr>
+      </tr>
+    </>
+  );
+}
+
+// Keep failed drafts on screen and retry the latest submitted value for each cell.
+// Requests to the same cell are ordered so an older response cannot overwrite a newer edit.
+type MetricSavePayload = Record<string, string | number | null>;
+
+function useMetricSaves(endpoint: string, onSaved?: (key: string, payload: MetricSavePayload) => void) {
+  const latest = useRef<Record<string, { payload: MetricSavePayload; revision: number }>>({});
+  const queues = useRef<Record<string, Promise<void>>>({});
+  const [failures, setFailures] = useState<Record<string, true>>({});
+  const [pending, setPending] = useState(0);
+
+  async function save(key: string, payload: MetricSavePayload) {
+    const revision = (latest.current[key]?.revision ?? 0) + 1;
+    latest.current[key] = { payload, revision };
+    setPending((count) => count + 1);
+    const request = (queues.current[key] ?? Promise.resolve()).then(async () => {
+      try {
+        const response = await fetch(endpoint, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) throw new Error(`Error ${response.status}`);
+        if (latest.current[key]?.revision === revision) {
+          onSaved?.(key, payload);
+          setFailures((current) => {
+            const next = { ...current };
+            delete next[key];
+            return next;
+          });
+        }
+      } catch {
+        if (latest.current[key]?.revision === revision) {
+          setFailures((current) => ({ ...current, [key]: true }));
+        }
+      } finally {
+        setPending((count) => count - 1);
+      }
+    });
+    queues.current[key] = request;
+    await request;
+  }
+
+  function retry() {
+    for (const key of Object.keys(failures)) {
+      const draft = latest.current[key];
+      if (draft) void save(key, draft.payload);
+    }
+  }
+
+  return { save, retry, failedCount: Object.keys(failures).length, saving: pending > 0 };
+}
+
+function SaveFeedback({ count, saving, onRetry }: { count: number; saving: boolean; onRetry: () => void }) {
+  if (!count) return null;
+  return (
+    <div role="alert" className="flex items-center gap-2 flex-wrap text-xs text-red-700 mb-2">
+      <span>No se {count === 1 ? "ha guardado un cambio" : `han guardado ${count} cambios`}. Los valores siguen en pantalla.</span>
+      <button type="button" disabled={saving} onClick={onRetry} className="underline font-medium disabled:opacity-50">
+        {saving ? "Guardando…" : "Reintentar"}
+      </button>
+    </div>
   );
 }
 

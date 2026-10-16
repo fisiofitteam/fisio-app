@@ -1,21 +1,24 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
-import { getPeriodRange, calculateFinanceSummary, type Period } from "@/lib/finance";
+import { getPeriodRange, calculateFinanceSummary } from "@/lib/finance";
 import { FinancePage } from "@/components/FinancePage";
+import { resolveKpiMonth } from "@/lib/kpi-period";
+import { KpiPeriodNav } from "@/components/KpiPeriodNav";
 
 export default async function FinancePageRoute({
   searchParams,
 }: {
-  searchParams: { period?: string };
+  searchParams: { period?: string; specificMonth?: string };
 }) {
   const user = (await getActiveProfessional())!;
   if (user.role !== "ceo") redirect("/fisio");
 
-  const period: Period = (["month", "quarter", "year"].includes(searchParams.period ?? "")
-    ? (searchParams.period as Period)
+  const selectedMonth = resolveKpiMonth(searchParams.specificMonth);
+  const period: "month" | "quarter" | "year" = (["month", "quarter", "year"].includes(searchParams.period ?? "")
+    ? (searchParams.period as "month" | "quarter" | "year")
     : "month");
-  const { start, end, label } = getPeriodRange(period);
+  const { start, end, label } = period === "month" ? selectedMonth : getPeriodRange(period);
 
   const summary = await calculateFinanceSummary(start, end);
 
@@ -26,7 +29,6 @@ export default async function FinancePageRoute({
       patient: { select: { id: true, fullName: true } },
     },
     orderBy: { occurredAt: "desc" },
-    take: 30,
   });
 
   const autoRenewals = await prisma.subscriptionRenewal.findMany({
@@ -50,9 +52,9 @@ export default async function FinancePageRoute({
 
   // === Datos para el gráfico anual ===
   // Todas las transacciones del año actual + renovaciones automáticas del año
-  const now = new Date();
-  const yearStart = new Date(now.getFullYear(), 0, 1);
-  const yearEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
+  const year = start.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(year, 0, 1));
+  const yearEnd = new Date(Date.UTC(year + 1, 0, 1) - 1);
 
   const yearTransactions = await prisma.transaction.findMany({
     where: { occurredAt: { gte: yearStart, lte: yearEnd } },
@@ -69,8 +71,10 @@ export default async function FinancePageRoute({
   });
 
   return (
+    <>
+    <KpiPeriodNav title="Negocio" month={selectedMonth.month} year={year} rangeLabel={period === "month" ? undefined : label} />
     <FinancePage
-      year={now.getFullYear()}
+      year={year}
       period={period}
       periodLabel={label}
       summary={summary}
@@ -109,5 +113,6 @@ export default async function FinancePageRoute({
       professionals={professionals.map((p) => ({ id: p.id, fullName: p.fullName, role: p.role }))}
       patients={patients.map((p) => ({ id: p.id, fullName: p.fullName }))}
     />
+    </>
   );
 }
