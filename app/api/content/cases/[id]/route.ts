@@ -92,6 +92,19 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     processVideos: parseVids(row.processVideos),
     obstaclesVideos: parseVids(row.obstaclesVideos),
     achievementsVideos: parseVids(row.achievementsVideos),
+    // Vídeos sueltos (legacy) que el fisio adjunta desde el CaseModal:
+    // allí la textarea los vuelca en `videoUrls` como array JSON de
+    // strings. Los pintamos en el detalle como "Otros vídeos" aparte
+    // de los categorizados por apartado para no perderlos.
+    videoUrls: (() => {
+      try {
+        const arr = row.videoUrls ? JSON.parse(row.videoUrls) : [];
+        if (!Array.isArray(arr)) return [];
+        return arr
+          .map((v: any) => (typeof v === "string" ? v : v?.url))
+          .filter((u: unknown): u is string => typeof u === "string" && u.length > 0);
+      } catch { return []; }
+    })(),
     shortSummary: row.shortSummary,
     aiDraftedAt: row.aiDraftedAt,
     createdAt: row.createdAt,

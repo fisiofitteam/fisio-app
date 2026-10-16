@@ -648,6 +648,10 @@ type CaseDetail = {
   processVideos: { url: string; caption?: string }[];
   obstaclesVideos: { url: string; caption?: string }[];
   achievementsVideos: { url: string; caption?: string }[];
+  // Legacy: vídeos sueltos sin categorizar que el fisio adjunta desde
+  // el CaseModal (textarea). Se pintan como "Otros vídeos" al final del
+  // detalle para no perderlos hasta migrar a los 4 campos nuevos.
+  videoUrls?: string[];
 };
 
 type GeneratedPiece = {
@@ -865,6 +869,28 @@ function CaseDetailModal({ caseId, onClose }: { caseId: string; onClose: () => v
                     );
                   })}
                 </div>
+              )}
+
+              {/* Vídeos sueltos (legacy) que el fisio adjuntó desde el CaseModal
+                  antes de que existieran los 4 apartados. Se pintan aparte para
+                  no perderlos — el fisio puede moverlos a su apartado desde
+                  "Generar con IA" o editándolo manualmente luego. */}
+              {data.videoUrls && data.videoUrls.length > 0 && (
+                <details className="border border-neutral-200 rounded p-3 bg-neutral-50" open>
+                  <summary className="text-sm font-semibold cursor-pointer">📹 Vídeos adjuntos</summary>
+                  <p className="text-[11px] text-neutral-500 mt-1 mb-2">
+                    Vídeos cargados por el fisio sin categorizar por apartado.
+                  </p>
+                  <ul className="space-y-1">
+                    {data.videoUrls.map((url, i) => (
+                      <li key={i} className="text-[11px]">
+                        <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">
+                          🎥 {url}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
               )}
 
               {/* ─── Generador de piezas ─── */}
