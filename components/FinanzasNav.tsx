@@ -1,75 +1,60 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 
-// Cuadro de mandos: dos niveles.
-//  - Nivel 1 (secciones): Finanzas | Métricas globales del negocio
-//  - Nivel 2 (subpestañas de Finanzas): Resumen | Facturas equipo
-const SECTIONS = [
-  { href: "/fisio/finanzas/metricas-negocio", label: "📈 Métricas globales del negocio", key: "metricas" },
-  { href: "/fisio/finanzas", label: "💶 Finanzas", key: "finanzas" },
-  { href: "/fisio/finanzas/anuncios", label: "📣 Anuncios", key: "anuncios" },
+const BASE = "/fisio/finanzas";
+const TABS = [
+  { href: BASE, label: "💼 Negocio", key: "negocio" },
+  { href: `${BASE}/captacion`, label: "📈 Captación", key: "captacion" },
+  { href: `${BASE}/salud`, label: "🩺 Salud", key: "salud" },
+  { href: `${BASE}/pagos`, label: "💳 Pagos", key: "pagos" },
+  { href: `${BASE}/anual`, label: "📅 Anual", key: "anual" },
+  { href: `${BASE}/diagnostico`, label: "🔎 Diagnóstico", key: "diagnostico" },
+  { href: `${BASE}/vias`, label: "🧭 Vías", key: "vias" },
 ];
-
-const FINANZAS_SUBTABS = [
-  { href: "/fisio/finanzas", label: "Resumen", match: (p: string) => p === "/fisio/finanzas" },
-  { href: "/fisio/finanzas/facturas", label: "Facturas equipo", match: (p: string) => p === "/fisio/finanzas/facturas" || p.startsWith("/fisio/finanzas/facturas/") },
-  { href: "/fisio/finanzas/facturas-pacientes", label: "Facturas a pacientes", match: (p: string) => p.startsWith("/fisio/finanzas/facturas-pacientes") },
+const TOOLS = [
+  { href: `${BASE}/facturas`, label: "Facturas equipo" },
+  { href: `${BASE}/facturas-pacientes`, label: "Facturas a pacientes" },
+  { href: `${BASE}/anuncios`, label: "Anuncios" },
+  { href: `${BASE}/metricas-negocio`, label: "Resumen anterior y objetivos" },
 ];
 
 export function FinanzasNav() {
   const pathname = usePathname() ?? "";
-  const section = pathname.startsWith("/fisio/finanzas/metricas-negocio")
-    ? "metricas"
-    : pathname.startsWith("/fisio/finanzas/anuncios")
-    ? "anuncios"
-    : "finanzas";
+  const params = useSearchParams();
+  const activeKey = TABS.find((t) => t.href !== BASE && pathname === t.href)?.key
+    ?? (pathname === `${BASE}/metricas-negocio` ? "anual" : pathname === BASE ? "negocio" : null);
+  const query = new URLSearchParams();
+  for (const key of ["specificMonth", "year"]) {
+    const value = params.get(key);
+    if (value) query.set(key, value);
+  }
+  const withPeriod = (href: string) => query.size ? `${href}?${query.toString()}` : href;
 
   return (
-    <div className="mb-4">
+    <div className="mb-5">
       <header className="mb-3">
-        <h1 className="text-xl font-semibold">Cuadro de mandos</h1>
-        <p className="text-xs text-neutral-500 mt-0.5">Finanzas y métricas globales del negocio</p>
+        <h1 className="text-xl font-semibold tracking-tight">Cuadro de mandos</h1>
+        <p className="text-xs text-neutral-500 mt-0.5">Negocio, captación y salud de FisioFitCross</p>
       </header>
-
-      {/* Nivel 1 — secciones */}
-      <nav className="flex gap-1 border-b border-neutral-200">
-        {SECTIONS.map((s) => {
-          const active = s.key === section;
-          return (
-            <Link
-              key={s.key}
-              href={s.href}
-              className={`px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
-                active ? "border-neutral-900 text-neutral-900" : "border-transparent text-neutral-500 hover:text-neutral-900"
-              }`}
-            >
-              {s.label}
-            </Link>
-          );
-        })}
+      <nav aria-label="KPIs del negocio" className="flex gap-1 overflow-x-auto border-b border-neutral-200">
+        {TABS.map((tab) => (
+          <Link key={tab.key} href={withPeriod(tab.href)} aria-current={activeKey === tab.key ? "page" : undefined}
+            className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors ${activeKey === tab.key ? "border-amber-500 font-medium text-neutral-900" : "border-transparent text-neutral-500 hover:text-neutral-900"}`}>
+            {tab.label}
+          </Link>
+        ))}
       </nav>
-
-      {/* Nivel 2 — subpestañas de Finanzas */}
-      {section === "finanzas" && (
-        <nav className="flex gap-1 mt-3">
-          {FINANZAS_SUBTABS.map((t) => {
-            const active = t.match(pathname);
-            return (
-              <Link
-                key={t.href}
-                href={t.href}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  active ? "bg-neutral-900 text-white" : "bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-50"
-                }`}
-              >
-                {t.label}
-              </Link>
-            );
-          })}
-        </nav>
-      )}
+      <nav aria-label="Herramientas de finanzas" className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs">
+        {TOOLS.map((tool) => (
+          <Link key={tool.href} href={withPeriod(tool.href)}
+            aria-current={pathname === tool.href || pathname.startsWith(tool.href + "/") ? "page" : undefined}
+            className={pathname === tool.href || pathname.startsWith(tool.href + "/") ? "font-medium text-neutral-900 underline underline-offset-4" : "text-neutral-500 hover:text-neutral-900"}>
+            {tool.label}
+          </Link>
+        ))}
+      </nav>
     </div>
   );
 }

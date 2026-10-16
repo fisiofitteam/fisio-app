@@ -67,7 +67,7 @@ const ROLLING_LECTURA: Item = { id: "rolling-lectura", label: "Rolling", Icon: Z
 const TAREAS: Item = { id: "tareas", label: "Tareas", Icon: CheckSquare, href: "/fisio/tareas", match: (p) => p.startsWith("/fisio/tareas") };
 const LLAMADAS: Item = { id: "llamadas", label: "Llamadas", Icon: Phone, href: "/fisio/llamadas", match: (p) => p.startsWith("/fisio/llamadas") };
 const RECURSOS: Item = { id: "recursos", label: "Recursos", Icon: Package, href: "/fisio/recursos", match: (p) => p.startsWith("/fisio/recursos") };
-const FINANZAS: Item = { id: "finanzas", label: "Cuadro de mandos", Icon: Gauge, href: "/fisio/finanzas/metricas-negocio", match: (p) => p.startsWith("/fisio/finanzas") };
+const FINANZAS: Item = { id: "finanzas", label: "Cuadro de mandos", Icon: Gauge, href: "/fisio/finanzas", match: (p) => p.startsWith("/fisio/finanzas") };
 const EQUIPO: Item = { id: "equipo", label: "Equipo", Icon: UserCog, href: "/fisio/equipo", match: (p) => p.startsWith("/fisio/equipo") };
 const CHAT: Item = { id: "chat", label: "Chat", Icon: MessageSquare, href: "/fisio/chat", match: (p) => p.startsWith("/fisio/chat") };
 const FISIO_IA: Item = { id: "fisio-ia", label: "Fisio IA", Icon: Brain, href: "/fisio/fisio-ia", match: (p) => p.startsWith("/fisio/fisio-ia") };
