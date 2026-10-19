@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { getFinanceLedger } from "./finance-ledger";
 
 export type SalesMetrics = {
   scheduled: number;       // total que se programaron en el período (vivos o muertos)
@@ -21,8 +22,9 @@ export type SalesMetrics = {
 //   - `won/lost/cancelled/no_show`: leads DECIDIDOS en el rango (decidedAt).
 //     Esto permite que un lead agendado para un mes y cerrado en otro (p.ej. tras
 //     follow-up) impacte en el período de cierre, no en el de la llamada original.
-//   - `revenue`: suma de transacciones income_new asociadas a los leads decididos
-//     como "won" en el período.
+//   - `revenue`: facturación contractual de altas confirmadas en el período,
+//     por fecha de confirmación del contrato. Las cuotas posteriores son recaudado.
+//     Esta fecha puede diferir de la decisión del lead usada para won/lost.
 export async function calculateSalesMetrics(
   start: Date,
   end: Date,
@@ -49,7 +51,6 @@ export async function calculateSalesMetrics(
 
   let won = 0, lost = 0, cancelled = 0, no_show = 0;
   const wonByProgram = { RECUPERA: 0, CONSOLIDA: 0, ADVANCE: 0, NONE: 0 };
-  const convertedPatientIds: string[] = [];
 
   for (const l of decided) {
     if (l.status === "won") {
@@ -60,7 +61,6 @@ export async function calculateSalesMetrics(
       } else {
         wonByProgram.NONE++;
       }
-      if (l.convertedPatient) convertedPatientIds.push(l.convertedPatient.id);
     }
     else if (l.status === "lost") lost++;
     else if (l.status === "cancelled") cancelled++;
@@ -71,18 +71,12 @@ export async function calculateSalesMetrics(
   const closeRate = won + lost > 0 ? Math.round((won / (won + lost)) * 100) : null;
   const showUpRate = totalCalls > 0 ? Math.round(((won + lost) / totalCalls) * 100) : null;
 
-  // Facturación: sumar income_new de los pacientes convertidos en el período.
-  let revenue = 0;
-  if (convertedPatientIds.length > 0) {
-    const transactions = await prisma.transaction.findMany({
-      where: {
-        type: "income_new",
-        patientId: { in: convertedPatientIds },
-      },
-    });
-    revenue = transactions.reduce((acc, t) => acc + t.amount, 0);
-  }
-  const ticketAvg = won > 0 ? Math.round(revenue / won) : null;
+  // Contractual billing is recognized once, rather than summing later cash installments.
+  const ledger = await getFinanceLedger(start, end);
+  const billedSales = ledger.billedEntries.filter((entry) => entry.type === "income_new"
+    && (!closerId || entry.professionalId === closerId));
+  const revenue = billedSales.reduce((sum, entry) => sum + entry.amount, 0);
+  const ticketAvg = billedSales.length > 0 ? Math.round(revenue / billedSales.length) : null;
 
   return {
     scheduled, totalCalls, won, lost, cancelled, no_show,

@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { computeBusinessMetrics, type BusinessMetrics } from "@/lib/business-metrics";
 import { activePatientCondition } from "@/lib/patient-active";
-import { getRenewalActivityInPeriod } from "@/lib/renewals";
+import { getFinanceLedger } from "@/lib/finance-ledger";
+import { paymentDescription } from "@/lib/payment-description";
 import {
   countLeadOutcomes, groupLeadOutcomes, reconstructIntervalHealth,
   type LeadCounts, type SourceBreakdown,
@@ -55,12 +56,12 @@ export type KpiDashboardData = {
   };
   payments: {
     income: number; expense: number; profit: number;
-    transactionsIncome: number; legacyRenewalIncome: number;
+    transactionsIncome: number; legacyRenewalIncome: number; legacyUnverifiedAmount: number;
     rows: KpiPaymentRow[]; rowCount: number; truncated: boolean;
     notes: string[];
   };
   diagnosis: {
-    monthlyIncome: number; financeIncome: number; incomeDifference: number;
+    billed: number; collected: number; difference: number; unverifiedLegacy: number;
     findings: { key: string; severity: "info" | "warning"; title: string; detail: string }[];
   };
   sources: {
@@ -88,16 +89,10 @@ export async function getKpiDashboardData(
   const effectiveEnd = new Date(Math.min(end.getTime(), now.getTime()));
   const inPeriod = { gte: start, lte: end };
   const incomeWhere = { occurredAt: inPeriod, type: { in: INCOME_TYPES } };
-  const legacyRenewalWhere = {
-    decidedAt: inPeriod, outcome: "renewed", amountPaid: { not: null },
-  };
-  const [
-    metrics, leads, catalog, expenseGroups, officialActive, intervals,
-    paymentTransactions, legacyRenewals, transactionCount, legacyCount,
-    transactionIncome, monthlyTransactionIncome, legacyIncome, renewalActivity,
-    inputRows,
-  ] = await Promise.all([
+  const [metrics, ledger, leads, catalog, expenseGroups, officialActive, intervals,
+    paymentTransactions, inputRows] = await Promise.all([
     existingMetrics ? Promise.resolve(existingMetrics) : computeBusinessMetrics(start, end),
+    getFinanceLedger(start, end),
     prisma.lead.findMany({
       where: { callScheduledAt: inPeriod },
       orderBy: [{ callScheduledAt: "desc" }, { id: "asc" }],
@@ -128,24 +123,6 @@ export async function getKpiDashboardData(
         patientId: true, patient: { select: { fullName: true } },
       },
     }),
-    prisma.subscriptionRenewal.findMany({
-      where: legacyRenewalWhere,
-      orderBy: [{ decidedAt: "desc" }, { id: "asc" }], take: PAYMENT_ROW_LIMIT,
-      select: {
-        id: true, amountPaid: true, decidedAt: true, notes: true,
-        patientId: true, patient: { select: { fullName: true } },
-      },
-    }),
-    prisma.transaction.count({ where: incomeWhere }),
-    prisma.subscriptionRenewal.count({ where: legacyRenewalWhere }),
-    prisma.transaction.aggregate({ where: incomeWhere, _sum: { amount: true } }),
-    // The monthly grid uses every income* type, unlike the finance summary.
-    prisma.transaction.aggregate({
-      where: { occurredAt: inPeriod, type: { startsWith: "income" } },
-      _sum: { amount: true },
-    }),
-    prisma.subscriptionRenewal.aggregate({ where: legacyRenewalWhere, _sum: { amountPaid: true } }),
-    getRenewalActivityInPeriod(start, end),
     prisma.businessMonthlyInput.findMany({
       where: { year: { gte: start.getFullYear(), lte: end.getFullYear() } },
       orderBy: [{ year: "asc" }, { month: "asc" }],
@@ -180,24 +157,13 @@ export async function getKpiDashboardData(
     .reduce((sum, group) => sum + group.amount, 0);
 
   const health = reconstructIntervalHealth(intervals, start, end, now);
-  const monthlyIncome = roundMoney((monthlyTransactionIncome._sum.amount ?? 0) +
-    renewalActivity.reduce((total, row) => total + (row.outcome === "renewed" ? row.amountPaid ?? 0 : 0), 0));
-  const financeIncome = roundMoney(metrics.income);
-  const incomeDifference = roundMoney(monthlyIncome - financeIncome);
-  const rows: KpiPaymentRow[] = [
-    ...paymentTransactions.map((row) => ({
-      id: row.id, source: "transaction" as const, type: row.type,
-      amount: row.amount, date: row.occurredAt.toISOString(), description: row.description,
-      patientId: row.patientId, patientName: row.patient?.fullName ?? null,
-    })),
-    ...legacyRenewals.map((row) => ({
-      id: "legacy-" + row.id, source: "legacy-renewal" as const, type: "income_renewal",
-      amount: row.amountPaid ?? 0, date: row.decidedAt.toISOString(),
-      description: row.notes ?? "Renovación histórica de compatibilidad",
-      patientId: row.patientId, patientName: row.patient?.fullName ?? null,
-    })),
-  ].sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id)).slice(0, PAYMENT_ROW_LIMIT);
-  const rowCount = transactionCount + legacyCount;
+  const legacyUnverifiedAmount = roundMoney(ledger.legacyUnverified.filter((row) => row.issue === "missing-receipt").reduce((sum, row) => sum + row.amount, 0));
+  const rows: KpiPaymentRow[] = paymentTransactions.map((row) => ({
+    id: row.id, source: "transaction" as const, type: row.type,
+    amount: row.amount, date: row.occurredAt.toISOString(), description: paymentDescription(row.description),
+    patientId: row.patientId, patientName: row.patient?.fullName ?? null,
+  }));
+  const rowCount = ledger.receiptEntries.length;
   const counts = countLeadOutcomes(leads.map((lead) => lead.status));
   const breakdown = groupLeadOutcomes(leads.map((lead) => ({
     status: lead.status, groupId: lead.sourceTagId ?? "unassigned",
@@ -208,25 +174,20 @@ export async function getKpiDashboardData(
     groupLabel: lead.source ?? "Sin origen registrado",
   })));
   const findings: KpiDashboardData["diagnosis"]["findings"] = [
-    {
-      key: "preserved", severity: "info", title: "Historial conservado",
-      detail: "Estas vistas consultan los registros existentes. Los movimientos, periodos, datos manuales y objetivos se mantienen en sus registros originales.",
-    },
-    {
-      key: "revenue-sources", severity: Math.abs(incomeDifference) > 0.01 ? "warning" : "info",
-      title: Math.abs(incomeDifference) > 0.01 ? "Dos criterios históricos de ingresos" : "Ingresos del resumen y del histórico coinciden",
-      detail: "Finanzas suma los movimientos registrados y las renovaciones históricas marcadas como renovadas. La tabla mensual añade las renovaciones reales por fecha de decisión. Se conservan ambos criterios; una diferencia requiere revisar el origen antes de corregir registros.",
-    },
-    {
-      key: "sales-count", severity: "info", title: "Altas y ventas utilizan bases distintas",
-      detail: "El resumen cuenta registros de alta, incluidas cuotas; Captación cuenta leads ganados según la fecha de su cita. No son contadores intercambiables.",
-    },
-    {
-      key: "active-count", severity: officialActive === metrics.activePatients ? "info" : "warning",
-      title: officialActive === metrics.activePatients ? "Clientes activos: criterios coincidentes" : "Revisar el criterio de clientes activos",
-      detail: "Salud usa el mismo filtro que la app: periodo activo y fin futuro, sin pacientes de prueba. El resumen histórico calcula inicio de suscripción más meses acumulados. Ambos valores se muestran sin modificar pacientes.",
-    },
+    { key: "billing-cash", severity: "info", title: "Facturación y recaudado tienen fechas distintas",
+      detail: "La facturación recoge el importe completo del contrato una sola vez. El recaudado suma cada cobro confirmado en su fecha, incluso si el programa se vendió en otro mes. La diferencia de un mes no es el saldo pendiente total." },
+    { key: "sales-count", severity: "info", title: "Las cuotas no son nuevas ventas",
+      detail: "Un pago fraccionado cuenta como un contrato y varias entradas de dinero. El ticket utiliza el importe completo de los contratos nuevos; las cuotas posteriores no vuelven a contar como altas." },
+    { key: "history", severity: "info", title: "Registros históricos conservados",
+      detail: "Los cobros, periodos, entradas manuales y objetivos se mantienen. Los importes históricos sin justificante de cobro se revisan por separado y no se suman automáticamente al recaudado." },
   ];
+  for (const [index, warning] of ledger.warnings.entries()) findings.push({
+    key: "ledger-" + index, severity: "warning", title: "Revisión del histórico", detail: warning,
+  });
+  if (legacyUnverifiedAmount > 0) findings.push({
+    key: "legacy-unverified", severity: "warning", title: "Importes históricos por comprobar",
+    detail: "Hay importes asociados a periodos antiguos sin un cobro confirmado enlazado. Se conservan para su revisión y no se incluyen dos veces como cuotas o efectivo.",
+  });
   if (health.incompleteIntervals > 0) findings.push({
     key: "history-dates", severity: "warning", title: "Histórico con fechas incompletas",
     detail: health.incompleteIntervals + " periodos carecen de un intervalo válido. Quedan fuera de la reconstrucción de clientes al inicio y al final.",
@@ -253,7 +214,7 @@ export async function getKpiDashboardData(
       monthsWithInputs: inputs.length, monthsInPeriod: periodMonthKeys.size,
       notes: [
         "Las llamadas se atribuyen a su fecha de cita, igual que el cuadro actual. Realizadas = ganadas + perdidas; show rate excluye canceladas y pendientes.",
-        "El CAC conserva ADS manuales + comisión del 10% + sueldo de closers. Los gastos contables de marketing se muestran aparte y no sustituyen esta fórmula.",
+        "El CAC usa ADS manuales + comisión estimada del 10% sobre contratos nuevos + sueldo de closers, dividido entre altas contractuales. Las cuotas posteriores no aumentan las altas.",
         "No existe un registro completo de conversaciones iniciadas: esa etapa del embudo queda sin dato.",
         "Seguidores y publicidad proceden de los meses guardados en Anual; un campo vacío permanece sin dato.",
       ],
@@ -276,22 +237,22 @@ export async function getKpiDashboardData(
         "Inicio y cierre se estiman con las fechas actuales del historial de suscripciones, sin duplicar pacientes y excluyendo reservas y periodos cancelados. El cierre se limita a hoy cuando el periodo aún no ha terminado.",
         "Entradas y salidas son movimientos netos entre esas dos cohortes. No incluyen todas las altas y reactivaciones intermedias. Churn = pacientes de la cohorte inicial ausentes al cierre / cohorte inicial.",
         "ARPU del periodo = ingresos del resumen / media de clientes al inicio y cierre; no está mensualizado. La reconstrucción puede cambiar si se editan fechas históricas.",
-        "El LTV mantiene los pagos históricos por paciente del cuadro anterior. La duración media de vida queda sin dato: no hay un historial de bajas suficientemente fiable para estimarla.",
+        "El LTV utiliza los cobros registrados por paciente, sin añadir de nuevo el importe completo del contrato. La duración media de vida queda sin dato: no hay un historial de bajas suficientemente fiable para estimarla.",
       ],
     },
     payments: {
       income: metrics.income, expense: metrics.expense, profit: metrics.profit,
-      transactionsIncome: roundMoney(transactionIncome._sum.amount ?? 0),
-      legacyRenewalIncome: roundMoney(legacyIncome._sum.amountPaid ?? 0),
+      transactionsIncome: metrics.income,
+      legacyRenewalIncome: 0, legacyUnverifiedAmount,
       rows, rowCount, truncated: rowCount > rows.length,
       notes: [
-        "Totales con el mismo criterio que Finanzas, sin deduplicar ni modificar registros históricos.",
+        "El recaudado incluye únicamente cobros registrados. Un contrato fraccionado genera varios cobros durante sus meses de pago.",
         "La lista muestra hasta " + PAYMENT_ROW_LIMIT + " movimientos más recientes; los totales abarcan el periodo completo.",
-        "Las transacciones no enlazan un proveedor de pago ni un estado de cobro. No se deducen métodos de pago, impagos o saldo pendiente a partir de sus descripciones.",
-        "Las renovaciones de compatibilidad se identifican aparte para facilitar su revisión.",
+        "Las cuotas futuras no se dan por cobradas. Los avisos de pago y la conciliación verifican cada cobro sin repetirlo.",
       ],
     },
-    diagnosis: { monthlyIncome, financeIncome, incomeDifference, findings },
+    diagnosis: { billed: metrics.billed, collected: metrics.income,
+      difference: roundMoney(metrics.billed - metrics.income), unverifiedLegacy: legacyUnverifiedAmount, findings },
     sources: {
       catalog, breakdown, origins,
       notes: [

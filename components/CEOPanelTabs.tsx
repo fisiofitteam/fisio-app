@@ -1,23 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import type { FinanceSummary } from "@/lib/finance";
 import Link from "next/link";
 import { CeoPersonalView } from "@/components/CeoPersonalView";
 import { CapacityReportLazy } from "@/components/CapacityReportLazy";
 
-type FinanceResumen = {
-  income: number;
-  expense: number;
-  profit: number;
-  profitPct: number | null;
-  incomeNew: number;
-  incomeRenewal: number;
-  incomeOther: number;
-  countNew: number;
-  countRenewal: number;
-  countOther: number;
-  periodLabel: string;
-};
+type FinanceResumen = FinanceSummary & { periodLabel: string };
 
 function eur(n: number): string {
   return `${n.toLocaleString("es-ES", { maximumFractionDigits: 0 })} €`;
@@ -68,9 +57,13 @@ export function CEOPanelTabs({
                 Ver todo →
               </Link>
             </div>
-            <div className="grid grid-cols-3 gap-3 pl-2">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 pl-2">
               <div>
-                <div className="text-xs text-neutral-500 mb-1">Ingresos</div>
+                <div className="text-xs text-neutral-500 mb-1">Facturación</div>
+                <div className="text-2xl font-semibold text-emerald-700">{eur(finance.billed)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-neutral-500 mb-1">Recaudado</div>
                 <div className="text-2xl font-semibold text-emerald-700">{eur(finance.income)}</div>
               </div>
               <div>
@@ -78,7 +71,7 @@ export function CEOPanelTabs({
                 <div className="text-2xl font-semibold text-red-700">{eur(finance.expense)}</div>
               </div>
               <div>
-                <div className="text-xs text-neutral-500 mb-1">Beneficio</div>
+                <div className="text-xs text-neutral-500 mb-1">Resultado de caja</div>
                 <div className={`text-2xl font-semibold ${finance.profit >= 0 ? "text-neutral-900" : "text-red-700"}`}>
                   {eur(finance.profit)}
                 </div>
@@ -92,9 +85,9 @@ export function CEOPanelTabs({
           </section>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-            <SourceCard label="Nuevas altas" amount={finance.incomeNew} count={finance.countNew} color="emerald" />
-            <SourceCard label="Renovaciones" amount={finance.incomeRenewal} count={finance.countRenewal} color="blue" />
-            <SourceCard label="Otros ingresos" amount={finance.incomeOther} count={finance.countOther} color="purple" />
+            <SourceCard label="Nuevas altas" amount={finance.incomeNew} count={finance.collectedCountNew} color="emerald" />
+            <SourceCard label="Renovaciones" amount={finance.incomeRenewal} count={finance.collectedCountRenewal} color="blue" />
+            <SourceCard label="Otros ingresos" amount={finance.incomeOther} count={finance.collectedCountOther} color="purple" />
           </div>
 
           <p className="text-xs text-neutral-500 italic mt-3 text-center">

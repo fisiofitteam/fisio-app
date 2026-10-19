@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 import { SubscriptionView } from "@/components/SubscriptionView";
+import { paymentDescription } from "@/lib/payment-description";
 
 export const dynamic = "force-dynamic";
 
@@ -147,7 +148,7 @@ export default async function PatientSuscripcionTab({ params }: { params: { id: 
         type: t.type,
         category: t.category,
         amount: t.amount,
-        description: t.description,
+        description: paymentDescription(t.description),
         occurredAt: t.occurredAt.toISOString(),
         professional: t.professional ? { id: t.professional.id, fullName: t.professional.fullName } : null,
       }))}

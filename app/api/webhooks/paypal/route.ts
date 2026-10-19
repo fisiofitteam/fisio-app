@@ -13,16 +13,16 @@
  *   Fase 2 (suscripción N ciclos):
  *     - BILLING.SUBSCRIPTION.ACTIVATED       → crea Patient (misma lógica que
  *       capture.completed pero por importe total pactado).
- *     - PAYMENT.SALE.COMPLETED               → informativo. Registra el
- *       cobro mensual como transaction income_new proporcional a la cuota.
+ *     - PAYMENT.SALE.COMPLETED               → registra cada cobro real,
+ *       incluida la primera cuota, de forma idempotente por ID de recibo.
  *     - BILLING.SUBSCRIPTION.CANCELLED       → notifica al equipo.
  *     - BILLING.SUBSCRIPTION.PAYMENT.FAILED  → notifica al equipo.
  *
  * Diseño:
- *  - IDEMPOTENTE: si el Sale ya está paid con patientId, saltamos.
+ *  - La activación y los recibos tienen identidades independientes.
  *  - Firma verificada contra el endpoint de PayPal (ver lib/paypal/webhook).
- *  - 200 OK en errores de negocio (Sale no encontrado, sin custom_id, …).
- *    500 solo en fallos de infraestructura (BD caída, PayPal caído…).
+ *  - Un recibo anterior a la activación devuelve 500 para conservar el
+ *    reintento. Las coincidencias históricas dudosas se reportan sin duplicar.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -34,6 +34,7 @@ import { paypalCredentials } from "@/lib/paypal/config";
 // Antes duplicaban el código aquí y el bug era catastrófico: si el webhook
 // no llegaba, ninguna otra vía podía completar la activación.
 import { activateSaleAsPatient, applyRenewalCheckoutPaid } from "@/lib/paypal/activation";
+import { recordInstallmentReceipt, type InstallmentContract } from "@/lib/installment-receipts";
 
 // Prefijo del custom_id de PayPal para diferenciar renovaciones (RenewalCheckout)
 // de altas (Sale). Ver /api/renewal/[token]/paypal.
@@ -184,99 +185,49 @@ async function handleSubscriptionActivated(subscription: any) {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// PAYMENT.SALE.COMPLETED — cobro periódico de una suscripción (cuota 2..N)
+// PAYMENT.SALE.COMPLETED — todos los cobros reales (primera cuota y siguientes)
 // ────────────────────────────────────────────────────────────────────────────
-async function handleSubscriptionCyclePayment(sale: any) {
-  // sale.billing_agreement_id = subscription id (PayPal legacy naming)
-  const subscriptionId: string | undefined = sale?.billing_agreement_id;
-  if (!subscriptionId) return;
-
-  const amountValue = Number(sale?.amount?.total ?? 0);
-  if (!amountValue) return;
-
-  // Buscar primero como Sale (alta), después como RenewalCheckout (renovación)
-  const saleRecord = await prisma.sale.findUnique({
-    where: { paypalSubscriptionId: subscriptionId },
-  });
-  if (saleRecord && saleRecord.patientId) {
-    await registerSubscriptionCycle({
-      patientId: saleRecord.patientId,
-      programType: saleRecord.programType,
-      durationMonths: saleRecord.durationMonths,
-      totalCycles: saleRecord.installmentCount ?? 0,
-      amountValue,
-      professionalId: saleRecord.closerId,
-      transactionType: "income_new",
-      subscriptionId,
-    });
-    return;
+async function handleSubscriptionCyclePayment(payment: any) {
+  const subscriptionId: string | undefined = payment?.billing_agreement_id;
+  if (!subscriptionId) return; // unrelated one-shot legacy sale event
+  const amountCents = Math.round(Number(payment?.amount?.total) * 100);
+  const paidAt = new Date(payment?.create_time ?? "");
+  if (!payment?.id || !Number.isSafeInteger(amountCents) || amountCents <= 0
+    || payment?.amount?.currency?.toUpperCase() !== "EUR" || !Number.isFinite(paidAt.getTime())) {
+    throw new Error("Cuota PayPal sin recibo, importe EUR o fecha efectiva válidos.");
   }
 
-  const renewalCheckout = await prisma.renewalCheckout.findUnique({
-    where: { paypalSubscriptionId: subscriptionId },
-  });
-  if (renewalCheckout && renewalCheckout.patientId) {
-    await registerSubscriptionCycle({
-      patientId: renewalCheckout.patientId,
-      programType: renewalCheckout.programType,
-      durationMonths: renewalCheckout.durationMonths,
-      totalCycles: renewalCheckout.installmentCount ?? 0,
-      amountValue,
-      professionalId: renewalCheckout.createdById,
-      transactionType: "income_renewal",
-      subscriptionId,
-    });
-    return;
+  let contract: InstallmentContract;
+  const saleRecord = await prisma.sale.findUnique({ where: { paypalSubscriptionId: subscriptionId } });
+  if (saleRecord) {
+    if (!saleRecord.patientId || saleRecord.status !== "paid") {
+      throw new Error("Cuota PayPal pendiente de activación del Sale; reintentar.");
+    }
+    contract = {
+      kind: "sale", id: saleRecord.id, patientId: saleRecord.patientId,
+      programType: saleRecord.programType, durationMonths: saleRecord.durationMonths,
+      installmentCount: saleRecord.installmentCount ?? 0,
+      professionalId: saleRecord.closerId, createdAt: saleRecord.createdAt,
+    };
+  } else {
+    const checkout = await prisma.renewalCheckout.findUnique({ where: { paypalSubscriptionId: subscriptionId } });
+    if (!checkout || checkout.status !== "paid" || (!checkout.renewalId && checkout.programType !== "ADHOC")) {
+      // ACTIVATED and the first SALE.COMPLETED need not arrive in order.
+      // Keep retries rather than acknowledging and losing the first receipt.
+      throw new Error("Cuota PayPal sin renovación activada asociada; reintentar.");
+    }
+    contract = {
+      kind: "renewal", id: checkout.id, patientId: checkout.patientId,
+      programType: checkout.programType, durationMonths: checkout.durationMonths,
+      installmentCount: checkout.installmentCount ?? 0,
+      professionalId: checkout.createdById, createdAt: checkout.createdAt,
+    };
   }
-
-  console.warn("[paypal-webhook] sale.completed sin sale/renewal asociado", { subscriptionId });
-}
-
-/**
- * Registra una cuota mensual como Transaction. Cuenta las ya registradas para
- * ese paciente con la etiqueta "cuota" y crea una nueva cada vez que llega
- * PAYMENT.SALE.COMPLETED. Esto incluye la PRIMERA cuota — antes se creaba
- * en subscription.activated, ahora es responsabilidad única de este handler
- * para evitar el duplicado.
- */
-async function registerSubscriptionCycle(opts: {
-  patientId: string;
-  programType: string;
-  durationMonths: number;
-  totalCycles: number;
-  amountValue: number;
-  professionalId: string | null;
-  transactionType: "income_new" | "income_renewal";
-  subscriptionId: string;
-}) {
-  // Contamos las cuotas ya registradas para ESTE paciente por PayPal (marca
-  // "cuota" en descripción). Así calculamos el número de cuota actual.
-  const alreadyBilled = await prisma.transaction.count({
-    where: {
-      patientId: opts.patientId,
-      type: opts.transactionType,
-      description: { contains: "cuota" },
-    },
+  const result = await recordInstallmentReceipt({
+    provider: "paypal", receiptId: payment.id, subscriptionId, contract,
+    amountCents, paidAt,
   });
-  const cycleNumber = alreadyBilled + 1;
-  const label = opts.transactionType === "income_renewal" ? "Renovación PayPal" : "Pago vía PayPal";
-  await prisma.transaction.create({
-    data: {
-      type: opts.transactionType,
-      category: `${opts.programType} ${opts.durationMonths}M`,
-      amount: opts.amountValue,
-      description: `${label} · ${opts.programType} ${opts.durationMonths} meses · cuota ${cycleNumber}/${opts.totalCycles}`,
-      occurredAt: new Date(),
-      patientId: opts.patientId,
-      professionalId: opts.professionalId,
-    },
-  });
-  console.log("[paypal-webhook] Cuota registrada", {
-    subscriptionId: opts.subscriptionId,
-    cycleNumber,
-    totalCycles: opts.totalCycles,
-    amount: opts.amountValue,
-  });
+  if (result.status === "ambiguous") console.warn("[paypal-webhook] Cuota histórica requiere conciliación manual", { receiptId: payment.id, contractId: contract.id, reason: result.reason });
 }
 
 // ────────────────────────────────────────────────────────────────────────────

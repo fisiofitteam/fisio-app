@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 import { generatePaymentToken } from "@/lib/stripe";
+import type { Prisma } from "@prisma/client";
 
 const TOKEN_VALIDITY_DAYS = 7;
 const PROGRAMS = ["RECUPERA", "CONSOLIDA", "ADVANCE"];
@@ -11,8 +12,8 @@ const PROGRAMS = ["RECUPERA", "CONSOLIDA", "ADVANCE"];
  * marcado como reserva, pagado (importe > 0) y aún no consumido en una
  * renovación real. Si hay varias, devuelve la más reciente.
  */
-async function findPendingReservation(patientId: string) {
-  return await prisma.subscriptionRenewal.findFirst({
+async function findPendingReservation(patientId: string, database: Pick<Prisma.TransactionClient, "subscriptionRenewal"> = prisma) {
+  return await database.subscriptionRenewal.findFirst({
     where: {
       patientId,
       isReservation: true,
@@ -22,6 +23,10 @@ async function findPendingReservation(patientId: string) {
     orderBy: { decidedAt: "desc" },
     select: { id: true, amountPaid: true, decidedAt: true },
   });
+}
+
+class RenewalLinkError extends Error {
+  constructor(message: string, readonly status: number) { super(message); }
 }
 
 /**
@@ -65,7 +70,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (!Number.isFinite(durationMonths) || durationMonths < 1 || durationMonths > 24) {
     return NextResponse.json({ error: "Duración no válida (1-24 meses)" }, { status: 400 });
   }
-  if (!Number.isFinite(amountEuros) || amountEuros <= 0) {
+  const grossAmountCents = Math.round(amountEuros * 100);
+  if (!Number.isFinite(amountEuros) || !Number.isSafeInteger(grossAmountCents)
+    || grossAmountCents <= 0 || grossAmountCents > 2147483647) {
     return NextResponse.json({ error: "Importe no válido" }, { status: 400 });
   }
 
@@ -95,60 +102,51 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // lleven la misma reserva. Si el enlace no llega a pagarse el fisio
   // puede eliminarlo desde el panel y regenerarlo — no se re-abre la
   // reserva automáticamente, es más seguro que arriesgar duplicidades.
-  let amountCents = Math.round(amountEuros * 100);
-  let discountCents = 0;
-  let consumedReservationId: string | null = null;
-  if (!isReservation) {
-    const pending = await findPendingReservation(patient.id);
-    if (pending && (pending.amountPaid ?? 0) > 0) {
-      discountCents = Math.round((pending.amountPaid ?? 0) * 100);
-      if (discountCents >= amountCents) {
-        return NextResponse.json(
-          {
-            error: `El importe (${amountEuros.toFixed(2)}€) es menor o igual que la reserva pendiente (${(pending.amountPaid ?? 0).toFixed(2)}€). Sube el importe.`,
-          },
-          { status: 400 }
-        );
-      }
-      amountCents -= discountCents;
-      consumedReservationId = pending.id;
-    }
-  }
-
   const tokenExpiresAt = new Date();
   tokenExpiresAt.setDate(tokenExpiresAt.getDate() + TOKEN_VALIDITY_DAYS);
-
-  const checkout = await prisma.renewalCheckout.create({
-    data: {
-      patientId: patient.id,
-      createdById: user.id,
-      programType,
-      durationMonths,
-      amountCents,
-      paymentToken: generatePaymentToken(),
-      tokenExpiresAt,
-      status: "pending",
-      installmentCount,
-      isReservation,
-      paymentProvider,
-    } as any,
-    select: { paymentToken: true },
-  });
-
-  // Marcar reserva como consumida (idempotente si ya lo estaba: nadie
-  // más la puede pillar en carrera). Se hace después de crear el
-  // checkout para asegurar que el link ya existe.
-  if (consumedReservationId) {
-    await prisma.subscriptionRenewal.update({
-      where: { id: consumedReservationId },
-      data: { reservationConsumedAt: new Date() },
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      let discountCents = 0;
+      let reservationId: string | null = null;
+      if (!isReservation) {
+        const pending = await findPendingReservation(patient.id, tx);
+        if (pending && (pending.amountPaid ?? 0) > 0) {
+          discountCents = Math.round((pending.amountPaid ?? 0) * 100);
+          if (!Number.isSafeInteger(discountCents) || discountCents <= 0 || discountCents >= grossAmountCents) {
+            throw new RenewalLinkError(`El importe (${amountEuros.toFixed(2)}€) es menor o igual que la reserva pendiente (${(pending.amountPaid ?? 0).toFixed(2)}€). Sube el importe.`, 400);
+          }
+          // Claim the exact, still-free deposit before creating the checkout.
+          // The whole transaction rolls back if the claim or creation fails.
+          const claimed = await tx.subscriptionRenewal.updateMany({
+            where: { id: pending.id, patientId: patient.id, isReservation: true,
+              reservationConsumedAt: null, amountPaid: pending.amountPaid },
+            data: { reservationConsumedAt: new Date() },
+          });
+          if (claimed.count !== 1) throw new RenewalLinkError("La reserva acaba de cambiar o ya se ha aplicado. Actualiza la ficha y vuelve a generar el enlace.", 409);
+          reservationId = pending.id;
+        }
+      }
+      const amountCents = grossAmountCents - discountCents;
+      const checkout = await tx.renewalCheckout.create({
+        data: {
+          patientId: patient.id, createdById: user.id, programType, durationMonths,
+          // Payment providers continue charging ONLY the remaining balance.
+          amountCents, grossAmountCents, depositAppliedCents: discountCents, reservationId,
+          paymentToken: generatePaymentToken(), tokenExpiresAt, status: "pending",
+          installmentCount, isReservation, paymentProvider,
+        },
+        select: { paymentToken: true },
+      });
+      return { checkout, amountCents, discountCents };
     });
+    return NextResponse.json({
+      token: result.checkout.paymentToken,
+      url: `/renovar/${result.checkout.paymentToken}`,
+      amountCents: result.amountCents,
+      discountCents: result.discountCents,
+    });
+  } catch (error) {
+    if (error instanceof RenewalLinkError) return NextResponse.json({ error: error.message }, { status: error.status });
+    throw error;
   }
-
-  return NextResponse.json({
-    token: checkout.paymentToken,
-    url: `/renovar/${checkout.paymentToken}`,
-    amountCents,
-    discountCents,
-  });
 }

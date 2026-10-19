@@ -2,12 +2,17 @@
 // finanzas y añade adquisición (CAC), cliente (LTV, activos, renovación).
 import { prisma } from "@/lib/prisma";
 import { calculateFinanceSummary } from "@/lib/finance";
+import { getFinanceLedger } from "@/lib/finance-ledger";
 import { getRenewalActivityInPeriod } from "@/lib/renewals";
 
 // Comisión del closer sobre ventas nuevas (igual que el panel del closer).
 const CLOSER_COMMISSION_RATE = 0.1;
 
 export type BusinessMetrics = {
+  billed: number;
+  billedNew: number;
+  billedRenewal: number;
+  billedOther: number;
   income: number;
   expense: number;
   profit: number;
@@ -51,6 +56,10 @@ export type MonthlyRow = {
   renewedCount: number;
   lostCount: number;
   refunds: number | null;
+  billed: number;
+  billedNew: number;
+  billedRenewal: number;
+  billedOther: number;
   income: number;
   incomeNew: number;
   incomeRenewal: number;
@@ -80,139 +89,91 @@ export type MonthlyMetrics = {
 
 export async function computeMonthlyBusinessMetrics(year: number): Promise<MonthlyMetrics> {
   const yearStart = new Date(Date.UTC(year, 0, 1));
-  const yearEnd = new Date(Date.UTC(year, 11, 31, 23, 59, 59));
-
-  const [txs, renewals, newAltaTxs, inputs, leads] = await Promise.all([
-    prisma.transaction.findMany({
-      where: { occurredAt: { gte: yearStart, lte: yearEnd } },
-      select: { type: true, amount: true, occurredAt: true },
-    }),
-    // Actividad de renovaciones del año: renovadas por mes de decisión
-    // (para que "renovadas en agosto" refleje lo cerrado en agosto) +
-    // perdidas por mes de vencimiento (baja efectiva).
+  const yearEnd = new Date(Date.UTC(year + 1, 0, 1) - 1);
+  const [ledger, renewals, inputs, leads] = await Promise.all([
+    getFinanceLedger(yearStart, yearEnd),
     getRenewalActivityInPeriod(yearStart, yearEnd),
-    prisma.transaction.findMany({
-      where: { type: "income_new", occurredAt: { gte: yearStart, lte: yearEnd } },
-      select: { occurredAt: true, amount: true, patient: { select: { programType: true } } },
-    }),
     prisma.businessMonthlyInput.findMany({ where: { year } }),
     prisma.lead.findMany({
       where: { callScheduledAt: { gte: yearStart, lte: yearEnd } },
       select: { callScheduledAt: true, status: true },
     }),
   ]);
-
-  const months: MonthlyRow[] = Array.from({ length: 12 }, (_, m) => ({
-    month: m, altasCount: 0, altasByProgram: {}, altasRevenueByProgram: {}, renewedCount: 0, lostCount: 0, refunds: null,
+  const empty = (): Omit<MonthlyRow, "month"> => ({
+    altasCount: 0, altasByProgram: {}, altasRevenueByProgram: {}, renewedCount: 0, lostCount: 0, refunds: null,
+    billed: 0, billedNew: 0, billedRenewal: 0, billedOther: 0,
     income: 0, incomeNew: 0, incomeRenewal: 0, expense: 0, profit: 0, profitPct: null, renewalRate: null,
     newFollowers: null, adsSpend: null, adsConversion: null, totalFollowers: null, costPerFollower: null,
     callsScheduled: 0, callsDone: 0, callsNoShow: 0, showRate: null,
-  }));
-
-  for (const t of txs) {
-    const m = months[new Date(t.occurredAt).getUTCMonth()];
-    if (t.type === "income_new") { m.incomeNew += t.amount; m.altasCount++; }
-    else if (t.type === "income_renewal") { m.incomeRenewal += t.amount; }
-    else if (t.type === "expense") { m.expense += t.amount; }
-    if (t.type.startsWith("income")) m.income += t.amount;
-  }
-
-  // Altas por programa
+  });
+  const months: MonthlyRow[] = Array.from({ length: 12 }, (_, month) => ({ month, ...empty() }));
   const programSet = new Set<string>();
-  for (const t of newAltaTxs) {
-    const prog = t.patient?.programType || "Sin programa";
-    programSet.add(prog);
-    const m = months[new Date(t.occurredAt).getUTCMonth()];
-    m.altasByProgram[prog] = (m.altasByProgram[prog] ?? 0) + 1;
-    m.altasRevenueByProgram[prog] = (m.altasRevenueByProgram[prog] ?? 0) + t.amount;
+  for (const entry of ledger.billedEntries) {
+    const row = months[entry.occurredAt.getUTCMonth()];
+    row.billed += entry.amount;
+    if (entry.type === "income_new") {
+      row.billedNew += entry.amount;
+      row.altasCount++;
+      const program = entry.programType || "Sin programa";
+      programSet.add(program);
+      row.altasByProgram[program] = (row.altasByProgram[program] ?? 0) + 1;
+      row.altasRevenueByProgram[program] = (row.altasRevenueByProgram[program] ?? 0) + entry.amount;
+    } else if (entry.type === "income_renewal") row.billedRenewal += entry.amount;
+    else row.billedOther += entry.amount;
   }
-  const programTypes = [...programSet].sort();
-
-  // Renovadas por mes de decisión, perdidas por mes de vencimiento.
-  // renewals es RenewalActivityRow[]: `when` es decidedAt (renewed) o
-  // endDate (lost) según el outcome.
-  for (const o of renewals) {
-    const m = months[new Date(o.when).getUTCMonth()];
-    if (!m) continue;
-    if (o.outcome === "renewed") {
-      m.renewedCount++;
-      if (o.amountPaid) { m.incomeRenewal += o.amountPaid; m.income += o.amountPaid; }
-    } else {
-      m.lostCount++;
-    }
+  for (const entry of ledger.receiptEntries) {
+    const row = months[entry.occurredAt.getUTCMonth()];
+    row.income += entry.amount;
+    if (entry.type === "income_new") row.incomeNew += entry.amount;
+    else if (entry.type === "income_renewal") row.incomeRenewal += entry.amount;
   }
-
-  // Llamadas comerciales (por callScheduledAt)
-  for (const l of leads) {
-    const m = months[new Date(l.callScheduledAt).getUTCMonth()];
-    if (!m) continue;
-    m.callsScheduled++;
-    if (l.status === "won" || l.status === "lost") m.callsDone++;
-    else if (l.status === "no_show") m.callsNoShow++;
+  for (const entry of ledger.expenseEntries) months[entry.occurredAt.getUTCMonth()].expense += entry.amount;
+  // Renewal activity is a client-retention metric, never proof of a cash receipt.
+  for (const renewal of renewals) {
+    const row = months[new Date(renewal.when).getUTCMonth()];
+    if (!row) continue;
+    if (renewal.outcome === "renewed") row.renewedCount++;
+    else row.lostCount++;
   }
-
-  // Datos manuales
-  for (const i of inputs) {
-    const m = months[i.month];
-    if (!m) continue;
-    m.newFollowers = i.newFollowers;
-    m.adsSpend = i.adsSpend;
-    m.adsConversion = i.adsConversion;
-    m.totalFollowers = i.totalFollowers;
-    m.refunds = i.refunds;
-    m.costPerFollower = i.adsSpend != null && i.newFollowers ? Math.round((i.adsSpend / i.newFollowers) * 100) / 100 : null;
+  for (const lead of leads) {
+    const row = months[new Date(lead.callScheduledAt).getUTCMonth()];
+    row.callsScheduled++;
+    if (lead.status === "won" || lead.status === "lost") row.callsDone++;
+    else if (lead.status === "no_show") row.callsNoShow++;
   }
-
-  for (const m of months) {
-    m.profit = m.income - m.expense;
-    m.profitPct = m.income > 0 ? Math.round((m.profit / m.income) * 100) : null;
-    const decided = m.renewedCount + m.lostCount;
-    m.renewalRate = decided > 0 ? Math.round((m.renewedCount / decided) * 100) : null;
-    const showBase = m.callsDone + m.callsNoShow;
-    m.showRate = showBase > 0 ? Math.round((m.callsDone / showBase) * 100) : null;
+  for (const input of inputs) {
+    const row = months[input.month];
+    if (!row) continue;
+    row.newFollowers = input.newFollowers;
+    row.adsSpend = input.adsSpend;
+    row.adsConversion = input.adsConversion;
+    row.totalFollowers = input.totalFollowers;
+    row.refunds = input.refunds;
   }
-
-  // Anual
-  const annual: Omit<MonthlyRow, "month"> = {
-    altasCount: 0, altasByProgram: {}, altasRevenueByProgram: {}, renewedCount: 0, lostCount: 0, refunds: 0,
-    income: 0, incomeNew: 0, incomeRenewal: 0, expense: 0, profit: 0, profitPct: null, renewalRate: null,
-    newFollowers: 0, adsSpend: 0, adsConversion: 0, totalFollowers: null, costPerFollower: null,
-    callsScheduled: 0, callsDone: 0, callsNoShow: 0, showRate: null,
+  const round = (n: number) => Math.round(n * 100) / 100;
+  const finish = (row: Omit<MonthlyRow, "month">) => {
+    for (const key of ["billed", "billedNew", "billedRenewal", "billedOther", "income", "incomeNew", "incomeRenewal", "expense"] as const) row[key] = round(row[key]);
+    row.profit = round(row.income - row.expense);
+    row.profitPct = row.income > 0 ? Math.round(row.profit / row.income * 100) : null;
+    const decisions = row.renewedCount + row.lostCount;
+    row.renewalRate = decisions > 0 ? Math.round(row.renewedCount / decisions * 100) : null;
+    const showBase = row.callsDone + row.callsNoShow;
+    row.showRate = showBase > 0 ? Math.round(row.callsDone / showBase * 100) : null;
+    row.costPerFollower = row.adsSpend != null && row.newFollowers ? round(row.adsSpend / row.newFollowers) : null;
   };
-  let lastTotalFollowers: number | null = null;
-  for (const m of months) {
-    annual.altasCount += m.altasCount;
-    annual.renewedCount += m.renewedCount;
-    annual.lostCount += m.lostCount;
-    annual.income += m.income;
-    annual.incomeNew += m.incomeNew;
-    annual.incomeRenewal += m.incomeRenewal;
-    annual.expense += m.expense;
-    annual.profit += m.profit;
-    if (m.newFollowers != null) annual.newFollowers = (annual.newFollowers ?? 0) + m.newFollowers;
-    if (m.adsSpend != null) annual.adsSpend = (annual.adsSpend ?? 0) + m.adsSpend;
-    if (m.adsConversion != null) annual.adsConversion = (annual.adsConversion ?? 0) + m.adsConversion;
-    if (m.totalFollowers != null) lastTotalFollowers = m.totalFollowers;
-    if (m.refunds != null) annual.refunds = (annual.refunds ?? 0) + m.refunds;
-    annual.callsScheduled += m.callsScheduled;
-    annual.callsDone += m.callsDone;
-    annual.callsNoShow += m.callsNoShow;
-    for (const [prog, rev] of Object.entries(m.altasRevenueByProgram)) {
-      annual.altasRevenueByProgram[prog] = (annual.altasRevenueByProgram[prog] ?? 0) + rev;
+  months.forEach(finish);
+  const annual = empty();
+  for (const row of months) {
+    for (const key of ["billed", "billedNew", "billedRenewal", "billedOther", "income", "incomeNew", "incomeRenewal", "expense", "altasCount", "renewedCount", "lostCount", "callsScheduled", "callsDone", "callsNoShow"] as const) annual[key] += row[key];
+    for (const key of ["newFollowers", "adsSpend", "adsConversion", "refunds"] as const) {
+      if (row[key] != null) annual[key] = (annual[key] ?? 0) + row[key]!;
     }
-    for (const [prog, n] of Object.entries(m.altasByProgram)) {
-      annual.altasByProgram[prog] = (annual.altasByProgram[prog] ?? 0) + n;
-    }
+    if (row.totalFollowers != null) annual.totalFollowers = row.totalFollowers;
+    for (const [program, count] of Object.entries(row.altasByProgram)) annual.altasByProgram[program] = (annual.altasByProgram[program] ?? 0) + count;
+    for (const [program, amount] of Object.entries(row.altasRevenueByProgram)) annual.altasRevenueByProgram[program] = round((annual.altasRevenueByProgram[program] ?? 0) + amount);
   }
-  annual.totalFollowers = lastTotalFollowers; // último valor del año, no la suma
-  annual.profitPct = annual.income > 0 ? Math.round((annual.profit / annual.income) * 100) : null;
-  const decidedY = annual.renewedCount + annual.lostCount;
-  annual.renewalRate = decidedY > 0 ? Math.round((annual.renewedCount / decidedY) * 100) : null;
-  annual.costPerFollower = annual.adsSpend && annual.newFollowers ? Math.round((annual.adsSpend / annual.newFollowers) * 100) / 100 : null;
-  const showBaseY = annual.callsDone + annual.callsNoShow;
-  annual.showRate = showBaseY > 0 ? Math.round((annual.callsDone / showBaseY) * 100) : null;
-
-  return { year, programTypes, months, annual };
+  finish(annual);
+  return { year, programTypes: [...programSet].sort(), months, annual };
 }
 
 export async function computeBusinessMetrics(start: Date, end: Date): Promise<BusinessMetrics> {
@@ -237,9 +198,9 @@ export async function computeBusinessMetrics(start: Date, end: Date): Promise<Bu
   const closerSalary = Math.round(closerMonthlyBase * Math.max(1, monthsInPeriod));
 
   // CAC = (inversión ADS + comisión closer + sueldo closer) / altas nuevas
-  const closerCommission = Math.round(summary.incomeNew * CLOSER_COMMISSION_RATE);
+  const closerCommission = Math.round(summary.billedNew * CLOSER_COMMISSION_RATE);
   const cac = summary.countNew > 0 ? Math.round((marketingSpend + closerCommission + closerSalary) / summary.countNew) : null;
-  const ticketAvg = summary.countNew > 0 ? Math.round(summary.incomeNew / summary.countNew) : null;
+  const ticketAvg = summary.countNew > 0 ? Math.round(summary.billedNew / summary.countNew) : null;
 
   // Llamadas comerciales del periodo (por fecha agendada).
   const leadsInPeriod = await prisma.lead.findMany({
@@ -282,17 +243,9 @@ export async function computeBusinessMetrics(start: Date, end: Date): Promise<Bu
     where: { type: { in: ["income_new", "income_renewal", "income_other"] }, patientId: { not: null } },
     _sum: { amount: true },
   });
-  const autoRByPatient = await prisma.subscriptionRenewal.groupBy({
-    by: ["patientId"],
-    where: { outcome: "renewed", amountPaid: { not: null } },
-    _sum: { amountPaid: true },
-  });
   const byPatient = new Map<string, number>();
   for (const r of incomeByPatient) {
     if (r.patientId) byPatient.set(r.patientId, (byPatient.get(r.patientId) ?? 0) + (r._sum.amount ?? 0));
-  }
-  for (const r of autoRByPatient) {
-    if (r.patientId) byPatient.set(r.patientId, (byPatient.get(r.patientId) ?? 0) + (r._sum.amountPaid ?? 0));
   }
   const ltvPatients = byPatient.size;
   const totalLtv = [...byPatient.values()].reduce((a, b) => a + b, 0);
@@ -301,12 +254,16 @@ export async function computeBusinessMetrics(start: Date, end: Date): Promise<Bu
   const ltvCacRatio = ltv != null && cac != null && cac > 0 ? Math.round((ltv / cac) * 10) / 10 : null;
 
   return {
+    billed: summary.billed,
+    billedNew: summary.billedNew,
+    billedRenewal: summary.billedRenewal,
+    billedOther: summary.billedOther,
     income: summary.income,
     expense: summary.expense,
     profit: summary.profit,
     profitPct: summary.profitPct,
     newAltas: summary.countNew,
-    newSaleRevenue: summary.incomeNew,
+    newSaleRevenue: summary.billedNew,
     ticketAvg,
     closerSalary,
     renewedCount,

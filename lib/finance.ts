@@ -1,4 +1,4 @@
-import { prisma } from "./prisma";
+import { getFinanceLedger, type FinanceLedger } from "./finance-ledger";
 
 export type Period = "day" | "week" | "month" | "quarter" | "year";
 
@@ -15,7 +15,7 @@ export function parseSpecificMonth(value: string | undefined | null): { start: D
   const month = Number(m[2]) - 1;
   if (month < 0 || month > 11) return null;
   const start = new Date(year, month, 1, 0, 0, 0);
-  const end = new Date(year, month + 1, 0, 23, 59, 59);
+  const end = new Date(year, month + 1, 0, 23, 59, 59, 999);
   const label = start.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
   return { start, end, label };
 }
@@ -50,7 +50,7 @@ export function getPeriodRange(period: Period): { start: Date; end: Date; label:
 
   if (period === "month") {
     const start = new Date(year, month, 1, 0, 0, 0);
-    const end = new Date(year, month + 1, 0, 23, 59, 59);
+    const end = new Date(year, month + 1, 0, 23, 59, 59, 999);
     const label = start.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
     return { start, end, label };
   }
@@ -58,14 +58,14 @@ export function getPeriodRange(period: Period): { start: Date; end: Date; label:
   if (period === "quarter") {
     const q = Math.floor(month / 3);
     const start = new Date(year, q * 3, 1, 0, 0, 0);
-    const end = new Date(year, q * 3 + 3, 0, 23, 59, 59);
+    const end = new Date(year, q * 3 + 3, 0, 23, 59, 59, 999);
     const label = `Q${q + 1} ${year}`;
     return { start, end, label };
   }
 
   // year
   const start = new Date(year, 0, 1, 0, 0, 0);
-  const end = new Date(year, 11, 31, 23, 59, 59);
+  const end = new Date(year, 11, 31, 23, 59, 59, 999);
   const label = String(year);
   return { start, end, label };
 }
@@ -115,6 +115,7 @@ export function getPreviousPeriodRange(period: Period): { start: Date; end: Date
 }
 
 export type FinanceSummary = {
+  // Existing income aliases are collected cash, not contractual billing.
   income: number;
   expense: number;
   profit: number;
@@ -125,48 +126,43 @@ export type FinanceSummary = {
   countNew: number;
   countRenewal: number;
   countOther: number;
+  billed: number;
+  billedNew: number;
+  billedRenewal: number;
+  billedOther: number;
+  collectedCountNew: number;
+  collectedCountRenewal: number;
+  collectedCountOther: number;
 };
 
-// Las renovaciones con outcome=renewed y amountPaid cuentan como ingresos por renovación
-// aunque no estén en la tabla Transaction (mantenemos compatibilidad)
-export async function calculateFinanceSummary(start: Date, end: Date): Promise<FinanceSummary> {
-  const transactions = await prisma.transaction.findMany({
-    where: { occurredAt: { gte: start, lte: end } },
-  });
-
-  // Renovaciones automáticas (las que no se han duplicado como transaction manual)
-  const renewals = await prisma.subscriptionRenewal.findMany({
-    where: {
-      decidedAt: { gte: start, lte: end },
-      outcome: "renewed",
-      amountPaid: { not: null },
-    },
-  });
-
-  let incomeNew = 0;
-  let incomeRenewal = 0;
-  let incomeOther = 0;
-  let expense = 0;
-  let countNew = 0;
-  let countRenewal = 0;
-  let countOther = 0;
-
-  for (const t of transactions) {
-    if (t.type === "income_new") { incomeNew += t.amount; countNew++; }
-    else if (t.type === "income_renewal") { incomeRenewal += t.amount; countRenewal++; }
-    else if (t.type === "income_other") { incomeOther += t.amount; countOther++; }
-    else if (t.type === "expense") { expense += t.amount; }
-  }
-
-  // Sumar renovaciones automáticas (de SubscriptionRenewal)
-  for (const r of renewals) {
-    incomeRenewal += r.amountPaid ?? 0;
-    countRenewal++;
-  }
-
+/** Summarize a previously loaded ledger without another database query. */
+export function summarizeFinanceLedger(ledger: FinanceLedger): FinanceSummary {
+  const sum = (rows: FinanceLedger["billedEntries"], type?: string) =>
+    Math.round(rows.reduce((total, row) => total + (!type || row.type === type ? row.amount : 0), 0) * 100) / 100;
+  const incomeNew = sum(ledger.receiptEntries, "income_new");
+  const incomeRenewal = sum(ledger.receiptEntries, "income_renewal");
+  const incomeOther = sum(ledger.receiptEntries, "income_other");
+  const expense = Math.round(ledger.expenseEntries.reduce((total, row) => total + row.amount, 0) * 100) / 100;
+  const billedNew = sum(ledger.billedEntries, "income_new");
+  const billedRenewal = sum(ledger.billedEntries, "income_renewal");
+  const billedOther = sum(ledger.billedEntries, "income_other");
+  const count = (rows: FinanceLedger["billedEntries"], type: string) => rows.filter((row) => row.type === type).length;
+  const countNew = count(ledger.billedEntries, "income_new");
+  const countRenewal = count(ledger.billedEntries, "income_renewal");
+  const countOther = count(ledger.billedEntries, "income_other");
+  const collectedCountNew = count(ledger.receiptEntries, "income_new");
+  const collectedCountRenewal = count(ledger.receiptEntries, "income_renewal");
+  const collectedCountOther = count(ledger.receiptEntries, "income_other");
   const income = incomeNew + incomeRenewal + incomeOther;
-  const profit = income - expense;
+  const profit = Math.round((income - expense) * 100) / 100;
   const profitPct = income > 0 ? Math.round((profit / income) * 100) : null;
+  const billed = Math.round((billedNew + billedRenewal + billedOther) * 100) / 100;
+  return { income: Math.round(income * 100) / 100, expense, profit, profitPct,
+    incomeNew, incomeRenewal, incomeOther, countNew, countRenewal, countOther,
+    billed, billedNew, billedRenewal, billedOther,
+    collectedCountNew, collectedCountRenewal, collectedCountOther };
+}
 
-  return { income, expense, profit, profitPct, incomeNew, incomeRenewal, incomeOther, countNew, countRenewal, countOther };
+export async function calculateFinanceSummary(start: Date, end: Date): Promise<FinanceSummary> {
+  return summarizeFinanceLedger(await getFinanceLedger(start, end));
 }
