@@ -91,7 +91,6 @@ export function InvoiceClient({
     }
   }
   const monthLabel = new Date(Date.UTC(year, month, 1)).toLocaleDateString("es-ES", { month: "long", year: "numeric", timeZone: "UTC" });
-  const today = new Date().toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" });
   // Concepto único y genérico en TODAS las facturas (no se desglosa la compensación
   // real, para no comprometer la naturaleza del servicio ni la exención).
   const conceptText = `Servicios de fisioterapia y rehabilitación prestados en ${monthLabel}`;
@@ -169,7 +168,6 @@ export function InvoiceClient({
               </span>
             </div>
           </div>
-          <div className="text-right text-sm text-neutral-500">Fecha de emisión: {today}</div>
         </div>
 
         <div className="grid grid-cols-2 gap-6 mb-8 text-sm">
