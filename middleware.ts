@@ -28,6 +28,7 @@ const PUBLIC_PATHS = [
   "/prevention",    // landing pública Prevention + páginas de gracias
   "/api/prevention",// endpoints públicos del flujo Prevention (checkout, confirm)
   "/api/webhooks",  // webhooks externos (Stripe) — los llama Stripe sin cookie
+  "/api/cron/installment-reconcile", // autentica CRON_SECRET en el handler; Vercel no envía cookie de equipo
   "/privacidad",    // política de privacidad pública (requerida por App Store)
   "/terminos",     // términos y condiciones públicos
   "/eliminar-cuenta", // instrucciones de borrado de cuenta (requerida por Google Play)

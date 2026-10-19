@@ -2624,6 +2624,10 @@ model RenewalCheckout {
   programType    String                              // "RECUPERA" | "CONSOLIDA" | "ADVANCE"
   durationMonths Int
   amountCents    Int                                 // importe definido al generar el enlace
+  // Immutable billing snapshot; amountCents remains the actual balance charged.
+  grossAmountCents    Int?
+  depositAppliedCents Int?
+  reservationId       String?  // exact deposit period, deliberately no foreign key
   currency       String   @default("eur")
 
   stripeSessionId       String?  @unique

@@ -94,16 +94,16 @@ export function KpiAcquisitionView({ data }: Props) {
         <Metric label="Gastos contables de captación" value={money(a.acquisitionExpenses)} note="Se muestran aparte de la fórmula histórica de CAC" />
       </div>
     </Section>
-    <Section title="Coste de adquisición" description="Se conserva la fórmula del cuadro de mandos de FisioFitCross y su base de altas registradas.">
+    <Section title="Coste de adquisición" description="Los contratos de alta nueva se cuentan una vez, aunque se paguen en varias cuotas.">
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <Metric label="Inversión ADS" value={money(m.marketingSpend)} />
         <Metric label="Comisión closer" value={money(m.closerCommission)} />
         <Metric label="Sueldo closer" value={money(m.closerSalary)} />
-        <Metric label="CAC" value={money(m.cac)} note={`ADS + comisión + sueldo / ${count(m.newAltas)} registros de alta`} />
+        <Metric label="CAC" value={money(m.cac)} note={`ADS + comisión + sueldo / ${count(m.newAltas)} altas nuevas`} />
       </div>
       <div className="mt-3 grid grid-cols-2 gap-3">
-        <Metric label="Altas registradas" value={count(m.newAltas)} note="Transacciones de tipo alta nueva" />
-        <Metric label="Ticket medio" value={money(m.ticketAvg)} note="Ingresos de altas / registros de alta" />
+        <Metric label="Altas nuevas" value={count(m.newAltas)} note="Contratos nuevos del período" />
+        <Metric label="Ticket medio" value={money(m.ticketAvg)} note="Facturación de altas / contratos nuevos" />
       </div>
     </Section>
     <Notes notes={a.notes} />
@@ -137,15 +137,15 @@ export function KpiHealthView({ data }: Props) {
         <Metric label="Renovaciones" value={count(m.renewedCount)} note="Decisiones de renovación en el período" />
         <Metric label="Bajas" value={count(m.lostCount)} note="Bajas efectivas en el período" />
         <Metric label="Tasa de renovación" value={pct(m.renewalRate)} note="Renovaciones / (renovaciones + bajas)" />
-        <Metric label="LTV registrado" value={money(m.ltv)} note={`Histórico · ${count(m.ltvPatients)} pacientes con pagos`} tone="good" />
+        <Metric label="LTV recaudado" value={money(m.ltv)} note={`Cobros históricos · ${count(m.ltvPatients)} pacientes con pagos`} tone="good" />
         <Metric label="LTV / CAC" value={ratio(m.ltvCacRatio)} note="Referencia orientativa: 3×" tone={m.ltvCacRatio !== null && m.ltvCacRatio >= 3 ? "good" : m.ltvCacRatio !== null && m.ltvCacRatio < 1 ? "warning" : "neutral"} />
-        <Metric label="ARPU del período" value={money(h.arpu)} note="Ingresos / media de activos al inicio y cierre · sin mensualizar" />
+        <Metric label="ARPU recaudado del período" value={money(h.arpu)} note="Recaudado / media de activos al inicio y cierre · sin mensualizar" />
       </div>
     </Section>
     <Notes notes={h.notes} />
     <details className="card text-xs leading-5 text-neutral-600">
       <summary className="cursor-pointer font-medium text-neutral-700">Cómo se interpretan estas métricas</summary>
-      <p className="mt-3">El LTV divide los ingresos históricos registrados entre los pacientes con pagos. El ratio LTV / CAC combina ese histórico con el coste de adquisición del período seleccionado.</p>
+      <p className="mt-3">El LTV divide los cobros históricos registrados entre los pacientes con pagos. El ratio LTV / CAC combina ese histórico con el coste de adquisición del período seleccionado.</p>
       <p className="mt-2">Los movimientos estimados comparan personas entre dos fechas; una entrada y salida dentro del mismo período pueden no aparecer en esos cortes. El churn se presenta como estimación.</p>
       <p className="mt-2">La duración media no se estima a partir del churn: faltan intervalos históricos completos para calcularla con fiabilidad.</p>
     </details>
@@ -156,21 +156,21 @@ export function KpiPaymentsView({ data }: Props) {
   const { payments: p } = data;
   const selectedMonth = data.period.start.slice(0, 7);
   const selectedYear = selectedMonth.slice(0, 4);
-  const incomeType = (type: string) => type === "income_new" ? "Alta nueva" : type === "income_renewal" ? "Renovación" : (type === "income" || type === "income_other") ? "Otro ingreso" : type.replace(/_/g, " ");
+  const incomeType = (type: string) => type === "income_new" ? "Pago de alta" : type === "income_renewal" ? "Pago de renovación" : (type === "income" || type === "income_other") ? "Otro cobro" : type.replace(/_/g, " ");
   return <div className="space-y-6">
     <div className="flex flex-wrap gap-2">
       <Link href={`/fisio/finanzas?specificMonth=${selectedMonth}`} className="btn btn-ghost">Gestionar movimientos</Link>
       <Link href={`/fisio/finanzas/facturas-pacientes?year=${selectedYear}&specificMonth=${selectedMonth}`} className="btn btn-ghost">Facturas a pacientes</Link>
     </div>
-    <Section title="Ingresos registrados" description="Movimientos que alimentan el resumen financiero del período seleccionado.">
+    <Section title="Cobros registrados" description="Pagos recibidos en el período seleccionado, incluidas las cuotas de contratos de otros meses.">
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <Metric label="Ingresos" value={preciseMoney(p.income)} tone="good" />
+        <Metric label="Recaudado" value={preciseMoney(p.income)} tone="good" />
         <Metric label="Gastos" value={preciseMoney(p.expense)} />
-        <Metric label="Beneficio" value={preciseMoney(p.profit)} tone={p.profit < 0 ? "warning" : "neutral"} />
-        <Metric label="Registros de ingreso" value={count(p.rowCount)} />
+        <Metric label="Resultado de caja" value={preciseMoney(p.profit)} note="Recaudado menos gastos" tone={p.profit < 0 ? "warning" : "neutral"} />
+        <Metric label="Pagos registrados" value={count(p.rowCount)} />
       </div>
     </Section>
-    <Section title="Detalle de ingresos" description="Este listado muestra ingresos registrados; consulta la ficha de cada paciente para revisar sus pagos.">
+    <Section title="Detalle de cobros" description="Cada cuota aparece por separado en su fecha de cobro; consulta la ficha del paciente para revisar sus pagos.">
       <CompactTable columns={["Paciente", "Fecha", "Concepto", "Tipo", "Procedencia", "Importe"]}
         rows={p.rows.map(row => [
           row.patientId
@@ -179,46 +179,41 @@ export function KpiPaymentsView({ data }: Props) {
           day(row.date),
           <div key="description" className="max-w-sm whitespace-normal text-left">{row.description || "Sin descripción"}</div>,
           incomeType(row.type),
-          <span key="source" className={`inline-flex rounded-md px-2 py-1 text-[11px] ${row.source === "legacy-renewal" ? "bg-amber-50 text-amber-800" : "bg-neutral-100 text-neutral-600"}`}>{row.source === "legacy-renewal" ? "Renovación histórica" : "Transacción"}</span>,
+          <span key="source" className="text-neutral-600">Registro de cobro</span>,
           <span key="amount" className="font-medium">{preciseMoney(row.amount)}</span>,
         ])}
-        empty="No hay ingresos registrados en este período." />
+        empty="No hay cobros registrados en este período." />
       {p.truncated && <p className="mt-2 text-xs text-neutral-500">Se muestran {count(p.rows.length)} de {count(p.rowCount)} registros. Los importes del resumen incluyen todos.</p>}
     </Section>
-    <Section title="Composición de los ingresos">
-      <div className="grid grid-cols-1 gap-3 min-[700px]:grid-cols-2">
-        <Metric label="Transacciones" value={preciseMoney(p.transactionsIncome)} note="Movimientos de ingreso existentes" />
-        <Metric label="Renovaciones históricas" value={preciseMoney(p.legacyRenewalIncome)} note="Importes de compatibilidad incluidos por el cálculo financiero" />
-      </div>
-    </Section>
     <Notes notes={p.notes} />
-    <p className="text-xs leading-5 text-neutral-500">La procedencia indica dónde se guardó cada ingreso. Para consultar más información sobre un pago, abre la ficha del paciente.</p>
+    <p className="text-xs leading-5 text-neutral-500">La facturación recoge el importe completo contratado. Aquí se incluyen los pagos registrados como recibidos.</p>
   </div>;
 }
 
 export function KpiDiagnosisView({ data }: Props) {
-  const { diagnosis: d, metrics: m, acquisition: a, payments: p } = data;
+  const { diagnosis: d, metrics: m, acquisition: a } = data;
   return <div className="space-y-6">
     <Section title="Lectura del negocio" description="Indicadores del período y comprobaciones sobre la información que ya existe.">
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <Metric label="Margen de beneficio" value={pct(m.profitPct)} tone={m.profitPct !== null && m.profitPct < 0 ? "warning" : "neutral"} note="Beneficio / ingresos" />
+        <Metric label="Resultado sobre recaudado" value={pct(m.profitPct)} tone={m.profitPct !== null && m.profitPct < 0 ? "warning" : "neutral"} note="(Recaudado − gastos) / recaudado" />
         <Metric label="Cierre comercial" value={pct(a.closeRate)} note={`${count(a.won)} ventas en ${count(a.done)} llamadas realizadas`} />
         <Metric label="Renovación" value={pct(m.renewalRate)} note={`${count(m.renewedCount)} renovaciones · ${count(m.lostCount)} bajas`} />
         <Metric label="LTV / CAC" value={ratio(m.ltvCacRatio)} note="LTV histórico / CAC del período" tone={m.ltvCacRatio !== null && m.ltvCacRatio >= 3 ? "good" : "neutral"} />
       </div>
     </Section>
-    <Section title="Coherencia de las fuentes financieras">
-      <CompactTable columns={["Base de cálculo", "Ingresos"]}
+    <Section title="Facturación y recaudado" description="Los contratos y sus pagos pueden corresponder a meses distintos.">
+      <CompactTable columns={["Concepto", "Importe"]}
         rows={[
-          ["Resumen financiero", preciseMoney(d.financeIncome)],
-          ["Ingresos con criterio de tabla anual", preciseMoney(d.monthlyIncome)],
-          ["Diferencia entre ambas bases", <span key="difference" className={d.incomeDifference === 0 ? "text-emerald-700" : "text-amber-700"}>{preciseMoney(d.incomeDifference)}</span>],
-          ["Transacciones de ingreso", preciseMoney(p.transactionsIncome)],
-          ["Renovaciones históricas incluidas en finanzas", preciseMoney(p.legacyRenewalIncome)],
+          ["Facturación · contratos completos del período", preciseMoney(d.billed)],
+          ["Recaudado · pagos recibidos en el período", preciseMoney(d.collected)],
+          ["Facturación − recaudado", preciseMoney(d.difference)],
         ]}
         empty="Sin información financiera para este período." />
-      <p className="mt-2 text-xs leading-5 text-neutral-500">Las bases existentes se muestran por separado para poder revisar diferencias conservando su historial.</p>
+      <p className="mt-2 text-xs leading-5 text-neutral-500">La diferencia puede ser positiva o negativa: este mes se pueden cobrar cuotas de ventas anteriores. Para conocer lo pendiente de un contrato hay que revisar sus pagos individualmente.</p>
     </Section>
+    {d.unverifiedLegacy > 0 && <Section title="Histórico por verificar">
+      <Metric label="Importes sin cobro confirmado" value={preciseMoney(d.unverifiedLegacy)} note="Se conservan en el histórico y quedan fuera del recaudado hasta verificar el pago." tone="warning" />
+    </Section>}
     <Section title="Comprobaciones">
       <div className="space-y-3">
         {d.findings.length ? d.findings.map(finding => <div key={finding.key} className="card">
@@ -235,8 +230,12 @@ export function KpiDiagnosisView({ data }: Props) {
     <Section title="Criterios de cálculo">
       <CompactTable columns={["Métrica", "Fórmula y alcance"]}
         rows={[
-          ["CAC", <span key="cac" className="block max-w-xl whitespace-normal text-left">ADS + comisión closer + sueldo closer, dividido entre transacciones de alta nueva del período.</span>],
-          ["LTV", <span key="ltv" className="block max-w-xl whitespace-normal text-left">Ingresos históricos registrados por paciente con pagos; no es una proyección de valor futuro.</span>],
+          ["Facturación", <span key="billed" className="block max-w-xl whitespace-normal text-left">Importe completo del contrato, una sola vez en el mes de venta, aunque tenga varios pagos.</span>],
+          ["Recaudado", <span key="collected" className="block max-w-xl whitespace-normal text-left">Cada pago recibido, por su fecha de cobro. Las cuotas futuras quedan fuera.</span>],
+          ["Resultado de caja", "Recaudado menos gastos del período."],
+          ["Ticket medio", "Facturación de altas / contratos nuevos."],
+          ["CAC", <span key="cac" className="block max-w-xl whitespace-normal text-left">ADS + comisión closer + sueldo closer, dividido entre las altas nuevas del período.</span>],
+          ["LTV", <span key="ltv" className="block max-w-xl whitespace-normal text-left">Cobros históricos registrados por paciente con pagos.</span>],
           ["Show rate", "Realizadas / (realizadas + no asiste)."],
           ["Tasa de cierre", "Ventas / llamadas realizadas."],
           ["Renovación", "Renovaciones / (renovaciones + bajas)."],

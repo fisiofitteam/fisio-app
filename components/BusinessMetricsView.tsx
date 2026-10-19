@@ -130,9 +130,10 @@ function ResumenView({
       </div>
 
       <Section title="Resultado del período">
-        <Kpi label="Facturación" value={eur(m.income)} tone="emerald" />
+        <Kpi label="Facturación" value={eur(m.billed)} tone="emerald" sub="Importe completo de los contratos del período" />
+        <Kpi label="Recaudado" value={eur(m.income)} tone="emerald" sub="Pagos recibidos en el período" />
         <Kpi label="Gastos" value={eur(m.expense)} tone="red" />
-        <Kpi label="Beneficio" value={eur(m.profit)} tone={m.profit >= 0 ? "neutral" : "red"} sub={m.profitPct !== null ? `${m.profitPct >= 0 ? "+" : ""}${m.profitPct}% sobre ingresos` : undefined} />
+        <Kpi label="Resultado de caja" value={eur(m.profit)} tone={m.profit >= 0 ? "neutral" : "red"} sub={m.profitPct !== null ? `${m.profitPct}% sobre recaudado · cobros menos gastos` : "Recaudado menos gastos"} />
       </Section>
 
       <Section title="Llamadas comerciales (período)">
@@ -148,20 +149,20 @@ function ResumenView({
 
       <Section title="Adquisición (período)">
         <Kpi label="Altas nuevas" value={String(m.newAltas)} sub={m.newSaleRevenue > 0 ? eur(m.newSaleRevenue) : undefined} />
-        <Kpi label="Ticket medio" value={m.ticketAvg !== null ? eur(m.ticketAvg) : "—"} sub="por alta nueva" />
+        <Kpi label="Ticket medio" value={m.ticketAvg !== null ? eur(m.ticketAvg) : "—"} sub="Facturación de altas / contratos nuevos" />
         <Kpi label="CAC" value={m.cac !== null ? eur(m.cac) : "—"} sub={`ADS ${eur(m.marketingSpend)} + comisión ${eur(m.closerCommission)} + sueldo ${eur(m.closerSalary)}`} />
       </Section>
 
       <Section title="Cliente y retención">
         <Kpi label="Pacientes activos" value={String(m.activePatients)} sub="suscripción vigente · actual" />
         <Kpi label="Tasa de renovación" value={m.renewalRate !== null ? `${m.renewalRate}%` : "—"} sub={m.renewedCount + m.lostCount > 0 ? `${m.renewedCount} renov · ${m.lostCount} baja` : "sin decisiones en el período"} />
-        <Kpi label="LTV" value={m.ltv !== null ? eur(m.ltv) : "—"} tone="emerald" sub={m.ltvPatients > 0 ? `histórico · base ${m.ltvPatients} paciente${m.ltvPatients === 1 ? "" : "s"}` : "aún sin pacientes con pagos"} />
+        <Kpi label="LTV recaudado" value={m.ltv !== null ? eur(m.ltv) : "—"} tone="emerald" sub={m.ltvPatients > 0 ? `histórico · base ${m.ltvPatients} paciente${m.ltvPatients === 1 ? "" : "s"}` : "aún sin pacientes con pagos"} />
         <Kpi label="Ratio LTV / CAC" value={m.ltvCacRatio !== null ? `${m.ltvCacRatio}×` : "—"} tone={m.ltvCacRatio !== null && m.ltvCacRatio >= 3 ? "emerald" : m.ltvCacRatio !== null && m.ltvCacRatio < 1 ? "red" : "neutral"} sub="objetivo ≥ 3×" />
       </Section>
 
       <p className="text-[11px] text-neutral-400 mt-4 max-w-2xl">
-        El LTV es histórico y solo cuenta pacientes con pagos registrados en la app (se irá afinando).
-        El CAC depende de registrar el gasto de marketing en su categoría.
+        La facturación cuenta el contrato completo una vez; el recaudado cuenta cada pago en la fecha de cobro.
+        El LTV utiliza cobros históricos. El CAC utiliza las altas nuevas y la inversión ADS registrada en Anual.
       </p>
     </>
   );
@@ -196,14 +197,21 @@ function MesesView({ monthly, goals, onYear, hideYearControls = false }: { month
     { label: "Renovaciones", get: (r: Row) => r.renewedCount, fmt: "int" },
     { label: "Bajas", get: (r: Row) => r.lostCount, fmt: "int" },
   ];
-  const finanzasRows: RowDef[] = [
-    { label: "Facturación total", get: (r) => r.income, fmt: "money" },
-    { label: "— de altas nuevas", get: (r) => r.incomeNew, fmt: "money" },
-    ...programTypes.map((prog) => ({ label: `— altas · ${prettyProgram(prog)}`, get: (r: Row) => r.altasRevenueByProgram[prog] ?? 0, fmt: "money" as const })),
-    { label: "— de renovaciones", get: (r) => r.incomeRenewal, fmt: "money" },
+  const facturacionRows: RowDef[] = [
+    { label: "Facturación total", get: (r) => r.billed, fmt: "money" },
+    { label: "Facturación · altas nuevas", get: (r) => r.billedNew, fmt: "money" },
+    ...programTypes.map((prog) => ({ label: `Facturación · altas · ${prettyProgram(prog)}`, get: (r: Row) => r.altasRevenueByProgram[prog] ?? 0, fmt: "money" as const })),
+    { label: "Facturación · renovaciones", get: (r) => r.billedRenewal, fmt: "money" },
+    { label: "Facturación · otros", get: (r) => r.billedOther, fmt: "money" },
+  ];
+  const cajaRows: RowDef[] = [
+    { label: "Recaudado total", get: (r) => r.income, fmt: "money" },
+    { label: "Recaudado · altas nuevas", get: (r) => r.incomeNew, fmt: "money" },
+    { label: "Recaudado · renovaciones", get: (r) => r.incomeRenewal, fmt: "money" },
+    { label: "Recaudado · otros", get: (r) => r.income - r.incomeNew - r.incomeRenewal, fmt: "money" },
     { label: "Gastos totales", get: (r) => r.expense, fmt: "money" },
-    { label: "Beneficio", get: (r) => r.profit, fmt: "money" },
-    { label: "% beneficio", get: (r) => r.profitPct, fmt: "pct" },
+    { label: "Resultado de caja", get: (r) => r.profit, fmt: "money" },
+    { label: "% resultado sobre recaudado", get: (r) => r.profitPct, fmt: "pct" },
   ];
   const servicioRows: RowDef[] = [
     { label: "Clientes a renovar", get: (r) => r.renewedCount + r.lostCount, fmt: "int" },
@@ -239,7 +247,8 @@ function MesesView({ monthly, goals, onYear, hideYearControls = false }: { month
           <tbody>
             <PublicidadRows key={`publicidad:${year}`} year={year} months={months} />
             <BlockRows title="Ventas (Convertir)" rows={ventasRows} months={months} annual={annual} />
-            <BlockRows title="Finanzas (Recoger)" rows={finanzasRows} months={months} annual={annual} />
+            <BlockRows title="Facturación (Contratos)" rows={facturacionRows} months={months} annual={annual} />
+            <BlockRows title="Caja (Cobros y gastos)" rows={cajaRows} months={months} annual={annual} />
             <BlockRows title="Servicio (Entregar)" rows={servicioRows} months={months} annual={annual} />
             <EditableSingleRow key={`refunds:${year}`} year={year} months={months} field="refunds" label="Devoluciones" />
           </tbody>
@@ -247,6 +256,7 @@ function MesesView({ monthly, goals, onYear, hideYearControls = false }: { month
       </section>
       <p className="text-[11px] text-neutral-400 mt-2">
         Las filas de Publicidad son editables (escribe y sal de la celda para guardar). La inversión ADS alimenta el CAC del resumen.
+        {" "}La facturación recoge el importe completo contratado; el recaudado, cada pago recibido en su mes. El resultado de caja es recaudado menos gastos.
       </p>
 
       <GoalsSection key={year} year={year} months={months} goals={goals} />
@@ -261,12 +271,16 @@ const sumBy = (q: MonthlyRow[], f: (r: MonthlyRow) => number) => q.reduce((a, r)
 
 const GOAL_METRICS: GoalMetric[] = [
   { key: "altasCount", label: "Altas nuevas", fmt: "int", higherBetter: true, real: (q) => sumBy(q, (r) => r.altasCount) },
-  { key: "income", label: "Facturación total", fmt: "money", higherBetter: true, real: (q) => sumBy(q, (r) => r.income) },
-  { key: "incomeNew", label: "Facturación · altas", fmt: "money", higherBetter: true, real: (q) => sumBy(q, (r) => r.incomeNew) },
-  { key: "incomeRenewal", label: "Facturación · renovaciones", fmt: "money", higherBetter: true, real: (q) => sumBy(q, (r) => r.incomeRenewal) },
+  { key: "billed", label: "Facturación total", fmt: "money", higherBetter: true, real: (q) => sumBy(q, (r) => r.billed) },
+  { key: "billedNew", label: "Facturación · altas", fmt: "money", higherBetter: true, real: (q) => sumBy(q, (r) => r.billedNew) },
+  { key: "billedRenewal", label: "Facturación · renovaciones", fmt: "money", higherBetter: true, real: (q) => sumBy(q, (r) => r.billedRenewal) },
+  { key: "billedOther", label: "Facturación · otros", fmt: "money", higherBetter: true, real: (q) => sumBy(q, (r) => r.billedOther) },
+  { key: "income", label: "Recaudado total", fmt: "money", higherBetter: true, real: (q) => sumBy(q, (r) => r.income) },
+  { key: "incomeNew", label: "Recaudado · altas", fmt: "money", higherBetter: true, real: (q) => sumBy(q, (r) => r.incomeNew) },
+  { key: "incomeRenewal", label: "Recaudado · renovaciones", fmt: "money", higherBetter: true, real: (q) => sumBy(q, (r) => r.incomeRenewal) },
   { key: "expense", label: "Gastos", fmt: "money", higherBetter: false, real: (q) => sumBy(q, (r) => r.expense) },
-  { key: "profit", label: "Beneficio", fmt: "money", higherBetter: true, real: (q) => sumBy(q, (r) => r.profit) },
-  { key: "profitPct", label: "% beneficio", fmt: "pct", higherBetter: true, real: (q) => { const i = sumBy(q, (r) => r.income); return i > 0 ? Math.round((sumBy(q, (r) => r.profit) / i) * 100) : null; } },
+  { key: "profit", label: "Resultado de caja", fmt: "money", higherBetter: true, real: (q) => sumBy(q, (r) => r.profit) },
+  { key: "profitPct", label: "% resultado sobre recaudado", fmt: "pct", higherBetter: true, real: (q) => { const i = sumBy(q, (r) => r.income); return i > 0 ? Math.round((sumBy(q, (r) => r.profit) / i) * 100) : null; } },
   { key: "renewalRate", label: "% renovación", fmt: "pct", higherBetter: true, real: (q) => { const d = sumBy(q, (r) => r.renewedCount + r.lostCount); return d > 0 ? Math.round((sumBy(q, (r) => r.renewedCount) / d) * 100) : null; } },
   { key: "lostCount", label: "Bajas", fmt: "int", higherBetter: false, real: (q) => sumBy(q, (r) => r.lostCount) },
   { key: "refunds", label: "Devoluciones", fmt: "int", higherBetter: false, real: (q) => sumBy(q, (r) => r.refunds ?? 0) },

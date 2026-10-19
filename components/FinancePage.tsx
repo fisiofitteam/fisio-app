@@ -2,6 +2,8 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import type { FinanceSummary } from "@/lib/finance";
+import { roundMoney } from "@/lib/money";
 import {
   ResponsiveContainer, Tooltip,
   LineChart, Line, XAxis, YAxis, CartesianGrid, Legend,
@@ -9,18 +11,8 @@ import {
 
 type Period = "month" | "quarter" | "year";
 
-type Summary = {
-  income: number;
-  expense: number;
-  profit: number;
-  profitPct: number | null;
-  incomeNew: number;
-  incomeRenewal: number;
-  incomeOther: number;
-  countNew: number;
-  countRenewal: number;
-  countOther: number;
-};
+type Summary = FinanceSummary;
+type BilledRow = { id: string; type: string; amount: number; occurredAt: string; patientName: string | null; programType: string | null; };
 
 type Pro = { id: string; fullName: string; role: string };
 type Pat = { id: string; fullName: string };
@@ -76,6 +68,7 @@ export function FinancePage({
   summary,
   transactions,
   autoRenewals,
+  billedEntries = [],
   yearTransactions,
   yearAutoRenewals,
   professionals,
@@ -88,6 +81,7 @@ export function FinancePage({
   summary: Summary;
   transactions: Tx[];
   autoRenewals: Tx[];
+  billedEntries?: BilledRow[];
   yearTransactions: YearTx[];
   yearAutoRenewals: YearAutoR[];
   professionals: Pro[];
@@ -113,8 +107,8 @@ export function FinancePage({
   }
 
   const allTx = useMemo(
-    () => [...transactions, ...autoRenewals].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)),
-    [transactions, autoRenewals]
+    () => [...transactions].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)),
+    [transactions]
   );
   const incomeTx = useMemo(() => allTx.filter((t) => t.type !== "expense"), [allTx]);
   const expenseTx = useMemo(() => allTx.filter((t) => t.type === "expense"), [allTx]);
@@ -128,9 +122,9 @@ export function FinancePage({
   }, [expenseTx]);
 
   const incomeCategories = [
-    { label: "Nuevas altas", total: summary.incomeNew, count: summary.countNew },
-    { label: "Renovaciones", total: summary.incomeRenewal, count: summary.countRenewal },
-    { label: "Otros ingresos", total: summary.incomeOther, count: summary.countOther },
+    { label: "Nuevas altas", total: summary.incomeNew, count: summary.collectedCountNew },
+    { label: "Renovaciones", total: summary.incomeRenewal, count: summary.collectedCountRenewal },
+    { label: "Otros ingresos", total: summary.incomeOther, count: summary.collectedCountOther },
   ].filter((category) => category.total !== 0 || category.count > 0);
 
   return (
@@ -164,20 +158,21 @@ export function FinancePage({
         </div>
       </header>
 
-      <section aria-label="Resultado del período" className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        <FinanceKpi label="Facturación" value={summary.income} tone="income" />
+      <section aria-label="Resultado del período" className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <FinanceKpi label="Facturación" value={summary.billed} tone="income" sub="Importe completo de contratos confirmados" />
+        <FinanceKpi label="Recaudado" value={summary.income} tone="income" sub="Cobros registrados durante el período" />
         <FinanceKpi label="Gastos" value={summary.expense} tone="expense" />
         <FinanceKpi
-          label="Beneficio"
+          label="Resultado de caja"
           value={summary.profit}
           tone={summary.profit < 0 ? "expense" : "neutral"}
-          sub={summary.profitPct !== null ? `${summary.profitPct}% sobre ingresos` : undefined}
+          sub={summary.profitPct !== null ? `${summary.profitPct}% sobre recaudado` : undefined}
         />
       </section>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <section className="rounded-xl border border-neutral-200 bg-white overflow-hidden">
-          <h2 className="px-4 py-3 border-b border-neutral-200 text-sm font-semibold">Ingresos por categoría</h2>
+          <h2 className="px-4 py-3 border-b border-neutral-200 text-sm font-semibold">Recaudado por categoría</h2>
           <div className="p-4">
             {incomeCategories.length > 0 ? incomeCategories.map((category) => (
               <div key={category.label} className="flex justify-between items-baseline gap-3 py-2 border-b border-neutral-100 last:border-0 text-sm">
@@ -201,6 +196,16 @@ export function FinancePage({
       </div>
 
       <section className="rounded-xl border border-neutral-200 bg-white overflow-hidden">
+        <h2 className="px-4 py-3 border-b border-neutral-200 text-sm font-semibold">Facturación de contratos</h2>
+        <p className="px-4 pt-3 text-xs text-neutral-500">El importe completo se cuenta una sola vez. Las cuotas se registran aparte en el recaudado de cada mes.</p>
+        <div className="overflow-x-auto p-4">
+          <table className="w-full text-sm"><thead className="bg-neutral-50 text-xs text-neutral-500"><tr><th className="px-3 py-2 text-left">Fecha</th><th className="px-3 py-2 text-left">Paciente / programa</th><th className="px-3 py-2 text-right">Importe completo</th></tr></thead>
+            <tbody>{billedEntries.length ? billedEntries.map((entry) => <tr key={entry.id} className="border-b border-neutral-100"><td className="px-3 py-2 text-xs whitespace-nowrap">{new Date(entry.occurredAt).toLocaleDateString("es-ES", { day: "numeric", month: "short", timeZone: "UTC" })}</td><td className="px-3 py-2 text-xs">{entry.patientName || "Registro manual"}{entry.programType ? ` · ${entry.programType}` : ""}</td><td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">{eur(entry.amount)}</td></tr>) : <tr><td colSpan={3} className="px-3 py-6 text-center text-xs text-neutral-500">Sin contratos facturados en este período.</td></tr>}</tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-neutral-200 bg-white overflow-hidden">
         <header className="flex justify-between items-center flex-wrap gap-2 px-4 py-3 border-b border-neutral-200">
           <h2 className="font-semibold text-sm">Movimientos del período <span className="font-normal text-neutral-500">({allTx.length})</span></h2>
           <p className="text-xs text-neutral-500">Los movimientos manuales se pueden editar</p>
@@ -208,7 +213,7 @@ export function FinancePage({
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 p-4">
           <div className="min-w-0">
             <div className="flex items-baseline justify-between gap-2 mb-3">
-              <h3 className="font-medium text-sm">Ingresos</h3>
+              <h3 className="font-medium text-sm">Cobros</h3>
               <span className="text-xs text-neutral-500">{incomeTx.length} movimientos · <span className="font-medium text-emerald-700">{eur(summary.income)}</span></span>
             </div>
             <TxTable rows={incomeTx} kind="income" onEdit={setEditing} emptyText="Sin ingresos en este período." />
@@ -222,6 +227,12 @@ export function FinancePage({
           </div>
         </div>
       </section>
+
+      {autoRenewals.length > 0 && <details className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+        <summary className="cursor-pointer text-sm font-medium">Importes históricos por comprobar ({autoRenewals.length})</summary>
+        <p className="my-3 text-xs text-neutral-600">Se conservan estos importes de periodos antiguos. No se consideran dinero recaudado sin un cobro registrado.</p>
+        <TxTable rows={autoRenewals} kind="income" onEdit={() => {}} emptyText="" />
+      </details>}
 
       <details className="rounded-xl border border-neutral-200 bg-white overflow-hidden">
         <summary className="cursor-pointer px-4 py-3 text-sm font-medium">Gráfico anual con filtros · {year}</summary>
@@ -299,7 +310,7 @@ function YearChart({
     }));
 
     for (const t of yearTransactions) {
-      const m = new Date(t.occurredAt).getMonth();
+      const m = new Date(t.occurredAt).getUTCMonth();
       if (t.type === "expense") {
         const cat = t.category ?? "otros";
         if (!activeExpenseCats.has(cat)) continue;
@@ -309,16 +320,11 @@ function YearChart({
         months[m].ingresos += t.amount;
       }
     }
-    // Auto renewals (renovaciones automáticas) cuentan como income_renewal
-    if (activeIncomeTypes.has("income_renewal")) {
-      for (const r of yearAutoRenewals) {
-        const m = new Date(r.occurredAt).getMonth();
-        months[m].ingresos += r.amount;
-      }
-    }
 
     for (const m of months) {
-      m.beneficio = m.ingresos - m.gastos;
+      m.ingresos = roundMoney(m.ingresos);
+      m.gastos = roundMoney(m.gastos);
+      m.beneficio = roundMoney(m.ingresos - m.gastos);
     }
 
     return months;
@@ -329,12 +335,12 @@ function YearChart({
       <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
         <div>
           <h2 className="font-medium text-sm">Tendencia anual — {year}</h2>
-          <p className="text-xs text-neutral-500">Ingresos, gastos y beneficio mes a mes</p>
+          <p className="text-xs text-neutral-500">Recaudado, gastos y resultado de caja mes a mes</p>
         </div>
         <div className="flex gap-1">
-          <ToggleChip active={showIncome} onClick={() => setShowIncome((v) => !v)} color="emerald" label="Ingresos" />
+          <ToggleChip active={showIncome} onClick={() => setShowIncome((v) => !v)} color="emerald" label="Recaudado" />
           <ToggleChip active={showExpense} onClick={() => setShowExpense((v) => !v)} color="red" label="Gastos" />
-          <ToggleChip active={showProfit} onClick={() => setShowProfit((v) => !v)} color="blue" label="Beneficio" />
+          <ToggleChip active={showProfit} onClick={() => setShowProfit((v) => !v)} color="blue" label="Resultado de caja" />
         </div>
       </div>
 
@@ -378,9 +384,9 @@ function YearChart({
               contentStyle={{ fontSize: "12px", borderRadius: 8 }}
             />
             <Legend wrapperStyle={{ fontSize: "12px" }} />
-            {showIncome && <Line type="monotone" dataKey="ingresos" name="Ingresos" stroke="#10B981" strokeWidth={2} dot={{ r: 3 }} />}
+            {showIncome && <Line type="monotone" dataKey="ingresos" name="Recaudado" stroke="#10B981" strokeWidth={2} dot={{ r: 3 }} />}
             {showExpense && <Line type="monotone" dataKey="gastos" name="Gastos" stroke="#DC2626" strokeWidth={2} dot={{ r: 3 }} />}
-            {showProfit && <Line type="monotone" dataKey="beneficio" name="Beneficio" stroke="#3B82F6" strokeWidth={2} dot={{ r: 3 }} />}
+            {showProfit && <Line type="monotone" dataKey="beneficio" name="Resultado de caja" stroke="#3B82F6" strokeWidth={2} dot={{ r: 3 }} />}
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -637,7 +643,7 @@ function TxTable({ rows, kind, onEdit, emptyText }: { rows: Tx[]; kind: "income"
                 key={t.id}
                 onClick={() => isEditable && onEdit(t)}
                 className={`border-b border-neutral-100 ${isEditable ? "hover:bg-neutral-50 cursor-pointer" : "opacity-90"}`}
-                title={isEditable ? "Click para editar" : "Automático (se edita desde la ficha del paciente)"}
+                title={isEditable ? "Click para editar" : "Cobro confirmado por el proveedor de pago"}
               >
                 <td className="py-2 px-2 text-xs text-neutral-500 whitespace-nowrap align-top">
                   {new Date(t.occurredAt).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
