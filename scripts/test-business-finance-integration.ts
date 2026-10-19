@@ -4,7 +4,8 @@ import { prisma } from "../lib/prisma";
 import { computeBusinessMetrics, computeMonthlyBusinessMetrics } from "../lib/business-metrics";
 import { calculateFinanceSummary, parseSpecificMonth, getPeriodRange } from "../lib/finance";
 import { calculateSalesMetrics } from "../lib/sales";
-import type { FinanceLedgerSources, LedgerPeriod } from "../lib/finance-ledger";
+import { getFinanceLedger, type FinanceLedgerSources, type LedgerPeriod } from "../lib/finance-ledger";
+import { moneyCents, roundMoney } from "../lib/money";
 
 // Run with: node --import tsx scripts/test-business-finance-integration.ts
 // All Prisma reads are mocked and fetch is forbidden. No DB/provider is called.
@@ -182,6 +183,64 @@ test("integration: cents and expenses reconcile between monthly grid and annual 
   assert.equal(annual.income, grid.annual.income);
   assert.equal(annual.expense, grid.annual.expense);
   assert.equal(annual.profit, grid.annual.profit);
+});
+
+test("integration: sub-cent movements round individually before any monthly, category or annual sum", async (t) => {
+  const fixture: Fixture = { sales: [], checkouts: [], renewals: [], transactions: [0, 1].flatMap((month) =>
+    ["expense", "income_new", "income_other"].map((type) => ({
+      id: `fraction-${type}-${month}`, type, amount: 10.004,
+      occurredAt: new Date(Date.UTC(2025, month, 5)), patientId: null, professionalId: null,
+      description: "cuota histórica", category: "otros",
+    }))),
+  };
+  installFixture(t, fixture);
+  const grid = await computeMonthlyBusinessMetrics(2025);
+  const annual = await calculateFinanceSummary(...yearRange(2025));
+  const ledger = await getFinanceLedger(...yearRange(2025));
+  assert.deepEqual(grid.months.slice(0, 2).map((row) => [row.expense, row.income]), [[10, 20], [10, 20]]);
+  assert.equal(grid.annual.expense, 20);
+  assert.equal(grid.annual.income, 40);
+  assert.equal(annual.expense, grid.annual.expense);
+  assert.equal(annual.income, grid.annual.income);
+  assert.equal(annual.incomeNew, 20);
+  assert.equal(annual.incomeOther, 20);
+  assert.equal(annual.profit, grid.annual.profit);
+  assert.ok([...ledger.expenseEntries, ...ledger.receiptEntries].every((row) => row.amount === 10));
+  assert.ok(ledger.warnings.some((warning) => warning.includes("6 movimientos históricos tienen fracciones de céntimo")));
+  assert.ok(fixture.transactions.every((row) => row.amount === 10.004));
+});
+
+test("integration: decimal half-cents and negative cash/expense adjustments round symmetrically", async (t) => {
+  for (const [value, expected] of [[1.005, 101], [10.075, 1008], [-1.005, -101], [-10.075, -1008]]) {
+    assert.equal(moneyCents(value), expected);
+    assert.equal(roundMoney(value), expected / 100);
+  }
+  const fixture: Fixture = { sales: [], checkouts: [], renewals: [], transactions: [0, 1].flatMap((month) =>
+    ["expense", "income_other"].flatMap((type) => [1.005, 10.075].map((amount, index) => ({
+      id: `half-${type}-${month}-${index}`, type, amount: month ? -amount : amount,
+      occurredAt: new Date(Date.UTC(2025, month, 5)), patientId: null, professionalId: null,
+      description: "cuota histórica",
+    })))),
+  };
+  installFixture(t, fixture);
+  const grid = await computeMonthlyBusinessMetrics(2025);
+  const annual = await calculateFinanceSummary(...yearRange(2025));
+  assert.deepEqual(grid.months.slice(0, 2).map((row) => [row.expense, row.income]), [[11.09, 11.09], [-11.09, -11.09]]);
+  assert.equal(grid.annual.expense, 0);
+  assert.equal(grid.annual.income, 0);
+  assert.equal(annual.expense, grid.annual.expense);
+  assert.equal(annual.income, grid.annual.income);
+  assert.equal(annual.collectedCountOther, 4);
+});
+
+test("integration: ordinary Float noise does not produce sub-cent warnings", async (t) => {
+  installFixture(t, { sales: [], checkouts: [], renewals: [], transactions: [{
+    id: "binary-noise", type: "expense", amount: 0.1 + 0.2,
+    occurredAt: new Date("2025-01-05T12:00:00Z"), patientId: null, professionalId: null,
+  }] });
+  const ledger = await getFinanceLedger(...yearRange(2025));
+  assert.equal(ledger.expenseEntries[0].amount, 0.3);
+  assert.ok(!ledger.warnings.some((warning) => warning.includes("fracciones de céntimo")));
 });
 
 test("integration: retention decisions do not manufacture renewal cash", async (t) => {

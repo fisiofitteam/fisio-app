@@ -3,6 +3,7 @@ import { computeBusinessMetrics, type BusinessMetrics } from "@/lib/business-met
 import { activePatientCondition } from "@/lib/patient-active";
 import { getFinanceLedger } from "@/lib/finance-ledger";
 import { paymentDescription } from "@/lib/payment-description";
+import { moneyCents, roundMoney } from "@/lib/money";
 import {
   countLeadOutcomes, groupLeadOutcomes, reconstructIntervalHealth,
   type LeadCounts, type SourceBreakdown,
@@ -74,7 +75,6 @@ export type KpiDashboardData = {
 
 const PAYMENT_ROW_LIMIT = 200;
 const INCOME_TYPES = ["income_new", "income_renewal", "income_other"];
-const roundMoney = (value: number) => Math.round(value * 100) / 100;
 
 /**
  * Read-only adapter for the Dashora-shaped views. Existing summary, CAC and
@@ -89,7 +89,7 @@ export async function getKpiDashboardData(
   const effectiveEnd = new Date(Math.min(end.getTime(), now.getTime()));
   const inPeriod = { gte: start, lte: end };
   const incomeWhere = { occurredAt: inPeriod, type: { in: INCOME_TYPES } };
-  const [metrics, ledger, leads, catalog, expenseGroups, officialActive, intervals,
+  const [metrics, ledger, leads, catalog, officialActive, intervals,
     paymentTransactions, inputRows] = await Promise.all([
     existingMetrics ? Promise.resolve(existingMetrics) : computeBusinessMetrics(start, end),
     getFinanceLedger(start, end),
@@ -105,10 +105,6 @@ export async function getKpiDashboardData(
     prisma.leadSourceTag.findMany({
       orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
       select: { id: true, label: true, color: true, active: true, sortOrder: true },
-    }),
-    prisma.transaction.groupBy({
-      by: ["category"], where: { occurredAt: inPeriod, type: "expense" },
-      _sum: { amount: true },
     }),
     prisma.patient.count({ where: { isTest: false, ...activePatientCondition() } }),
     prisma.subscriptionRenewal.findMany({
@@ -149,8 +145,13 @@ export async function getKpiDashboardData(
   const followAds = sumInput("adsSpend");
   const conversionAds = sumInput("adsConversion");
   const totalFollowers = [...inputs].reverse().find((input) => input.totalFollowers != null)?.totalFollowers ?? null;
-  const expenseCategories = expenseGroups.map((group) => ({
-    category: group.category ?? "Sin categoría", amount: roundMoney(group._sum.amount ?? 0),
+  const expenseCategoryCents = new Map<string, number>();
+  for (const entry of ledger.expenseEntries) {
+    const category = entry.programType ?? "Sin categoría";
+    expenseCategoryCents.set(category, (expenseCategoryCents.get(category) ?? 0) + moneyCents(entry.amount));
+  }
+  const expenseCategories = [...expenseCategoryCents].map(([category, amountCents]) => ({
+    category, amount: amountCents / 100,
   })).sort((a, b) => b.amount - a.amount);
   const acquisitionExpenses = expenseCategories
     .filter((group) => group.category.toLowerCase() === "marketing")
@@ -160,7 +161,7 @@ export async function getKpiDashboardData(
   const legacyUnverifiedAmount = roundMoney(ledger.legacyUnverified.filter((row) => row.issue === "missing-receipt").reduce((sum, row) => sum + row.amount, 0));
   const rows: KpiPaymentRow[] = paymentTransactions.map((row) => ({
     id: row.id, source: "transaction" as const, type: row.type,
-    amount: row.amount, date: row.occurredAt.toISOString(), description: paymentDescription(row.description),
+    amount: roundMoney(row.amount), date: row.occurredAt.toISOString(), description: paymentDescription(row.description),
     patientId: row.patientId, patientName: row.patient?.fullName ?? null,
   }));
   const rowCount = ledger.receiptEntries.length;

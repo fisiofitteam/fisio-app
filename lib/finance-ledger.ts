@@ -3,6 +3,8 @@
  * This module never changes historical rows. Identity matching happens before
  * period filtering so installments from earlier sales remain cash this month.
  */
+import { moneyCents, roundMoney } from "./money";
+
 export type FinanceIncomeType = "income_new" | "income_renewal" | "income_other";
 export type FinanceLedgerEntry<T extends string = FinanceIncomeType> = {
   id: string;
@@ -59,8 +61,8 @@ export type FinanceLedgerSources = {
 };
 
 const incomeTypes = new Set<string>(["income_new", "income_renewal", "income_other"]);
-const cents = (value: number) => Math.round(value * 100);
-const money = (value: number) => Math.round(value * 100) / 100;
+const cents = moneyCents;
+const money = roundMoney;
 const sameTime = (a: Date | null, b: Date | null) => !!a && !!b && a.getTime() === b.getTime();
 const validDate = (value: Date | null): value is Date => !!value && Number.isFinite(value.getTime());
 
@@ -265,8 +267,14 @@ export function buildFinanceLedger(
   }
 
   const transactions = sources.transactions.filter((row) => inPeriod(row.occurredAt));
+  const fractionalMovements = transactions.filter((row) =>
+    (incomeTypes.has(row.type) || row.type === "expense")
+    && Math.abs(row.amount - money(row.amount)) > 1e-8);
+  if (fractionalMovements.length) warnings.add(
+    `${fractionalMovements.length} movimiento${fractionalMovements.length === 1 ? " histórico tiene" : "s históricos tienen"} fracciones de céntimo. Los totales suman cada movimiento redondeado a dos decimales; los importes guardados no se modifican.`,
+  );
   const toEntry = <T extends string>(row: LedgerTransaction, type: T): FinanceLedgerEntry<T> => ({
-    id: row.id, type, amount: row.amount, occurredAt: row.occurredAt,
+    id: row.id, type, amount: money(row.amount), occurredAt: row.occurredAt,
     patientId: row.patientId, professionalId: row.professionalId,
     programType: row.category ?? null, source: "transaction",
   });

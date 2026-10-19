@@ -4,6 +4,7 @@ import { getActiveProfessional } from "@/lib/session";
 import { getPeriodRange, summarizeFinanceLedger } from "@/lib/finance";
 import { getFinanceLedger } from "@/lib/finance-ledger";
 import { paymentDescription } from "@/lib/payment-description";
+import { roundMoney } from "@/lib/money";
 import { FinancePage } from "@/components/FinancePage";
 import { resolveKpiMonth } from "@/lib/kpi-period";
 import { KpiPeriodNav } from "@/components/KpiPeriodNav";
@@ -39,7 +40,7 @@ export default async function FinancePageRoute({ searchParams }: {
     <KpiPeriodNav title="Negocio" month={selectedMonth.month} year={year} rangeLabel={period === "month" ? undefined : label} />
     <FinancePage year={year} period={period} periodLabel={label} summary={summarizeFinanceLedger(ledger)}
       transactions={transactions.map((row) => ({
-        ...row, occurredAt: row.occurredAt.toISOString(), description: paymentDescription(row.description),
+        ...row, amount: roundMoney(row.amount), occurredAt: row.occurredAt.toISOString(), description: paymentDescription(row.description),
         source: row.id.startsWith("receipt:") || row.description?.includes("[ff-receipt:v1") ? "auto" as const : "manual" as const,
       }))}
       billedEntries={ledger.billedEntries.map((row) => ({ ...row, occurredAt: row.occurredAt.toISOString(), patientName: row.patientId ? patientNames.get(row.patientId) ?? null : null }))}
@@ -49,7 +50,7 @@ export default async function FinancePageRoute({ searchParams }: {
         patient: row.patientId ? { id: row.patientId, fullName: patientNames.get(row.patientId) ?? "Paciente" } : null,
         professional: null, source: "auto" as const,
       }))}
-      yearTransactions={yearTransactions.map((row) => ({ ...row, occurredAt: row.occurredAt.toISOString() }))}
+      yearTransactions={yearTransactions.map((row) => ({ ...row, amount: roundMoney(row.amount), occurredAt: row.occurredAt.toISOString() }))}
       yearAutoRenewals={[]} professionals={professionals} patients={patients} />
   </>;
 }

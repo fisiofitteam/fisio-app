@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import type { FinanceSummary } from "@/lib/finance";
+import { roundMoney } from "@/lib/money";
 import {
   ResponsiveContainer, Tooltip,
   LineChart, Line, XAxis, YAxis, CartesianGrid, Legend,
@@ -321,7 +322,9 @@ function YearChart({
     }
 
     for (const m of months) {
-      m.beneficio = m.ingresos - m.gastos;
+      m.ingresos = roundMoney(m.ingresos);
+      m.gastos = roundMoney(m.gastos);
+      m.beneficio = roundMoney(m.ingresos - m.gastos);
     }
 
     return months;

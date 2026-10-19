@@ -1,4 +1,5 @@
 import { getFinanceLedger, type FinanceLedger } from "./finance-ledger";
+import { moneyCents } from "./money";
 
 export type Period = "day" | "week" | "month" | "quarter" | "year";
 
@@ -137,12 +138,14 @@ export type FinanceSummary = {
 
 /** Summarize a previously loaded ledger without another database query. */
 export function summarizeFinanceLedger(ledger: FinanceLedger): FinanceSummary {
-  const sum = (rows: FinanceLedger["billedEntries"], type?: string) =>
-    Math.round(rows.reduce((total, row) => total + (!type || row.type === type ? row.amount : 0), 0) * 100) / 100;
+  const sumCents = (rows: readonly { amount: number; type: string }[], type?: string) =>
+    rows.reduce((total, row) => total + (!type || row.type === type ? moneyCents(row.amount) : 0), 0);
+  const sum = (rows: FinanceLedger["billedEntries"], type?: string) => sumCents(rows, type) / 100;
   const incomeNew = sum(ledger.receiptEntries, "income_new");
   const incomeRenewal = sum(ledger.receiptEntries, "income_renewal");
   const incomeOther = sum(ledger.receiptEntries, "income_other");
-  const expense = Math.round(ledger.expenseEntries.reduce((total, row) => total + row.amount, 0) * 100) / 100;
+  const expenseCents = sumCents(ledger.expenseEntries);
+  const expense = expenseCents / 100;
   const billedNew = sum(ledger.billedEntries, "income_new");
   const billedRenewal = sum(ledger.billedEntries, "income_renewal");
   const billedOther = sum(ledger.billedEntries, "income_other");
@@ -153,11 +156,12 @@ export function summarizeFinanceLedger(ledger: FinanceLedger): FinanceSummary {
   const collectedCountNew = count(ledger.receiptEntries, "income_new");
   const collectedCountRenewal = count(ledger.receiptEntries, "income_renewal");
   const collectedCountOther = count(ledger.receiptEntries, "income_other");
-  const income = incomeNew + incomeRenewal + incomeOther;
-  const profit = Math.round((income - expense) * 100) / 100;
+  const incomeCents = moneyCents(incomeNew) + moneyCents(incomeRenewal) + moneyCents(incomeOther);
+  const income = incomeCents / 100;
+  const profit = (incomeCents - expenseCents) / 100;
   const profitPct = income > 0 ? Math.round((profit / income) * 100) : null;
-  const billed = Math.round((billedNew + billedRenewal + billedOther) * 100) / 100;
-  return { income: Math.round(income * 100) / 100, expense, profit, profitPct,
+  const billed = (moneyCents(billedNew) + moneyCents(billedRenewal) + moneyCents(billedOther)) / 100;
+  return { income, expense, profit, profitPct,
     incomeNew, incomeRenewal, incomeOther, countNew, countRenewal, countOther,
     billed, billedNew, billedRenewal, billedOther,
     collectedCountNew, collectedCountRenewal, collectedCountOther };
