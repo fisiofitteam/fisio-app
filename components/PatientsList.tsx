@@ -237,6 +237,7 @@ export function PatientsList({
         <StagedPatientList
           patients={visiblePatients}
           isManager={currentUser.isManager}
+          isCeo={currentUser.role === "ceo"}
           onReassign={setReassigning}
         />
       )}
@@ -316,17 +317,59 @@ function TabButton({
 function PatientRow({
   patient,
   isManager,
+  isCeo,
   onReassign,
 }: {
   patient: Patient;
   isManager: boolean;
+  isCeo: boolean;
   onReassign: () => void;
 }) {
+  const router = useRouter();
+  async function deletePatient() {
+    // Doble confirmación: el server exige recibir el fullName exacto
+    // porque borra TODOS los datos del paciente (ver app/api/patients/[id]).
+    if (!window.confirm(
+      `¿Borrar a "${patient.fullName}" permanentemente?\n\nTodos sus datos (sesiones, PRs, métricas, pagos, notas) se borrarán. No se puede deshacer.\n\nEn el siguiente paso tendrás que escribir su nombre para confirmar.`
+    )) return;
+    const typed = window.prompt(`Para confirmar, escribe el nombre exacto:\n\n${patient.fullName}`);
+    if (typed == null) return;
+    if (typed.trim() !== patient.fullName.trim()) {
+      window.alert("El nombre no coincide. Operación cancelada.");
+      return;
+    }
+    try {
+      const r = await fetch(`/api/patients/${patient.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: patient.fullName }),
+      });
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        window.alert(d?.error || "No se pudo borrar el paciente");
+        return;
+      }
+      router.refresh();
+    } catch (e: any) {
+      window.alert(e?.message || "Error de red");
+    }
+  }
+
   return (
     <div
-      className="card flex items-center gap-3 hover:border-neutral-300"
+      className="card relative flex items-center gap-3 hover:border-neutral-300"
       style={patient.isDerived ? { background: "#EFF6FF", borderColor: "#BFDBFE" } : undefined}
     >
+      {isCeo && (
+        <button
+          type="button"
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); deletePatient(); }}
+          title="Eliminar paciente (solo CEO)"
+          className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center rounded-full text-neutral-300 hover:text-red-600 hover:bg-red-50 transition-colors text-sm leading-none"
+        >
+          ✕
+        </button>
+      )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <Link href={`/fisio/paciente/${patient.id}`} className="font-medium hover:underline">
@@ -1157,10 +1200,12 @@ function CreatePatientModal({
 function StagedPatientList({
   patients,
   isManager,
+  isCeo,
   onReassign,
 }: {
   patients: Patient[];
   isManager: boolean;
+  isCeo: boolean;
   onReassign: (p: Patient) => void;
 }) {
   const onboarding = patients.filter((p) => p.stage === "onboarding");
@@ -1198,6 +1243,7 @@ function StagedPatientList({
                 <PatientRow
                   patient={p}
                   isManager={isManager}
+                  isCeo={isCeo}
                   onReassign={() => onReassign(p)}
                 />
                 <div className="flex items-center justify-between pl-3 pr-1 mt-2 flex-wrap gap-2">
@@ -1239,6 +1285,7 @@ function StagedPatientList({
                 key={p.id}
                 patient={p}
                 isManager={isManager}
+                isCeo={isCeo}
                 onReassign={() => onReassign(p)}
               />
             ))}
@@ -1253,6 +1300,7 @@ function StagedPatientList({
               key={p.id}
               patient={p}
               isManager={isManager}
+              isCeo={isCeo}
               onReassign={() => onReassign(p)}
             />
           ))}
