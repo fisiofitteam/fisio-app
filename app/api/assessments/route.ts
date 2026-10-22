@@ -15,9 +15,14 @@ export async function GET(req: NextRequest) {
     owner = s?.assignment.patientId || null;
   }
   if (!owner || !await assessmentAccess(owner)) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
-  const rows = await prisma.assessmentVideo.findMany({ where: { patientId: owner, ...(sessionId ? { sessionId } : {}) }, orderBy: { assessedAt: "desc" }, take: 500,
+  const material = req.nextUrl.searchParams.get("material") === "1";
+  const page = Math.max(0, Math.floor(Number(req.nextUrl.searchParams.get("page")) || 0));
+  const where = { patientId: owner, ...(sessionId ? { sessionId } : {}), ...(material ? { url: { not: null }, uploadedAt: { not: null } } : {}) };
+  const rows = await prisma.assessmentVideo.findMany({ where, orderBy: [{ assessedAt: "desc" }, { id: "desc" }],
+    skip: material ? page * 30 : 0, take: material ? 30 : 500,
     select: { id: true, sessionId: true, taskId: true, testId: true, assessmentTitle: true, testTitle: true, assessedAt: true, url: true, uploadedAt: true, reviewedAt: true, coachNotes: true } });
-  return NextResponse.json(rows.map(r => ({ ...r, version: r.uploadedAt?.toISOString(), url: r.url ? "/api/assessments/media?id=" + r.id + "&v=" + r.uploadedAt?.getTime() : null })), { headers: { "Cache-Control": "private, no-store" } });
+  const items = rows.map(r => ({ ...r, version: r.uploadedAt?.toISOString(), url: r.url ? "/api/assessments/media?id=" + r.id + "&v=" + r.uploadedAt?.getTime() : null }));
+  return NextResponse.json(material ? { items, total: await prisma.assessmentVideo.count({ where }) } : items, { headers: { "Cache-Control": "private, no-store" } });
 }
 export async function POST(req: NextRequest) {
   try {
