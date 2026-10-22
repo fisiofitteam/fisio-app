@@ -440,7 +440,7 @@ export default async function PatientHome({ params }: { params: { id: string } }
         // Pacientes migrados (giftsAlreadySent=true) ya tienen su camiseta
         // de antes y no deben ver el selector.
         needsShirtSize={patient.programType === "ADVANCE" && !patient.shirtSize && !patient.giftsAlreadySent}
-        shippingComplete={!!(patient.shippingStreet && patient.shippingNumber && patient.shippingCity && patient.shippingPostalCode)}
+        shippingComplete={!!(patient.contractDNI?.trim() && patient.shippingStreet && patient.shippingNumber && patient.shippingCity && patient.shippingPostalCode)}
         individualSessionsToday={individualSessionsToday.length > 0 ? {
           count: individualSessionsToday.length,
           allCompleted: individualSessionsToday.every((s: any) => !!s.completedAt),
@@ -638,7 +638,7 @@ export default async function PatientHome({ params }: { params: { id: string } }
           : null,
         whatsappGroupUrl: patient.whatsappGroupUrl,
         photoUrl: patient.photoUrl,
-        shippingComplete: !!(patient.shippingStreet && patient.shippingNumber && patient.shippingCity && patient.shippingPostalCode),
+        shippingComplete: !!(patient.contractDNI?.trim() && patient.shippingStreet && patient.shippingNumber && patient.shippingCity && patient.shippingPostalCode),
         communityUnread,
       }}
       todaySessions={todaySessions.map((s) => ({

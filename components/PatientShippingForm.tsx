@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 type Shipping = {
+  contractDNI: string | null;
   shippingStreet: string | null;
   shippingNumber: string | null;
   shippingFloor: string | null;
@@ -20,6 +21,7 @@ type Shipping = {
 export function PatientShippingForm({ initial }: { initial: Shipping }) {
   const router = useRouter();
   const [v, setV] = useState({
+    contractDNI: initial.contractDNI ?? "",
     shippingStreet: initial.shippingStreet ?? "",
     shippingNumber: initial.shippingNumber ?? "",
     shippingFloor: initial.shippingFloor ?? "",
@@ -38,6 +40,10 @@ export function PatientShippingForm({ initial }: { initial: Shipping }) {
   }
 
   async function save() {
+    if (!v.contractDNI.trim()) {
+      setMsg({ kind: "err", text: "El DNI / NIE es obligatorio." });
+      return;
+    }
     setSaving(true);
     setMsg(null);
     try {
@@ -50,7 +56,7 @@ export function PatientShippingForm({ initial }: { initial: Shipping }) {
         const d = await res.json().catch(() => ({}));
         throw new Error(d?.error || "No se pudo guardar");
       }
-      setMsg({ kind: "ok", text: "Dirección guardada." });
+      setMsg({ kind: "ok", text: "Datos fiscales y dirección guardados." });
       router.refresh();
     } catch (e) {
       setMsg({ kind: "err", text: e instanceof Error ? e.message : "No se pudo guardar" });
@@ -58,7 +64,7 @@ export function PatientShippingForm({ initial }: { initial: Shipping }) {
     setSaving(false);
   }
 
-  const required = !!(v.shippingStreet && v.shippingNumber && v.shippingCity && v.shippingPostalCode);
+  const required = !!(v.contractDNI.trim() && v.shippingStreet.trim() && v.shippingNumber.trim() && v.shippingCity.trim() && v.shippingPostalCode.trim());
 
   const labelCls = "text-[11px] block mb-1";
   const labelStyle = { color: "var(--p-text-dim)" } as const;
@@ -71,6 +77,13 @@ export function PatientShippingForm({ initial }: { initial: Shipping }) {
 
   return (
     <div className="space-y-3">
+      <div>
+        <label htmlFor="patient-dni" className={labelCls} style={labelStyle}>DNI / NIE *</label>
+        <input id="patient-dni" required maxLength={30} className={inputCls} style={inputStyle}
+          value={v.contractDNI} onChange={(e) => field("contractDNI", e.target.value.toUpperCase())}
+          placeholder="12345678A" />
+        <p className="text-[11px] mt-1" style={labelStyle}>Necesario para tus datos fiscales. Puedes completarlo aunque no hayas firmado el contrato en la app.</p>
+      </div>
       <div className="grid grid-cols-3 gap-2">
         <div className="col-span-2">
           <label className={labelCls} style={labelStyle}>Calle *</label>
@@ -133,7 +146,7 @@ export function PatientShippingForm({ initial }: { initial: Shipping }) {
         className="text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-50"
         style={{ background: "var(--p-accent)", color: "var(--p-accent-ink)" }}
       >
-        {saving ? "Guardando…" : "Guardar dirección"}
+        {saving ? "Guardando…" : "Guardar datos"}
       </button>
     </div>
   );
