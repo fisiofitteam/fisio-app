@@ -1,4 +1,6 @@
 "use client";
+import { CaseWhatsAppImport } from "@/components/CaseWhatsAppImport";
+import { PatientEvidenceLibrary } from "@/components/PatientEvidenceLibrary";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -509,6 +511,8 @@ type CaseState = {
 };
 
 function ConvertToCaseModal({ patient, onClose, onCreated }: { patient: Patient; onClose: () => void; onCreated: () => void }) {
+  const [materialSection, setMaterialSection] = useState<"initialSituationVideos" | "processVideos" | "obstaclesVideos" | "achievementsVideos">("achievementsVideos");
+  const [importingWhatsApp, setImportingWhatsApp] = useState(false);
   const [caseId, setCaseId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -647,7 +651,7 @@ function ConvertToCaseModal({ patient, onClose, onCreated }: { patient: Patient;
           <div className="flex items-center gap-2">
             <button
               onClick={generateWithAi}
-              disabled={loading || generating || !caseId}
+              disabled={loading || generating || importingWhatsApp || !caseId}
               className="text-xs font-medium px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white disabled:opacity-40"
               title="La IA lee toda la info del paciente y rellena los 4 apartados"
             >
@@ -677,6 +681,22 @@ function ConvertToCaseModal({ patient, onClose, onCreated }: { patient: Patient;
                   Leyendo anamnesis, sesiones, sensaciones, resúmenes semanales… tarda 20-60s.
                 </p>
               )}
+
+              <CaseWhatsAppImport patientId={patient.id} disabled={generating} onBusyChange={setImportingWhatsApp} />
+              <details className="rounded-xl border p-3">
+                <summary className="cursor-pointer text-sm font-medium">Material del cliente: vídeos, capturas y conversaciones</summary>
+                <div className="mt-3 space-y-3">
+                  <label className="text-xs block">Añadir vídeos al apartado
+                    <select className="input mt-1" value={materialSection} onChange={e => setMaterialSection(e.target.value as typeof materialSection)}>
+                      {APARTADOS.map(ap => <option key={ap.videosKey} value={ap.videosKey}>{ap.label}</option>)}
+                    </select>
+                  </label>
+                  <PatientEvidenceLibrary patientId={patient.id} compact onSelectVideo={(url, caption) => {
+                    setState(prev => ({ ...prev, [materialSection]: prev[materialSection].some(v => v.url === url) ? prev[materialSection] : [...prev[materialSection], { url, caption }] }));
+                    setSavedFeedback("Vídeo añadido al apartado. Guarda el caso para conservarlo.");
+                  }} />
+                </div>
+              </details>
 
               {APARTADOS.map((ap) => (
                 <ApartadoBlock
