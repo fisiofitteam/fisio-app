@@ -4,48 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const SECTIONS = [
-  {
-    id: "calendario",
-    label: "Calendario",
-    icon: "📅",
-    desc: "Programas asignados y vista mensual",
-  },
-  {
-    id: "cargas",
-    label: "Control de cargas",
-    icon: "🏋️",
-    desc: "Adaptaciones por movimiento",
-  },
-  {
-    id: "evolucion",
-    label: "Evolución",
-    icon: "📈",
-    desc: "Métricas y progreso del paciente",
-  },
-  {
-    id: "ficha",
-    label: "Ficha clínica",
-    icon: "🩺",
-    desc: "Datos, diagnóstico, perfil",
-  },
-  {
-    id: "suscripcion",
-    label: "Suscripción",
-    icon: "💳",
-    desc: "Pago, programa, pausas",
-  },
-  {
-    id: "formularios",
-    label: "Resúmenes y formularios",
-    icon: "📝",
-    desc: "Resúmenes IA de llamadas y cuestionarios",
-  },
-  {
-    id: "wods",
-    label: "Readaptación y WODs",
-    icon: "⚡",
-    desc: "Sensaciones tras sesión y WODs registrados",
-  },
+  { id: "calendario", label: "Calendario", icon: "📅", desc: "Programas asignados y vista mensual" },
+  { id: "cargas", label: "Control de cargas", icon: "🏋️", desc: "Adaptaciones por movimiento" },
+  { id: "info", label: "Evolución e historial", icon: "📋", desc: "Ficha, evolución, historial, formularios, WODs y éxitos" },
+  { id: "suscripcion", label: "Suscripción", icon: "💳", desc: "Pago, programa, pausas" },
 ];
 
 // Aparece solo si el paciente está en una sesión clínica.

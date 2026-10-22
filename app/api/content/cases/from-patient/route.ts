@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { canAccessEvidencePatient } from "@/lib/patient-evidence";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 
@@ -8,6 +9,8 @@ export async function POST(req: NextRequest) {
 
   const { patientId, insight, consentSigned, videoUrls, notes } = await req.json();
   if (!patientId) return NextResponse.json({ error: "patientId requerido" }, { status: 400 });
+
+  if (!await canAccessEvidencePatient(patientId, user)) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
 
   const patient = await prisma.patient.findUnique({ where: { id: patientId } });
   if (!patient) return NextResponse.json({ error: "Paciente no encontrado" }, { status: 404 });
