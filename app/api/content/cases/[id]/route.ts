@@ -10,7 +10,7 @@ import { getActiveProfessional } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
-type VideoRef = { url: string; caption?: string };
+type VideoRef = { url: string; caption?: string; kind?: string };
 
 function sanitizeVideos(input: unknown): VideoRef[] | null {
   if (input === undefined) return null;
@@ -18,6 +18,7 @@ function sanitizeVideos(input: unknown): VideoRef[] | null {
   return input
     .map((v: any) => ({
       url: typeof v?.url === "string" ? v.url.trim() : "",
+      ...(["image", "video", "document"].includes(v?.kind) ? { kind: v.kind } : {}),
       caption: typeof v?.caption === "string" ? v.caption.trim() : "",
     }))
     .filter((v) => v.url.length > 0);
