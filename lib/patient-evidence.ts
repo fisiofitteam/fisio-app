@@ -2,8 +2,9 @@ import { prisma } from "@/lib/prisma";
 import { getActiveProfessional, type ActiveProfessional } from "@/lib/session";
 
 export const EVIDENCE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif", "video/mp4", "video/quicktime", "video/webm", "application/pdf"];
-export const MAX_EVIDENCE_BYTES = 250 * 1024 * 1024;
-export const MAX_WHATSAPP_CHARS = 200000;
+export const MAX_EVIDENCE_BYTES = 1024 * 1024 * 1024;
+export const MAX_WHATSAPP_CHARS = 200000; // Legacy single-request import.
+export const MAX_WHATSAPP_BYTES = 50 * 1024 * 1024;
 export function canUseEvidence(user: ActiveProfessional | null): user is ActiveProfessional {
   return !!user && [user.role, ...user.extraRoles].some(r => ["ceo", "head_success", "fisio"].includes(r));
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
-import { canUseEvidence, canAccessEvidencePatient, evidencePatientIds, EVIDENCE_TYPES, MAX_EVIDENCE_BYTES, MAX_WHATSAPP_CHARS } from "@/lib/patient-evidence";
+import { canUseEvidence, canAccessEvidencePatient, evidencePatientIds, EVIDENCE_TYPES, MAX_EVIDENCE_BYTES, MAX_WHATSAPP_CHARS, MAX_WHATSAPP_BYTES } from "@/lib/patient-evidence";
 import { validEvidenceZone } from "@/lib/evidence-zones";
 export const dynamic = "force-dynamic";
 
@@ -43,6 +43,12 @@ export async function POST(req: NextRequest) {
   const name = typeof b.name === "string" ? b.name.trim().slice(0, 180) : "";
   const notes = typeof b.notes === "string" ? b.notes.trim().slice(0, 4000) : "";
   if (!name) return NextResponse.json({ error: "Nombre obligatorio" }, { status: 400 });
+  if (b.kind === "whatsapp" && b.chunked === true) {
+    if (!Number.isInteger(b.size) || b.size <= 0 || b.size > MAX_WHATSAPP_BYTES) return NextResponse.json({ error: "El TXT debe tener un máximo de 50 MB." }, { status: 400 });
+    const item = await prisma.patientEvidence.create({ data: { patientId, createdById: user.id, name, bodyZone,
+      notes, kind: "whatsapp", mimeType: "text/plain", textContent: "", size: b.size, status: "pending" } });
+    return NextResponse.json({ id: item.id });
+  }
   if (b.kind === "whatsapp") {
     if (typeof b.textContent !== "string" || !b.textContent.trim() || b.textContent.length > MAX_WHATSAPP_CHARS || b.textContent.includes("\u0000"))
       return NextResponse.json({ error: "El TXT debe contener texto y tener un máximo de 200.000 caracteres." }, { status: 400 });
@@ -51,7 +57,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ id: item.id });
   }
   if (!EVIDENCE_TYPES.includes(b.mimeType) || !Number.isInteger(b.size) || b.size <= 0 || b.size > MAX_EVIDENCE_BYTES)
-    return NextResponse.json({ error: "Formato no admitido o archivo mayor de 250 MB." }, { status: 400 });
+    return NextResponse.json({ error: "Formato no admitido o archivo mayor de 1 GB." }, { status: 400 });
   const item = await prisma.patientEvidence.create({ data: { patientId, createdById: user.id, name, notes, bodyZone,
     mimeType: b.mimeType, size: b.size, kind: b.mimeType.startsWith("video/") ? "video" : b.mimeType.startsWith("image/") ? "image" : "document",
     status: "pending" } });
