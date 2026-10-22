@@ -140,6 +140,13 @@ export function InvoiceClient({
         </div>
       </div>
 
+      {salary.adjustments?.length > 0 && (
+        <div className="no-print max-w-2xl mx-auto px-8 pt-4 text-sm">
+          {salary.adjustments.map(adjustment => (
+            <p key={adjustment.id}>{adjustment.description}: {adjustment.amount.toLocaleString("es-ES", { style: "currency", currency: "EUR" })} incluidos en la base de esta liquidación.</p>
+          ))}
+        </div>
+      )}
       <div className="max-w-2xl mx-auto px-8 py-10">
         <div className="flex justify-between items-start mb-8">
           <div>
