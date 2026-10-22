@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { AssessmentMaterial } from "@/components/AssessmentMaterial";
 import type { CaseAttachment } from "@/lib/case-attachments";
 type Material = { id: string; name: string; kind: string; url: string | null; notes: string | null };
 export function CaseMaterialPicker({ patientId, sectionLabel, existing, onClose, onConfirm }: {
@@ -7,6 +8,7 @@ export function CaseMaterialPicker({ patientId, sectionLabel, existing, onClose,
   onClose: () => void; onConfirm: (chosen: CaseAttachment[]) => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const [source, setSource] = useState<"testimonials" | "assessments">("testimonials");
   const [items, setItems] = useState<Material[]>([]);
   const [selected, setSelected] = useState<Map<string, Material>>(new Map());
   const [page, setPage] = useState(0);
@@ -39,6 +41,11 @@ export function CaseMaterialPicker({ patientId, sectionLabel, existing, onClose,
     </header>
     <div className="p-4">
       <p className="text-xs text-neutral-500 mb-3">Selecciona vídeos, capturas o PDF para este apartado. Las conversaciones de WhatsApp se incorporan desde «Importar WhatsApp».</p>
+      <div className="flex gap-2 mb-4" aria-label="Origen del material">
+        <button type="button" aria-pressed={source === "testimonials"} onClick={() => setSource("testimonials")} className={"rounded-lg px-3 py-2 text-sm " + (source === "testimonials" ? "bg-amber-100 text-amber-900" : "bg-neutral-100")}>Testimonios</button>
+        <button type="button" aria-pressed={source === "assessments"} onClick={() => setSource("assessments")} className={"rounded-lg px-3 py-2 text-sm " + (source === "assessments" ? "bg-amber-100 text-amber-900" : "bg-neutral-100")}>Vídeos de test</button>
+      </div>
+      {source === "assessments" ? <AssessmentMaterial patientId={patientId} existing={existing} selectedIds={Array.from(selected.keys())} onToggle={toggle} /> : <>
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
       {loading ? <p className="text-sm text-neutral-500 py-6">Cargando material…</p> :
         !items.length ? <p className="text-sm text-neutral-500 py-6">Todavía no hay material. Puedes subirlo desde Éxitos.</p> :
@@ -61,6 +68,7 @@ export function CaseMaterialPicker({ patientId, sectionLabel, existing, onClose,
         <span>Página {page + 1} de {Math.ceil(total / 30)}</span>
         <button type="button" disabled={(page + 1) * 30 >= total || loading} onClick={() => setPage(p => p + 1)}>Siguiente →</button>
       </div>}
+      </>}
     </div>
     <footer className="sticky bottom-0 bg-white border-t p-4 flex justify-end gap-3">
       <button type="button" onClick={onClose} className="text-sm text-neutral-500">Cancelar</button>
