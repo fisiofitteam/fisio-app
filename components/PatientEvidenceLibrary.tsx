@@ -2,13 +2,20 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { AssignEvidenceClient } from "@/components/AssignEvidenceClient";
+import { EVIDENCE_ZONES } from "@/lib/evidence-zones";
+import { Folder, Trash2 } from "lucide-react";
 import { upload } from "@vercel/blob/client";
-type Evidence = { id: string; patientId: string | null; name: string; kind: string; mimeType: string; url: string | null; notes: string | null; createdAt: string; patient: { fullName: string } | null };
+type Evidence = { id: string; patientId: string | null; name: string; bodyZone: string | null; kind: string; mimeType: string; url: string | null; notes: string | null; createdAt: string; patient: { fullName: string } | null };
 export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVideo }: { patientId?: string; compact?: boolean; onSelectVideo?: (url: string, name: string) => void }) {
   const [items, setItems] = useState<Evidence[]>([]);
   const [patients, setPatients] = useState<Array<{ id: string; fullName: string }>>([]);
   const [unassigned, setUnassigned] = useState(false);
   const [assigning, setAssigning] = useState<Evidence | null>(null);
+  const [zone, setZone] = useState("");
+  const [uploadZone, setUploadZone] = useState("");
+  const [folders, setFolders] = useState<Array<{ bodyZone: string | null; count: number }>>([]);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<Evidence | null>(null);
   const [notes, setNotes] = useState("");
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
@@ -24,17 +31,19 @@ export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVid
     setLoading(true);
     try {
       const q = new URLSearchParams({ page: String(page) });
+      if (zone) q.set("bodyZone", zone);
       if (patientId) q.set("patientId", patientId);
       else if (unassigned) q.set("unassigned", "1");
       const res = await fetch("/api/testimonials?" + q);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "No se pudo cargar");
       if (request !== requestId.current) return;
-      setItems(data.items); setPatients(data.patients); setTotal(data.total);
+      setItems(data.items); setPatients(data.patients); setTotal(data.total); setFolders(data.folders || []);
+      if (page && page * 30 >= data.total) setPage(Math.max(0, Math.ceil(data.total / 30) - 1));
     } catch (e) { if (request === requestId.current) setError(e instanceof Error ? e.message : "Error al cargar"); }
     finally { if (request === requestId.current) setLoading(false); }
   }
-  useEffect(() => { void load(); return () => { requestId.current++; }; }, [patientId, unassigned, page]);
+  useEffect(() => { void load(); return () => { requestId.current++; }; }, [patientId, unassigned, page, zone]);
   async function add(files: FileList | File[]) {
     if (busy) return;
     setBusy(true); setError("");
@@ -48,7 +57,7 @@ export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVid
           if (txt && file.size > 1024 * 1024) throw new Error("TXT demasiado grande (máximo 1 MB y 200.000 caracteres)");
           const mimeType = file.type || (/\.mov$/i.test(file.name) ? "video/quicktime" : /\.mp4$/i.test(file.name) ? "video/mp4" : /\.heic$/i.test(file.name) ? "image/heic" : "");
           const res = await fetch("/api/testimonials", { method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ patientId: patientId || null, name: file.name, notes, size: file.size, mimeType,
+            body: JSON.stringify({ patientId: patientId || null, name: file.name, notes, bodyZone: uploadZone || null, size: file.size, mimeType,
               ...(txt ? { kind: "whatsapp", textContent: await file.text() } : {}) }) });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || "No se pudo guardar");
@@ -67,7 +76,29 @@ export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVid
       if (saved) { setNotes(""); if (page) setPage(0); else await load(); }
     } finally { setBusy(false); if (input.current) input.current.value = ""; }
   }
+  async function changeItem(item: Evidence, bodyZone?: string) {
+    setEditing(item.id); setError("");
+    try {
+      const res = await fetch("/api/testimonials/" + item.id, { method: bodyZone === undefined ? "DELETE" : "PATCH",
+        headers: { "Content-Type": "application/json" }, ...(bodyZone === undefined ? {} : { body: JSON.stringify({ bodyZone: bodyZone || null }) }) });
+      if (!res.ok) throw new Error((await res.json()).error || "No se pudo guardar");
+      setDeleting(null); setProgress(bodyZone === undefined ? "Testimonio eliminado." : "Zona actualizada."); await load();
+    } catch (e) { setError(e instanceof Error ? e.message : "No se pudo guardar"); }
+    finally { setEditing(null); }
+  }
   return <div className="space-y-4">
+    {deleting && <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="delete-evidence-title">
+      <div className="bg-white rounded-2xl p-6 max-w-md w-full space-y-4">
+        <h3 id="delete-evidence-title" className="font-semibold text-lg">¿Borrar este testimonio?</h3>
+        <p className="text-sm break-words">{deleting.name}</p>
+        <p className="text-sm text-neutral-600">Dejará de aparecer en Testimonios y en los éxitos del cliente. Los casos de éxito ya creados se conservarán.</p>
+        {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+        <div className="flex justify-end gap-3">
+          <button type="button" className="btn btn-ghost" disabled={!!editing} onClick={() => setDeleting(null)}>Cancelar</button>
+          <button type="button" className="rounded-lg bg-red-600 text-white px-4 py-2 text-sm" disabled={!!editing} onClick={() => void changeItem(deleting)}>{editing ? "Borrando…" : "Borrar testimonio"}</button>
+        </div>
+      </div>
+    </div>}
     {assigning && <AssignEvidenceClient item={assigning} patients={patients} onClose={() => setAssigning(null)} onAssigned={async () => {
       setAssigning(null); setProgress("Cliente asignado. El material ya está disponible en su ficha."); await load();
     }} />}
@@ -81,6 +112,12 @@ export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVid
       <label className="text-xs text-neutral-600 block mb-2">Contexto del material (opcional)
         <textarea className="input mt-1 text-sm w-full" rows={2} disabled={busy} value={notes} onChange={e => setNotes(e.target.value)}
           placeholder="Qué ha conseguido, qué dice la captura o qué muestra el vídeo…" /></label>
+      <label className="text-xs text-neutral-600 block mb-3">Zona corporal de los archivos
+        <select className="input block mt-1 text-sm" value={uploadZone} disabled={busy} onChange={e => setUploadZone(e.target.value)}>
+          <option value="">Sin etiquetar</option>
+          {EVIDENCE_ZONES.map(z => <option key={z.value} value={z.value}>{z.label}</option>)}
+        </select>
+      </label>
       <input ref={input} type="file" multiple className="hidden" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,video/mp4,video/quicktime,video/webm,application/pdf,.txt"
         onChange={e => { if (e.target.files) void add(e.target.files); }} />
       <button type="button" className="btn btn-primary text-sm" disabled={busy} onClick={() => input.current?.click()}>{busy ? "Subiendo…" : "Subir archivos"}</button>
@@ -93,7 +130,20 @@ export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVid
       <button type="button" aria-pressed={!unassigned} disabled={busy} onClick={() => { setUnassigned(false); setPage(0); }} className={"rounded-full px-4 py-2 text-sm " + (!unassigned ? "bg-neutral-900 text-white" : "bg-neutral-100")}>Todos</button>
       <button type="button" aria-pressed={unassigned} disabled={busy} onClick={() => { setUnassigned(true); setPage(0); }} className={"rounded-full px-4 py-2 text-sm " + (unassigned ? "bg-neutral-900 text-white" : "bg-neutral-100")}>Pendientes de asignar</button>
     </div>}
-    {loading ? <p className="text-sm text-neutral-400">Cargando material…</p> : !items.length ? <p className="text-sm text-neutral-500 py-4">Todavía no hay material guardado.</p> :
+    <section aria-label="Carpetas por zona corporal" className="space-y-2">
+      <h3 className="text-sm font-semibold">Carpetas por zona corporal</h3>
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2">
+        {[{ value: "", label: "Todos" }, ...EVIDENCE_ZONES, { value: "unlabelled", label: "Sin etiquetar" }].map(z => {
+          const count = folders.filter(f => !z.value || (f.bodyZone || "unlabelled") === z.value).reduce((sum, f) => sum + f.count, 0);
+          return <button type="button" key={z.value} aria-pressed={zone === z.value} disabled={busy || !!editing}
+            onClick={() => { setZone(z.value); setPage(0); }}
+            className={"rounded-xl border p-3 text-left flex items-center gap-2 " + (zone === z.value ? "border-amber-400 bg-amber-50" : "border-neutral-200 bg-white hover:bg-neutral-50")}>
+            <Folder size={20} className="text-amber-600 shrink-0" /><span className="text-sm">{z.label}<span className="block text-xs text-neutral-500">{count} archivos</span></span>
+          </button>;
+        })}
+      </div>
+    </section>
+    {loading ? <p className="text-sm text-neutral-400">Cargando material…</p> : !items.length ? <p className="text-sm text-neutral-500 py-4">No hay material en esta carpeta.</p> :
       <div className={"grid gap-3 " + (compact ? "sm:grid-cols-2" : "sm:grid-cols-2 xl:grid-cols-3")}>
         {items.map(item => <article key={item.id} className="rounded-xl border border-neutral-200 overflow-hidden bg-white">
           {item.kind === "image" && item.url && <a href={item.url} target="_blank" rel="noreferrer"><img src={item.url} alt={item.name} className="h-40 w-full object-contain bg-neutral-100" loading="lazy" /></a>}
@@ -106,6 +156,13 @@ export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVid
             {!patientId && <button type="button" className={"block rounded-lg px-3 py-2 text-sm font-medium " + (item.patientId ? "bg-neutral-100 text-neutral-700" : "bg-amber-400 text-neutral-900 hover:bg-amber-500")} onClick={() => setAssigning(item)}>
               {item.patientId ? "Cambiar cliente" : "Asignar a cliente"}
             </button>}
+            <label className="block text-xs text-neutral-500 pt-2">Zona corporal
+              <select aria-label={"Zona corporal de " + item.name} className="input block w-full mt-1 text-sm" value={item.bodyZone || ""} disabled={!!editing}
+                onChange={e => void changeItem(item, e.target.value)}>
+                <option value="">Sin etiquetar</option>
+                {EVIDENCE_ZONES.map(z => <option key={z.value} value={z.value}>{z.label}</option>)}
+              </select>
+            </label>
             <p className="text-xs text-neutral-400">{new Date(item.createdAt).toLocaleDateString("es-ES")}</p>
             {item.notes && <p className="text-xs whitespace-pre-wrap text-neutral-600">{item.notes}</p>}
             {item.url && <button type="button" className="block text-xs underline" onClick={async () => {
@@ -113,6 +170,7 @@ export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVid
             }}>Copiar enlace</button>}
             {onSelectVideo && item.kind === "video" && item.url && <button type="button" className="btn btn-ghost text-xs" onClick={() => onSelectVideo(item.url!, item.notes || item.name)}>Añadir al caso</button>}
             <a className="inline-block text-xs underline pt-2" href={item.kind === "whatsapp" ? "/api/testimonials/" + item.id : item.url || "#"} target="_blank" rel="noreferrer">Abrir / descargar</a>
+            <button type="button" aria-label={"Borrar " + item.name} disabled={!!editing} onClick={() => setDeleting(item)} className="flex items-center gap-1 text-xs text-red-600 hover:text-red-800 pt-3"><Trash2 size={14} /> Borrar testimonio</button>
           </div>
         </article>)}
       </div>}

@@ -1,0 +1,1 @@
+ALTER TABLE "PatientEvidence" ADD COLUMN IF NOT EXISTS "bodyZone" TEXT;
