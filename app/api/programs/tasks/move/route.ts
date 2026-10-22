@@ -1,9 +1,12 @@
+import { canUseEvidence } from "@/lib/patient-evidence";
+import { getActiveProfessional } from "@/lib/session";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 // Mover o duplicar una tarea de un día a otro
 // body: { taskId, targetWeekId, targetDayOfWeek, action: "move" | "duplicate" }
 export async function POST(req: NextRequest) {
+  if (!canUseEvidence(await getActiveProfessional())) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   const { taskId, targetWeekId, targetDayOfWeek, action } = await req.json();
 
   // Buscar día destino, crear si no existe
@@ -44,6 +47,7 @@ export async function POST(req: NextRequest) {
         type: source.type,
         order: count,
         title: source.title,
+        assessment: source.assessment,
       },
     });
 

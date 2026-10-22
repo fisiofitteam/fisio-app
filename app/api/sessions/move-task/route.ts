@@ -91,6 +91,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    await tx.assessmentVideo.updateMany({ where: { sessionId, taskId }, data: { sessionId: created.id, taskId: movedTask.id } });
     // 2. Actualizar la sesión origen: si se quedó sin tareas la borramos,
     //    si no, guardamos el snapshot recortado.
     if (tasks.length === 0) {

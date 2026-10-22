@@ -8,6 +8,7 @@ datasource db {
 }
 
 model Patient {
+  assessmentVideos AssessmentVideo[]
   evidence PatientEvidence[]
   id              String   @id @default(cuid())
   fullName        String
@@ -760,6 +761,7 @@ model ProgramDay {
 
 // Una tarea genérica. type indica qué subtabla mirar.
 model ProgramTask {
+  assessment String? // JSON definition, immutable test IDs
   id        String     @id @default(cuid())
   dayId     String
   day       ProgramDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
@@ -901,6 +903,7 @@ model ProgramAssignment {
 }
 
 model ProgramSession {
+  assessmentVideos AssessmentVideo[]
   id            String   @id @default(cuid())
   assignmentId  String
   assignment    ProgramAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
@@ -4117,4 +4120,32 @@ model PatientEvidence {
 
   @@index([patientId, status, createdAt])
   @@index([status, createdAt])
+}
+
+
+model AssessmentVideo {
+  id              String @id @default(cuid())
+  patientId       String
+  patient         Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  sessionId       String?
+  session         ProgramSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  taskId          String
+  testId          String
+  assessmentTitle String
+  testTitle       String
+  assessedAt      DateTime
+  url             String?
+  uploadedAt      DateTime?
+  reviewedAt      DateTime?
+  reviewedById    String?
+  coachNotes      String @default("")
+  pendingPath     String?
+  pendingMime     String?
+  pendingSize     Int?
+  pendingUntil    DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@unique([sessionId, taskId, testId])
+  @@index([patientId, assessedAt])
+  @@index([uploadedAt])
 }

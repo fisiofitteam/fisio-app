@@ -9,6 +9,7 @@
  *   otras al guardar (lo hace el endpoint complete-combined).
  * - Un único botón "Completar sesión" marca todas las sesiones a la vez.
  */
+import { AssessmentUploader } from "@/components/AssessmentUploader";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -40,6 +41,8 @@ export function CombinedSessionRunner({
   const router = useRouter();
   const [responses, setResponses] = useState<Record<string, any>>({});
   const [saving, setSaving] = useState(false);
+  const [uploads, setUploads] = useState<Record<string, boolean>>({});
+  const uploading = Object.values(uploads).some(Boolean);
   const [expandedExercise, setExpandedExercise] = useState<string | null>(null);
 
   // Sensaciones del paciente al terminar (igual que SessionRunner). Antes
@@ -92,6 +95,8 @@ export function CombinedSessionRunner({
           {g.tasks.map((task) => (
             <TaskBlock
               key={task.id}
+              sessionId={g.sessionId}
+              onUploadBusy={busy => setUploads(prev => ({ ...prev, [g.sessionId + task.id]: busy }))}
               task={task}
               response={responses[task.id] ?? (task.type === "FORM" || task.type === "EVOLUTION" ? {} : "")}
               onChange={(data: any) => setTaskResponse(task.id, data)}
@@ -138,7 +143,7 @@ export function CombinedSessionRunner({
         </div>
         <button
           onClick={complete}
-          disabled={saving || patientNotes.trim().length < NOTES_MIN}
+          disabled={uploading || saving || patientNotes.trim().length < NOTES_MIN}
           className="w-full font-semibold rounded-lg py-3 text-sm disabled:opacity-60"
           style={{ background: "var(--p-accent)", color: "var(--p-accent-ink)" }}
         >
@@ -150,9 +155,11 @@ export function CombinedSessionRunner({
 }
 
 function TaskBlock({
-  task, response, onChange, expandedExercise, setExpandedExercise,
+  task, response, onChange, expandedExercise, setExpandedExercise, sessionId, onUploadBusy,
 }: {
   task: Task;
+  sessionId?: string;
+  onUploadBusy?: (busy: boolean) => void;
   response: any;
   onChange: (data: any) => void;
   expandedExercise: string | null;
@@ -167,6 +174,7 @@ function TaskBlock({
         </div>
       </div>
 
+      {task.type === "ASSESSMENT" && sessionId && <AssessmentUploader sessionId={sessionId} task={task} onBusyChange={onUploadBusy} />}
       {task.type === "WORKOUT" && (() => {
         const ex = getTaskExercises(task);
         return (

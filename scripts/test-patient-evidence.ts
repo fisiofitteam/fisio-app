@@ -16,6 +16,7 @@ async function main() {
     wodLog: { findMany: async (q: any) => q.distinct ? [{ patientId: patient.id }] : [{ id: "w1", completedAt: null, submittedAt: new Date("2026-10-22T10:00:00Z"), rawText: "5 pull-ups", notes: "Sin dolor", painScore: 0, rpe: 6 }] },
     patientCallFormResponse: { findMany: async () => [] },
     programSession: { findMany: async () => [session], count: async () => 1, groupBy: async () => [] },
+    assessmentVideo: { findMany: async () => [] },
     patientEvidence: { findMany: async (q: any) => q.distinct ? [{ patientId: patient.id }] : attachments },
     advanceSessionLog: { groupBy: async () => [] },
     metricDefinition: { findMany: async () => [] },

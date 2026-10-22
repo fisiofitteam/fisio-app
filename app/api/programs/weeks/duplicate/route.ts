@@ -1,7 +1,10 @@
+import { canUseEvidence } from "@/lib/patient-evidence";
+import { getActiveProfessional } from "@/lib/session";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
+  if (!canUseEvidence(await getActiveProfessional())) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   const { weekId } = await req.json();
   const source = await prisma.programWeek.findUnique({
     where: { id: weekId },
@@ -39,7 +42,7 @@ export async function POST(req: NextRequest) {
     });
     for (const t of day.tasks) {
       const newTask = await prisma.programTask.create({
-        data: { dayId: newDay.id, type: t.type, order: t.order, title: t.title },
+        data: { dayId: newDay.id, type: t.type, order: t.order, title: t.title, assessment: t.assessment },
       });
       if (t.type === "WORKOUT" && t.workout) {
         const w = await prisma.taskWorkout.create({

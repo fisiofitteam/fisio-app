@@ -1,9 +1,13 @@
+import { PatientAssessments } from "@/components/PatientAssessments";
+import { canAccessEvidencePatient } from "@/lib/patient-evidence";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { EvolutionDashboard } from "@/components/EvolutionDashboard";
 import { CoachDailyLogPanel } from "@/components/CoachDailyLogPanel";
 import { materializePatientMetrics } from "@/lib/metric-definitions";
 
 export default async function PatientEvolucionTab({ params }: { params: { id: string } }) {
+  if (!await canAccessEvidencePatient(params.id)) redirect("/fisio/pacientes");
   // Asegura que las métricas generales del CEO están asignadas a este paciente.
   await materializePatientMetrics(params.id);
 
@@ -22,6 +26,7 @@ export default async function PatientEvolucionTab({ params }: { params: { id: st
 
   return (
     <div className="space-y-4">
+      <PatientAssessments patientId={params.id} />
       <CoachDailyLogPanel
         entries={dailyLogs.map((e: any) => ({
           recordedDate: e.recordedDate.toISOString(),
