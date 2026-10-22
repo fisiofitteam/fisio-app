@@ -469,9 +469,9 @@ export async function runWeeklyReportsForWeek(monday: Date, opts?: { force?: boo
   const [wodPatients, formPatients, evidencePatients] = await Promise.all([
     prisma.wodLog.findMany({ where: { OR: [{ completedAt: { gte: start, lt: end } }, { completedAt: null, submittedAt: { gte: start, lt: end } }] }, select: { patientId: true }, distinct: ["patientId"] }),
     prisma.patientCallFormResponse.findMany({ where: { submittedAt: { gte: start, lt: end } }, select: { patientId: true }, distinct: ["patientId"] }),
-    prisma.patientEvidence.findMany({ where: { status: "ready", kind: { not: "whatsapp" }, createdAt: { gte: start, lt: end } }, select: { patientId: true }, distinct: ["patientId"] }),
+    prisma.patientEvidence.findMany({ where: { patientId: { not: null }, status: "ready", kind: { not: "whatsapp" }, createdAt: { gte: start, lt: end } }, select: { patientId: true }, distinct: ["patientId"] }),
   ]);
-  const extraIds = [...new Set([...wodPatients, ...formPatients, ...evidencePatients].map(p => p.patientId))];
+  const extraIds = [...new Set([...wodPatients, ...formPatients, ...evidencePatients].map(p => p.patientId).filter((id): id is string => typeof id === "string"))];
   if (extraIds.length) {
     const extraPatients = await prisma.patient.findMany({ where: { id: { in: extraIds }, isTest: false },
       select: { id: true, fullName: true, programType: true, assignedProfessionalId: true } });

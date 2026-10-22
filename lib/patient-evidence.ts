@@ -23,3 +23,10 @@ export async function evidencePatientIds(user: ActiveProfessional): Promise<stri
   ]);
   return [...new Set([...assigned.map(p => p.id), ...derived.map(p => p.patientId)])];
 }
+
+/** Unassigned uploads belong to their uploader and clinical managers. */
+export async function canAccessEvidence(row: { patientId: string | null; createdById: string }, user?: ActiveProfessional | null) {
+  const actor = user === undefined ? await getActiveProfessional() : user;
+  if (!canUseEvidence(actor)) return false;
+  return row.patientId ? canAccessEvidencePatient(row.patientId, actor) : actor.isManager || row.createdById === actor.id;
+}
