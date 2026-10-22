@@ -18,7 +18,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
-import { issuePatientInvoice } from "@/lib/patient-invoices";
+import { parseInvoiceDetails } from "@/lib/invoice-details";
+import { issuePatientInvoice, getPatientInvoiceDefaults } from "@/lib/patient-invoices";
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const user = await getActiveProfessional();
@@ -34,16 +35,27 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: "Importe inválido" }, { status: 400 });
   }
 
+  let details;
+  try { details = parseInvoiceDetails(body?.details); }
+  catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : "Datos inválidos" }, { status: 400 }); }
+  const issueDate = body?.issueDate ? new Date(body.issueDate) : undefined;
+  if (issueDate && !Number.isFinite(issueDate.getTime())) return NextResponse.json({ error: "Fecha inválida" }, { status: 400 });
+  for (const key of ["vatRate", "irpfRate"]) {
+    if (body?.[key] !== undefined && (typeof body[key] !== "number" || !Number.isFinite(body[key]) || body[key] < 0 || body[key] > 100)) {
+      return NextResponse.json({ error: "Los impuestos deben estar entre 0 y 100%" }, { status: 400 });
+    }
+  }
   try {
     const invoice = await issuePatientInvoice({
       patientId: params.id,
       issuerProfessionalId: user.id,
+      details,
       concept,
       baseAmount,
       vatExempt: body?.vatExempt !== false,
       vatRate: typeof body?.vatRate === "number" ? body.vatRate : 0,
       irpfRate: typeof body?.irpfRate === "number" ? body.irpfRate : 0,
-      issueDate: body?.issueDate ? new Date(body.issueDate) : undefined,
+      issueDate,
       saleId: body?.saleId || null,
       subscriptionRenewalId: body?.subscriptionRenewalId || null,
       transactionId: body?.transactionId || null,
@@ -59,6 +71,14 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   const user = await getActiveProfessional();
   if (!user || user.role !== "ceo") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (_req.nextUrl.searchParams.get("defaults") === "1") {
+    try {
+      const details = await getPatientInvoiceDefaults(params.id, user.id);
+      return NextResponse.json({ details });
+    } catch {
+      return NextResponse.json({ error: "No se pudieron cargar los datos fiscales" }, { status: 404 });
+    }
   }
   const invoices = await prisma.patientInvoice.findMany({
     where: { patientId: params.id },

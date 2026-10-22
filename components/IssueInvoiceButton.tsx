@@ -1,5 +1,6 @@
 "use client";
 
+import { InvoiceDetails } from "@/lib/invoice-details";
 import { useState } from "react";
 
 type Patient = {
@@ -43,7 +44,28 @@ export function IssueInvoiceButton({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [details, setDetails] = useState<InvoiceDetails | null>(null);
+  const [loading, setLoading] = useState(false);
+  async function loadDetails() {
+    setOpen(true);
+    setLoading(true);
+    setDetails(null);
+    setError(null);
+    try {
+      const res = await fetch(`/api/patients/${patient.id}/invoices?defaults=1`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "No se pudieron cargar los datos");
+      setDetails(data.details);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudieron cargar los datos");
+    } finally { setLoading(false); }
+  }
   async function emit() {
+    if (!details) return;
+    if (!details.clientName.trim() || !details.issuerName.trim()) {
+      setError("Completa el nombre del cliente y del emisor");
+      return;
+    }
     setError(null);
     const baseAmount = Number(amount.replace(",", "."));
     if (!Number.isFinite(baseAmount) || baseAmount <= 0) {
@@ -60,6 +82,7 @@ export function IssueInvoiceButton({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          details,
           concept: concept.trim(),
           baseAmount,
           vatExempt,
@@ -84,7 +107,7 @@ export function IssueInvoiceButton({
     return (
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={loadDetails}
         className="text-xs font-medium px-3 py-1.5 rounded-lg"
         style={{ background: "#0A0A0A", color: "#FAFAFA" }}
       >
@@ -93,7 +116,7 @@ export function IssueInvoiceButton({
     );
   }
 
-  const missingFiscalData = !patient.hasTaxId || !patient.hasFiscalAddress;
+  const missingFiscalData = details && (!details.clientTaxId.trim() || !details.clientAddress.trim());
 
   return (
     <div
@@ -102,7 +125,7 @@ export function IssueInvoiceButton({
       onClick={() => !busy && setOpen(false)}
     >
       <div
-        className="bg-white rounded-2xl w-full max-w-md p-5 max-h-[92vh] overflow-y-auto"
+        className="bg-white rounded-2xl w-full max-w-2xl p-5 max-h-[92vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-3">
@@ -116,29 +139,33 @@ export function IssueInvoiceButton({
           </button>
         </div>
         <p className="text-xs text-neutral-500 mb-4">
-          Cliente: <strong>{patient.fullName}</strong>. La factura se guarda con
-          numeración correlativa anual (FF-YYYY-NNNN) y los datos del paciente +
-          tuyos en snapshot inmutable.
+          Revisa y modifica los datos antes de emitir. Los cambios de este formulario se aplican solo a esta factura.
+          La numeración se asigna automáticamente.
         </p>
 
-        {missingFiscalData && (
-          <div
-            className="rounded-lg p-3 mb-3 text-xs"
-            style={{ background: "#FEF3C7", border: "1px solid #FCD34D", color: "#78350F" }}
-          >
-            <strong>⚠ Faltan datos del cliente:</strong>
-            <ul className="mt-1 list-disc list-inside">
-              {!patient.hasTaxId && (
-                <li>NIF (lo coge del contrato firmado — verifica que ya lo haya firmado)</li>
-              )}
-              {!patient.hasFiscalAddress && (
-                <li>Dirección postal (debe rellenarla el paciente en su app)</li>
-              )}
-            </ul>
-            <p className="mt-1">
-              Puedes emitirla igual — esos campos saldrán vacíos en la factura, pero
-              se mantiene el número de serie.
-            </p>
+        {loading && <p className="text-sm mb-3">Cargando datos fiscales…</p>}
+        {!loading && !details && <button type="button" className="btn mb-3" onClick={loadDetails}>Reintentar carga</button>}
+        {missingFiscalData && <p className="rounded-lg bg-amber-50 text-amber-900 text-xs p-3 mb-3">Falta el DNI / NIF o la dirección del cliente. Puedes completarlos aquí antes de emitir.</p>}
+        {details && (
+          <div className="grid sm:grid-cols-2 gap-4 mb-4">
+            {([
+              ["Datos del cliente", [["clientName", "Nombre / razón social"], ["clientTaxId", "DNI / NIE / NIF"], ["clientAddress", "Dirección fiscal"], ["clientEmail", "Email"]]],
+              ["Datos del emisor", [["issuerName", "Nombre / razón social"], ["issuerTaxId", "NIF"], ["issuerAddress", "Dirección fiscal"], ["issuerIban", "IBAN"]]],
+            ] as const).map(([title, fields]) => (
+              <fieldset key={title} disabled={busy} className="space-y-2 rounded-lg border border-neutral-200 p-3">
+                <legend className="text-sm font-semibold px-1">{title}</legend>
+                {fields.map(([key, label]) => (
+                  <div key={key}>
+                    <label htmlFor={`invoice-${key}`} className="text-xs text-neutral-600 block mb-1">{label}</label>
+                    {key.endsWith("Address") ? (
+                      <textarea id={`invoice-${key}`} maxLength={2000} rows={3} value={details[key]} onChange={e => setDetails({ ...details, [key]: e.target.value })} className="input text-sm w-full" />
+                    ) : (
+                      <input id={`invoice-${key}`} maxLength={2000} value={details[key]} onChange={e => setDetails({ ...details, [key]: e.target.value })} className="input text-sm w-full" />
+                    )}
+                  </div>
+                ))}
+              </fieldset>
+            ))}
           </div>
         )}
 
@@ -193,30 +220,13 @@ export function IssueInvoiceButton({
             {!vatExempt && (
               <div className="mt-2">
                 <label className="text-xs text-neutral-600 block mb-1">% IVA</label>
-                <select
-                  value={vatRate}
-                  onChange={(e) => setVatRate(e.target.value)}
-                  className="input text-sm w-full"
-                >
-                  <option value="21">21% (general)</option>
-                  <option value="10">10% (reducido)</option>
-                  <option value="4">4% (superreducido)</option>
-                  <option value="0">0%</option>
-                </select>
+                <input type="number" min="0" max="100" step="0.01" value={vatRate} onChange={e => setVatRate(e.target.value)} className="input text-sm w-full" />
               </div>
             )}
 
             <div className="mt-2">
               <label className="text-xs text-neutral-600 block mb-1">% Retención IRPF</label>
-              <select
-                value={irpfRate}
-                onChange={(e) => setIrpfRate(e.target.value)}
-                className="input text-sm w-full"
-              >
-                <option value="0">0% (cliente particular — habitual)</option>
-                <option value="7">7% (autónomo nuevo)</option>
-                <option value="15">15% (autónomo general)</option>
-              </select>
+              <input type="number" min="0" max="100" step="0.01" value={irpfRate} onChange={e => setIrpfRate(e.target.value)} className="input text-sm w-full" />
             </div>
           </div>
 
@@ -241,8 +251,8 @@ export function IssueInvoiceButton({
             <button
               type="button"
               onClick={emit}
-              disabled={busy}
-              className="text-sm font-semibold px-4 py-2 rounded-lg"
+              disabled={busy || loading || !details}
+              className="text-sm font-semibold disabled:opacity-50 px-4 py-2 rounded-lg"
               style={{ background: "#0A0A0A", color: "#FAFAFA" }}
             >
               {busy ? "Emitiendo…" : "🧾 Emitir y abrir factura"}

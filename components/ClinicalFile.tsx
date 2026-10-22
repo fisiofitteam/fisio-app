@@ -28,6 +28,7 @@ type Patient = {
   rollingProgramId: string | null;
   rollingAccessoriesId: string | null;
   rollingTrainingId: string | null;
+  contractDNI: string | null;
   // Dirección postal
   shippingStreet: string | null;
   shippingNumber: string | null;
@@ -69,6 +70,7 @@ export function ClinicalFile({
   const [email, setEmail] = useState(patient.email ?? "");
   const [phone, setPhone] = useState(patient.phone ?? "");
   const [instagram, setInstagram] = useState(patient.instagram ?? "");
+  const [contractDNI, setContractDNI] = useState(patient.contractDNI ?? "");
   // Dirección postal (editable desde la ficha)
   const [shippingStreet, setShippingStreet] = useState(patient.shippingStreet ?? "");
   const [shippingNumber, setShippingNumber] = useState(patient.shippingNumber ?? "");
@@ -111,6 +113,7 @@ export function ClinicalFile({
         whatsappGroupUrl: whatsappGroupUrl || null,
         programType: programType || null,
         ...(isManager && { difficulty: difficulty || null }),
+        contractDNI: contractDNI.trim().toUpperCase() || null,
         // Dirección
         shippingStreet: shippingStreet.trim() || null,
         shippingNumber: shippingNumber.trim() || null,
@@ -198,6 +201,11 @@ export function ClinicalFile({
             </span>
           </summary>
           <div className="mt-3 space-y-2">
+            <div>
+              <label htmlFor="clinical-dni" className="text-xs text-neutral-500 block mb-1">DNI / NIE · para facturación</label>
+              <input id="clinical-dni" className="input" maxLength={30} value={contractDNI} onChange={(e) => setContractDNI(e.target.value.toUpperCase())} placeholder="12345678A" />
+              <p className="text-[11px] text-neutral-400 mt-1">Guarda la ficha para usar este dato al generar facturas.</p>
+            </div>
             <div className="grid grid-cols-3 gap-2">
               <div className="col-span-2">
                 <label className="text-xs text-neutral-500 block mb-1">Calle</label>

@@ -84,6 +84,7 @@ export default async function PatientFichaTab({ params }: { params: { id: string
         phone: patient.phone ?? null,
         instagram: patient.instagram ?? null,
         diagnosis: patient.diagnosis ?? "",
+        contractDNI: patient.contractDNI ?? null,
         shippingStreet: patient.shippingStreet ?? null,
         shippingNumber: patient.shippingNumber ?? null,
         shippingFloor: patient.shippingFloor ?? null,
