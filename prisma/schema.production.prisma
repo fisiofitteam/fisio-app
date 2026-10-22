@@ -213,6 +213,7 @@ model Patient {
 // ============================================================================
 
 model Professional {
+  payrollAdjustments PayrollAdjustment[]
   id        String   @id @default(cuid())
   fullName  String
   email     String?  @unique
@@ -4149,4 +4150,20 @@ model AssessmentVideo {
   @@unique([sessionId, taskId, testId])
   @@index([patientId, assessedAt])
   @@index([uploadedAt])
+}
+
+// Ajustes puntuales autorizados de liquidación. No son pagos: se suman al mes
+// indicado y se liquidan mediante el flujo habitual de PayrollPayment.
+model PayrollAdjustment {
+  professional Professional @relation(fields: [professionalId], references: [id], onDelete: Restrict)
+  id             String   @id @default(cuid())
+  sourceKey      String   @unique
+  professionalId String
+  year           Int
+  month          Int
+  amountCents    Int
+  description    String
+  createdAt      DateTime @default(now())
+
+  @@index([professionalId, year, month])
 }

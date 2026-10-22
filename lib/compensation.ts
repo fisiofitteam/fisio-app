@@ -49,6 +49,7 @@ export function monthRangeUTC(year: number, month: number) {
 
 export type SalaryResult = {
   config: CompensationConfig;
+  adjustments: Array<{ id: string; description: string; amount: number }>;
   activePatients: number;
   renewalOwnCount: number;
   renewalOwnRevenue: number;
@@ -61,6 +62,7 @@ export type SalaryResult = {
    *  contando solo las ausencias con totalDays >= 5 (umbral de compensación). */
   vacationDaysInMonth: number;
   breakdown: {
+    adjustments: number;
     fixed: number;
     patients: number;
     renewals: number;
@@ -279,10 +281,22 @@ export async function computeMonthlySalary(
       ? -((grossTotal / daysInMonth) * vacationDaysInMonth)
       : 0;
 
-  const breakdown = { fixed, patients, renewals, newSales, vacation };
-  const total = grossTotal + vacation;
+  // Regularizaciones de meses anteriores: se añaden después del descuento
+  // de vacaciones del mes actual para conservar el importe autorizado.
+  const adjustmentRows = await prisma.payrollAdjustment.findMany({
+    where: { professionalId, year, month },
+    orderBy: { createdAt: "asc" },
+  });
+  const adjustments = adjustmentRows.map(row => ({
+    id: row.id, description: row.description, amount: row.amountCents / 100,
+  }));
+  const adjustmentTotal = adjustmentRows.reduce((sum, row) => sum + row.amountCents, 0) / 100;
+  const total = grossTotal + vacation + adjustmentTotal;
+  const breakdown = { fixed, patients, renewals, newSales, vacation, adjustments: adjustmentTotal };
+
 
   return {
+    adjustments,
     config,
     activePatients,
     renewalOwnCount,

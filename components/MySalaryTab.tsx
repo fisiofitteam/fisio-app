@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 type Salary = {
   config: { baseSalary: number; perActivePatient: number; renewalOwnPct: number; renewalOthersPct: number; newSaleCommissionPct: number };
+  adjustments?: Array<{ id: string; description: string; amount: number }>;
   breakdown: { fixed: number; patients: number; renewals: number; newSales: number; vacation: number };
   activePatients: number;
   renewalOwnCount: number;
@@ -170,6 +171,12 @@ export function MySalaryTab({ professionalId }: { professionalId: string }) {
                 {salary.config.newSaleCommissionPct > 0 && (
                   <div className="flex justify-between"><span className="text-neutral-600">Comisión ventas ({salary.config.newSaleCommissionPct}%)</span><span className="tabular-nums">{eur(salary.breakdown.newSales)}</span></div>
                 )}
+                {salary.adjustments?.map(adjustment => (
+                  <div key={adjustment.id} className="flex justify-between gap-4">
+                    <span className="text-neutral-600">{adjustment.description}</span>
+                    <span className="tabular-nums whitespace-nowrap">{eur(adjustment.amount)}</span>
+                  </div>
+                ))}
                 {salary.vacationDaysInMonth > 0 && (
                   <div className="flex justify-between" style={{ color: "#B45309" }}>
                     <span>
