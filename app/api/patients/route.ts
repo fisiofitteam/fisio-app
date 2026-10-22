@@ -209,6 +209,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  const user = await getActiveProfessional();
+  if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   const body = await req.json();
   const {
     id,
@@ -225,6 +227,7 @@ export async function PATCH(req: NextRequest) {
     assignedProfessionalId,
     programType,
     difficulty,
+    contractDNI,
     shippingAddress,
     shippingStreet,
     shippingNumber,
@@ -247,6 +250,10 @@ export async function PATCH(req: NextRequest) {
     rollingTrainingId,
     week0Completed,
   } = body;
+
+  if (contractDNI !== undefined && contractDNI !== null && (typeof contractDNI !== "string" || contractDNI.trim().length > 30)) {
+    return NextResponse.json({ error: "DNI / NIE inválido (máximo 30 caracteres)" }, { status: 400 });
+  }
 
   // Si se intenta cambiar email, validar que no esté ocupado por otro paciente
   if (email !== undefined) {
@@ -333,6 +340,7 @@ export async function PATCH(req: NextRequest) {
       ...(difficulty !== undefined && {
         difficulty: difficulty || null,
       }),
+      ...(contractDNI !== undefined && { contractDNI: contractDNI?.trim().toUpperCase() || null }),
       ...(shippingAddress !== undefined && { shippingAddress: shippingAddress || null }),
       ...(shippingStreet !== undefined && { shippingStreet: shippingStreet || null }),
       ...(shippingNumber !== undefined && { shippingNumber: shippingNumber || null }),

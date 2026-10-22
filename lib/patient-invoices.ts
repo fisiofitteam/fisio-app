@@ -11,9 +11,11 @@
  *    (Art. 20 Ley 37/1992 — igual que en tu factura del Professional).
  *  - Sin retención IRPF en facturas a particulares (default 0).
  */
+import { InvoiceDetails } from "@/lib/invoice-details";
 import { prisma } from "@/lib/prisma";
 
 export type IssueInvoiceInput = {
+  details?: Partial<InvoiceDetails>;
   patientId: string;
   issuerProfessionalId: string;
   concept: string;
@@ -36,32 +38,8 @@ export async function issuePatientInvoice(input: IssueInvoiceInput) {
   const issueDate = input.issueDate ?? new Date();
   const year = issueDate.getUTCFullYear();
 
-  // Cargar cliente (snapshot)
-  const patient = await prisma.patient.findUnique({
-    where: { id: input.patientId },
-    select: {
-      id: true,
-      fullName: true,
-      email: true,
-      contractDNI: true,
-      shippingStreet: true,
-      shippingNumber: true,
-      shippingFloor: true,
-      shippingStaircase: true,
-      shippingDoor: true,
-      shippingCity: true,
-      shippingProvince: true,
-      shippingPostalCode: true,
-    },
-  });
-  if (!patient) throw new Error("Paciente no encontrado");
-
-  // Cargar emisor (CEO, snapshot)
-  const issuer = await prisma.professional.findUnique({
-    where: { id: input.issuerProfessionalId },
-    select: { fullName: true, fiscalName: true, taxId: true, fiscalAddress: true, iban: true },
-  });
-  if (!issuer) throw new Error("Profesional emisor no encontrado");
+  const defaults = await getPatientInvoiceDefaults(input.patientId, input.issuerProfessionalId);
+  const details = { ...defaults, ...input.details };
 
   // Datos calculados
   const vatExempt = input.vatExempt ?? true;
@@ -72,7 +50,6 @@ export async function issuePatientInvoice(input: IssueInvoiceInput) {
   const irpfAmount = Number((baseAmount * (irpfRate / 100)).toFixed(2));
   const totalAmount = Number((baseAmount + vatAmount - irpfAmount).toFixed(2));
 
-  const clientAddress = formatAddress(patient);
 
   // Bucle de reintento para asignar sequence sin huecos ni colisiones.
   // Pedir el max actual, sumar 1, intentar crear; si choca unique, reintentar.
@@ -93,15 +70,15 @@ export async function issuePatientInvoice(input: IssueInvoiceInput) {
           sequence,
           number,
           issueDate,
-          patientId: patient.id,
-          clientName: patient.fullName,
-          clientTaxId: patient.contractDNI ?? null,
-          clientAddress: clientAddress || null,
-          clientEmail: patient.email ?? null,
-          issuerName: issuer.fiscalName || issuer.fullName,
-          issuerTaxId: issuer.taxId ?? null,
-          issuerAddress: issuer.fiscalAddress ?? null,
-          issuerIban: issuer.iban ?? null,
+          patientId: input.patientId,
+          clientName: details.clientName,
+          clientTaxId: details.clientTaxId || null,
+          clientAddress: details.clientAddress || null,
+          clientEmail: details.clientEmail || null,
+          issuerName: details.issuerName,
+          issuerTaxId: details.issuerTaxId || null,
+          issuerAddress: details.issuerAddress || null,
+          issuerIban: details.issuerIban || null,
           concept: input.concept,
           baseAmount,
           vatExempt,
@@ -123,6 +100,46 @@ export async function issuePatientInvoice(input: IssueInvoiceInput) {
     }
   }
   throw new Error("No se pudo asignar número de factura tras 5 intentos");
+}
+
+export async function getPatientInvoiceDefaults(patientId: string, issuerProfessionalId: string): Promise<InvoiceDetails> {
+  // Cargar cliente (snapshot)
+  const patient = await prisma.patient.findUnique({
+    where: { id: patientId },
+    select: {
+      id: true,
+      fullName: true,
+      email: true,
+      contractDNI: true,
+      shippingStreet: true,
+      shippingNumber: true,
+      shippingFloor: true,
+      shippingStaircase: true,
+      shippingDoor: true,
+      shippingCity: true,
+      shippingProvince: true,
+      shippingPostalCode: true,
+    },
+  });
+  if (!patient) throw new Error("Paciente no encontrado");
+
+  // Cargar emisor (CEO, snapshot)
+  const issuer = await prisma.professional.findUnique({
+    where: { id: issuerProfessionalId },
+    select: { fullName: true, fiscalName: true, taxId: true, fiscalAddress: true, iban: true },
+  });
+  if (!issuer) throw new Error("Profesional emisor no encontrado");
+
+  return {
+    clientName: patient.fullName,
+    clientTaxId: patient.contractDNI ?? "",
+    clientAddress: formatAddress(patient),
+    clientEmail: patient.email ?? "",
+    issuerName: issuer.fiscalName || issuer.fullName,
+    issuerTaxId: issuer.taxId ?? "",
+    issuerAddress: issuer.fiscalAddress ?? "",
+    issuerIban: issuer.iban ?? "",
+  };
 }
 
 function formatAddress(p: {
