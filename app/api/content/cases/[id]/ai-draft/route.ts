@@ -108,7 +108,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     wods: additionalHistory.wods, forms: additionalHistory.forms, assessmentMaterial: additionalHistory.evidence.filter(e => e.name.startsWith("Valoración: ")) };
   // Fail visibly rather than silently dropping patient evidence.
   if (JSON.stringify(enrichedContext).length > 450000) {
-    return NextResponse.json({ error: "El contexto es demasiado extenso. Sube un TXT más corto con el periodo relevante antes de generar." }, { status: 400 });
+    return NextResponse.json({ error: "La conversación se ha guardado completa, pero supera el contexto que la IA puede analizar en una sola generación. Importa una copia con el periodo relevante para generar este caso. El original seguirá disponible en Éxitos." }, { status: 400 });
   }
 
   const tool: Anthropic.Tool = {

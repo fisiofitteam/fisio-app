@@ -4,6 +4,7 @@ import Link from "next/link";
 import { AssignEvidenceClient } from "@/components/AssignEvidenceClient";
 import { EVIDENCE_ZONES } from "@/lib/evidence-zones";
 import { Folder, Trash2 } from "lucide-react";
+import { uploadWhatsApp } from "@/lib/upload-whatsapp";
 import { upload } from "@vercel/blob/client";
 type Evidence = { id: string; patientId: string | null; name: string; bodyZone: string | null; kind: string; mimeType: string; url: string | null; notes: string | null; createdAt: string; patient: { fullName: string } | null };
 export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVideo }: { patientId?: string; compact?: boolean; onSelectVideo?: (url: string, name: string) => void }) {
@@ -56,7 +57,11 @@ export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVid
         try {
           setProgress("Subiendo " + file.name);
           const txt = file.name.toLowerCase().endsWith(".txt");
-          if (txt && file.size > 1024 * 1024) throw new Error("TXT demasiado grande (máximo 1 MB y 200.000 caracteres)");
+          if (txt) {
+            await uploadWhatsApp(file, { patientId: patientId || uploadPatient?.id || null, notes, bodyZone: uploadZone || null }, setProgress);
+            saved++; continue;
+          }
+          if (file.size > 1024 * 1024 * 1024) throw new Error("Archivo demasiado grande (máximo 1 GB).");
           const mimeType = file.type || (/\.mov$/i.test(file.name) ? "video/quicktime" : /\.mp4$/i.test(file.name) ? "video/mp4" : /\.heic$/i.test(file.name) ? "image/heic" : "");
           const res = await fetch("/api/testimonials", { method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ patientId: patientId || uploadPatient?.id || null, name: file.name, notes, bodyZone: uploadZone || null, size: file.size, mimeType,
@@ -130,7 +135,7 @@ export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVid
         onChange={e => { if (e.target.files) void add(e.target.files); }} />
       <button type="button" className="btn btn-primary text-sm" disabled={busy} onClick={() => input.current?.click()}>{busy ? "Subiendo…" : "Subir archivos"}</button>
       <span className="text-xs text-neutral-500 ml-3">O arrástralos aquí desde el Mac</span>
-      <p className="text-xs text-neutral-400 mt-2">Imágenes, vídeos y PDF: hasta 250 MB. WhatsApp: TXT hasta 200.000 caracteres.</p>
+      <p className="text-xs text-neutral-400 mt-2">Imágenes, vídeos y PDF: hasta 1 GB. WhatsApp: TXT hasta 50 MB.</p>
     </div>
     {progress && <p role="status" className="text-sm text-emerald-700">{progress}</p>}
     {error && <p role="alert" className="text-sm text-red-700 whitespace-pre-wrap">{error}</p>}

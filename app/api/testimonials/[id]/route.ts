@@ -8,7 +8,14 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   const row = await prisma.patientEvidence.findUnique({ where: { id: params.id } });
   if (!row || row.status === "deleted" || !await canAccessEvidence(row)) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   if (row.kind !== "whatsapp") return NextResponse.json({ error: "No es un TXT" }, { status: 400 });
-  return new NextResponse(row.textContent || "", { headers: { "Content-Type": "text/plain; charset=utf-8", "Content-Disposition": "attachment; filename=conversacion.txt", "Cache-Control": "private, no-store" } });
+  if (row.status !== "ready") return NextResponse.json({ error: "La conversación aún se está subiendo." }, { status: 409 });
+  const bytes = new TextEncoder().encode(row.textContent || "");
+  let offset = 0;
+  const stream = new ReadableStream({ pull(controller) {
+    if (offset >= bytes.length) { controller.close(); return; }
+    controller.enqueue(bytes.subarray(offset, offset + 64 * 1024)); offset += 64 * 1024;
+  } });
+  return new NextResponse(stream, { headers: { "Content-Type": "text/plain; charset=utf-8", "Content-Disposition": "attachment; filename=conversacion.txt", "Cache-Control": "private, no-store" } });
 }
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const row = await prisma.patientEvidence.findUnique({ where: { id: params.id } });
