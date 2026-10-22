@@ -1,19 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { head } from "@vercel/blob";
 import { prisma } from "@/lib/prisma";
-import { canAccessEvidencePatient } from "@/lib/patient-evidence";
+import { canAccessEvidence, canAccessEvidencePatient } from "@/lib/patient-evidence";
 export const dynamic = "force-dynamic";
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const row = await prisma.patientEvidence.findUnique({ where: { id: params.id } });
-  if (!row || !await canAccessEvidencePatient(row.patientId)) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  if (!row || !await canAccessEvidence(row)) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   if (row.kind !== "whatsapp") return NextResponse.json({ error: "No es un TXT" }, { status: 400 });
   return new NextResponse(row.textContent || "", { headers: { "Content-Type": "text/plain; charset=utf-8", "Content-Disposition": "attachment; filename=conversacion.txt", "Cache-Control": "private, no-store" } });
 }
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const row = await prisma.patientEvidence.findUnique({ where: { id: params.id } });
-  if (!row || !await canAccessEvidencePatient(row.patientId)) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
-  if (row.status === "ready") return NextResponse.json({ ok: true });
+  if (!row || !await canAccessEvidence(row)) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   const b = await req.json().catch(() => ({}));
+  if (Object.prototype.hasOwnProperty.call(b, "patientId")) {
+    if (row.status !== "ready") return NextResponse.json({ error: "Espera a que termine la subida" }, { status: 409 });
+    if (typeof b.patientId !== "string" || !b.patientId || !await canAccessEvidencePatient(b.patientId))
+      return NextResponse.json({ error: "Cliente no disponible" }, { status: 403 });
+    const result = await prisma.patientEvidence.updateMany({
+      where: { id: row.id, patientId: row.patientId, status: "ready" }, data: { patientId: b.patientId },
+    });
+    if (!result.count) return NextResponse.json({ error: "Otro miembro ha actualizado este archivo. Recarga la lista." }, { status: 409 });
+    return NextResponse.json({ ok: true });
+  }
+  if (row.status === "ready") return NextResponse.json({ ok: true });
   try {
     const pathname = "testimonials/" + row.id + "/" + row.name.replace(/[^a-zA-Z0-9._-]/g, "_");
     // Look up our own pathname, never fetch a client-controlled URL.

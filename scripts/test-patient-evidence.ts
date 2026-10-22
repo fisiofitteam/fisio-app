@@ -28,7 +28,7 @@ async function main() {
   };
   (globalThis as any).prisma = db;
   const { collectWeekExtras, extrasInWeek } = await import("../lib/weekly-evidence");
-  const { canAccessEvidencePatient, canUseEvidence } = await import("../lib/patient-evidence");
+  const { canAccessEvidence, canAccessEvidencePatient, canUseEvidence } = await import("../lib/patient-evidence");
   const { refreshPatientWeek, runWeeklyReportsForWeek } = await import("../lib/weekly-reports");
 
   const user: any = { id: "fisio-1", role: "fisio", extraRoles: [], isManager: false };
@@ -40,6 +40,12 @@ async function main() {
   assert.equal(canUseEvidence({ ...user, role: "setter" }), false);
   assert.equal(canUseEvidence({ ...user, role: "setter", extraRoles: ["fisio"] }), true);
   assert.equal(canUseEvidence(null), false);
+  const unassigned = { patientId: null, createdById: user.id };
+  assert.equal(await canAccessEvidence(unassigned, user), true, "uploader can assign their pending client");
+  assert.equal(await canAccessEvidence(unassigned, { ...user, id: "other-fisio" }), false, "unassigned files are not visible to unrelated fisios");
+  assert.equal(await canAccessEvidence(unassigned, { ...user, role: "ceo", isManager: true }), true);
+  assert.equal(await canAccessEvidence(unassigned, null), false);
+  assert.equal(await canAccessEvidence({ patientId: patient.id, createdById: user.id }, user), false, "once assigned, patient access is required even for the uploader");
 
   const extras = await collectWeekExtras(patient.id, monday, end);
   assert.equal(extras.wods[0].painScore, 0, "zero is a valid pain score");

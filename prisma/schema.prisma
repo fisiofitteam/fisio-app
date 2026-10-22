@@ -4105,8 +4105,8 @@ model AutotestHombroConfig {
 /// Material vinculado al cliente, compartido entre Testimonios, Éxitos y casos IA.
 model PatientEvidence {
   id          String   @id @default(cuid())
-  patientId   String
-  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patientId   String?
+  patient     Patient? @relation(fields: [patientId], references: [id], onDelete: Cascade)
   createdById String
   name        String
   kind        String

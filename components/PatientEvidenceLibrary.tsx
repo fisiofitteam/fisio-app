@@ -1,12 +1,14 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { AssignEvidenceClient } from "@/components/AssignEvidenceClient";
 import { upload } from "@vercel/blob/client";
-type Evidence = { id: string; patientId: string; name: string; kind: string; mimeType: string; url: string | null; notes: string | null; createdAt: string; patient: { fullName: string } };
+type Evidence = { id: string; patientId: string | null; name: string; kind: string; mimeType: string; url: string | null; notes: string | null; createdAt: string; patient: { fullName: string } | null };
 export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVideo }: { patientId?: string; compact?: boolean; onSelectVideo?: (url: string, name: string) => void }) {
   const [items, setItems] = useState<Evidence[]>([]);
   const [patients, setPatients] = useState<Array<{ id: string; fullName: string }>>([]);
-  const [selected, setSelected] = useState(patientId || "");
+  const [unassigned, setUnassigned] = useState(false);
+  const [assigning, setAssigning] = useState<Evidence | null>(null);
   const [notes, setNotes] = useState("");
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
@@ -22,7 +24,8 @@ export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVid
     setLoading(true);
     try {
       const q = new URLSearchParams({ page: String(page) });
-      if (selected) q.set("patientId", selected);
+      if (patientId) q.set("patientId", patientId);
+      else if (unassigned) q.set("unassigned", "1");
       const res = await fetch("/api/testimonials?" + q);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "No se pudo cargar");
@@ -31,10 +34,9 @@ export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVid
     } catch (e) { if (request === requestId.current) setError(e instanceof Error ? e.message : "Error al cargar"); }
     finally { if (request === requestId.current) setLoading(false); }
   }
-  useEffect(() => { void load(); return () => { requestId.current++; }; }, [selected, page]);
+  useEffect(() => { void load(); return () => { requestId.current++; }; }, [patientId, unassigned, page]);
   async function add(files: FileList | File[]) {
     if (busy) return;
-    if (!selected) { setError("Selecciona el cliente al que pertenece el material antes de subirlo."); return; }
     setBusy(true); setError("");
     const failures: string[] = [];
     let saved = 0;
@@ -46,7 +48,7 @@ export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVid
           if (txt && file.size > 1024 * 1024) throw new Error("TXT demasiado grande (máximo 1 MB y 200.000 caracteres)");
           const mimeType = file.type || (/\.mov$/i.test(file.name) ? "video/quicktime" : /\.mp4$/i.test(file.name) ? "video/mp4" : /\.heic$/i.test(file.name) ? "image/heic" : "");
           const res = await fetch("/api/testimonials", { method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ patientId: selected, name: file.name, notes, size: file.size, mimeType,
+            body: JSON.stringify({ patientId: patientId || null, name: file.name, notes, size: file.size, mimeType,
               ...(txt ? { kind: "whatsapp", textContent: await file.text() } : {}) }) });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || "No se pudo guardar");
@@ -66,13 +68,12 @@ export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVid
     } finally { setBusy(false); if (input.current) input.current.value = ""; }
   }
   return <div className="space-y-4">
+    {assigning && <AssignEvidenceClient item={assigning} patients={patients} onClose={() => setAssigning(null)} onAssigned={async () => {
+      setAssigning(null); setProgress("Cliente asignado. El material ya está disponible en su ficha."); await load();
+    }} />}
     {!compact && <div><h2 className="text-lg font-semibold">{patientId ? "Éxitos" : "Testimonios"}</h2>
       <p className="text-sm text-neutral-500">Vídeos, capturas y conversaciones vinculados a cada cliente. Disponibles también al crear su caso de éxito.</p></div>}
-    {!patientId && <label className="block text-sm">Cliente
-      <select className="input mt-1" disabled={busy} value={selected} onChange={e => { setSelected(e.target.value); setPage(0); }}>
-        <option value="">Todos los clientes · selecciona uno para subir</option>
-        {patients.map(p => <option key={p.id} value={p.id}>{p.fullName}</option>)}
-      </select></label>}
+    {!patientId && <p className="text-sm text-neutral-500">Sube el material y después pulsa «Asignar a cliente» en cada archivo.</p>}
     <div className={"rounded-xl border-2 border-dashed p-4 " + (dragging ? "border-amber-500 bg-amber-50" : "border-neutral-200 bg-neutral-50")}
       onDragOver={e => { e.preventDefault(); if (!busy) setDragging(true); }}
       onDragLeave={() => setDragging(false)}
@@ -88,6 +89,10 @@ export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVid
     </div>
     {progress && <p role="status" className="text-sm text-emerald-700">{progress}</p>}
     {error && <p role="alert" className="text-sm text-red-700 whitespace-pre-wrap">{error}</p>}
+    {!patientId && <div className="flex gap-2" aria-label="Filtrar testimonios">
+      <button type="button" aria-pressed={!unassigned} disabled={busy} onClick={() => { setUnassigned(false); setPage(0); }} className={"rounded-full px-4 py-2 text-sm " + (!unassigned ? "bg-neutral-900 text-white" : "bg-neutral-100")}>Todos</button>
+      <button type="button" aria-pressed={unassigned} disabled={busy} onClick={() => { setUnassigned(true); setPage(0); }} className={"rounded-full px-4 py-2 text-sm " + (unassigned ? "bg-neutral-900 text-white" : "bg-neutral-100")}>Pendientes de asignar</button>
+    </div>}
     {loading ? <p className="text-sm text-neutral-400">Cargando material…</p> : !items.length ? <p className="text-sm text-neutral-500 py-4">Todavía no hay material guardado.</p> :
       <div className={"grid gap-3 " + (compact ? "sm:grid-cols-2" : "sm:grid-cols-2 xl:grid-cols-3")}>
         {items.map(item => <article key={item.id} className="rounded-xl border border-neutral-200 overflow-hidden bg-white">
@@ -95,7 +100,12 @@ export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVid
           {item.kind === "video" && item.url && <video src={item.url} controls preload="metadata" className="h-40 w-full bg-neutral-900" />}
           {(item.kind === "document" || item.kind === "whatsapp") && <div className="bg-neutral-100 py-6 text-center text-sm">{item.kind === "whatsapp" ? "Conversación de WhatsApp" : "Documento PDF"}</div>}
           <div className="p-3 space-y-1"><p className="font-medium text-sm break-words">{item.name}</p>
-            <Link href={"/fisio/paciente/" + item.patientId + "/info/exitos"} className="text-xs text-amber-700">{item.patient.fullName}</Link>
+            {item.patient && item.patientId
+              ? <Link href={"/fisio/paciente/" + item.patientId + "/info/exitos"} className="text-xs text-amber-700">{item.patient.fullName}</Link>
+              : <span className="inline-block rounded-full bg-amber-50 px-2 py-1 text-xs text-amber-800">Sin asignar</span>}
+            {!patientId && <button type="button" className={"block rounded-lg px-3 py-2 text-sm font-medium " + (item.patientId ? "bg-neutral-100 text-neutral-700" : "bg-amber-400 text-neutral-900 hover:bg-amber-500")} onClick={() => setAssigning(item)}>
+              {item.patientId ? "Cambiar cliente" : "Asignar a cliente"}
+            </button>}
             <p className="text-xs text-neutral-400">{new Date(item.createdAt).toLocaleDateString("es-ES")}</p>
             {item.notes && <p className="text-xs whitespace-pre-wrap text-neutral-600">{item.notes}</p>}
             {item.url && <button type="button" className="block text-xs underline" onClick={async () => {
