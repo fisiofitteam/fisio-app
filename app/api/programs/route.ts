@@ -1,7 +1,10 @@
+import { canUseEvidence } from "@/lib/patient-evidence";
+import { getActiveProfessional } from "@/lib/session";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
+  if (!canUseEvidence(await getActiveProfessional())) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   const body = await req.json();
   const { sourceId, name, bodyZone, type, level, weeksCount, description } = body;
 
@@ -54,6 +57,7 @@ export async function POST(req: NextRequest) {
               type: t.type,
               order: t.order,
               title: t.title,
+              assessment: t.assessment,
             },
           });
           if (t.workout) {
@@ -128,6 +132,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  if (!canUseEvidence(await getActiveProfessional())) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   const { id, name, bodyZone, type, level, description } = await req.json();
   const program = await prisma.program.update({
     where: { id },
@@ -143,6 +148,7 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  if (!canUseEvidence(await getActiveProfessional())) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "missing id" }, { status: 400 });
 

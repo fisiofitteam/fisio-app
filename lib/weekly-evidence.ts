@@ -18,7 +18,7 @@ function answersFor(questions: any, answers: any) {
   }));
 }
 export async function collectWeekExtras(patientId: string, start: Date, end: Date): Promise<WeekExtras> {
-  const [wods, callForms, sessions, evidence] = await Promise.all([
+  const [wods, callForms, sessions, evidence, assessments] = await Promise.all([
     prisma.wodLog.findMany({ where: { patientId, OR: [
       { completedAt: { gte: start, lt: end } }, { completedAt: null, submittedAt: { gte: start, lt: end } },
     ] }, orderBy: { submittedAt: "asc" } }),
@@ -27,6 +27,7 @@ export async function collectWeekExtras(patientId: string, start: Date, end: Dat
       select: { id: true, completedAt: true, tasksSnapshot: true, responses: true } }),
     prisma.patientEvidence.findMany({ where: { patientId, status: "ready", kind: { not: "whatsapp" }, createdAt: { gte: start, lt: end } }, orderBy: { createdAt: "asc" },
       select: { id: true, createdAt: true, name: true, kind: true, notes: true, url: true } }),
+    prisma.assessmentVideo.findMany({ where: { patientId, url: { not: null }, uploadedAt: { gte: start, lt: end } }, orderBy: { uploadedAt: "asc" } }),
   ]);
   const forms: WeekExtras["forms"] = callForms.map(f => {
     const snapshot = parse(f.formSnapshot, {});
@@ -44,7 +45,7 @@ export async function collectWeekExtras(patientId: string, start: Date, end: Dat
   return {
     wods: wods.map(w => ({ id: w.id, date: (w.completedAt || w.submittedAt).toISOString(), workout: w.rawText, notes: w.notes, painScore: w.painScore, rpe: w.rpe })),
     forms,
-    evidence: evidence.map(e => ({ id: e.id, date: e.createdAt.toISOString(), name: e.name, kind: e.kind, notes: e.notes, url: e.url })),
+    evidence: [...evidence.map(e => ({ id: e.id, date: e.createdAt.toISOString(), name: e.name, kind: e.kind, notes: e.notes, url: e.url })), ...assessments.map(a => ({ id: a.id, date: a.uploadedAt!.toISOString(), name: "Valoración: " + a.assessmentTitle + " · " + a.testTitle, kind: "video", notes: a.coachNotes || null, url: "/api/assessments/media?id=" + a.id + "&v=" + a.uploadedAt!.getTime() }))],
   };
 }
 export function extrasInWeek(all: WeekExtras, start: Date): WeekExtras {

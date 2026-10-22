@@ -1,6 +1,7 @@
 "use client";
 
 const TYPES = [
+  { id: "ASSESSMENT", label: "Valoración", icon: "🩺", desc: "Varios test con vídeo de ejemplo y entrega del cliente" },
   { id: "WORKOUT", label: "Workout", icon: "🏋️", desc: "Sesión de entrenamiento con texto libre + vídeos de referencia" },
   { id: "VIDEO", label: "Vídeo / Mini-clase", icon: "🎥", desc: "Una pieza de vídeo educativa o explicativa" },
   { id: "FORM", label: "Formulario", icon: "📝", desc: "Preguntas configurables para el paciente" },

@@ -105,7 +105,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     collectWeekExtras(caseRow.patientId, new Date(0), new Date()),
   ]);
   const enrichedContext = { ...ctx, whatsappConversation: conversation, testimonialMaterial: material,
-    wods: additionalHistory.wods, forms: additionalHistory.forms };
+    wods: additionalHistory.wods, forms: additionalHistory.forms, assessmentMaterial: additionalHistory.evidence.filter(e => e.name.startsWith("Valoración: ")) };
   // Fail visibly rather than silently dropping patient evidence.
   if (JSON.stringify(enrichedContext).length > 450000) {
     return NextResponse.json({ error: "El contexto es demasiado extenso. Sube un TXT más corto con el periodo relevante antes de generar." }, { status: 400 });

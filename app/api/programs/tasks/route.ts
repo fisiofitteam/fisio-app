@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { validateAssessment } from "@/lib/assessments";
+import { getActiveProfessional } from "@/lib/session";
+import { canUseEvidence } from "@/lib/patient-evidence";
 import { prisma } from "@/lib/prisma";
 
 // GET: leer tarea con sus relaciones
@@ -19,6 +22,7 @@ export async function GET(req: NextRequest) {
 
 // POST: crear tarea
 export async function POST(req: NextRequest) {
+  if (!canUseEvidence(await getActiveProfessional())) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   const { programId, weekId, dayOfWeek, type } = await req.json();
 
   // Buscar el día (debe existir, creado al crear el programa)
@@ -32,6 +36,7 @@ export async function POST(req: NextRequest) {
   const count = await prisma.programTask.count({ where: { dayId: day.id } });
 
   const defaultTitle =
+    type === "ASSESSMENT" ? "Valoración" :
     type === "WORKOUT" ? "Nueva sesión" :
     type === "VIDEO" ? "Nuevo vídeo" :
     type === "FORM" ? "Nuevo formulario" :
@@ -57,11 +62,14 @@ export async function POST(req: NextRequest) {
 
 // PATCH: actualizar tarea + su contenido
 export async function PATCH(req: NextRequest) {
-  const { id, title, workout, video, form, evolution } = await req.json();
+  if (!canUseEvidence(await getActiveProfessional())) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  const { id, title, workout, video, form, evolution, assessment } = await req.json();
 
+  let assessmentJson: string | undefined;
+  try { if (assessment !== undefined) assessmentJson = JSON.stringify(validateAssessment(assessment)); } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : "Valoración inválida" }, { status: 400 }); }
   await prisma.programTask.update({
     where: { id },
-    data: { ...(title !== undefined && { title }) },
+    data: { ...(title !== undefined && { title }), ...(assessmentJson !== undefined && { assessment: assessmentJson }) },
   });
 
   if (workout) {
@@ -111,6 +119,7 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  if (!canUseEvidence(await getActiveProfessional())) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "missing id" }, { status: 400 });
   await prisma.programTask.delete({ where: { id } });

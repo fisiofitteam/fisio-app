@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { canAccessEvidencePatient, canUseEvidence } from "@/lib/patient-evidence";
+import { getActiveProfessional } from "@/lib/session";
+import { validateAssessment } from "@/lib/assessments";
 import { prisma } from "@/lib/prisma";
 
 // Crea una o varias sesiones sueltas (no atadas a un programa de la
@@ -20,8 +23,11 @@ import { prisma } from "@/lib/prisma";
 //   - Sin recurrence: devuelve la sesión creada (compat con el front actual).
 //   - Con recurrence: devuelve { sessions: Session[], count: number }.
 export async function POST(req: NextRequest) {
+  if (!canUseEvidence(await getActiveProfessional())) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   const { patientId, scheduledDate, title, tasksSnapshot, recurrence } = await req.json();
 
+  if (!await canAccessEvidencePatient(patientId)) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  try { for (const t of tasksSnapshot || []) if (t.type === "ASSESSMENT") validateAssessment(t.assessment); } catch { return NextResponse.json({ error: "Revisa los test de la valoración" }, { status: 400 }); }
   const baseDate = new Date(scheduledDate);
   if (Number.isNaN(baseDate.getTime())) {
     return NextResponse.json({ error: "scheduledDate inválida" }, { status: 400 });
@@ -148,8 +154,12 @@ export async function POST(req: NextRequest) {
 // Editar una sesión: cambiar fecha (drag&drop) o snapshot (editar contenido)
 // Solo afecta a la sesión, nunca al programa base
 export async function PATCH(req: NextRequest) {
+  if (!canUseEvidence(await getActiveProfessional())) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   const { id, scheduledDate, tasksSnapshot } = await req.json();
 
+  const owner = await prisma.programSession.findUnique({ where: { id }, select: { assignment: { select: { patientId: true } } } });
+  if (!owner || !await canAccessEvidencePatient(owner.assignment.patientId)) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  try { for (const t of tasksSnapshot || []) if (t.type === "ASSESSMENT") validateAssessment(t.assessment); } catch { return NextResponse.json({ error: "Revisa los test de la valoración" }, { status: 400 }); }
   const data: any = {};
   if (scheduledDate !== undefined) {
     const date = new Date(scheduledDate);
@@ -171,6 +181,7 @@ export async function PATCH(req: NextRequest) {
 
 // Eliminar sesión (con limpieza si era una sesión suelta)
 export async function DELETE(req: NextRequest) {
+  if (!canUseEvidence(await getActiveProfessional())) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "missing id" }, { status: 400 });
 
@@ -178,6 +189,7 @@ export async function DELETE(req: NextRequest) {
     where: { id },
     include: { assignment: { include: { program: true, sessions: true } } },
   });
+  if (!session || !await canAccessEvidencePatient(session.assignment.patientId)) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   if (!session) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   const wasStandalone = session.assignment.program.isStandalone;

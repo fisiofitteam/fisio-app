@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AssessmentTaskEditor } from "./tasks/AssessmentTaskEditor";
 import { WorkoutTaskEditor } from "./tasks/WorkoutTaskEditor";
 import { VideoTaskEditor } from "./tasks/VideoTaskEditor";
 import { FormTaskEditor } from "./tasks/FormTaskEditor";
@@ -37,6 +38,7 @@ export function TaskEditorModal({
             </div>
 
             <div className="p-4">
+              {task.type === "ASSESSMENT" && <AssessmentTaskEditor task={task} onClose={onClose} />}
               {task.type === "WORKOUT" && <WorkoutTaskEditor task={task} onClose={onClose} />}
               {task.type === "VIDEO" && <VideoTaskEditor task={task} onClose={onClose} />}
               {task.type === "FORM" && <FormTaskEditor task={task} onClose={onClose} />}

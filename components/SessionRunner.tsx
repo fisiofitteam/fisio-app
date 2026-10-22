@@ -1,4 +1,6 @@
 "use client";
+import { AssessmentUploader } from "@/components/AssessmentUploader";
+
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -10,7 +12,8 @@ export type Exercise = { id: string; name: string; category: string; youtubeUrl:
 
 export type Task = {
   id: string;
-  type: "WORKOUT" | "VIDEO" | "FORM" | "EVOLUTION";
+  assessment?: import("@/lib/assessments").Assessment;
+  type: "ASSESSMENT" | "WORKOUT" | "VIDEO" | "FORM" | "EVOLUTION";
   title: string;
   order: number;
   bodyText?: string;
@@ -58,6 +61,8 @@ export function SessionRunner({
   const initialResponses = existingResponses ? JSON.parse(existingResponses) : {};
   const [responses, setResponses] = useState<Record<string, any>>(initialResponses);
   const [saving, setSaving] = useState(false);
+  const [uploads, setUploads] = useState<Record<string, boolean>>({});
+  const uploading = Object.values(uploads).some(Boolean);
   const [expandedExercise, setExpandedExercise] = useState<string | null>(null);
 
   function setTaskResponse(taskId: string, data: any) {
@@ -166,6 +171,7 @@ export function SessionRunner({
             </div>
           </div>
 
+          {task.type === "ASSESSMENT" && <AssessmentUploader sessionId={sessionId} task={task} onBusyChange={busy => setUploads(prev => ({ ...prev, [task.id]: busy }))} />}
           {task.type === "WORKOUT" && (() => {
             const ex = getTaskExercises(task);
             return (
@@ -254,7 +260,7 @@ export function SessionRunner({
                   task={task}
                   completed={readOnly}
                   response={responses[task.id] ?? {}}
-                  onChange={(data) => setTaskResponse(task.id, data)}
+                  onChange={(data: any) => setTaskResponse(task.id, data)}
                 />
                 {emptyPending && (
                   <button
@@ -275,7 +281,7 @@ export function SessionRunner({
               task={task}
               completed={completed}
               response={responses[task.id] ?? {}}
-              onChange={(data) => setTaskResponse(task.id, data)}
+              onChange={(data: any) => setTaskResponse(task.id, data)}
             />
           )}
         </div>
@@ -306,7 +312,7 @@ export function SessionRunner({
           </div>
           <button
             onClick={complete}
-            disabled={saving || patientNotes.trim().length < NOTES_MIN}
+            disabled={uploading || saving || patientNotes.trim().length < NOTES_MIN}
             className="w-full font-semibold rounded-lg py-3 text-sm disabled:opacity-60"
             style={{ background: "var(--p-accent)", color: "var(--p-accent-ink)" }}
           >
@@ -397,7 +403,7 @@ export function SessionRunner({
 }
 
 export function typeLabel(type: string) {
-  return type === "WORKOUT" ? "Workout"
+  return type === "ASSESSMENT" ? "🩺 Valoración" : type === "WORKOUT" ? "Workout"
     : type === "VIDEO" ? "Vídeo"
     : type === "FORM" ? "Formulario"
     : type === "EVOLUTION" ? "Registrar evolución"
@@ -628,7 +634,7 @@ export function EvolutionResponder({ task, completed, response, onChange }: any)
           label={m.unit ? `${m.name} (${m.unit})` : m.name}
           value={response?.[m.key]}
           completed={completed}
-          onChange={(v) => onChange({ ...response, [m.key]: v })}
+          onChange={(v: number) => onChange({ ...response, [m.key]: v })}
         />
       ))}
     </div>

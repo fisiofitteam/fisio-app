@@ -27,6 +27,7 @@ const PUBLIC_PATHS = [
   "/api/renewal",   // endpoints públicos del flujo de renovación (status, checkout)
   "/prevention",    // landing pública Prevention + páginas de gracias
   "/api/prevention",// endpoints públicos del flujo Prevention (checkout, confirm)
+  "/api/assessments/upload", // Blob callback verifies signature; token requests require the assigned patient.
   "/api/webhooks",  // webhooks externos (Stripe) — los llama Stripe sin cookie
   "/api/cron/installment-reconcile", // autentica CRON_SECRET en el handler; Vercel no envía cookie de equipo
   "/privacidad",    // política de privacidad pública (requerida por App Store)

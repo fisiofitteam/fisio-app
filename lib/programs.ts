@@ -1,3 +1,4 @@
+import { parseAssessment } from "./assessments";
 import { prisma } from "./prisma";
 
 // Etiquetas de día relativas al inicio del programa. El "dayOfWeek" en
@@ -53,7 +54,7 @@ export async function generateSessions(assignmentId: string) {
 
   // Borrar futuras no completadas
   await prisma.programSession.deleteMany({
-    where: { assignmentId, completedAt: null },
+    where: { assignmentId, completedAt: null, assessmentVideos: { none: {} } },
   });
 
   // startDate ya NO se alinea al lunes. Es el día real que el fisio
@@ -88,6 +89,7 @@ export async function generateSessions(assignmentId: string) {
       if (day.tasks.length === 0) continue;
 
       const tasksSnapshot = day.tasks.map((t) => {
+        if (t.type === "ASSESSMENT") return { id: t.id, type: t.type, title: t.title, order: t.order, assessment: parseAssessment(t.assessment) };
         if (t.type === "WORKOUT" && t.workout) {
           return {
             id: t.id,
@@ -138,6 +140,8 @@ export async function generateSessions(assignmentId: string) {
       const sessionDate = new Date(startDay);
       sessionDate.setDate(startDay.getDate() + (week - 1) * 7 + (day.dayOfWeek - 1));
 
+      const retained = await prisma.programSession.findFirst({ where: { assignmentId, scheduledDate: sessionDate, assessmentVideos: { some: {} } }, select: { id: true } });
+      if (retained) continue;
       await prisma.programSession.create({
         data: {
           assignmentId,

@@ -15,6 +15,7 @@ import {
   DragOverlay,
 } from "@dnd-kit/core";
 import { TaskTypeModal } from "./TaskTypeModal";
+import { AssessmentTaskEditor } from "./tasks/AssessmentTaskEditor";
 import { WorkoutTaskEditor } from "./tasks/WorkoutTaskEditor";
 import { VideoTaskEditor } from "./tasks/VideoTaskEditor";
 import { FormTaskEditor } from "./tasks/FormTaskEditor";
@@ -1198,8 +1199,9 @@ function DayDetail({
                   ) : (
                     tasks.map((t, i) => (
                       <div key={i} className="border-l-2 border-neutral-200 pl-2">
-                        <div className="text-xs text-neutral-500 uppercase">{t.type}</div>
+                        <div className="text-xs text-neutral-500 uppercase">{t.type === "ASSESSMENT" ? "🩺 Valoración" : t.type}</div>
                         <div className="font-medium text-sm">{t.title}</div>
+                        {t.type === "ASSESSMENT" && <p className="text-xs text-neutral-500 mt-1">{t.assessment?.tests?.length || 0} test con entrega de vídeo</p>}
                         {t.type === "WORKOUT" && t.bodyText && (
                           <pre className="text-xs text-neutral-700 whitespace-pre-wrap mt-1 font-mono">{t.bodyText}</pre>
                         )}
@@ -1472,9 +1474,10 @@ function EditSessionModal({
     const newTask: any = {
       id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       type,
-      title: type === "WORKOUT" ? "Workout" : type === "VIDEO" ? "Vídeo" : type === "FORM" ? "Formulario" : "Registrar evolución",
+      title: type === "ASSESSMENT" ? "Valoración" : type === "WORKOUT" ? "Workout" : type === "VIDEO" ? "Vídeo" : type === "FORM" ? "Formulario" : "Registrar evolución",
       order: tasks.length,
     };
+    if (type === "ASSESSMENT") { newTask.assessment = { instructions: "", tests: [] }; }
     if (type === "WORKOUT") { newTask.bodyText = ""; newTask.exercises = []; }
     if (type === "VIDEO") { newTask.youtubeUrl = ""; newTask.description = ""; }
     if (type === "FORM") { newTask.questions = "[]"; }
@@ -1509,12 +1512,16 @@ function EditSessionModal({
 
   async function save() {
     setSaving(true);
-    await fetch("/api/sessions", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: session.id, tasksSnapshot: tasks }),
-    });
-    onSaved();
+    try {
+      const res = await fetch("/api/sessions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: session.id, tasksSnapshot: tasks }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "No se pudo guardar.");
+      onSaved();
+    } catch (e) { alert(e instanceof Error ? e.message : "No se pudo guardar."); }
+    finally { setSaving(false); }
   }
 
   /** Persiste los cambios actuales en el server y devuelve. Se usa cuando
@@ -1570,10 +1577,11 @@ function EditSessionModal({
                     className="flex-1 min-w-0 text-left"
                   >
                     <div className="text-xs text-neutral-500 uppercase">
-                      {i + 1}. {t.type}
+                      {i + 1}. {t.type === "ASSESSMENT" ? "🩺 Valoración" : t.type}
                     </div>
                     <div className="font-medium text-sm">{t.title}</div>
-                    {t.type === "WORKOUT" && t.bodyText && (
+                    {t.type === "ASSESSMENT" && <p className="text-xs text-neutral-500 mt-1">{t.assessment?.tests?.length || 0} test con entrega de vídeo</p>}
+                        {t.type === "WORKOUT" && t.bodyText && (
                       <pre className="text-xs text-neutral-600 whitespace-pre-wrap mt-1 font-mono line-clamp-3">{t.bodyText}</pre>
                     )}
                     {t.type === "VIDEO" && t.youtubeUrl && (
@@ -1661,6 +1669,7 @@ function EditSessionModal({
               <button onClick={() => setEditingTaskId(null)} className="text-neutral-400 text-xl">✕</button>
             </div>
             <div className="p-4">
+              {editingTask.type === "ASSESSMENT" && <AssessmentTaskEditor task={editingTask} onClose={() => setEditingTaskId(null)} onSave={applyEditedTask} />}
               {editingTask.type === "WORKOUT" && (
                 <WorkoutTaskEditor task={editingTask} onClose={() => setEditingTaskId(null)} onSave={applyEditedTask} />
               )}

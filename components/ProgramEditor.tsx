@@ -21,6 +21,7 @@ import { TaskEditorModal } from "./TaskEditorModal";
 const DAY_HEADERS = ["Día 1", "Día 2", "Día 3", "Día 4", "Día 5"];
 
 const TYPE_LABELS: Record<string, string> = {
+  ASSESSMENT: "🩺 Valoración",
   WORKOUT: "Workout",
   VIDEO: "Vídeo",
   FORM: "Formulario",
@@ -28,6 +29,7 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 const TYPE_COLORS: Record<string, string> = {
+  ASSESSMENT: "bg-indigo-100 text-indigo-900 border-indigo-200",
   WORKOUT: "bg-amber-100 text-amber-900 border-amber-200",
   VIDEO: "bg-rose-100 text-rose-900 border-rose-200",
   FORM: "bg-emerald-100 text-emerald-900 border-emerald-200",

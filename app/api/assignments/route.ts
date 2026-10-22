@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getActiveProfessional } from "@/lib/session";
+import { canUseEvidence, canAccessEvidencePatient } from "@/lib/patient-evidence";
 import { prisma } from "@/lib/prisma";
 import { generateSessions } from "@/lib/programs";
 
@@ -12,8 +14,10 @@ function startOfDay(input: string | Date): Date {
 }
 
 export async function POST(req: NextRequest) {
+  if (!canUseEvidence(await getActiveProfessional())) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   const { patientId, programId, startDate, weeksCount } = await req.json();
 
+  if (!await canAccessEvidencePatient(patientId)) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   const program = await prisma.program.findUnique({ where: { id: programId } });
   if (!program) {
     return NextResponse.json({ error: "program not found" }, { status: 404 });
@@ -39,8 +43,11 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  if (!canUseEvidence(await getActiveProfessional())) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "missing id" }, { status: 400 });
+  const owner = await prisma.programAssignment.findUnique({ where: { id }, select: { patientId: true } });
+  if (!owner || !await canAccessEvidencePatient(owner.patientId)) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   await prisma.programAssignment.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }
@@ -53,6 +60,7 @@ export async function DELETE(req: NextRequest) {
  *  - startDate: cambiar fecha de inicio (mueve sesiones futuras no completadas)
  */
 export async function PATCH(req: NextRequest) {
+  if (!canUseEvidence(await getActiveProfessional())) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   const body = await req.json();
   const { id, isActive, startDate } = body;
 
@@ -61,6 +69,7 @@ export async function PATCH(req: NextRequest) {
   const current = await prisma.programAssignment.findUnique({ where: { id } });
   if (!current) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  if (!await canAccessEvidencePatient(current.patientId)) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   const data: any = {};
 
   // Cambio de fecha → mover sesiones futuras no completadas
