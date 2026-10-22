@@ -8,8 +8,8 @@ export type RenewalActivityRow = {
   patientId: string;
   assignedProfessionalId: string | null;
   outcome: "renewed" | "lost";
-  /** Fecha de atribución: MIN(endDate del previo, decidedAt del follow-up) para
-   *  renewed; endDate del previo para lost. */
+  /** Fecha de atribución: decidedAt del follow-up para renewed;
+   *  endDate del previo para lost. */
   when: Date;
   amountPaid: number | null; // solo aplica a renovadas
 };
@@ -151,8 +151,10 @@ export async function getRenewalActivityInPeriod(from: Date, to: Date): Promise<
   const result: RenewalActivityRow[] = [];
   const countedAsRenewedPreviousIds = new Set<string>();
 
-  // RENEWED: attribution = MIN(previo.endDate, followUp.decidedAt) en [from, to]
+  // RENEWED: attribution = followUp.decidedAt en [from, to]
   for (const a of attributionsFor(history)) {
+    // Un periodo renovado no es una pérdida aunque el pago se atribuya a otro mes.
+    countedAsRenewedPreviousIds.add(a.previous.id);
     if (a.attribution.getTime() < from.getTime()) continue;
     if (a.attribution.getTime() > to.getTime()) continue;
     result.push({
@@ -162,7 +164,6 @@ export async function getRenewalActivityInPeriod(from: Date, to: Date): Promise<
       when: a.attribution,
       amountPaid: a.followUp.amountPaid,
     });
-    countedAsRenewedPreviousIds.add(a.previous.id);
   }
 
   // LOST: periodos con endDate en [from, effectiveToForLost] sin follow-up
@@ -186,13 +187,12 @@ export type RealRenewalRow = {
   patientId: string;
   amountPaid: number | null;
   assignedProfessionalId: string | null;
-  decidedAt: Date; // fecha de atribución (MIN previo.endDate, followUp.decidedAt)
+  decidedAt: Date; // fecha de atribución: followUp.decidedAt
   status: string;
 };
 
 /**
- * Devuelve las RENOVACIONES REALES atribuidas al rango por la regla
- * híbrida MIN(previo.endDate, followUp.decidedAt).
+ * Devuelve las RENOVACIONES REALES atribuidas al rango por followUp.decidedAt.
  *
  * `decidedAt` en la fila devuelta = fecha de atribución (no el decidedAt
  * real del registro), para que las gráficas por mes coincidan con las
