@@ -93,7 +93,7 @@ export function PatientHomeRolling({
   daysToExpire?: number | null;
   /** true si el paciente aún no ha rellenado su talla de camiseta ADVANCE. */
   needsShirtSize?: boolean;
-  /** false → mostramos banner "Completa tu dirección postal" (mismo de Dark). */
+  /** false → mostramos banner "Completa tus datos fiscales" (mismo de Dark). */
   shippingComplete?: boolean;
   /**
    * Sesiones individuales del atleta que tocan HOY (puede haber varias si
@@ -243,9 +243,9 @@ export function PatientHomeRolling({
             }}
           >
             <div className="flex-1 min-w-0">
-              <div className="font-medium mb-0.5">📮 Completa tu dirección postal</div>
+              <div className="font-medium mb-0.5">📮 Completa tus datos fiscales</div>
               <div className="text-xs" style={{ color: "var(--p-text-dim)" }}>
-                Faltan datos de contacto básicos en tu ficha.
+                Añade tu DNI / NIE y dirección para completar tu ficha.
               </div>
             </div>
             <span className="text-xs font-medium underline flex-shrink-0">Completar</span>

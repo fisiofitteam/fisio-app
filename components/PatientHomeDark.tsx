@@ -267,9 +267,9 @@ export function PatientHomeDark({
             }}
           >
             <div className="flex-1 min-w-0">
-              <div className="font-medium mb-0.5">📮 Completa tu dirección postal</div>
+              <div className="font-medium mb-0.5">📮 Completa tus datos fiscales</div>
               <div className="text-xs" style={{ color: "var(--p-text-dim)" }}>
-                Faltan datos de contacto básicos en tu ficha.
+                Añade tu DNI / NIE y dirección para completar tu ficha.
               </div>
             </div>
             <span className="text-xs font-medium underline flex-shrink-0">Completar</span>
