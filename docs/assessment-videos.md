@@ -6,10 +6,10 @@ El cliente puede entregar un MP4/MOV/WebM de hasta 1 GiB por test asignado, medi
 
 Evolución muestra valoraciones, entregas y comentarios del fisio. El historial semanal y el contexto del caso de éxito incluyen los vídeos entregados y sus comentarios. La IA recibe metadatos y texto, no analiza visualmente el vídeo. No se convierten automáticamente en testimonios públicos.
 
-## Activación pendiente
-1. Crear un Vercel Blob **privado** de FisioFit (región fra1).
-2. Conectarlo exclusivamente al proyecto fisio-app con un prefijo que produzca ASSESSMENT_BLOB_READ_WRITE_TOKEN. Conservar BLOB_READ_WRITE_TOKEN del almacén público existente.
-3. Aplicar scripts/migrations/20261022-assessment-videos.sql a la base de datos destino (aditiva).
+## Activación
+1. Creado el almacén **privado** fisiofit-valoraciones (fra1), store_yCVBBlYg58E5QvZx.
+2. Conectado al proyecto fisio-app en Production y Preview con ASSESSMENT_BLOB_READ_WRITE_TOKEN. Se conserva el almacén público existente.
+3. Migración aditiva aplicada a producción el 22/10/2026; verificada tabla inicialmente vacía.
 4. Desplegar esta rama; comprobar con un cliente de prueba: subida multipart, confirmación, reproducción con rangos, sustitución, revisión y bloqueo de sustitución.
 5. Verificar en móvil iOS/Android antes de anunciar el flujo al equipo. No se han modificado workouts existentes.
 
@@ -20,4 +20,4 @@ Evolución muestra valoraciones, entregas y comentarios del fisio. El historial 
 - Interfaz de editor/cliente con datos ficticios y respuestas de lectura simuladas.
 
 ## Consideraciones
-No se ha probado todavía una subida real a Blob ni un archivo de 1 GiB: falta configurar el almacén privado. Los vídeos requieren sesión de cliente propietario o profesional clínico con acceso; no se publican URLs abiertas. La eliminación de una sesión conserva las entregas como archivo dentro de Evolución. Las sustituciones no borran automáticamente los blobs anteriores; se podrá añadir una política de retención/limpieza por separado. El listado muestra hasta 100 sesiones y 500 entregas recientes.
+No se ha probado todavía una subida real a Blob ni un archivo de 1 GiB: la prueba real se realizará tras el despliegue con datos ficticios. Los vídeos requieren sesión de cliente propietario o profesional clínico con acceso; no se publican URLs abiertas. La eliminación de una sesión conserva las entregas como archivo dentro de Evolución. Las sustituciones no borran automáticamente los blobs anteriores; se podrá añadir una política de retención/limpieza por separado. El listado muestra hasta 100 sesiones y 500 entregas recientes.
