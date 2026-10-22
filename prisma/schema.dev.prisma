@@ -3409,6 +3409,7 @@ model PatientEvidence {
   url         String?
   textContent String?
   notes       String?
+  bodyZone    String?
   status      String   @default("pending")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
