@@ -644,10 +644,10 @@ type CaseDetail = {
   process: string | null;
   obstacles: string | null;
   achievements: string | null;
-  initialSituationVideos: { url: string; caption?: string }[];
-  processVideos: { url: string; caption?: string }[];
-  obstaclesVideos: { url: string; caption?: string }[];
-  achievementsVideos: { url: string; caption?: string }[];
+  initialSituationVideos: { url: string; caption?: string; kind?: string }[];
+  processVideos: { url: string; caption?: string; kind?: string }[];
+  obstaclesVideos: { url: string; caption?: string; kind?: string }[];
+  achievementsVideos: { url: string; caption?: string; kind?: string }[];
   // Legacy: vídeos sueltos sin categorizar que el fisio adjunta desde
   // el CaseModal (textarea). Se pintan como "Otros vídeos" al final del
   // detalle para no perderlos hasta migrar a los 4 campos nuevos.
@@ -842,7 +842,7 @@ function CaseDetailModal({ caseId, onClose }: { caseId: string; onClose: () => v
                 </div>
               )}
 
-              {hasNarrative && (
+              {data && APARTADOS_DETAIL.some(ap => data[ap.key] || data[ap.videosKey].length) && (
                 <div className="space-y-3">
                   {APARTADOS_DETAIL.map((ap) => {
                     const text = data[ap.key];
@@ -859,7 +859,7 @@ function CaseDetailModal({ caseId, onClose }: { caseId: string; onClose: () => v
                             {videos.map((v, i) => (
                               <li key={i} className="text-[11px]">
                                 <a href={v.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                                  🎥 {v.caption || v.url}
+                                  {v.kind === "image" ? "🖼️" : v.kind === "document" ? "📄" : "🎥"} {v.caption || v.url}
                                 </a>
                               </li>
                             ))}

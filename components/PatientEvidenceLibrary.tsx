@@ -10,6 +10,8 @@ export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVid
   const [items, setItems] = useState<Evidence[]>([]);
   const [patients, setPatients] = useState<Array<{ id: string; fullName: string }>>([]);
   const [unassigned, setUnassigned] = useState(false);
+  const [uploadPatient, setUploadPatient] = useState<{ id: string; fullName: string } | null>(null);
+  const [choosingPatient, setChoosingPatient] = useState(false);
   const [assigning, setAssigning] = useState<Evidence | null>(null);
   const [zone, setZone] = useState("");
   const [uploadZone, setUploadZone] = useState("");
@@ -57,7 +59,7 @@ export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVid
           if (txt && file.size > 1024 * 1024) throw new Error("TXT demasiado grande (máximo 1 MB y 200.000 caracteres)");
           const mimeType = file.type || (/\.mov$/i.test(file.name) ? "video/quicktime" : /\.mp4$/i.test(file.name) ? "video/mp4" : /\.heic$/i.test(file.name) ? "image/heic" : "");
           const res = await fetch("/api/testimonials", { method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ patientId: patientId || null, name: file.name, notes, bodyZone: uploadZone || null, size: file.size, mimeType,
+            body: JSON.stringify({ patientId: patientId || uploadPatient?.id || null, name: file.name, notes, bodyZone: uploadZone || null, size: file.size, mimeType,
               ...(txt ? { kind: "whatsapp", textContent: await file.text() } : {}) }) });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || "No se pudo guardar");
@@ -99,17 +101,23 @@ export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVid
         </div>
       </div>
     </div>}
+    {choosingPatient && <AssignEvidenceClient item={{ id: "", name: "Los archivos que subas quedarán vinculados a este paciente.", patientId: uploadPatient?.id || null }}
+      patients={patients} onClose={() => setChoosingPatient(false)} onSelect={patient => { setUploadPatient(patient); setChoosingPatient(false); }} />}
     {assigning && <AssignEvidenceClient item={assigning} patients={patients} onClose={() => setAssigning(null)} onAssigned={async () => {
       setAssigning(null); setProgress("Cliente asignado. El material ya está disponible en su ficha."); await load();
     }} />}
     {!compact && <div><h2 className="text-lg font-semibold">{patientId ? "Éxitos" : "Testimonios"}</h2>
       <p className="text-sm text-neutral-500">Vídeos, capturas y conversaciones vinculados a cada cliente. Disponibles también al crear su caso de éxito.</p></div>}
-    {!patientId && <p className="text-sm text-neutral-500">Sube el material y después pulsa «Asignar a cliente» en cada archivo.</p>}
     <div className={"rounded-xl border-2 border-dashed p-4 " + (dragging ? "border-amber-500 bg-amber-50" : "border-neutral-200 bg-neutral-50")}
       onDragOver={e => { e.preventDefault(); if (!busy) setDragging(true); }}
       onDragLeave={() => setDragging(false)}
       onDrop={e => { e.preventDefault(); setDragging(false); if (!busy) void add(e.dataTransfer.files); }}>
-      <label className="text-xs text-neutral-600 block mb-2">Contexto del material (opcional)
+      {!patientId && <div className="mb-4 flex flex-wrap items-center gap-2">
+        {uploadPatient && <span className="text-base font-semibold">{uploadPatient.fullName}</span>}
+        <button type="button" disabled={busy || loading} onClick={() => setChoosingPatient(true)} className="rounded-lg bg-amber-400 px-3 py-2 text-sm font-medium hover:bg-amber-500 disabled:opacity-50">{uploadPatient ? "Cambiar paciente" : "Asignar a paciente"}</button>
+        {uploadPatient && <button type="button" disabled={busy} onClick={() => setUploadPatient(null)} className="text-xs text-neutral-500 underline">Quitar</button>}
+      </div>}
+      <label className="text-sm text-neutral-700 block mb-2">Comentario del fisio (opcional)
         <textarea className="input mt-1 text-sm w-full" rows={2} disabled={busy} value={notes} onChange={e => setNotes(e.target.value)}
           placeholder="Qué ha conseguido, qué dice la captura o qué muestra el vídeo…" /></label>
       <label className="text-xs text-neutral-600 block mb-3">Zona corporal de los archivos
@@ -132,8 +140,8 @@ export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVid
     </div>}
     <section aria-label="Carpetas por zona corporal" className="space-y-2">
       <h3 className="text-sm font-semibold">Carpetas por zona corporal</h3>
-      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2">
-        {[{ value: "", label: "Todos" }, ...EVIDENCE_ZONES, { value: "unlabelled", label: "Sin etiquetar" }].map(z => {
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2">
+        {[{ value: "", label: "Todos" }, ...EVIDENCE_ZONES].map(z => {
           const count = folders.filter(f => !z.value || (f.bodyZone || "unlabelled") === z.value).reduce((sum, f) => sum + f.count, 0);
           return <button type="button" key={z.value} aria-pressed={zone === z.value} disabled={busy || !!editing}
             onClick={() => { setZone(z.value); setPage(0); }}
@@ -149,10 +157,11 @@ export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVid
           {item.kind === "image" && item.url && <a href={item.url} target="_blank" rel="noreferrer"><img src={item.url} alt={item.name} className="h-40 w-full object-contain bg-neutral-100" loading="lazy" /></a>}
           {item.kind === "video" && item.url && <video src={item.url} controls preload="metadata" className="h-40 w-full bg-neutral-900" />}
           {(item.kind === "document" || item.kind === "whatsapp") && <div className="bg-neutral-100 py-6 text-center text-sm">{item.kind === "whatsapp" ? "Conversación de WhatsApp" : "Documento PDF"}</div>}
-          <div className="p-3 space-y-1"><p className="font-medium text-sm break-words">{item.name}</p>
+          <div className="p-4 space-y-3">
             {item.patient && item.patientId
-              ? <Link href={"/fisio/paciente/" + item.patientId + "/info/exitos"} className="text-xs text-amber-700">{item.patient.fullName}</Link>
+              ? <Link href={"/fisio/paciente/" + item.patientId + "/info/exitos"} className="block text-lg font-semibold text-neutral-900 hover:text-amber-700 hover:underline">{item.patient.fullName}</Link>
               : <span className="inline-block rounded-full bg-amber-50 px-2 py-1 text-xs text-amber-800">Sin asignar</span>}
+            {item.notes && <div className="rounded-lg bg-amber-50/60 p-3"><p className="text-xs text-neutral-500 mb-1">Comentario del fisio</p><p className="text-base leading-relaxed whitespace-pre-wrap text-neutral-800">{item.notes}</p></div>}
             {!patientId && <button type="button" className={"block rounded-lg px-3 py-2 text-sm font-medium " + (item.patientId ? "bg-neutral-100 text-neutral-700" : "bg-amber-400 text-neutral-900 hover:bg-amber-500")} onClick={() => setAssigning(item)}>
               {item.patientId ? "Cambiar cliente" : "Asignar a cliente"}
             </button>}
@@ -164,7 +173,7 @@ export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVid
               </select>
             </label>
             <p className="text-xs text-neutral-400">{new Date(item.createdAt).toLocaleDateString("es-ES")}</p>
-            {item.notes && <p className="text-xs whitespace-pre-wrap text-neutral-600">{item.notes}</p>}
+
             {item.url && <button type="button" className="block text-xs underline" onClick={async () => {
               try { await navigator.clipboard.writeText(item.url!); setProgress("Enlace copiado"); } catch { setError("No se pudo copiar. Abre el archivo para copiar su enlace."); }
             }}>Copiar enlace</button>}

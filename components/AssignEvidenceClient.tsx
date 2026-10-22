@@ -2,9 +2,9 @@
 import { useEffect, useRef, useState } from "react";
 type Client = { id: string; fullName: string };
 const normalize = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("es").trim();
-export function AssignEvidenceClient({ item, patients, onClose, onAssigned }: {
+export function AssignEvidenceClient({ item, patients, onClose, onAssigned, onSelect }: {
   item: { id: string; name: string; patientId: string | null };
-  patients: Client[]; onClose: () => void; onAssigned: () => void;
+  patients: Client[]; onClose: () => void; onAssigned?: () => void; onSelect?: (patient: Client) => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [query, setQuery] = useState("");
@@ -15,13 +15,14 @@ export function AssignEvidenceClient({ item, patients, onClose, onAssigned }: {
   const matches = patients.filter(p => words.every(w => normalize(p.fullName).includes(w)));
   async function assign(patient: Client) {
     if (saving) return;
+    if (onSelect) { onSelect(patient); return; }
     setSaving(patient.id); setError("");
     try {
       const res = await fetch("/api/testimonials/" + item.id, { method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ patientId: patient.id }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "No se pudo asignar");
-      onAssigned();
+      onAssigned?.();
     } catch (e) { setError(e instanceof Error ? e.message : "No se pudo asignar"); setSaving(null); }
   }
   return <dialog ref={dialog} aria-labelledby="assign-client-title" onCancel={e => { e.preventDefault(); if (!saving) onClose(); }}
