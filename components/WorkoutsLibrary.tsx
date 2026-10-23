@@ -27,6 +27,9 @@ export function WorkoutsLibrary({
 }) {
   const router = useRouter();
   const [list, setList] = useState<Template[]>(initial);
+  const [query, setQuery] = useState("");
+  const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  const filteredTemplates = list.filter(t => normalize(t.title).includes(normalize(query)));
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Template | null>(null);
 
@@ -53,6 +56,23 @@ export function WorkoutsLibrary({
         )}
       </header>
 
+      <div className="mb-4">
+        <label htmlFor="workout-name-search" className="sr-only">Buscar workouts por nombre</label>
+        <input
+          id="workout-name-search"
+          type="search"
+          className="input text-sm w-full"
+          placeholder="Buscar workouts por nombre…"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+        />
+        {query.trim() && (
+          <p className="text-xs text-neutral-500 mt-2" role="status">
+            {filteredTemplates.length} de {list.length} workouts
+          </p>
+        )}
+      </div>
+
       {(creating || editing) && (
         <TemplateEditor
           initial={editing}
@@ -71,9 +91,14 @@ export function WorkoutsLibrary({
         <p className="text-sm text-neutral-400 italic py-12 text-center card">
           Aún no hay plantillas. Crea la primera o márcalas como plantilla al guardar un workout dentro de un paciente.
         </p>
+      ) : query.trim() && filteredTemplates.length === 0 ? (
+        <div className="card py-10 text-center">
+          <p className="text-sm text-neutral-500">No hay workouts con ese nombre.</p>
+          <button type="button" className="btn btn-ghost text-xs mt-2" onClick={() => setQuery("")}>Limpiar búsqueda</button>
+        </div>
       ) : (
         <div className="space-y-2 mt-3">
-          {list.map((t) => {
+          {filteredTemplates.map((t) => {
             const linked = exercises.filter((e) => t.exerciseIds.includes(e.id));
             return (
               <article key={t.id} className="card">
