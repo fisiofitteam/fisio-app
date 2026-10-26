@@ -1,3 +1,5 @@
+import { getSidebarLayout } from "@/lib/sidebar-settings";
+import { sidebarIdsForRole } from "@/lib/sidebar-order";
 import { redirect } from "next/navigation";
 import { FisioSidebar } from "@/components/FisioSidebar";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
@@ -30,7 +32,7 @@ export default async function FisioLayout({ children }: { children: React.ReactN
         )}
         <div className="flex flex-col md:flex-row gap-3 print:gap-0 print:block">
           <div className="print:hidden">
-            <FisioSidebar user={user} />
+            <FisioSidebar user={user} sidebarLayout={await getSidebarLayout(user.id, sidebarIdsForRole(user.role, user.extraRoles ?? []))} />
           </div>
           <div className="flex-1 min-w-0">
             {/* Banner persistente: aparece cuando al profesional le toca

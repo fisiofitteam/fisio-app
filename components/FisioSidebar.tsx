@@ -5,172 +5,10 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { LogoFull } from "./Logo";
 import { NotificationsBell } from "./NotificationsBell";
-import {
-  LayoutDashboard,
-  Users,
-  BookOpen,
-  CheckSquare,
-  Phone,
-  Package,
-  Wallet,
-  Target,
-  PhoneCall,
-  Repeat,
-  Gift,
-  Sparkles,
-  UserCog,
-  Settings,
-  LogOut,
-  Stethoscope,
-  CalendarDays,
-  Gauge,
-  Zap,
-  MessageSquare,
-  Megaphone,
-  Brain,
-  AlertTriangle,
-  Sunrise,
-  Bot,
-  TrafficCone,
-  LucideIcon,
-} from "lucide-react";
-
-type Item = {
-  id: string;
-  label: string;
-  Icon: LucideIcon;
-  href: string;
-  match: (p: string) => boolean;
-};
-
-const PANEL: Item = { id: "panel", label: "Panel", Icon: LayoutDashboard, href: "/fisio", match: (p) => p === "/fisio" };
-const TESTIMONIOS: Item = { id: "testimonios", label: "Testimonios", Icon: Sparkles, href: "/fisio/testimonios", match: (p) => p.startsWith("/fisio/testimonios") };
-const PACIENTES: Item = { id: "pacientes", label: "Pacientes", Icon: Users, href: "/fisio/pacientes", match: (p) => p.startsWith("/fisio/pacientes") || p.startsWith("/fisio/paciente/") };
-const LEADS: Item = { id: "leads", label: "Llamadas", Icon: Target, href: "/fisio/leads", match: (p) => p.startsWith("/fisio/leads") };
-const LLAMADAS_VENTA: Item = { id: "llamadas-venta", label: "Llamadas", Icon: PhoneCall, href: "/fisio/llamadas-venta", match: (p) => p.startsWith("/fisio/llamadas-venta") };
-// Config de disponibilidad de llamadas de VENTA (ClosingShift /
-// DefaultClosingShift). La UI vive dentro de /fisio/equipo?tab=llamadas;
-// el acceso directo aquí evita que el closer tenga que bucear por Equipo.
-// match: () => false → el highlight activo se lo queda la pestaña "Equipo"
-// (que ya matchea /fisio/equipo). Este es un acceso directo, no una ruta
-// propia, así que no competimos por el active state.
-const CALENDARIO_LLAMADAS: Item = { id: "calendario-llamadas", label: "Calendario llamadas", Icon: CalendarDays, href: "/fisio/equipo?tab=llamadas", match: () => false };
-const FOLLOWUP: Item = { id: "followup", label: "Follow-up", Icon: Repeat, href: "/fisio/followup", match: (p) => p.startsWith("/fisio/followup") };
-const REGALOS: Item = { id: "regalos", label: "Regalos", Icon: Gift, href: "/fisio/regalos", match: (p) => p.startsWith("/fisio/regalos") || p.startsWith("/fisio/parches") };
-const CONTENIDO: Item = { id: "contenido", label: "Contenido", Icon: Sparkles, href: "/fisio/contenido/calendario", match: (p) => p.startsWith("/fisio/contenido") };
-const ANUNCIOS: Item = { id: "anuncios", label: "Anuncios", Icon: Megaphone, href: "/fisio/anuncios", match: (p) => p.startsWith("/fisio/anuncios") };
-const BIBLIOTECA: Item = { id: "biblioteca", label: "Biblioteca", Icon: BookOpen, href: "/fisio/biblioteca", match: (p) => p.startsWith("/fisio/biblioteca") };
-const REUNIONES: Item = { id: "reuniones", label: "Reuniones", Icon: Stethoscope, href: "/fisio/reuniones", match: (p) => p.startsWith("/fisio/reuniones") };
-const CALENDARIO: Item = { id: "calendario", label: "Calendario", Icon: CalendarDays, href: "/fisio/calendario", match: (p) => p.startsWith("/fisio/calendario") };
-const ADVANCE: Item = { id: "advance", label: "Advance", Icon: Zap, href: "/fisio/advance", match: (p) => p.startsWith("/fisio/advance") };
-const COMUNIDAD: Item = { id: "comunidad", label: "Comunidad", Icon: CalendarDays, href: "/fisio/comunidad", match: (p) => p.startsWith("/fisio/comunidad") };
-const ROLLING_LECTURA: Item = { id: "rolling-lectura", label: "Rolling", Icon: Zap, href: "/fisio/rolling-lectura", match: (p) => p.startsWith("/fisio/rolling-lectura") };
-const TAREAS: Item = { id: "tareas", label: "Tareas", Icon: CheckSquare, href: "/fisio/tareas", match: (p) => p.startsWith("/fisio/tareas") };
-const LLAMADAS: Item = { id: "llamadas", label: "Llamadas", Icon: Phone, href: "/fisio/llamadas", match: (p) => p.startsWith("/fisio/llamadas") };
-const RECURSOS: Item = { id: "recursos", label: "Recursos", Icon: Package, href: "/fisio/recursos", match: (p) => p.startsWith("/fisio/recursos") };
-const FINANZAS: Item = { id: "finanzas", label: "Cuadro de mandos", Icon: Gauge, href: "/fisio/finanzas", match: (p) => p.startsWith("/fisio/finanzas") };
-const EQUIPO: Item = { id: "equipo", label: "Equipo", Icon: UserCog, href: "/fisio/equipo", match: (p) => p.startsWith("/fisio/equipo") };
-const CHAT: Item = { id: "chat", label: "Chat", Icon: MessageSquare, href: "/fisio/chat", match: (p) => p.startsWith("/fisio/chat") };
-const FISIO_IA: Item = { id: "fisio-ia", label: "Fisio IA", Icon: Brain, href: "/fisio/fisio-ia", match: (p) => p.startsWith("/fisio/fisio-ia") };
-const SETTER_IA: Item = { id: "setter-ia", label: "Setter IA", Icon: Bot, href: "/fisio/setter-ia", match: (p) => p.startsWith("/fisio/setter-ia") };
-const ALERTAS: Item = { id: "alertas", label: "Alertas", Icon: AlertTriangle, href: "/fisio/alertas", match: (p) => p.startsWith("/fisio/alertas") };
-const RESUMENES: Item = { id: "resumenes", label: "Resúmenes", Icon: Sunrise, href: "/fisio/resumenes", match: (p) => p.startsWith("/fisio/resumenes") };
-const AJUSTES: Item = { id: "ajustes", label: "Ajustes", Icon: Settings, href: "/fisio/ajustes", match: (p) => p.startsWith("/fisio/ajustes") };
-// Lead magnets — para el setter va directo en el sidebar (es su
-// fuente principal de leads). El CEO lo ve dentro de Contenido, y el
-// resto de roles no lo tienen a la vista (acceden por URL si hace
-// falta). Empareja con "/fisio/contenido/lead-magnets" y con la ruta
-// standalone "/fisio/semaforo" que se mantiene por compat.
-const LEAD_MAGNETS: Item = {
-  id: "lead-magnets",
-  label: "Lead magnets",
-  Icon: TrafficCone,
-  href: "/fisio/contenido/lead-magnets",
-  match: (p) => p.startsWith("/fisio/contenido/lead-magnets") || p.startsWith("/fisio/semaforo"),
-};
-
-/**
- * Devuelve la lista de items para UN rol concreto. Es un helper interno.
- * Las personas con varios roles usan `itemsForRoles` (abajo), que hace
- * unión + dedup sin perder el orden del rol principal.
- */
-function itemsForRole(role: string, opts: { withResumenes: boolean }): Item[] {
-  // Managers (CEO / head_success) SIEMPRE ven "Resúmenes", aunque no
-  // haya contenido pendiente — desde ahí pueden disparar la regeneración
-  // manual cuando el cron falla. Los fisios normales solo lo ven cuando
-  // hay algo que revisar (evita ruido visual).
-  const isManager = role === "ceo" || role === "head_success";
-  const R = (opts.withResumenes || isManager) ? [RESUMENES] : [];
-  if (role === "ceo") {
-    // CEO no ve el buzon de Alertas (lo gestionan head_success y fisios).
-    // Lead magnets vive dentro de Contenido → Lead magnets, no en el
-    // sidebar (para no ensuciar la navegación principal).
-    return [PANEL, PACIENTES, TESTIMONIOS, ...R, ADVANCE, LLAMADAS_VENTA, CONTENIDO, ANUNCIOS, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, RECURSOS, FINANZAS, EQUIPO, CHAT, FISIO_IA, SETTER_IA, AJUSTES];
-  }
-  if (role === "head_success") {
-    return [PANEL, PACIENTES, TESTIMONIOS, ALERTAS, ...R, ADVANCE, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, CHAT, FISIO_IA, AJUSTES];
-  }
-  if (role === "setter") {
-    // Setter tiene Lead magnets DIRECTO en el sidebar — es su fuente
-    // principal de leads entrantes.
-    return [PANEL, LEADS, PACIENTES, LEAD_MAGNETS, REGALOS, CONTENIDO, COMUNIDAD, REUNIONES, CALENDARIO, EQUIPO, CHAT, FISIO_IA, AJUSTES];
-  }
-  if (role === "closer") {
-    return [PANEL, LLAMADAS_VENTA, FOLLOWUP, CALENDARIO_LLAMADAS, COMUNIDAD, REUNIONES, CALENDARIO, EQUIPO, CHAT, FISIO_IA, AJUSTES];
-  }
-  // fisio normal
-  return [PANEL, PACIENTES, TESTIMONIOS, ALERTAS, ...R, ROLLING_LECTURA, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, CHAT, FISIO_IA, AJUSTES];
-}
-
-/**
- * Compose items para una persona que puede tener varios roles. Mantiene
- * el ORDEN del rol principal y añade al final los items del resto de
- * roles que aún no estén presentes. Dedupe por `item.id`.
- *
- * Ejemplo: fisio (principal) + closer → aparece la navegación completa
- * de fisio, y al final se suman las pestañas que solo tenga closer
- * (Llamadas venta, Follow-up).
- */
-function itemsForRoles(mainRole: string, extraRoles: string[], opts: { withResumenes: boolean }): Item[] {
-  const main = itemsForRole(mainRole, opts);
-  const seen = new Set(main.map((i) => i.id));
-  const out = [...main];
-  for (const r of extraRoles) {
-    if (r === mainRole) continue;
-    for (const item of itemsForRole(r, opts)) {
-      if (seen.has(item.id)) continue;
-      seen.add(item.id);
-      out.push(item);
-    }
-  }
-  return out;
-}
-
-/**
- * Igual que itemsForRoles pero DEVUELVE AGRUPADO POR ROL. Cada sección
- * trae los items propios de ese rol que NO han aparecido en secciones
- * anteriores (dedup entre secciones, no dentro). Si una persona tiene
- * un único rol, devuelve una sola sección sin "roleKey" visible.
- *
- * El consumidor decide si pintar los headers (desktop sí, móvil no por
- * UX en scroll horizontal).
- */
-function itemsGroupedByRole(mainRole: string, extraRoles: string[], opts: { withResumenes: boolean }): Array<{ roleKey: string; items: Item[] }> {
-  const groups: Array<{ roleKey: string; items: Item[] }> = [];
-  const seen = new Set<string>();
-  const allRoles = [mainRole, ...extraRoles.filter((r) => r !== mainRole)];
-  for (const r of allRoles) {
-    const roleItems = itemsForRole(r, opts).filter((it) => {
-      if (seen.has(it.id)) return false;
-      seen.add(it.id);
-      return true;
-    });
-    if (roleItems.length === 0) continue;
-    groups.push({ roleKey: r, items: roleItems });
-  }
-  return groups;
-}
-
+import { LogOut } from "lucide-react";
+import { itemsForRoles } from "@/lib/sidebar-items";
+import { SidebarNavigation } from "@/components/SidebarNavigation";
+import type { SidebarLayout } from "@/lib/sidebar-layout";
 const ROLE_LABEL: Record<string, string> = {
   ceo: "CEO",
   head_success: "Head-success",
@@ -186,8 +24,9 @@ function getInitials(fullName: string): string {
 }
 
 export function FisioSidebar({
-  user,
+  user, sidebarLayout,
 }: {
+  sidebarLayout?: SidebarLayout;
   user: { id: string; fullName: string; role: string; extraRoles?: string[]; photoUrl?: string | null } | null;
 }) {
   const pathname = usePathname() ?? "";
@@ -271,15 +110,7 @@ export function FisioSidebar({
 
   const items = user
     ? itemsForRoles(user.role, user.extraRoles ?? [], { withResumenes: reportsCount > 0 })
-    : [PANEL, PACIENTES, BIBLIOTECA, TAREAS, LLAMADAS, RECURSOS];
-  // Mismo contenido que `items` pero segmentado por rol — para pintar
-  // secciones con header en el sidebar desktop cuando la persona
-  // combina cargos (ej. fisio + closer). En móvil seguimos usando
-  // `items` plano porque es un scroll horizontal.
-  const groups = user
-    ? itemsGroupedByRole(user.role, user.extraRoles ?? [], { withResumenes: reportsCount > 0 })
-    : [{ roleKey: "", items }];
-  const showGroupHeaders = groups.length > 1;
+    : [];
   const initials = user ? getInitials(user.fullName) : "??";
 
   // ¿Qué items deben mostrar el badge de notificaciones?
@@ -312,33 +143,7 @@ export function FisioSidebar({
             <NotificationsBell />
           </div>
         )}
-        <nav className="flex gap-1 overflow-x-auto pb-1 min-w-0 flex-1">
-          {items.map((it) => {
-            const active = it.match(pathname);
-            const Icon = it.Icon;
-            const badge = badgeFor(it.id);
-            return (
-              <Link
-                key={it.id}
-                href={it.href}
-                className={`px-3 py-2 text-xs rounded-lg whitespace-nowrap flex items-center gap-1.5 relative ${
-                  active ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900" : "bg-white border border-neutral-200"
-                }`}
-              >
-                <Icon size={14} strokeWidth={2} />
-                {it.label}
-                {badge !== null && badge > 0 && (
-                  <span
-                    className="ml-1 min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-bold flex items-center justify-center"
-                    style={{ background: "#DC2626", color: "#FFFFFF" }}
-                  >
-                    {badge > 99 ? "99+" : badge}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
-        </nav>
+        <SidebarNavigation items={items} layout={sidebarLayout} pathname={pathname} badgeFor={badgeFor} mobile />
       </div>
 
       {/* Desktop */}
@@ -385,45 +190,8 @@ export function FisioSidebar({
           </div>
         )}
 
-        <nav className="space-y-0.5">
-          {groups.map((g, gi) => (
-            <div key={g.roleKey || `g${gi}`} className={gi > 0 ? "mt-3" : ""}>
-              {showGroupHeaders && g.roleKey && (
-                <div
-                  className="px-3 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-neutral-400"
-                  style={{ letterSpacing: "0.08em" }}
-                >
-                  {ROLE_LABEL[g.roleKey] ?? g.roleKey}
-                </div>
-              )}
-              {g.items.map((it) => {
-                const active = it.match(pathname);
-                const Icon = it.Icon;
-                const badge = badgeFor(it.id);
-                return (
-                  <Link
-                    key={it.id}
-                    href={it.href}
-                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
-                      active ? "bg-neutral-900 text-white font-medium dark:bg-white dark:text-neutral-900" : "text-neutral-600 hover:bg-neutral-100"
-                    }`}
-                  >
-                    <Icon size={17} strokeWidth={active ? 2.25 : 2} />
-                    <span style={{ letterSpacing: "-0.015em" }} className="flex-1">{it.label}</span>
-                    {badge !== null && badge > 0 && (
-                      <span
-                        className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center"
-                        style={{ background: "#DC2626", color: "#FFFFFF" }}
-                      >
-                        {badge > 99 ? "99+" : badge}
-                      </span>
-                    )}
-                  </Link>
-                );
-              })}
-            </div>
-          ))}
-        </nav>
+        <SidebarNavigation items={items} layout={sidebarLayout} pathname={pathname} badgeFor={badgeFor} />
+        <Link href="/fisio/ajustes/menu" className="block px-3 py-2 mt-3 text-xs text-neutral-500 hover:text-neutral-900">Organizar menú</Link>
       </aside>
     </>
   );
