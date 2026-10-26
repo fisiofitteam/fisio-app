@@ -30,6 +30,10 @@ export default async function AjustesPage() {
       </div>
 
       <div className="space-y-2">
+        <Link href="/fisio/ajustes/menu" className="block rounded-lg p-3 hover:bg-neutral-50 bg-white border border-neutral-200">
+          <div className="font-medium text-sm">📁 Menú y carpetas</div>
+          <div className="text-xs text-neutral-500">Organiza tus páginas y crea carpetas con nombre e icono</div>
+        </Link>
         <Link
           href="/fisio/ajustes/perfil"
           className="block rounded-lg p-3 hover:bg-neutral-50 bg-white border border-neutral-200"

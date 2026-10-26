@@ -213,6 +213,7 @@ model Patient {
 // ============================================================================
 
 model Professional {
+  sidebarLayout String? // Personal sidebar folders and order (JSON)
   payrollAdjustments PayrollAdjustment[]
   id        String   @id @default(cuid())
   fullName  String
