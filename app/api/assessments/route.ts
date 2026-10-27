@@ -18,9 +18,10 @@ export async function GET(req: NextRequest) {
   const material = req.nextUrl.searchParams.get("material") === "1";
   const page = Math.max(0, Math.floor(Number(req.nextUrl.searchParams.get("page")) || 0));
   const where = { patientId: owner, ...(sessionId ? { sessionId } : {}), ...(material ? { url: { not: null }, uploadedAt: { not: null } } : {}) };
+  const actor = await getSessionUser();
   const rows = await prisma.assessmentVideo.findMany({ where, orderBy: [{ assessedAt: "desc" }, { id: "desc" }],
     skip: material ? page * 30 : 0, take: material ? 30 : 500,
-    select: { id: true, sessionId: true, taskId: true, testId: true, assessmentTitle: true, testTitle: true, assessedAt: true, url: true, uploadedAt: true, reviewedAt: true, coachNotes: true } });
+    select: { id: true, sessionId: true, taskId: true, testId: true, assessmentTitle: true, testTitle: true, videoTitle: actor?.kind === "professional", videoDescription: actor?.kind === "professional", assessedAt: true, url: true, uploadedAt: true, reviewedAt: true, coachNotes: true } });
   const items = rows.map(r => ({ ...r, version: r.uploadedAt?.toISOString(), url: r.url ? "/api/assessments/media?id=" + r.id + "&v=" + r.uploadedAt?.getTime() : null }));
   return NextResponse.json(material ? { items, total: await prisma.assessmentVideo.count({ where }) } : items, { headers: { "Cache-Control": "private, no-store" } });
 }
@@ -61,6 +62,14 @@ export async function PATCH(req: NextRequest) {
     }
     const actor = await getSessionUser();
     if (actor?.kind !== "professional" || !await canAccessEvidencePatient(row.patientId, actor.pro)) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+    if (b.action === "metadata") {
+      if (!row.url || typeof b.version !== "string" || !Number.isFinite(new Date(b.version).getTime())) throw new Error("Recarga el vídeo antes de editarlo.");
+      if (typeof b.videoTitle !== "string" || b.videoTitle.length > 200 || typeof b.videoDescription !== "string" || b.videoDescription.length > 5000) throw new Error("Título máximo 200 caracteres y descripción máximo 5000.");
+      const data = { videoTitle: b.videoTitle.trim(), videoDescription: b.videoDescription.trim() };
+      const result = await prisma.assessmentVideo.updateMany({ where: { id: row.id, uploadedAt: new Date(b.version), updatedAt: row.updatedAt }, data });
+      if (!result.count) return NextResponse.json({ error: "El vídeo ha cambiado. Recarga antes de editarlo." }, { status: 409 });
+      return NextResponse.json({ ok: true, ...data });
+    }
     if (typeof b.version !== "string" || !Number.isFinite(new Date(b.version).getTime())) throw new Error("Recarga el vídeo antes de revisarlo.");
     if (!row.url || (b.action !== "review" && b.action !== "notes")) throw new Error("Acción no válida.");
     if (typeof b.coachNotes !== "string" || b.coachNotes.length > 5000) throw new Error("Comentario demasiado largo.");

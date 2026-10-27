@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
+import { AssessmentVideoLabels } from "@/components/AssessmentVideoLabels";
 import type { CaseAttachment } from "@/lib/case-attachments";
-type Delivery = { id: string; testTitle: string; assessmentTitle: string; assessedAt: string; url: string; coachNotes: string; reviewedAt: string | null };
+type Delivery = { id: string; version: string; videoTitle: string; videoDescription: string; testTitle: string; assessmentTitle: string; assessedAt: string; url: string; coachNotes: string; reviewedAt: string | null };
 type Material = { id: string; name: string; kind: string; url: string; notes: string };
 export function AssessmentMaterial({ patientId, existing = [], selectedIds = [], onToggle }: {
   patientId: string; existing?: CaseAttachment[]; selectedIds?: string[]; onToggle?: (item: Material) => void;
@@ -37,15 +38,17 @@ export function AssessmentMaterial({ patientId, existing = [], selectedIds = [],
           return <article key={id} className={"rounded-xl border overflow-hidden bg-white " + (selected || already ? "border-amber-500" : "border-neutral-200")}>
             <video src={item.url} controls playsInline preload="metadata" className="h-40 w-full bg-neutral-900" />
             <div className="p-3 space-y-2">
-              <h3 className="font-semibold">{item.testTitle}</h3>
-              <p className="text-sm text-neutral-600">{item.assessmentTitle} · {new Date(item.assessedAt).toLocaleDateString("es-ES")}</p>
+              <h3 className="font-semibold">{item.videoTitle || item.testTitle}</h3>
+              {item.videoDescription && <p className="text-sm whitespace-pre-wrap break-words">{item.videoDescription}</p>}
+              <p className="text-sm text-neutral-600">{item.testTitle} · {item.assessmentTitle} · {new Date(item.assessedAt).toLocaleDateString("es-ES")}</p>
               <span className={"inline-block rounded-full px-2 py-1 text-xs " + (item.reviewedAt ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800")}>{item.reviewedAt ? "Revisado" : "Pendiente de revisión"}</span>
               {item.coachNotes && <div className="rounded-lg bg-amber-50/60 p-3"><p className="text-xs text-neutral-500 mb-1">Comentario del fisio</p><p className="text-sm whitespace-pre-wrap">{item.coachNotes}</p></div>}
               {onToggle ? <button type="button" disabled={already} aria-pressed={selected || already} className="btn btn-ghost text-sm w-full" onClick={() => onToggle({
-                id, name: item.testTitle, kind: "video", url: item.url,
-                notes: [item.testTitle, item.assessmentTitle, new Date(item.assessedAt).toLocaleDateString("es-ES"), item.coachNotes].filter(Boolean).join(" · "),
+                id, name: item.videoTitle || item.testTitle, kind: "video", url: item.url,
+                notes: [item.videoTitle || item.testTitle, item.videoDescription, item.assessmentTitle, new Date(item.assessedAt).toLocaleDateString("es-ES"), item.coachNotes].filter(Boolean).join(" · "),
               })}>{already ? "Ya adjuntado" : selected ? "✓ Seleccionado" : "Seleccionar test"}</button> :
                 <a href={item.url} target="_blank" rel="noreferrer" className="inline-block text-xs underline">Abrir vídeo</a>}
+              {!onToggle && <AssessmentVideoLabels row={item} onSaved={data => setItems(prev => prev.map(v => v.id === item.id ? { ...v, ...data } : v))} />}
             </div>
           </article>;
         })}
