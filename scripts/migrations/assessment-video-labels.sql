@@ -1,0 +1,2 @@
+ALTER TABLE "AssessmentVideo" ADD COLUMN IF NOT EXISTS "videoTitle" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "AssessmentVideo" ADD COLUMN IF NOT EXISTS "videoDescription" TEXT NOT NULL DEFAULT '';

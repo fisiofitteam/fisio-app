@@ -1,7 +1,9 @@
 "use client";
+import { AssessmentVideoLabels } from "@/components/AssessmentVideoLabels";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 export function AssessmentReview({ row }: { row: any }) {
+  const [labels, setLabels] = useState({ videoTitle: row.videoTitle || "", videoDescription: row.videoDescription || "" });
   const [notes, setNotes] = useState(row.coachNotes || "");
   const [reviewed, setReviewed] = useState(!!row.reviewedAt);
   const [busy, setBusy] = useState(false);
@@ -19,6 +21,9 @@ export function AssessmentReview({ row }: { row: any }) {
   }
   return <div className="space-y-2">
     <video controls playsInline preload="metadata" src={row.url} className="w-full max-h-80 rounded-lg bg-black" />
+    {labels.videoTitle && <h3 className="font-semibold">{labels.videoTitle}</h3>}
+    {labels.videoDescription && <p className="text-sm whitespace-pre-wrap">{labels.videoDescription}</p>}
+    <AssessmentVideoLabels row={{ ...row, ...labels }} onSaved={setLabels} />
     <p className="text-xs text-neutral-500">{reviewed ? "✓ Revisado" : "Recibido · pendiente de revisión"}</p>
     <label className="block text-xs">Comentario del fisio (visible para el cliente)<textarea rows={3} maxLength={5000} className="input mt-1 text-sm" value={notes} onChange={e => { setNotes(e.target.value); setSaved(false); }} /></label>
     <div className="flex flex-wrap gap-2"><button type="button" className="btn btn-ghost text-xs" disabled={busy} onClick={() => save("notes")}>Guardar comentario</button>{!reviewed && <button type="button" className="btn btn-primary text-xs" disabled={busy} onClick={() => save("review")}>Marcar revisado</button>}</div>

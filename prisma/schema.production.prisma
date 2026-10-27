@@ -4134,6 +4134,8 @@ model AssessmentVideo {
   session         ProgramSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
   taskId          String
   testId          String
+  videoTitle      String @default("")
+  videoDescription String @default("")
   assessmentTitle String
   testTitle       String
   assessedAt      DateTime
