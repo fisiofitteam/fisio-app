@@ -65,6 +65,7 @@ export function WodAdapter({ patientId }: { patientId: string }) {
   const [pain, setPain] = useState<number>(0);
   const [notes, setNotes] = useState<string>("");
   const [saving, setSaving] = useState(false);
+  const [logError, setLogError] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [restoredAt, setRestoredAt] = useState<string | null>(null);
 
@@ -104,6 +105,7 @@ export function WodAdapter({ patientId }: { patientId: string }) {
     setPain(0);
     setNotes("");
     setShowLog(false);
+    setLogError(null);
     setImgError(null);
     setRestoredAt(null);
     clearStorage(patientId);
@@ -159,15 +161,22 @@ export function WodAdapter({ patientId }: { patientId: string }) {
       )
       .join("\n");
 
-    await fetch("/api/wod/log", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ patientId, rawText, adaptedText, rpe, painScore: pain, notes: notes.trim() || null }),
-    });
-    setSaving(false);
-    resetLocal();
-    router.refresh();
-    alert("Sesión registrada ✅");
+    setLogError(null);
+    try {
+      const response = await fetch("/api/wod/log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ patientId, rawText, adaptedText, rpe, painScore: pain, notes: notes.trim() || null }),
+      });
+      if (!response.ok) throw new Error("No se pudo guardar el WOD. Tu registro sigue aquí; vuelve a intentarlo.");
+      resetLocal();
+      router.refresh();
+      alert("Sesión registrada ✅ Ya puedes consultarla en tu historial de WODs.");
+    } catch (error) {
+      setLogError(error instanceof Error ? error.message : "No se pudo guardar. Vuelve a intentarlo.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   const hasBlocked = adapted?.some((l) => l.state === "BLOCKED");
@@ -366,6 +375,7 @@ export function WodAdapter({ patientId }: { patientId: string }) {
                   Pesos que usaste, sensaciones, si algo te costó — cualquier detalle ayuda a tu fisio.
                 </p>
               </div>
+              {logError && <p role="alert" className="text-sm text-red-600">{logError}</p>}
               <button onClick={logSession} disabled={saving} className="btn btn-primary w-full">
                 {saving ? "Guardando..." : "Enviar a mi fisio"}
               </button>
