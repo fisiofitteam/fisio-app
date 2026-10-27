@@ -1,12 +1,13 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { EvidenceDetailsEditor } from "@/components/EvidenceDetailsEditor";
 import { AssignEvidenceClient } from "@/components/AssignEvidenceClient";
 import { EVIDENCE_ZONES } from "@/lib/evidence-zones";
 import { Folder, Trash2 } from "lucide-react";
 import { uploadWhatsApp } from "@/lib/upload-whatsapp";
 import { upload } from "@vercel/blob/client";
-type Evidence = { id: string; patientId: string | null; name: string; bodyZone: string | null; kind: string; mimeType: string; url: string | null; notes: string | null; createdAt: string; patient: { fullName: string } | null };
+type Evidence = { id: string; title: string; updatedAt: string; patientId: string | null; name: string; bodyZone: string | null; kind: string; mimeType: string; url: string | null; notes: string | null; createdAt: string; patient: { fullName: string } | null };
 export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVideo }: { patientId?: string; compact?: boolean; onSelectVideo?: (url: string, name: string) => void }) {
   const [items, setItems] = useState<Evidence[]>([]);
   const [patients, setPatients] = useState<Array<{ id: string; fullName: string }>>([]);
@@ -19,6 +20,7 @@ export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVid
   const [folders, setFolders] = useState<Array<{ bodyZone: string | null; count: number }>>([]);
   const [editing, setEditing] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<Evidence | null>(null);
+  const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
@@ -58,13 +60,13 @@ export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVid
           setProgress("Subiendo " + file.name);
           const txt = file.name.toLowerCase().endsWith(".txt");
           if (txt) {
-            await uploadWhatsApp(file, { patientId: patientId || uploadPatient?.id || null, notes, bodyZone: uploadZone || null }, setProgress);
+            await uploadWhatsApp(file, { patientId: patientId || uploadPatient?.id || null, title, notes, bodyZone: uploadZone || null }, setProgress);
             saved++; continue;
           }
           if (file.size > 1024 * 1024 * 1024) throw new Error("Archivo demasiado grande (máximo 1 GB).");
           const mimeType = file.type || (/\.mov$/i.test(file.name) ? "video/quicktime" : /\.mp4$/i.test(file.name) ? "video/mp4" : /\.heic$/i.test(file.name) ? "image/heic" : "");
           const res = await fetch("/api/testimonials", { method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ patientId: patientId || uploadPatient?.id || null, name: file.name, notes, bodyZone: uploadZone || null, size: file.size, mimeType,
+            body: JSON.stringify({ patientId: patientId || uploadPatient?.id || null, name: file.name, title, notes, bodyZone: uploadZone || null, size: file.size, mimeType,
               ...(txt ? { kind: "whatsapp", textContent: await file.text() } : {}) }) });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || "No se pudo guardar");
@@ -80,7 +82,7 @@ export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVid
       }
       setProgress(saved ? saved + " archivo(s) guardado(s)" : "");
       setError(failures.join("\n"));
-      if (saved) { setNotes(""); if (page) setPage(0); else await load(); }
+      if (saved) { setTitle(""); setNotes(""); if (page) setPage(0); else await load(); }
     } finally { setBusy(false); if (input.current) input.current.value = ""; }
   }
   async function changeItem(item: Evidence, bodyZone?: string) {
@@ -122,8 +124,11 @@ export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVid
         <button type="button" disabled={busy || loading} onClick={() => setChoosingPatient(true)} className="rounded-lg bg-amber-400 px-3 py-2 text-sm font-medium hover:bg-amber-500 disabled:opacity-50">{uploadPatient ? "Cambiar paciente" : "Asignar a paciente"}</button>
         {uploadPatient && <button type="button" disabled={busy} onClick={() => setUploadPatient(null)} className="text-xs text-neutral-500 underline">Quitar</button>}
       </div>}
-      <label className="text-sm text-neutral-700 block mb-2">Comentario del fisio (opcional)
-        <textarea className="input mt-1 text-sm w-full" rows={2} disabled={busy} value={notes} onChange={e => setNotes(e.target.value)}
+      <label className="text-sm text-neutral-700 block mb-2">Título (opcional)
+        <input className="input mt-1 text-sm w-full" maxLength={200} disabled={busy} value={title} onChange={e => setTitle(e.target.value)} placeholder="Ej.: Vuelta al entrenamiento sin dolor" />
+      </label>
+      <label className="text-sm text-neutral-700 block mb-2">Descripción / comentario del fisio (opcional)
+        <textarea className="input mt-1 text-sm w-full" rows={2} maxLength={4000} disabled={busy} value={notes} onChange={e => setNotes(e.target.value)}
           placeholder="Qué ha conseguido, qué dice la captura o qué muestra el vídeo…" /></label>
       <label className="text-xs text-neutral-600 block mb-3">Zona corporal de los archivos
         <select className="input block mt-1 text-sm" value={uploadZone} disabled={busy} onChange={e => setUploadZone(e.target.value)}>
@@ -166,7 +171,9 @@ export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVid
             {item.patient && item.patientId
               ? <Link href={"/fisio/paciente/" + item.patientId + "/info/exitos"} className="block text-lg font-semibold text-neutral-900 hover:text-amber-700 hover:underline">{item.patient.fullName}</Link>
               : <span className="inline-block rounded-full bg-amber-50 px-2 py-1 text-xs text-amber-800">Sin asignar</span>}
-            {item.notes && <div className="rounded-lg bg-amber-50/60 p-3"><p className="text-xs text-neutral-500 mb-1">Comentario del fisio</p><p className="text-base leading-relaxed whitespace-pre-wrap text-neutral-800">{item.notes}</p></div>}
+            {item.title && <h3 className="font-semibold text-base break-words">{item.title}</h3>}
+            {item.notes && <div className="rounded-lg bg-amber-50/60 p-3"><p className="text-xs text-neutral-500 mb-1">Descripción / comentario del fisio</p><p className="text-base leading-relaxed whitespace-pre-wrap text-neutral-800">{item.notes}</p></div>}
+            <EvidenceDetailsEditor row={item} onSaved={() => { setProgress("Título y descripción guardados."); void load(); }} />
             {!patientId && <button type="button" className={"block rounded-lg px-3 py-2 text-sm font-medium " + (item.patientId ? "bg-neutral-100 text-neutral-700" : "bg-amber-400 text-neutral-900 hover:bg-amber-500")} onClick={() => setAssigning(item)}>
               {item.patientId ? "Cambiar cliente" : "Asignar a cliente"}
             </button>}
@@ -182,7 +189,7 @@ export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVid
             {item.url && <button type="button" className="block text-xs underline" onClick={async () => {
               try { await navigator.clipboard.writeText(item.url!); setProgress("Enlace copiado"); } catch { setError("No se pudo copiar. Abre el archivo para copiar su enlace."); }
             }}>Copiar enlace</button>}
-            {onSelectVideo && item.kind === "video" && item.url && <button type="button" className="btn btn-ghost text-xs" onClick={() => onSelectVideo(item.url!, item.notes || item.name)}>Añadir al caso</button>}
+            {onSelectVideo && item.kind === "video" && item.url && <button type="button" className="btn btn-ghost text-xs" onClick={() => onSelectVideo(item.url!, [item.title, item.notes].filter(Boolean).join(" · ") || item.name)}>Añadir al caso</button>}
             <a className="inline-block text-xs underline pt-2" href={item.kind === "whatsapp" ? "/api/testimonials/" + item.id : item.url || "#"} target="_blank" rel="noreferrer">Abrir / descargar</a>
             <button type="button" aria-label={"Borrar " + item.name} disabled={!!editing} onClick={() => setDeleting(item)} className="flex items-center gap-1 text-xs text-red-600 hover:text-red-800 pt-3"><Trash2 size={14} /> Borrar testimonio</button>
           </div>

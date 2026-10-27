@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AssessmentMaterial } from "@/components/AssessmentMaterial";
 import type { CaseAttachment } from "@/lib/case-attachments";
-type Material = { id: string; name: string; kind: string; url: string | null; notes: string | null };
+type Material = { id: string; name: string; title?: string; kind: string; url: string | null; notes: string | null };
 export function CaseMaterialPicker({ patientId, sectionLabel, existing, onClose, onConfirm }: {
   patientId: string; sectionLabel: string; existing: CaseAttachment[];
   onClose: () => void; onConfirm: (chosen: CaseAttachment[]) => void;
@@ -57,7 +57,7 @@ export function CaseMaterialPicker({ patientId, sectionLabel, existing, onClose,
               {item.kind === "image" ? <img src={item.url!} alt={item.notes || "Captura del cliente"} className="h-32 w-full object-contain bg-neutral-100" loading="lazy" /> :
                 item.kind === "video" ? <video src={item.url!} muted playsInline preload="metadata" className="h-32 w-full object-contain bg-neutral-900" /> :
                 <div className="h-32 bg-neutral-100 flex items-center justify-center text-sm">📄 Documento PDF</div>}
-              <div className="p-2"><p className="text-sm whitespace-pre-wrap line-clamp-3">{item.notes || (item.kind === "video" ? "Vídeo del cliente" : item.kind === "image" ? "Captura del cliente" : "Documento del cliente")}</p>
+              <div className="p-2">{item.title && <h4 className="font-semibold text-sm break-words mb-1">{item.title}</h4>}<p className="text-sm whitespace-pre-wrap line-clamp-3">{item.notes || (item.kind === "video" ? "Vídeo del cliente" : item.kind === "image" ? "Captura del cliente" : "Documento del cliente")}</p>
                 <span className="text-xs text-amber-800">{already ? "Ya adjuntado" : checked ? "✓ Seleccionado" : "Seleccionar"}</span></div>
             </button>;
           })}
@@ -72,7 +72,7 @@ export function CaseMaterialPicker({ patientId, sectionLabel, existing, onClose,
     </div>
     <footer className="sticky bottom-0 bg-white border-t p-4 flex justify-end gap-3">
       <button type="button" onClick={onClose} className="text-sm text-neutral-500">Cancelar</button>
-      <button type="button" disabled={!selected.size} className="btn btn-primary text-sm" onClick={() => onConfirm(Array.from(selected.values()).map(item => ({ url: item.url!, caption: item.notes || item.name, kind: item.kind })))}>
+      <button type="button" disabled={!selected.size} className="btn btn-primary text-sm" onClick={() => onConfirm(Array.from(selected.values()).map(item => ({ url: item.url!, caption: [item.title, item.notes].filter(Boolean).join(" · ") || item.name, kind: item.kind })))}>
         Adjuntar {selected.size || ""} al apartado
       </button>
     </footer>

@@ -1,5 +1,5 @@
 "use client";
-export async function uploadWhatsApp(file: File, fields: { patientId?: string | null; notes?: string; bodyZone?: string | null }, progress: (message: string) => void) {
+export async function uploadWhatsApp(file: File, fields: { patientId?: string | null; title?: string; notes?: string; bodyZone?: string | null }, progress: (message: string) => void) {
   if (!file.name.toLowerCase().endsWith(".txt") || !file.size || file.size > 50 * 1024 * 1024) throw new Error("Selecciona un TXT de hasta 50 MB.");
   progress("Leyendo conversación…");
   let text: string;
