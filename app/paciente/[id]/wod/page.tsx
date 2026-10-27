@@ -1,12 +1,20 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PatientNav } from "@/components/PatientNav";
+import { getSessionUser } from "@/lib/session";
+import { PatientWodHistory } from "@/components/PatientWodHistory";
 import { WodAdapter } from "@/components/WodAdapter";
 
-export default async function WodPage({ params }: { params: { id: string } }) {
+export const dynamic = "force-dynamic";
+
+export default async function WodPage({ params, searchParams }: { params: { id: string }; searchParams: { historyPage?: string } }) {
+  const user = await getSessionUser();
+  if (!user) redirect("/paciente/login");
+  if (user.kind === "patient" && user.patient.id !== params.id) notFound();
   const patient = await prisma.patient.findUnique({ where: { id: params.id } });
   if (!patient) notFound();
+  if (user.kind === "professional" && !user.pro.isManager && patient.assignedProfessionalId !== user.pro.id) notFound();
 
   return (
     <main className="max-w-md mx-auto px-4 py-6 pb-24">
@@ -28,7 +36,9 @@ export default async function WodPage({ params }: { params: { id: string } }) {
         </p>
       </div>
 
+      <a href="#historial-wods" className="btn w-full mb-4">Ver mi historial de WODs ↓</a>
       <WodAdapter patientId={patient.id} />
+      <PatientWodHistory patientId={patient.id} pageParam={searchParams.historyPage} />
 
       <PatientNav patientId={patient.id} active="wod" />
     </main>
