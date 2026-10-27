@@ -3400,6 +3400,7 @@ model ProfessionalCallSettings {
 
 /// Material vinculado al cliente, compartido entre Testimonios, Éxitos y casos IA.
 model PatientEvidence {
+  title       String @default("")
   id          String   @id @default(cuid())
   patientId   String?
   patient     Patient? @relation(fields: [patientId], references: [id], onDelete: Cascade)

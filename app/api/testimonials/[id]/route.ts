@@ -22,6 +22,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (!row || row.status === "deleted" || !await canAccessEvidence(row)) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   const b = await req.json().catch(() => null);
   if (!b || typeof b !== "object") return NextResponse.json({ error: "Datos no válidos" }, { status: 400 });
+  if (b.action === "metadata") {
+    if (typeof b.title !== "string" || b.title.length > 200 || typeof b.notes !== "string" || b.notes.length > 4000 || typeof b.version !== "string" || !Number.isFinite(new Date(b.version).getTime()))
+      return NextResponse.json({ error: "Título máximo 200 caracteres y descripción máximo 4000. Recarga si el archivo ha cambiado." }, { status: 400 });
+    const data = { title: b.title.trim(), notes: b.notes.trim() };
+    const result = await prisma.patientEvidence.updateMany({ where: { id: row.id, patientId: row.patientId, status: "ready", updatedAt: new Date(b.version) }, data });
+    if (!result.count) return NextResponse.json({ error: "El archivo ha cambiado. Recarga antes de editarlo." }, { status: 409 });
+    return NextResponse.json({ ok: true });
+  }
   if (Object.prototype.hasOwnProperty.call(b, "bodyZone")) {
     if (!validEvidenceZone(b.bodyZone)) return NextResponse.json({ error: "Zona no válida" }, { status: 400 });
     const result = await prisma.patientEvidence.updateMany({ where: { id: row.id, patientId: row.patientId, status: "ready" }, data: { bodyZone: b.bodyZone } });
