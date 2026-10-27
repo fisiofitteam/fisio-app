@@ -11,7 +11,7 @@ export function CaseWhatsAppImport({ patientId, disabled, onBusyChange }: { pati
           const file = e.target.files?.[0]; if (!file) return;
           setBusy(true); onBusyChange(true); setStatus("Guardando conversación…");
           try {
-            await uploadWhatsApp(file, { patientId }, setStatus);
+            await uploadWhatsApp(file, { patientId, source: "patient" }, setStatus);
             setStatus("Conversación guardada. Se incluirá al pulsar Generar con IA.");
           } catch (err) { setStatus(err instanceof Error ? err.message : "No se pudo guardar"); }
           finally { setBusy(false); onBusyChange(false); e.target.value = ""; }

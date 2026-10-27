@@ -60,13 +60,13 @@ export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVid
           setProgress("Subiendo " + file.name);
           const txt = file.name.toLowerCase().endsWith(".txt");
           if (txt) {
-            await uploadWhatsApp(file, { patientId: patientId || uploadPatient?.id || null, title, notes, bodyZone: uploadZone || null }, setProgress);
+            await uploadWhatsApp(file, { patientId: patientId || uploadPatient?.id || null, source: patientId ? "patient" : "general", title, notes, bodyZone: uploadZone || null }, setProgress);
             saved++; continue;
           }
           if (file.size > 1024 * 1024 * 1024) throw new Error("Archivo demasiado grande (máximo 1 GB).");
           const mimeType = file.type || (/\.mov$/i.test(file.name) ? "video/quicktime" : /\.mp4$/i.test(file.name) ? "video/mp4" : /\.heic$/i.test(file.name) ? "image/heic" : "");
           const res = await fetch("/api/testimonials", { method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ patientId: patientId || uploadPatient?.id || null, name: file.name, title, notes, bodyZone: uploadZone || null, size: file.size, mimeType,
+            body: JSON.stringify({ patientId: patientId || uploadPatient?.id || null, name: file.name, source: patientId ? "patient" : "general", title, notes, bodyZone: uploadZone || null, size: file.size, mimeType,
               ...(txt ? { kind: "whatsapp", textContent: await file.text() } : {}) }) });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || "No se pudo guardar");
@@ -114,7 +114,7 @@ export function PatientEvidenceLibrary({ patientId, compact = false, onSelectVid
       setAssigning(null); setProgress("Cliente asignado. El material ya está disponible en su ficha."); await load();
     }} />}
     {!compact && <div><h2 className="text-lg font-semibold">{patientId ? "Éxitos" : "Testimonios"}</h2>
-      <p className="text-sm text-neutral-500">Vídeos, capturas y conversaciones vinculados a cada cliente. Disponibles también al crear su caso de éxito.</p></div>}
+      <p className="text-sm text-neutral-500">{patientId ? "Material de este cliente, disponible para su caso de éxito. Lo que subas aquí no aparecerá en Testimonios general." : "Material subido desde esta página. Puedes vincularlo a un cliente para usarlo también en su caso de éxito."}</p></div>}
     <div className={"rounded-xl border-2 border-dashed p-4 " + (dragging ? "border-amber-500 bg-amber-50" : "border-neutral-200 bg-neutral-50")}
       onDragOver={e => { e.preventDefault(); if (!busy) setDragging(true); }}
       onDragLeave={() => setDragging(false)}

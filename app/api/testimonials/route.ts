@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     : ids ? { OR: [{ patientId: { in: ids } }, { patientId: null, createdById: user.id }] } : {};
   const zone = req.nextUrl.searchParams.get("bodyZone");
   if (zone && zone !== "unlabelled" && !validEvidenceZone(zone)) return NextResponse.json({ error: "Zona no válida" }, { status: 400 });
-  const baseWhere = { status: "ready", ...scope };
+  const baseWhere = { status: "ready", ...scope, ...(!patientId ? { source: { in: ["general", "legacy"] } } : {}) };
   const where = { ...baseWhere, ...(zone ? { bodyZone: zone === "unlabelled" ? null : zone } : {}) };
   const [items, total, patients, folders] = await Promise.all([
     prisma.patientEvidence.findMany({ where, orderBy: { createdAt: "desc" }, skip: page * 30, take: 30,
@@ -40,6 +40,9 @@ export async function POST(req: NextRequest) {
   const bodyZone = b.bodyZone ?? null;
   const patientId = typeof b.patientId === "string" && b.patientId.trim() ? b.patientId.trim() : null;
   if (patientId && !await canAccessEvidencePatient(patientId, user)) return NextResponse.json({ error: "Cliente no disponible" }, { status: 403 });
+  if (b.source !== undefined && b.source !== "general" && b.source !== "patient") return NextResponse.json({ error: "Origen no válido" }, { status: 400 });
+  const source = b.source ?? (patientId ? "patient" : "general");
+  if (source === "patient" && !patientId) return NextResponse.json({ error: "Selecciona el cliente del archivo" }, { status: 400 });
   const name = typeof b.name === "string" ? b.name.trim().slice(0, 180) : "";
   if (b.title !== undefined && (typeof b.title !== "string" || b.title.length > 200)) return NextResponse.json({ error: "Título máximo 200 caracteres" }, { status: 400 });
   const title = typeof b.title === "string" ? b.title.trim() : "";
@@ -47,20 +50,20 @@ export async function POST(req: NextRequest) {
   if (!name) return NextResponse.json({ error: "Nombre obligatorio" }, { status: 400 });
   if (b.kind === "whatsapp" && b.chunked === true) {
     if (!Number.isInteger(b.size) || b.size <= 0 || b.size > MAX_WHATSAPP_BYTES) return NextResponse.json({ error: "El TXT debe tener un máximo de 50 MB." }, { status: 400 });
-    const item = await prisma.patientEvidence.create({ data: { patientId, createdById: user.id, name, title, bodyZone,
+    const item = await prisma.patientEvidence.create({ data: { patientId, createdById: user.id, source, name, title, bodyZone,
       notes, kind: "whatsapp", mimeType: "text/plain", textContent: "", size: b.size, status: "pending" } });
     return NextResponse.json({ id: item.id });
   }
   if (b.kind === "whatsapp") {
     if (typeof b.textContent !== "string" || !b.textContent.trim() || b.textContent.length > MAX_WHATSAPP_CHARS || b.textContent.includes("\u0000"))
       return NextResponse.json({ error: "El TXT debe contener texto y tener un máximo de 200.000 caracteres." }, { status: 400 });
-    const item = await prisma.patientEvidence.create({ data: { patientId, createdById: user.id, name, title, bodyZone,
+    const item = await prisma.patientEvidence.create({ data: { patientId, createdById: user.id, source, name, title, bodyZone,
       notes, kind: "whatsapp", mimeType: "text/plain", textContent: b.textContent, status: "ready" } });
     return NextResponse.json({ id: item.id });
   }
   if (!EVIDENCE_TYPES.includes(b.mimeType) || !Number.isInteger(b.size) || b.size <= 0 || b.size > MAX_EVIDENCE_BYTES)
     return NextResponse.json({ error: "Formato no admitido o archivo mayor de 1 GB." }, { status: 400 });
-  const item = await prisma.patientEvidence.create({ data: { patientId, createdById: user.id, name, title, notes, bodyZone,
+  const item = await prisma.patientEvidence.create({ data: { patientId, createdById: user.id, source, name, title, notes, bodyZone,
     mimeType: b.mimeType, size: b.size, kind: b.mimeType.startsWith("video/") ? "video" : b.mimeType.startsWith("image/") ? "image" : "document",
     status: "pending" } });
   return NextResponse.json({ id: item.id, pathname: "testimonials/" + item.id + "/" + name.replace(/[^a-zA-Z0-9._-]/g, "_") });
