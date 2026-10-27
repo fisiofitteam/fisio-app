@@ -15,11 +15,11 @@ export async function PatientWodHistory({ patientId, pageParam }: { patientId: s
     skip: (page - 1) * PAGE_SIZE,
     take: PAGE_SIZE,
   });
-  const href = (n: number) => `/paciente/${patientId}/wod?historyPage=${n}#historial-wods`;
+  const href = (n: number) => `/paciente/${patientId}/wod/historial?historyPage=${n}`;
 
   return (
-    <section id="historial-wods" className="mt-8 scroll-mt-4">
-      <h2 className="text-lg font-semibold">Mi historial de WODs</h2>
+    <section id="historial-wods" className="mt-4">
+      <h1 className="text-xl font-semibold">Mi historial de WODs</h1>
       <p className="text-sm text-neutral-500 mt-1 mb-4">Consulta tus entrenamientos, las cargas que anotaste y cómo te sentiste. Los más recientes aparecen primero.</p>
       {total === 0 ? (
         <div className="card text-sm text-neutral-500">Todavía no has registrado ningún WOD. Al terminar, pulsa «Registrar al terminar» y guarda tus sensaciones para verlo aquí.</div>

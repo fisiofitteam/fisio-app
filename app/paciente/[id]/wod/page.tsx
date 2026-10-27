@@ -3,12 +3,11 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PatientNav } from "@/components/PatientNav";
 import { getSessionUser } from "@/lib/session";
-import { PatientWodHistory } from "@/components/PatientWodHistory";
 import { WodAdapter } from "@/components/WodAdapter";
 
 export const dynamic = "force-dynamic";
 
-export default async function WodPage({ params, searchParams }: { params: { id: string }; searchParams: { historyPage?: string } }) {
+export default async function WodPage({ params }: { params: { id: string } }) {
   const user = await getSessionUser();
   if (!user) redirect("/paciente/login");
   if (user.kind === "patient" && user.patient.id !== params.id) notFound();
@@ -36,9 +35,8 @@ export default async function WodPage({ params, searchParams }: { params: { id: 
         </p>
       </div>
 
-      <a href="#historial-wods" className="btn w-full mb-4">Ver mi historial de WODs ↓</a>
+      <Link href={`/paciente/${patient.id}/wod/historial`} className="btn w-full mb-4">Ver mi historial →</Link>
       <WodAdapter patientId={patient.id} />
-      <PatientWodHistory patientId={patient.id} pageParam={searchParams.historyPage} />
 
       <PatientNav patientId={patient.id} active="wod" />
     </main>
