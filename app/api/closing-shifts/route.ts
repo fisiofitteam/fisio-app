@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { canCoverClosingShift } from "@/lib/closing-shift-roles";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 import { hasAnyRole, type ActiveProfessional } from "@/lib/auth";
@@ -92,7 +93,7 @@ export async function POST(req: NextRequest) {
   if (!closer) {
     return NextResponse.json({ error: "Closer no encontrado" }, { status: 400 });
   }
-  if (!["ceo", "closer", "setter"].includes(closer.role)) {
+  if (!canCoverClosingShift(closer)) {
     return NextResponse.json(
       { error: "Solo CEO, Closer o Setter pueden cubrir franjas" },
       { status: 400 }
@@ -193,7 +194,7 @@ export async function PATCH(req: NextRequest) {
 
   if (closerId) {
     const closer = await prisma.professional.findUnique({ where: { id: closerId } });
-    if (!closer || !["ceo", "closer", "setter"].includes(closer.role)) {
+    if (!closer || !canCoverClosingShift(closer)) {
       return NextResponse.json({ error: "Closer no válido" }, { status: 400 });
     }
   }
