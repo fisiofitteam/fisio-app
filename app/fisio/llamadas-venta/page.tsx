@@ -20,9 +20,14 @@ export default async function LlamadasVentaPage({
     ? searchParams.status!
     : "scheduled";
 
-  // Lista de closers disponibles (para tabs del CEO)
+  // Incluye cargos principales y secundarios en las pestañas y selectores.
   const closers = await prisma.professional.findMany({
-    where: { role: { in: ["ceo", "closer"] } },
+    where: {
+      OR: [
+        { role: { in: ["ceo", "closer"] } },
+        { extraRoles: { hasSome: ["ceo", "closer"] } },
+      ],
+    },
     orderBy: [{ role: "asc" }, { fullName: "asc" }], // ceo primero (por orden alfabético del role)
   });
 
