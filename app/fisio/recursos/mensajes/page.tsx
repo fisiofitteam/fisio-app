@@ -25,7 +25,7 @@ export default async function MessagesPage({ searchParams }: { searchParams: { r
   // realmente usan {closer.intro} al enviar plantillas desde Llamadas).
   const closerMembers = canManage
     ? await prisma.professional.findMany({
-        where: { active: true, role: { in: ["ceo", "closer"] } },
+        where: { active: true, OR: [{ role: { in: ["ceo", "closer"] } }, { extraRoles: { has: "closer" } }] },
         orderBy: [{ role: "asc" }, { fullName: "asc" }],
         select: { id: true, fullName: true, role: true, closerIntro: true },
       })

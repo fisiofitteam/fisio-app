@@ -123,7 +123,7 @@ export function CallsListView({
 }: {
   activeStatus: string;
   activeCloserId: string;
-  currentUser: { id: string; fullName: string; role: string };
+  currentUser: { id: string; fullName: string; role: string; isCloser: boolean };
   closers: Pro[];
   leads: Lead[];
   fisios: Pro[];
@@ -169,7 +169,7 @@ export function CallsListView({
         <div>
           <h1 className="text-xl font-semibold">Llamadas</h1>
           <p className="text-xs text-neutral-500 mt-0.5">
-            {currentUser.role === "closer" ? "Tus llamadas asignadas" : "Llamadas del equipo"}
+            {currentUser.isCloser ? "Tus llamadas asignadas" : "Llamadas del equipo"}
           </p>
         </div>
         <button
@@ -328,7 +328,7 @@ function CallsGroup({
   label: string;
   badge: "amber" | "blue" | "neutral";
   leads: Lead[];
-  currentUser: { id: string; fullName: string; role: string };
+  currentUser: { id: string; fullName: string; role: string; isCloser: boolean };
   onClick: (lead: Lead) => void;
   sendCaseProps: SendCaseProps;
   skalexAiByLeadId?: Record<string, import("@/lib/skalex/summaries").LeadAiSummary>;
@@ -365,7 +365,7 @@ function CallRow({
   callSummary,
 }: {
   lead: Lead;
-  currentUser: { id: string; fullName: string; role: string };
+  currentUser: { id: string; fullName: string; role: string; isCloser: boolean };
   fisios?: Pro[];
   onClick: () => void;
   sendCaseProps: SendCaseProps;
@@ -591,7 +591,7 @@ function AlwaysAvailableCallActions({
   sendCaseProps,
 }: {
   lead: Lead;
-  currentUser: { id: string; fullName: string; role: string };
+  currentUser: { id: string; fullName: string; role: string; isCloser: boolean };
   sendCaseProps: SendCaseProps;
 }) {
   const router = useRouter();
@@ -603,7 +603,7 @@ function AlwaysAvailableCallActions({
   //   - Head success: por ahora fuera (si lo quieres dentro, se abre).
   const canUse =
     currentUser.role === "ceo" ||
-    (currentUser.role === "closer" && lead.closer?.id === currentUser.id);
+    (currentUser.isCloser && lead.closer?.id === currentUser.id);
   if (!canUse) return null;
 
   const hasCaseTemplates = sendCaseProps.successCaseTemplates.length > 0;
@@ -694,7 +694,7 @@ function WorkflowActionButtons({
   sendCaseProps,
 }: {
   lead: Lead;
-  currentUser: { id: string; fullName: string; role: string };
+  currentUser: { id: string; fullName: string; role: string; isCloser: boolean };
   sendCaseProps: SendCaseProps;
 }) {
   const [loading, setLoading] = useState(false);
@@ -749,7 +749,7 @@ function WorkflowActionButtons({
   // por cada plantilla con actionType=send_success_case que abre el selector
   // de caso y manda al WhatsApp del lead.
   if (
-    (currentUser.role === "closer" || currentUser.role === "ceo") &&
+    (currentUser.isCloser || currentUser.role === "ceo") &&
     lead.closer?.id === currentUser.id &&
     lead.setterNotifiedAt &&
     !lead.closerContactedAt
@@ -774,7 +774,7 @@ function WorkflowActionButtons({
 
   // Closer asignado: ve "Recordatorio enviado" si está contactado, sin recordatorio, y cita es mañana
   if (
-    (currentUser.role === "closer" || currentUser.role === "ceo") &&
+    (currentUser.isCloser || currentUser.role === "ceo") &&
     lead.closer?.id === currentUser.id &&
     lead.closerContactedAt &&
     !lead.reminderSentAt
@@ -819,7 +819,7 @@ function CallEditModal({
   onConvert,
 }: {
   lead: Lead;
-  currentUser: { id: string; fullName: string; role: string };
+  currentUser: { id: string; fullName: string; role: string; isCloser: boolean };
   closers: Pro[];
   onClose: () => void;
   onSaved: () => void;
@@ -1344,7 +1344,7 @@ function AddCallModal({
   onClose,
   onSaved,
 }: {
-  currentUser: { id: string; fullName: string; role: string };
+  currentUser: { id: string; fullName: string; role: string; isCloser: boolean };
   closers: Pro[];
   onClose: () => void;
   onSaved: () => void;
@@ -1354,7 +1354,7 @@ function AddCallModal({
   const [phone, setPhone] = useState("");
   const [aiSummary, setAiSummary] = useState("");
   const [callScheduledAt, setCallScheduledAt] = useState(() => nowPlusHoursForInput(1));
-  const [closerId, setCloserId] = useState(currentUser.role === "closer" ? currentUser.id : currentUser.id);
+  const [closerId, setCloserId] = useState(currentUser.isCloser ? currentUser.id : currentUser.id);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 

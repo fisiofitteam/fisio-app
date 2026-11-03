@@ -159,9 +159,9 @@ export default async function LlamadasVentaPage({
       select: { closerIntro: true },
     }),
   ]);
-  const userRole = user.role as ResourceRole;
+  const userRoles = [user.role, ...(user.extraRoles ?? [])] as ResourceRole[];
   const visibleActionTemplates = allActionTemplates
-    .filter((t) => templateVisibleFor(parseTargetRoles(t.targetRoles), userRole))
+    .filter((t) => userRoles.some((role) => templateVisibleFor(parseTargetRoles(t.targetRoles), role)))
     .map((t) => ({ id: t.id, name: t.name, body: t.body, actionType: t.actionType! }));
   const successCaseTemplates = visibleActionTemplates.filter((t) => t.actionType === "send_success_case");
   const meetingReminderTemplates = visibleActionTemplates.filter((t) => t.actionType === "send_meeting_reminder");
@@ -213,7 +213,7 @@ export default async function LlamadasVentaPage({
     <CallsListView
       activeStatus={status}
       activeCloserId={activeCloserId}
-      currentUser={{ id: user.id, fullName: user.fullName, role: user.role }}
+      currentUser={{ id: user.id, fullName: user.fullName, role: user.role, isCloser: hasAnyRole(user, ["closer"]) }}
       closers={closers.map((c) => ({ id: c.id, fullName: c.fullName, role: c.role }))}
       leads={leads.map((l) => ({
         id: l.id,
