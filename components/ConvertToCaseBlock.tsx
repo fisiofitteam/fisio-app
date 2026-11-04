@@ -1,29 +1,34 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { CaseWhatsAppImport } from "@/components/CaseWhatsAppImport";
 import { CaseMaterialPicker } from "@/components/CaseMaterialPicker";
 import { mergeCaseAttachments, type CaseAttachment } from "@/lib/case-attachments";
 type CasePatient = { id: string; fullName: string; diagnosis: string };
 
-export function ConvertToCaseBlock({ patient }: { patient: CasePatient }) {
+type SavedCase = { id: string; summary: string; updatedAt: string };
+export function ConvertToCaseBlock({ patient, savedCase }: { patient: CasePatient; savedCase?: SavedCase }) {
+  const router = useRouter();
+  function close() { setOpen(false); router.refresh(); }
   const [open, setOpen] = useState(false);
   return (
     <>
       <section className="card">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex-1">
-            <h2 className="font-medium mb-1">🩺 Convertir en caso de éxito</h2>
+            <h2 className="font-medium mb-1">{savedCase ? "🩺 Caso de éxito · " + patient.fullName : "🩺 Convertir en caso de éxito"}</h2>
             <p className="text-xs text-neutral-500">
-              Crea un caso clínico publicable a partir de este paciente. Se guarda en el banco de recursos para usarlo en contenido (reels caso éxito, carruseles, etc).
+              {savedCase ? (savedCase.summary || "Caso guardado. Abre el caso para completar sus apartados y materiales.") : "Crea un caso clínico publicable a partir de este paciente. Quedará disponible aquí y en el banco de recursos."}
             </p>
+            {savedCase && <p className="text-xs text-neutral-400 mt-2">Última actualización: {new Date(savedCase.updatedAt).toLocaleDateString("es-ES", { timeZone: "Europe/Madrid" })}</p>}
           </div>
           <button onClick={() => setOpen(true)} className="btn btn-primary text-xs whitespace-nowrap">
-            Generar caso de éxito
+            {savedCase ? "Ver y editar caso" : "Generar caso de éxito"}
           </button>
         </div>
       </section>
       {open && (
-        <ConvertToCaseModal patient={patient} onClose={() => setOpen(false)} onCreated={() => setOpen(false)} />
+        <ConvertToCaseModal patient={patient} existingCaseId={savedCase?.id} onClose={close} onCreated={close} />
       )}
     </>
   );
@@ -71,7 +76,7 @@ type CaseState = {
   notes: string;
 };
 
-function ConvertToCaseModal({ patient, onClose, onCreated }: { patient: CasePatient; onClose: () => void; onCreated: () => void }) {
+function ConvertToCaseModal({ patient, existingCaseId, onClose, onCreated }: { patient: CasePatient; existingCaseId?: string; onClose: () => void; onCreated: () => void }) {
   const [pickerFor, setPickerFor] = useState<typeof APARTADOS[number] | null>(null);
   const [importingWhatsApp, setImportingWhatsApp] = useState(false);
   const [caseId, setCaseId] = useState<string | null>(null);
@@ -99,6 +104,8 @@ function ConvertToCaseModal({ patient, onClose, onCreated }: { patient: CasePati
     let cancelled = false;
     (async () => {
       try {
+        let id = existingCaseId;
+        if (!id) {
         const res = await fetch("/api/content/cases/from-patient", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -107,11 +114,15 @@ function ConvertToCaseModal({ patient, onClose, onCreated }: { patient: CasePati
         if (!res.ok) { setError("No se pudo crear el caso"); return; }
         const data = await res.json();
         if (cancelled) return;
-        setCaseId(data.caseId);
+        id = data.caseId;
+        }
+        if (cancelled || !id) return;
+        setCaseId(id);
 
         // Carga el estado actual del caso (por si ya existía).
-        const detail = await fetch(`/api/content/cases/${data.caseId}`).then((r) => r.ok ? r.json() : null);
-        if (cancelled || !detail) return;
+        const detail = await fetch(`/api/content/cases/${id}`).then((r) => r.ok ? r.json() : null);
+        if (cancelled) return;
+        if (!detail) { setError("No se pudo cargar el caso. Cierra y vuelve a intentarlo."); setCaseId(null); return; }
         setState({
           initialSituation: detail.initialSituation ?? "",
           process: detail.process ?? "",
@@ -132,7 +143,7 @@ function ConvertToCaseModal({ patient, onClose, onCreated }: { patient: CasePati
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [patient.id]);
+  }, [patient.id, existingCaseId]);
 
   async function generateWithAi() {
     if (!caseId) return;
