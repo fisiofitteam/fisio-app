@@ -61,7 +61,7 @@ export async function PUT(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "id requerido" }, { status: 400 });
 
   const pro = await prisma.professional.findUnique({ where: { id } });
-  if (!pro || !pro.email) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+  if (!pro || pro.deletedAt || !pro.email) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
 
   const token = generateToken();
   const expires = new Date();

@@ -24,6 +24,7 @@ export default async function EquipoPage({
 
   // Lista de miembros (solo necesaria si es manager o si está en cualquier tab)
   const pros = await prisma.professional.findMany({
+    where: { deletedAt: null },
     orderBy: [{ active: "desc" }, { fullName: "asc" }],
     select: {
       id: true, fullName: true, email: true, role: true, extraRoles: true, active: true,

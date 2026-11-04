@@ -30,11 +30,26 @@ const ROLE_OPTIONS = [
   { value: "closer", label: "Closer" },
 ];
 
-export function InviteView({ team, canEditCompensation = false, canEditRoles = false }: { team: TeamMember[]; canEditCompensation?: boolean; canEditRoles?: boolean }) {
+export function InviteView({ currentUserId, canDelete = false, team, canEditCompensation = false, canEditRoles = false }: { currentUserId: string; canDelete?: boolean; team: TeamMember[]; canEditCompensation?: boolean; canEditRoles?: boolean }) {
   const router = useRouter();
   const [showNew, setShowNew] = useState(false);
   const [compFor, setCompFor] = useState<TeamMember | null>(null);
   const [extraRolesFor, setExtraRolesFor] = useState<TeamMember | null>(null);
+
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState("");
+  async function removeMember(m: TeamMember) {
+    if (!confirm('¿Eliminar a ' + m.fullName + ' del equipo? Perderá el acceso y desaparecerá del listado. Su historial se conservará.')) return;
+    setDeleting(m.id);
+    setDeleteError("");
+    try {
+      const res = await fetch('/api/professionals/' + m.id, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'No se pudo eliminar');
+      router.refresh();
+    } catch (e) { setDeleteError(e instanceof Error ? e.message : 'Error de conexión'); }
+    finally { setDeleting(null); }
+  }
 
   async function impersonate(m: TeamMember) {
     if (!confirm(`Vas a entrar en el panel de ${m.fullName} como si fueras esa persona. Podrás volver a tu cuenta en cualquier momento. ¿Continuar?`)) return;
@@ -74,6 +89,7 @@ export function InviteView({ team, canEditCompensation = false, canEditRoles = f
         </button>
       </div>
 
+      {deleteError && <p role="alert" className="text-sm text-red-600 mb-3">{deleteError}</p>}
       <section className="card overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -135,6 +151,11 @@ export function InviteView({ team, canEditCompensation = false, canEditRoles = f
                   {canEditRoles && m.active && m.role !== "ceo" && (
                     <button onClick={() => setExtraRolesFor(m)} className="text-[11px] text-neutral-600 hover:underline mr-3">
                       🎭 Roles
+                    </button>
+                  )}
+                  {canDelete && m.id !== currentUserId && m.role !== "ceo" && (
+                    <button disabled={deleting !== null} onClick={() => removeMember(m)} className="text-[11px] text-red-600 hover:underline mr-3 disabled:opacity-50">
+                      {deleting === m.id ? "Eliminando…" : "Eliminar"}
                     </button>
                   )}
                   {canEditCompensation && (
