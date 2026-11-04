@@ -23,6 +23,7 @@ export default async function LlamadasVentaPage({
   // Incluye cargos principales y secundarios en las pestañas y selectores.
   const closers = await prisma.professional.findMany({
     where: {
+      deletedAt: null,
       OR: [
         { role: { in: ["ceo", "closer"] } },
         { extraRoles: { hasSome: ["ceo", "closer"] } },

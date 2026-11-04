@@ -197,6 +197,7 @@ model Patient {
 // ============================================================================
 
 model Professional {
+  deletedAt DateTime? // Removed from team; historical relations retained
   sidebarLayout String? // Personal sidebar folders and order (JSON)
   payrollAdjustments PayrollAdjustment[]
   id        String   @id @default(cuid())
