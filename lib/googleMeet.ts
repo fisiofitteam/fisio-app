@@ -40,13 +40,13 @@ export class MeetApiError extends Error {
 }
 
 /**
- * Auth flexible: por defecto usa la conexión ORGANIZACIONAL (videoconsultas@,
- * la que ve las Meet de venta). Pasando `professionalId` usa la conexión
+ * Auth flexible: por defecto usa la conexión ORGANIZACIONAL seleccionada para las Meet de venta.
+ * Pasando googleEmail se conserva el organizador de llamadas anteriores. Pasando `professionalId` usa la conexión
  * PERSONAL de ese fisio — necesario para las llamadas de paciente donde el
  * organizador es la propia cuenta @fisiofitteam.com del fisio.
  */
-async function meetFetch<T>(path: string, opts: { professionalId?: string } = {}): Promise<T> {
-  const token = await getValidAccessToken(opts.professionalId ? { professionalId: opts.professionalId } : undefined);
+async function meetFetch<T>(path: string, opts: { professionalId?: string; googleEmail?: string | null } = {}): Promise<T> {
+  const token = await getValidAccessToken(opts);
   const res = await fetch(`${MEET_API_BASE}${path}`, {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -96,7 +96,7 @@ export function extractMeetCode(url: string | null | undefined): string | null {
  * El caller (fetchTranscriptForMeetingUrl) itera esta lista hasta encontrar
  * una con transcript válido.
  */
-export async function findConferenceRecordsForCode(meetingCode: string, opts: { professionalId?: string } = {}): Promise<Array<{ name: string; startTime: string; endTime?: string }>> {
+export async function findConferenceRecordsForCode(meetingCode: string, opts: { professionalId?: string; googleEmail?: string | null } = {}): Promise<Array<{ name: string; startTime: string; endTime?: string }>> {
   const filter = encodeURIComponent(`space.meeting_code="${meetingCode}"`);
   const data = await meetFetch<{ conferenceRecords?: Array<{ name: string; startTime: string; endTime?: string }> }>(
     `/conferenceRecords?filter=${filter}`,
@@ -129,7 +129,7 @@ export async function findConferenceRecordForCode(meetingCode: string): Promise<
  * plano ("Speaker: what they said\n\n"). Lanza si el record no tiene
  * transcript disponible (aún se está generando o no se activó).
  */
-export async function getTranscriptTextForRecord(conferenceRecordName: string, opts: { professionalId?: string } = {}): Promise<MeetTranscriptResult> {
+export async function getTranscriptTextForRecord(conferenceRecordName: string, opts: { professionalId?: string; googleEmail?: string | null } = {}): Promise<MeetTranscriptResult> {
   const transcripts = await meetFetch<{ transcripts?: Array<{ name: string; state?: string }> }>(
     `/${conferenceRecordName}/transcripts`,
     opts,
@@ -216,7 +216,7 @@ export type FetchTranscriptResult =
  * porque el organizador es otra cuenta / no fue participante) de
  * "no_transcript" (sí ve la Meet pero aún no publicó transcript).
  */
-export async function fetchTranscriptForMeetingUrl(meetingUrl: string | null | undefined, opts: { professionalId?: string } = {}): Promise<FetchTranscriptResult> {
+export async function fetchTranscriptForMeetingUrl(meetingUrl: string | null | undefined, opts: { professionalId?: string; googleEmail?: string | null } = {}): Promise<FetchTranscriptResult> {
   const code = extractMeetCode(meetingUrl);
   if (!code) return { kind: "no_url" };
   const records = await findConferenceRecordsForCode(code, opts);

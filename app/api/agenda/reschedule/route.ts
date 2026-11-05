@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
   // ─── Borrar evento anterior (best-effort) ───
   if (lead.googleEventId) {
     try {
-      await deleteEvent(lead.googleEventId);
+      await deleteEvent(lead.googleEventId, lead.googleCalendarEmail);
     } catch (e: any) {
       // No bloqueamos por esto: si el borrado falla, los dos eventos quedarían
       // en el calendar pero el de la cita nueva sí se crearía. Loggeamos para
@@ -168,6 +168,7 @@ export async function POST(req: NextRequest) {
     data: {
       callScheduledAt: startDate,
       googleEventId: calendarEvent.id,
+      googleCalendarEmail: calendarEvent.googleCalendarEmail,
       meetingUrl,
       closerId: newCloserId || undefined,
       rescheduledAt: new Date(),

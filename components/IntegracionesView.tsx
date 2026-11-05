@@ -18,6 +18,7 @@ type PersonalConnection = {
 
 export function IntegracionesView({
   showOrganizational,
+  canChangeShared = false,
   organizationalConnection,
   personalConnection,
   flashSuccess,
@@ -25,6 +26,7 @@ export function IntegracionesView({
   flashError,
 }: {
   showOrganizational: boolean;
+  canChangeShared?: boolean;
   organizationalConnection: OrganizationalConnection | null;
   personalConnection: PersonalConnection | null;
   flashSuccess: boolean;
@@ -32,12 +34,26 @@ export function IntegracionesView({
   flashError: string | null;
 }) {
   const router = useRouter();
+  const [switching, setSwitching] = useState(false);
+  const [switchError, setSwitchError] = useState("");
   const [disconnectingOrg, setDisconnectingOrg] = useState(false);
   const [disconnectingMy, setDisconnectingMy] = useState(false);
 
+  async function usePersonalAsShared() {
+    if (!personalConnection || !confirm('¿Usar ' + personalConnection.googleEmail + ' para las nuevas reservas? Las citas existentes conservarán su calendario de origen.')) return;
+    setSwitching(true); setSwitchError("");
+    try {
+      const res = await fetch('/api/google/status', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ googleEmail: personalConnection.googleEmail }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'No se pudo cambiar la agenda');
+      router.refresh();
+    } catch (e) { setSwitchError(e instanceof Error ? e.message : 'Error de conexión'); }
+    finally { setSwitching(false); }
+  }
+
   async function disconnect(scope: "organizational" | "personal") {
     const msg = scope === "organizational"
-      ? "¿Desconectar la cuenta compartida (videoconsultas)?\n\nLa app dejará de poder gestionar la agenda compartida hasta reconectar."
+      ? "¿Desconectar la cuenta compartida?\n\nLa app dejará de poder gestionar la agenda compartida hasta reconectar."
       : "¿Desconectar tu cuenta de Google?\n\nLa app dejará de mostrar tus slots libres para pacientes y no podrá bajar transcripciones de tus llamadas.";
     if (!confirm(msg)) return;
 
@@ -47,7 +63,8 @@ export function IntegracionesView({
     if (res.ok) {
       router.refresh();
     } else {
-      alert("No se pudo desconectar. Intenta de nuevo.");
+      const data = await res.json().catch(() => ({}));
+      alert(data.error || "No se pudo desconectar. Intenta de nuevo.");
       setter(false);
     }
   }
@@ -77,7 +94,7 @@ export function IntegracionesView({
             <div className="flex-1 min-w-0">
               <h2 className="font-medium">Google Calendar · Cuenta compartida</h2>
               <p className="text-xs text-neutral-500 mt-0.5">
-                Agenda de <strong>videoconsultas@fisiofitteam.com</strong> — la usan las llamadas de venta y el auto-agendamiento público.
+                Agenda de <strong>{organizationalConnection?.googleEmail || "la cuenta del equipo"}</strong> — la usan las llamadas de venta y el auto-agendamiento público.
               </p>
             </div>
           </div>
@@ -92,11 +109,13 @@ export function IntegracionesView({
             />
           ) : (
             <ConnectCta
-              hint="Loguéate con videoconsultas@fisiofitteam.com cuando Google te lo pida."
+              hint="Selecciona la cuenta del equipo que quieres usar para las reservas."
               href="/api/google/connect"
               label="Conectar cuenta compartida"
             />
           )}
+          {canChangeShared && personalConnection && personalConnection.googleEmail !== organizationalConnection?.googleEmail && <button onClick={usePersonalAsShared} disabled={switching} className="text-xs font-medium underline mt-3 disabled:opacity-50">{switching ? "Validando cuenta…" : "Usar " + personalConnection.googleEmail + " como agenda compartida"}</button>}
+          {switchError && <p role="alert" className="text-xs text-red-600 mt-2">{switchError}</p>}
         </section>
       )}
 

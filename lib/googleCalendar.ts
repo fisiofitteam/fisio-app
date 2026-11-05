@@ -3,9 +3,10 @@
  *
  * Centraliza la gestión del access_token (refresca automáticamente cuando
  * expira) y proporciona métodos sencillos para leer y crear eventos en la
- * agenda compartida `videoconsultas@fisiofitteam.com`.
+ * agenda compartida seleccionada en Integraciones.
  */
 import { prisma } from "@/lib/prisma";
+import { getOrganizationalConnection } from "@/lib/google-connection";
 import { encrypt, decrypt } from "@/lib/encryption";
 import { refreshAccessToken } from "@/lib/googleOAuth";
 
@@ -16,21 +17,24 @@ const TOKEN_EXPIRY_MARGIN_MS = 60_000;
 
 /**
  * Obtiene un access_token válido (refresca si expiró) para el ámbito indicado:
- *  - undefined u "organizational" → conexión compartida videoconsultas
- *    (professionalId = null en BD).
+ *  - undefined → conexión compartida seleccionada.
+ *  - googleEmail → cuenta organizadora de un evento existente.
  *  - un professionalId concreto → conexión personal de ese fisio.
  *
  * Lanza un error si no hay conexión disponible para el ámbito pedido.
  */
-export async function getValidAccessToken(scope?: { professionalId?: string | null }): Promise<string> {
+export async function getValidAccessToken(scope?: { professionalId?: string | null; googleEmail?: string | null }): Promise<string> {
   const professionalId = scope?.professionalId ?? null;
-  const conn = await prisma.googleCalendarConnection.findFirst({
-    where: { professionalId },
-    orderBy: { createdAt: "desc" },
-  });
+  const conn = scope?.googleEmail
+    ? await prisma.googleCalendarConnection.findUnique({ where: { googleEmail: scope.googleEmail } })
+    : professionalId
+      ? await prisma.googleCalendarConnection.findUnique({ where: { professionalId } })
+      : await getOrganizationalConnection();
   if (!conn) {
     throw new Error(
-      professionalId
+      scope?.googleEmail
+        ? "La cuenta organizadora de esta llamada ya no está conectada a Google Calendar."
+        : professionalId
         ? "Este fisio no tiene su Google Calendar conectado (Ajustes → Integraciones → Mi cuenta personal)."
         : "No hay Google Calendar conectado. Conéctalo en Ajustes → Integraciones.",
     );
@@ -73,19 +77,10 @@ export async function getValidAccessToken(scope?: { professionalId?: string | nu
   return newAccess;
 }
 
-/**
- * El email de la agenda donde leemos/escribimos. Usamos "primary" del usuario
- * que se conectó (que debería ser videoconsultas@fisiofitteam.com).
- */
+/** Calendar and token must use the same selected connection. */
 async function getCalendarId(): Promise<string> {
-  // Siempre la organizacional para operaciones legacy (creación de eventos
-  // de venta, etc.). Nuevas funciones que necesiten calendarId de un fisio
-  // concreto deben pasar { professionalId } y usar el email correspondiente.
-  const conn = await prisma.googleCalendarConnection.findFirst({
-    where: { professionalId: null },
-    orderBy: { createdAt: "desc" },
-  });
-  if (!conn) throw new Error("No hay conexión Google");
+  const conn = await getOrganizationalConnection();
+  if (!conn) throw new Error("No hay conexión Google compartida");
   return conn.googleEmail;
 }
 
@@ -96,6 +91,7 @@ type CalendarEventTime = {
 
 export type CalendarEvent = {
   id: string;
+  googleCalendarEmail?: string;
   status: string;
   summary?: string;
   description?: string;
@@ -116,42 +112,47 @@ export type CalendarEvent = {
  *  - Detectar nuevos eventos creados por la API (sincronizar leads, en futuro)
  */
 export async function listEvents(timeMinISO: string, timeMaxISO: string): Promise<CalendarEvent[]> {
-  const token = await getValidAccessToken();
   const calendarId = await getCalendarId();
-
-  const params = new URLSearchParams({
-    timeMin: timeMinISO,
-    timeMax: timeMaxISO,
-    singleEvents: "true",
-    orderBy: "startTime",
-    maxResults: "250",
-    showDeleted: "false",
+  // Keep old reservations blocking slots while their organizer is being retired.
+  const legacy = await prisma.lead.findMany({
+    where: {
+      status: "scheduled",
+      callScheduledAt: { gte: new Date() },
+      googleEventId: { not: null },
+      googleCalendarEmail: { not: null },
+    },
+    select: { googleCalendarEmail: true },
+    distinct: ["googleCalendarEmail"],
   });
-
-  const url = `${CALENDAR_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events?${params.toString()}`;
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Calendar list events failed: ${res.status} ${text}`);
-  }
-
-  const data = await res.json();
-  return (data.items || []) as CalendarEvent[];
+  const calendars = [...new Set([calendarId, ...legacy.map(l => l.googleCalendarEmail).filter((email): email is string => !!email)])];
+  const groups = await Promise.all(calendars.map(async (email) => {
+    const token = await getValidAccessToken({ googleEmail: email });
+    const events: CalendarEvent[] = [];
+    let pageToken: string | undefined;
+    do {
+      const params = new URLSearchParams({
+        timeMin: timeMinISO, timeMax: timeMaxISO, singleEvents: "true",
+        orderBy: "startTime", maxResults: "250", showDeleted: "false",
+        ...(pageToken ? { pageToken } : {}),
+      });
+      const res = await fetch(`${CALENDAR_API_BASE}/calendars/${encodeURIComponent(email)}/events?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`Calendar list events failed: ${res.status} ${await res.text()}`);
+      const data = await res.json();
+      events.push(...(data.items || []).map((event: CalendarEvent) => ({ ...event, googleCalendarEmail: email })));
+      pageToken = data.nextPageToken;
+    } while (pageToken);
+    return events;
+  }));
+  return [...new Map(groups.flat().map(event => [event.googleCalendarEmail + ":" + event.id, event])).values()];
 }
 
 /**
  * Crea un evento en Calendar con Google Meet automático.
  *
- * Notas:
- *  - El evento se crea en la agenda `videoconsultas@` (mismo calendar al que
- *    estamos conectados via OAuth)
- *  - Como esa agenda ya tiene configurado a fisiofitteam@ y miguelcastro@
- *    como coanfitriones automáticos en cada evento, NO los pasamos en
- *    attendees aquí (Google los añadirá por su cuenta)
- *  - sendUpdates=all hace que Google envíe el email de invitación al asistente
+ * La cuenta compartida seleccionada organiza el evento. sendUpdates=all
+ * envía la invitación a sus asistentes.
  */
 export async function createEventWithMeet(params: {
   title: string;
@@ -161,9 +162,9 @@ export async function createEventWithMeet(params: {
   timeZone?: string;
   attendeeEmail: string;
   attendeeName?: string;
-}): Promise<CalendarEvent> {
-  const token = await getValidAccessToken();
+}): Promise<CalendarEvent & { googleCalendarEmail: string }> {
   const calendarId = await getCalendarId();
+  const token = await getValidAccessToken({ googleEmail: calendarId });
   const tz = params.timeZone || "Europe/Madrid";
 
   // ─── Coanfitriones del equipo FisioFit ───
@@ -182,7 +183,7 @@ export async function createEventWithMeet(params: {
   // por casualidad usara alguno de los emails del equipo.
   const leadEmailLower = params.attendeeEmail.trim().toLowerCase();
   const cohostsFiltered = TEAM_COHOSTS.filter(
-    (c) => c.email.toLowerCase() !== leadEmailLower
+    (c) => c.email.toLowerCase() !== leadEmailLower && c.email.toLowerCase() !== calendarId.toLowerCase()
   );
 
   const attendees = [
@@ -223,7 +224,7 @@ export async function createEventWithMeet(params: {
     throw new Error(`Calendar create event failed: ${res.status} ${text}`);
   }
 
-  return res.json();
+  return { ...await res.json(), googleCalendarEmail: calendarId };
 }
 
 /**
@@ -241,10 +242,10 @@ export function getMeetLink(event: CalendarEvent): string | null {
  * Best-effort: si el evento ya no existe o el API devuelve 404/410, no
  * lanzamos error — solo loggeamos. Otros errores HTTP se propagan.
  */
-export async function deleteEvent(eventId: string): Promise<void> {
+export async function deleteEvent(eventId: string, googleCalendarEmail?: string | null): Promise<void> {
   if (!eventId) return;
-  const token = await getValidAccessToken();
-  const calendarId = await getCalendarId();
+  const calendarId = googleCalendarEmail || await getCalendarId();
+  const token = await getValidAccessToken({ googleEmail: calendarId });
   const url = `${CALENDAR_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`;
   const res = await fetch(url, {
     method: "DELETE",

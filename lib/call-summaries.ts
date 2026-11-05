@@ -200,7 +200,7 @@ export async function generateSummaryForLead(
 ): Promise<GenerateResult> {
   const lead = await prisma.lead.findUnique({
     where: { id: leadId },
-    select: { id: true, fullName: true, meetingUrl: true, status: true },
+    select: { id: true, fullName: true, meetingUrl: true, googleCalendarEmail: true, status: true },
   });
   if (!lead) return { ok: false, reason: "error", detail: "Lead no encontrado" };
   if (!lead.meetingUrl) return { ok: false, reason: "no_meeting_url" };
@@ -231,7 +231,7 @@ export async function generateSummaryForLead(
   const t0 = Date.now();
   let fetchResult;
   try {
-    fetchResult = await fetchTranscriptForMeetingUrl(lead.meetingUrl);
+    fetchResult = await fetchTranscriptForMeetingUrl(lead.meetingUrl, { googleEmail: lead.googleCalendarEmail });
   } catch (e: any) {
     const msg = e instanceof MeetApiError ? e.message : e?.message ?? "unknown";
     const saved = await prisma.callSummary.upsert({
@@ -247,7 +247,7 @@ export async function generateSummaryForLead(
     // La primera es permanente; la segunda se puede reintentar más tarde.
     const detailByKind: Record<typeof fetchResult.kind, string> = {
       no_url: "El lead no tiene meetingUrl configurado.",
-      no_conference: "La cuenta de Google conectada (videoconsultas@fisiofitteam.com) NO ve esta reunión en Meet. Suele pasar cuando el organizador es otra cuenta (Ales personal, por ejemplo). Solución: la reunión debe crearse desde la cuenta de videoconsultas para que Meet exponga la transcripción por API.",
+      no_conference: "La cuenta organizadora vinculada a esta llamada no puede ver la reunión en Meet. Revisa su conexión en Integraciones y los permisos de acceso a la transcripción.",
       no_transcript: "Meet aún no ha publicado el archivo del transcript. Suele tardar 5-30 min tras terminar la llamada. Reintenta más tarde.",
     };
     const detail = detailByKind[fetchResult.kind];

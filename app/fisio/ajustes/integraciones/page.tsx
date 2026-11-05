@@ -17,7 +17,7 @@ export default async function IntegracionesPage({
   // Conexión organizacional (solo CEO/head_success la ven)
   const orgConn = isManager
     ? await prisma.googleCalendarConnection.findFirst({
-        where: { professionalId: null },
+        where: { isOrganizational: true },
         orderBy: { createdAt: "desc" },
       })
     : null;
@@ -48,6 +48,7 @@ export default async function IntegracionesPage({
 
       <IntegracionesView
         showOrganizational={isManager}
+        canChangeShared={user.role === "ceo"}
         organizationalConnection={
           orgConn
             ? {

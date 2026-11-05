@@ -71,8 +71,11 @@ export async function GET(req: NextRequest) {
       // esta última tiene professionalId=null.
       const existing = await prisma.googleCalendarConnection.findFirst({
         where: { professionalId: user.id },
-        select: { id: true },
+        select: { id: true, googleEmail: true, isOrganizational: true },
       });
+      if (existing && existing.googleEmail !== userInfo.email && (existing.isOrganizational || await prisma.lead.count({ where: { googleCalendarEmail: existing.googleEmail } }))) {
+        throw new Error("Esta conexión conserva citas o es la agenda compartida. No se puede sustituir por otra cuenta personal.");
+      }
       if (existing) {
         await prisma.googleCalendarConnection.update({
           where: { id: existing.id },
@@ -103,26 +106,15 @@ export async function GET(req: NextRequest) {
         });
       }
     } else {
-      // organizational: comportamiento clásico (una por email).
-      await prisma.googleCalendarConnection.upsert({
-        where: { googleEmail: userInfo.email },
-        create: {
-          googleEmail: userInfo.email,
-          googleName: userInfo.name,
-          connectedById: user.id,
-          accessTokenEnc,
-          refreshTokenEnc,
-          tokenExpiresAt: expiresAt,
-          scopes: tokens.scope,
-        },
-        update: {
-          googleName: userInfo.name,
-          connectedById: user.id,
-          accessTokenEnc,
-          ...(refreshTokenEnc && { refreshTokenEnc }),
-          tokenExpiresAt: expiresAt,
-          scopes: tokens.scope,
-        },
+      await prisma.$transaction(async tx => {
+        const previous = await tx.googleCalendarConnection.findFirst({ where: { isOrganizational: true } });
+        if (previous) await tx.lead.updateMany({ where: { googleEventId: { not: null }, googleCalendarEmail: null }, data: { googleCalendarEmail: previous.googleEmail } });
+        await tx.googleCalendarConnection.updateMany({ where: { isOrganizational: true }, data: { isOrganizational: false } });
+        await tx.googleCalendarConnection.upsert({
+          where: { googleEmail: userInfo.email },
+          create: { googleEmail: userInfo.email, googleName: userInfo.name, connectedById: user.id, accessTokenEnc, refreshTokenEnc, tokenExpiresAt: expiresAt, scopes: tokens.scope, isOrganizational: true },
+          update: { googleName: userInfo.name, connectedById: user.id, accessTokenEnc, ...(refreshTokenEnc && { refreshTokenEnc }), tokenExpiresAt: expiresAt, scopes: tokens.scope, isOrganizational: true },
+        });
       });
     }
 
