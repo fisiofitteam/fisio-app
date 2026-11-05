@@ -177,6 +177,7 @@ export async function createEventWithMeet(params: {
   const TEAM_COHOSTS: { email: string; name: string }[] = [
     { email: "fisiofitteam@fisiofitteam.com", name: "Ales Faus (FisioFit)" },
     { email: "miguelcastro@fisiofitteam.com", name: "Miguel Castro (FisioFit)" },
+    { email: "sofiacaliz@fisiofitteam.com", name: "Sofía Cáliz (FisioFit)" },
   ];
 
   // El attendee principal (el lead). Asegurar que no duplicamos si el lead
