@@ -334,6 +334,7 @@ model Transaction {
 // ============================================================================
 
 model Lead {
+  googleCalendarEmail String? // Calendar that owns this lead event
   id              String    @id @default(cuid())
   fullName        String
   contactType     String                                     // "phone" | "instagram" | "email"
@@ -1834,6 +1835,7 @@ model PatientPushToken {
 // ============================================================================
 
 model GoogleCalendarConnection {
+  isOrganizational Boolean @default(false)
   id              String   @id @default(cuid())
 
   // Email de la cuenta Google que se conectó (típicamente videoconsultas@fisiofitteam.com)

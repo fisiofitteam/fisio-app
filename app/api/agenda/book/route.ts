@@ -171,6 +171,7 @@ export async function POST(req: NextRequest) {
       bookedAt: new Date(),
       meetingUrl,
       googleEventId: calendarEvent.id,
+      googleCalendarEmail: calendarEvent.googleCalendarEmail,
       closerId: closerId || undefined,
       aiSummary: motivoIn
         ? `Reservado desde landing. Motivo: ${motivoIn.slice(0, 200)}`
