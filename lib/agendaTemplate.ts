@@ -94,8 +94,11 @@ export async function getShiftsForWeek(weekStartDate: Date): Promise<ResolvedShi
 export async function getShiftsForDateRange(from: Date, to: Date): Promise<Map<string, ResolvedShift[]>> {
   // Mapa weekStartDate (ISO YYYY-MM-DD) → shifts de esa semana
   const cache = new Map<string, ResolvedShift[]>();
-  const cursor = new Date(from);
-  while (cursor <= to) {
+  // Start on Monday and include the final partial week, even when `to`
+  // falls before the original weekday/time in that week.
+  const cursor = weekStartOf(from);
+  const lastWeek = weekStartOf(to);
+  while (cursor <= lastWeek) {
     const ws = weekStartOf(cursor);
     const key = ws.toISOString().slice(0, 10);
     if (!cache.has(key)) {
@@ -103,7 +106,7 @@ export async function getShiftsForDateRange(from: Date, to: Date): Promise<Map<s
       cache.set(key, shifts);
     }
     // Avanzar 1 semana
-    cursor.setDate(cursor.getDate() + 7);
+    cursor.setUTCDate(cursor.getUTCDate() + 7);
   }
   return cache;
 }

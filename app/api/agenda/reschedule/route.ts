@@ -5,10 +5,10 @@
  * El lead, desde la landing /agenda/reagendar/[token], elige un nuevo hueco
  * y aquí:
  *  1. Validamos el token y que el lead siga en estado "scheduled".
- *  2. Comprobamos que el slot nuevo siga libre (race condition).
+ *  2. Revalidamos horario, bloqueos y disponibilidad del nuevo slot.
  *  3. Borramos el evento de Calendar anterior (best-effort).
  *  4. Creamos un evento nuevo con Meet (reutilizando los datos del lead).
- *  5. Reasignamos closer según patrón semanal (whoseSlot).
+ *  5. Asignamos el closer de la franja validada.
  *  6. Actualizamos el lead (callScheduledAt, googleEventId, meetingUrl,
  *     closerId, rescheduledAt).
  *  7. Notificamos a los setters (lead reagendado) y al closer asignado.
@@ -25,7 +25,7 @@ import {
   getMeetLink,
   listEvents,
 } from "@/lib/googleCalendar";
-import { whoseSlot } from "@/lib/scheduleResolver";
+import { findConfiguredSlot } from "@/lib/agendaSlots";
 import { notifySetters, notifyProfessional } from "@/lib/notifications";
 
 type Body = { token?: string; startISO?: string; endISO?: string };
@@ -38,16 +38,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Body inválido" }, { status: 400 });
   }
 
-  const token = (body.token || "").trim();
-  const startISO = (body.startISO || "").trim();
-  const endISO = (body.endISO || "").trim();
+  const token = typeof body?.token === "string" ? body.token.trim() : "";
+  const startISO = typeof body?.startISO === "string" ? body.startISO.trim() : "";
+  const endISO = typeof body?.endISO === "string" ? body.endISO.trim() : "";
   if (!token || !startISO || !endISO) {
     return NextResponse.json({ ok: false, error: "Faltan datos" }, { status: 400 });
   }
 
   const startDate = new Date(startISO);
   const endDate = new Date(endISO);
-  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime()) || endDate <= startDate) {
     return NextResponse.json({ ok: false, error: "Fecha del slot inválida" }, { status: 400 });
   }
   if (startDate <= new Date()) {
@@ -77,7 +77,16 @@ export async function POST(req: NextRequest) {
   }
 
   // ─── Comprobar disponibilidad real en Calendar ───
+  let newCloserId: string;
   try {
+    const configuredSlot = await findConfiguredSlot(startISO, endISO);
+    if (!configuredSlot) {
+      return NextResponse.json(
+        { ok: false, error: "Ese horario ya no está disponible. Elige otro hueco." },
+        { status: 409 }
+      );
+    }
+    newCloserId = configuredSlot.closerId;
     const events = await listEvents(startISO, endISO);
     const overlap = events.some(
       (e) =>
@@ -157,11 +166,6 @@ export async function POST(req: NextRequest) {
 
   const meetingUrl = getMeetLink(calendarEvent);
 
-  // ─── Reasignar closer según el patrón semanal del nuevo slot ───
-  // Si no hay closer cubriendo el slot (no debería pasar porque getAvailableSlots
-  // solo devuelve huecos cubiertos), conservamos el closer original.
-  const newCloserId = (await whoseSlot(startDate)) || lead.closerId;
-
   // ─── Persistir cambios ───
   const updated = await prisma.lead.update({
     where: { id: lead.id },
@@ -170,7 +174,7 @@ export async function POST(req: NextRequest) {
       googleEventId: calendarEvent.id,
       googleCalendarEmail: calendarEvent.googleCalendarEmail,
       meetingUrl,
-      closerId: newCloserId || undefined,
+      closerId: newCloserId,
       rescheduledAt: new Date(),
       // Reset de estados intermedios del workflow: si el closer ya había
       // "contactado" o enviado recordatorio, esos pasos pueden tener fecha

@@ -3,16 +3,16 @@
  *
  * Público (sin auth). Recibe el formulario completo de la landing y:
  *  1. Valida los datos
- *  2. Comprueba que el slot sigue libre (race condition)
+ *  2. Revalida horario, bloqueos y disponibilidad del slot
  *  3. Crea evento en Calendar con Meet automático
  *  4. Crea Lead en BD con todos los campos
- *  5. Auto-asigna closer según `whoseSlot()`
+ *  5. Asigna el closer de la franja validada
  *  6. Devuelve { leadId } para que el frontend redirija a /agenda/gracias
  */
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createEventWithMeet, getMeetLink, listEvents } from "@/lib/googleCalendar";
-import { whoseSlot } from "@/lib/scheduleResolver";
+import { findConfiguredSlot } from "@/lib/agendaSlots";
 import { notifySetters } from "@/lib/notifications";
 
 type BookBody = {
@@ -43,6 +43,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Body inválido" }, { status: 400 });
   }
 
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return NextResponse.json({ ok: false, error: "Body inválido" }, { status: 400 });
+  }
+
   // Validación campo a campo. Las 3 preguntas del caso (motivo,
   // tratamientosPrevios, impactoCrossfit) son opcionales: el lead
   // decide en la landing si quiere contar su caso ya o esperar a la
@@ -57,7 +61,7 @@ export async function POST(req: NextRequest) {
     "endISO",
   ];
   for (const k of required) {
-    if (!body[k] || (typeof body[k] === "string" && !body[k].trim())) {
+    if (typeof body[k] !== "string" || !body[k].trim()) {
       return NextResponse.json({ ok: false, error: `Falta el campo: ${k}` }, { status: 400 });
     }
   }
@@ -69,7 +73,7 @@ export async function POST(req: NextRequest) {
 
   const startDate = new Date(body.startISO);
   const endDate = new Date(body.endISO);
-  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime()) || endDate <= startDate) {
     return NextResponse.json({ ok: false, error: "Fecha del slot inválida" }, { status: 400 });
   }
   if (startDate <= new Date()) {
@@ -87,7 +91,16 @@ export async function POST(req: NextRequest) {
   // En el tiempo entre que cargamos los slots y el lead pulsa "confirmar",
   // alguien podría haber agendado ese mismo slot. Comprobamos eventos
   // existentes que solapen.
+  let closerId: string;
   try {
+    const configuredSlot = await findConfiguredSlot(body.startISO, body.endISO);
+    if (!configuredSlot) {
+      return NextResponse.json(
+        { ok: false, error: "Ese horario ya no está disponible. Elige otro hueco." },
+        { status: 409 }
+      );
+    }
+    closerId = configuredSlot.closerId;
     const events = await listEvents(body.startISO, body.endISO);
     const overlap = events.some(
       (e) =>
@@ -149,9 +162,6 @@ export async function POST(req: NextRequest) {
 
   const meetingUrl = getMeetLink(calendarEvent);
 
-  // ─── Auto-asignar closer según patrón semanal ───
-  const closerId = await whoseSlot(startDate);
-
   // ─── Crear Lead ───
   const lead = await prisma.lead.create({
     data: {
@@ -172,7 +182,7 @@ export async function POST(req: NextRequest) {
       meetingUrl,
       googleEventId: calendarEvent.id,
       googleCalendarEmail: calendarEvent.googleCalendarEmail,
-      closerId: closerId || undefined,
+      closerId,
       aiSummary: motivoIn
         ? `Reservado desde landing. Motivo: ${motivoIn.slice(0, 200)}`
         : `Reservado desde landing. Sin cuestionario previo (lead lo rellenará en la llamada).`,
