@@ -17,7 +17,9 @@ function example(retest:boolean,config:PilotConfig){
  field("pvcHold",{holdSeconds:time*(retest?1:.75),inRangeSeconds:time*(retest?.9:.45),positionLossSeconds:time*(retest?.05:.15)});
  field("bumperHold",{holdSeconds:time*(retest?.9:.5),inRangeSeconds:time*(retest?.8:.25),positionLossSeconds:time*(retest?.12:.2)});
  field("bumperRaises",{reps5:8,range5:retest?8:6,reps10:retest?8:6,range10:retest?7:4,reps15:retest?4:0,range15:retest?3:0});
- for(const k of ["facePull8rm","press8rm"])field(k,{affectedKg:retest?12:8,referenceKg:12});
+ // The two-rep initial attempt is useful clinical context, but is not a valid 8RM.
+ field("facePull8rm",retest?{affectedKg:10,referenceKg:12}:{referenceKg:12});
+ field("press8rm",{affectedKg:retest?12:8,referenceKg:12});
  for(const k of ["scapLateral","scapFlexion","scapPress"]){
   const v:PilotObservations[string]={};for(let i=1;i<=3;i++){v["r"+i+"Smooth"]=retest||i===1?1:0;v["r"+i+"Symmetric"]=retest||i<3?1:0;v["r"+i+"NoShrug"]=i<3?1:0;}field(k,v);
  }
@@ -25,8 +27,16 @@ function example(retest:boolean,config:PilotConfig){
  field("frontSquat",{comment:retest?"Los codos mantienen su posición al llegar al fondo.":"El codo derecho baja en la pausa de la tercera repetición."});
  field("pushJerk",{comment:retest?"La barra queda nivelada en la recepción.":"En la recepción, el codo derecho termina de extenderse después del izquierdo."});
  field("scapPullUps",{comment:retest?"Mantiene la pausa sin balanceo en las tres repeticiones.":"Flexiona los codos en la última repetición."});
- const pain={before:retest?1:2,after:retest?2:4,painfulTestIds:retest?[byKey.bumperHold]:[byKey.bumperHold,byKey.overheadSquat]};
- return {weekNumber:retest?14:1,publishedAt:"",rubricVersion:RUBRIC_VERSION,pain,observations,scores:scorePilot(observations,pain,config)};
+ const testFeedback={
+  [byKey.facePull8rm]:retest
+    ? {pain:3,reps:8,loadKg:10,comment:"Completé las ocho. Noté el hombro en las dos últimas."}
+    : {pain:6,reps:2,loadKg:8,comment:"Paré después de la segunda repetición porque me dolía el hombro."},
+  [byKey.bumperHold]:{pain:retest?1:2},
+  [byKey.overheadSquat]:{pain:retest?0:3}
+ };
+ const pain={before:retest?1:2,after:retest?2:4,painfulTestIds:Object.entries(testFeedback).filter(([,entry])=>entry.pain>0).map(([id])=>id)};
+ const notAssessable:Record<string,string>=retest?{}:{[byKey.facePull8rm]:"El intento terminó tras dos repeticiones. No hay un 8RM válido del brazo afectado."};
+ return {weekNumber:retest?14:1,publishedAt:"",rubricVersion:RUBRIC_VERSION,pain,observations,testFeedback,notAssessable,scores:scorePilot(observations,pain,config)};
 }
 
 export default async function Example({params,searchParams}:{params:{id:string};searchParams:{semana?:string}}){

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { PILOT_TESTS, scorePilot, type PilotConfig, type PilotObservations, type PilotPain } from "@/lib/shoulder-pilot";
 import { ShoulderPilotReport, pilotNumber, type PilotReportSnapshot } from "@/components/ShoulderPilotReport";
+import type { ShoulderTestFeedbackMap } from "@/lib/shoulder-test-feedback";
+import { ShoulderTestFeedbackReadout, ShoulderTestPainOverview } from "@/components/ShoulderTestFeedbackDisplay";
 import { ShoulderVideoProposal } from "@/components/ShoulderVideoProposal";
 
 import { canAnalyzeShoulderTest } from "@/lib/shoulder-analysis-types";
@@ -13,7 +15,7 @@ import { useShoulderVideoQueue } from "@/components/useShoulderVideoQueue";
 type Video=ShoulderVideoSource & {taskId:string};
 type Data={sessionId:string;weekNumber:number;scheduledDate:string;assignmentId:string;patientId:string;patientName:string;
   observations:PilotObservations;loads:PilotObservations;reviewedTestIds:string[];notAssessable?:Record<string,string>;pain:PilotPain;
-  videos:Video[];baselineVideos?:Video[];initialFormContext:{label:string,value:string}[];aiReviewBlocked?:boolean;version:number;
+  testFeedback?:ShoulderTestFeedbackMap;videos:Video[];baselineVideos?:Video[];initialFormContext:{label:string,value:string}[];aiReviewBlocked?:boolean;version:number;
   published:PilotReportSnapshot|null;baseline:PilotReportSnapshot|null;config:PilotConfig};
 const groups=[...new Set(PILOT_TESTS.map(t=>t.group))];
 function mergeInputs(d:Data):PilotObservations {
@@ -84,7 +86,7 @@ function ReviewSession({sessionId}:{sessionId:string}) {
     </header>
     <section className="card space-y-2"><h2 className="font-semibold">Dolor y respuesta a la carga</h2>
       <div className="grid sm:grid-cols-3 gap-2 text-sm"><p>Antes: <b>{pilotNumber(data.pain.before)}</b></p><p>Después: <b>{pilotNumber(data.pain.after)}</b></p><p>Tests dolorosos: <b>{data.pain.painfulTestIds==null?"Pendiente":data.pain.painfulTestIds.length}</b></p></div>
-      {data.pain.painfulTestIds?.length?<p className="text-sm text-neutral-600">{data.pain.painfulTestIds.map(id=>PILOT_TESTS.find(t=>t.id===id)?.name??"Test").join(" · ")}</p>:null}
+      <ShoulderTestPainOverview current={data} openTest={openTest}/>
       {!!data.initialFormContext?.length&&<details className="text-sm"><summary className="cursor-pointer font-medium">Contexto del formulario inicial</summary><dl className="mt-2">{data.initialFormContext.map((c,i)=><div key={i} className="mt-1"><dt className="font-medium">{c.label}</dt><dd className="whitespace-pre-wrap text-neutral-600">{c.value}</dd></div>)}</dl></details>}
     </section>
     <fieldset disabled={busy} className="min-w-0 space-y-4">
@@ -95,6 +97,11 @@ function ReviewSession({sessionId}:{sessionId:string}) {
       const videoKey=source?revisionKey(source):"",aiEntry=ai.entries[videoKey],manualOnly=!!(source?.aiReviewBlocked||data.aiReviewBlocked);
       return <details className="py-3 scroll-mt-4" key={t.id} id={"test-"+t.id}><summary className="cursor-pointer font-medium text-sm">{t.name} <span className="ml-2 text-xs font-normal text-neutral-500">{reviewed?"Revisado":disabledTest?"Sin valorar":s?.missing?"Pendiente":"Por verificar"}{t.kind==="numeric"&&s?.score!=null?" · "+pilotNumber(s.score)+"/10":""}{aiEntry?.draft&&!aiEntry.applied&&!manualOnly&&!disabledTest?" · Propuesta IA":""}</span></summary>
         <div className="mt-3 space-y-3">
+          <div className="rounded-lg border-l-2 border-teal-600 bg-neutral-50 p-3">
+            <h3 className="text-xs font-semibold">Lo que registró el atleta</h3>
+            {(t.key==="press8rm"||t.key==="facePull8rm") && <p className="text-xs text-neutral-600">Intento con el brazo afectado. La carga válida para el 8RM se revisa aparte.</p>}
+            <ShoulderTestFeedbackReadout id={t.id} current={data} previous={data.weekNumber===14?data.baseline:null} retest={data.weekNumber===14}/>
+          </div>
           <ShoulderVideoProposal key={videoKey||t.id} source={source} initial={initial} disabled={disabledTest||manualOnly}
             entry={aiEntry} conflict={conflict} batchBusy={!!ai.active||conflict} progress={ai.active?.key===videoKey?ai.active.message:undefined} onCancel={ai.stop}
             onAnalyze={()=>{if(source&&!manualOnly&&!disabledTest&&!conflict)ai.run([source]);}}
@@ -121,7 +128,7 @@ function ReviewSession({sessionId}:{sessionId:string}) {
           <label className={"flex items-center gap-2 rounded-lg bg-neutral-50 p-3 text-sm font-medium "+(!canCheck?"opacity-60":"")}><input type="checkbox" checked={reviewed} disabled={!!ai.active||(!canCheck&&!reviewed)} onChange={e=>{const val=e.target.checked;setChecked(p=>[...p.filter(x=>x!==t.id),...(val?[t.id]:[])]);setDirty(true);setNotice("");}}/>He revisado este test</label>
         </div></details>;})}</div></section>)}
     </fieldset>
-    <details className="card"><summary className="cursor-pointer font-semibold">Vista previa del perfil que verá el atleta</summary><div className="mt-3"><ShoulderPilotReport report={{weekNumber:data.weekNumber,publishedAt:"",rubricVersion:data.published?.rubricVersion??"",observations:measured,pain:data.pain,notAssessable:skip,scores}} previous={data.baseline}/></div></details>
+    <details className="card"><summary className="cursor-pointer font-semibold">Vista previa del perfil que verá el atleta</summary><div className="mt-3"><ShoulderPilotReport report={{weekNumber:data.weekNumber,publishedAt:"",rubricVersion:data.published?.rubricVersion??"",observations:measured,pain:data.pain,testFeedback:data.testFeedback,notAssessable:skip,scores}} previous={data.baseline}/></div></details>
     <section className="card space-y-3 sticky bottom-2 shadow-lg z-10">
       {error&&<p role="alert" className="text-red-700 text-sm">{error}</p>}{notice&&<p role="status" className="text-sm">{notice}</p>}
       <div className="flex flex-wrap items-center gap-2"><span className="mr-auto text-xs text-neutral-600">{done}/{PILOT_TESTS.length} revisados{dirty?" · Cambios sin guardar":""}</span>
