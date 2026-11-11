@@ -12,7 +12,7 @@ import { patientShoulderTitle } from "@/lib/patient-shoulder-session";
 
 type Load = { affectedKg?: number | null; referenceKg?: number | null };
 type Pain = { before?: number | null; after?: number | null; painfulTestIds?: string[] | null };
-type State = { version: number; pain: Pain; testFeedback?: ShoulderTestFeedbackMap; legacyPainfulTestIds?: string[] | null; loads: Record<string,Load>; aiReviewBlocked: boolean; published: PilotReportSnapshot | null; baseline: PilotReportSnapshot | null };
+type State = { version: number; pain: Pain; testFeedback?: ShoulderTestFeedbackMap; legacyPainfulTestIds?: string[] | null; loads: Record<string,Load>; published: PilotReportSnapshot | null; baseline: PilotReportSnapshot | null };
 type Change = { pain?: Partial<Pain>; testFeedback?: ShoulderTestFeedbackPatch; loads?: Record<string,Load> };
 const legacyPainful = (d:State) => d.legacyPainfulTestIds === undefined ? d.pain.painfulTestIds??null : d.legacyPainfulTestIds;
 const surface = { background: "var(--p-surface)", color: "var(--p-text)", border: "1px solid var(--p-border)" };
@@ -163,7 +163,6 @@ export function ShoulderPatientBattery({sessionId,week,tasks,onBusyChange}: {ses
         {data.pain?.before==null&&data.pain?.after!=null?<p className="text-xs" style={dim}>Dolor inicial no registrado.</p>:<button type="button" disabled={locked||before===""||Number(before)===data.pain?.before||data.pain?.after!=null} className={btnClass} style={actionStyle} onClick={()=>save({pain:{before:Number(before)}},"Dolor inicial guardado.")}>{before!==""&&Number(before)===data.pain?.before?"Dolor inicial guardado":"Guardar dolor inicial"}</button>}
         {!started&&<button type="button" className="text-xs underline block" onClick={()=>setMissedBaseline(true)}>Ya empecé y no anoté mi dolor inicial</button>}
       </section>}
-      <p className="text-xs" style={dim}>{data.aiReviewBlocked ? "Tu fisio revisará manualmente los vídeos de esta valoración." : "Tu fisio puede analizar fotogramas de los vídeos que subas con la IA de Anthropic. Revisará los resultados antes de compartirlos contigo."}</p>
       {started&&<>
         <p className="text-xs" style={dim}>Abre cada bloque para anotar cuánto te ha dolido cada prueba y dejar un comentario. Puedes subir el vídeo más tarde. Recorta cada uno a un minuto como máximo (hasta 1 GB) y mantén abierta la pantalla hasta que termine la subida.</p>
         {tasks.map((t,i)=>{
