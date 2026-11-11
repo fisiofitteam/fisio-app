@@ -2,6 +2,7 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { PatientNav } from "@/components/PatientNav";
+import { patientShoulderWeek } from "@/lib/patient-shoulder-session";
 import { CombinedSessionRunner, type CombinedGroup } from "@/components/CombinedSessionRunner";
 import { todayForPatient, dowForPatient } from "@/lib/patient-dates";
 import { parseAndSortTasksSnapshot } from "@/lib/task-order";
@@ -11,7 +12,7 @@ const DAY_NAMES = ["", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 export default async function CombinedSessionTodayPage({ params }: { params: { id: string } }) {
   const patient = await prisma.patient.findUnique({
     where: { id: params.id },
-    select: { id: true, whatsappGroupUrl: true, timezone: true },
+    select: { id: true, isTest: true, whatsappGroupUrl: true, timezone: true },
   });
   if (!patient) notFound();
 
@@ -57,6 +58,7 @@ export default async function CombinedSessionTodayPage({ params }: { params: { i
     return {
       sessionId: s.id,
       programName: s.assignment.program.name,
+      pilotWeek: patientShoulderWeek(patient.isTest, s.assignment.programId, s.weekNumber, s.tasksSnapshot),
       tasks,
     };
   });

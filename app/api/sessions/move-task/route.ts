@@ -29,9 +29,11 @@ export async function POST(req: NextRequest) {
 
   const source = await prisma.programSession.findUnique({
     where: { id: sessionId },
-    include: { assignment: { select: { patientId: true } } },
+    include: { assignment: { select: { patientId: true } }, shoulderPilotReview:{select:{sessionId:true}} },
   });
   if (!source) return NextResponse.json({ error: "Sesión no encontrada" }, { status: 404 });
+
+  if (source.shoulderPilotReview) return NextResponse.json({error:"La valoración ya tiene datos. Conserva sus pruebas juntas para mantener el informe."},{status:409});
 
   let tasks: any[] = [];
   try { tasks = JSON.parse(source.tasksSnapshot); } catch { return NextResponse.json({ error: "snapshot inválido" }, { status: 500 }); }

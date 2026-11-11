@@ -54,7 +54,7 @@ export async function generateSessions(assignmentId: string) {
 
   // Borrar futuras no completadas
   await prisma.programSession.deleteMany({
-    where: { assignmentId, completedAt: null, assessmentVideos: { none: {} } },
+    where: { assignmentId, completedAt: null, assessmentVideos: { none: {} }, shoulderPilotReview: null },
   });
 
   // startDate ya NO se alinea al lunes. Es el día real que el fisio
@@ -140,7 +140,7 @@ export async function generateSessions(assignmentId: string) {
       const sessionDate = new Date(startDay);
       sessionDate.setDate(startDay.getDate() + (week - 1) * 7 + (day.dayOfWeek - 1));
 
-      const retained = await prisma.programSession.findFirst({ where: { assignmentId, scheduledDate: sessionDate, assessmentVideos: { some: {} } }, select: { id: true } });
+      const retained = await prisma.programSession.findFirst({ where: { assignmentId, scheduledDate: sessionDate, OR: [{ assessmentVideos: { some: {} } }, { shoulderPilotReview: { isNot: null } }] }, select: { id: true } });
       if (retained) continue;
       await prisma.programSession.create({
         data: {

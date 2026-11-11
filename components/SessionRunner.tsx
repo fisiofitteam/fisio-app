@@ -1,4 +1,6 @@
 "use client";
+import { isShoulderPilotTask } from "@/lib/patient-shoulder-session";
+import { ShoulderPatientBattery } from "@/components/ShoulderPatientBattery";
 import { AssessmentUploader } from "@/components/AssessmentUploader";
 
 
@@ -43,6 +45,7 @@ export function SessionRunner({
   patientId,
   tasks,
   completed,
+  pilotWeek,
   existingResponses,
   existingPatientNotes = null,
   whatsappUrl = null,
@@ -50,6 +53,7 @@ export function SessionRunner({
   sessionId: string;
   patientId: string;
   tasks: Task[];
+  pilotWeek?: 1 | 14;
   completed: boolean;
   existingResponses: string | null;
   /** Notas ya guardadas por el paciente (si la sesión ya está completada).
@@ -101,7 +105,8 @@ export function SessionRunner({
   // guarda como programSession.patientNotes y sustituye al antiguo
   // redirect al grupo de WhatsApp. Obligatorio ≥20 caracteres.
   const [patientNotes, setPatientNotes] = useState(existingPatientNotes ?? "");
-  const NOTES_MIN = 20;
+  const pilotOnly = !!pilotWeek && tasks.every(isShoulderPilotTask);
+  const NOTES_MIN = pilotOnly ? 0 : 20;
   // Estado de edición de sensaciones cuando la sesión ya está completada.
   // El paciente ve un resumen de sus notas y pulsa "Editar sensaciones"
   // para pasar al textarea + botón "Actualizar".
@@ -154,7 +159,12 @@ export function SessionRunner({
         </div>
       )}
 
-      {tasks.map((task) => (
+      {tasks.map((task) => pilotWeek && isShoulderPilotTask(task) ?
+        (task === tasks.find(isShoulderPilotTask) ? <ShoulderPatientBattery
+          key={sessionId} sessionId={sessionId} week={pilotWeek}
+          tasks={tasks.filter(isShoulderPilotTask)}
+          onBusyChange={(key, busy) => setUploads(prev => ({ ...prev, [key]: busy }))}
+        /> : null) : (
         <div
           key={task.id}
           className="rounded-2xl p-4"
@@ -297,7 +307,7 @@ export function SessionRunner({
               ¿Cómo te has sentido en esta sesión?
             </label>
             <p className="text-xs mt-0.5" style={{ color: "var(--p-text-dim)" }}>
-              Detalla las sensaciones que has tenido durante esta sesión — a tu fisio le sirve para ajustar tu plan.
+              {pilotOnly ? "Si quieres, añade algún detalle para tu fisio." : "Detalla las sensaciones que has tenido durante esta sesión — a tu fisio le sirve para ajustar tu plan."}
             </p>
           </div>
           <textarea
@@ -308,7 +318,7 @@ export function SessionRunner({
             onChange={(e) => setPatientNotes(e.target.value)}
           />
           <div className="text-[11px] text-right" style={{ color: patientNotes.trim().length >= NOTES_MIN ? "var(--p-text-dim)" : "var(--p-text-faint)" }}>
-            {patientNotes.trim().length}/{NOTES_MIN} mínimo
+            {pilotOnly ? "Comentario opcional" : patientNotes.trim().length+"/"+NOTES_MIN+" mínimo"}
           </div>
           <button
             onClick={complete}
@@ -374,7 +384,7 @@ export function SessionRunner({
                 className="text-[11px] text-right"
                 style={{ color: patientNotes.trim().length >= NOTES_MIN ? "var(--p-text-dim)" : "var(--p-text-faint)" }}
               >
-                {patientNotes.trim().length}/{NOTES_MIN} mínimo
+                {pilotOnly ? "Comentario opcional" : patientNotes.trim().length+"/"+NOTES_MIN+" mínimo"}
               </div>
               <div className="flex gap-2">
                 <button

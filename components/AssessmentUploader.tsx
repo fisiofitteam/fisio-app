@@ -3,20 +3,27 @@ import { useEffect, useState } from "react";
 import { upload } from "@vercel/blob/client";
 import { parseAssessment, MAX_ASSESSMENT_BYTES, ASSESSMENT_MIMES } from "@/lib/assessments";
 import { youtubeEmbedUrl } from "@/lib/youtube";
-export function AssessmentUploader({ sessionId, task, onBusyChange }: { sessionId: string; task: any; onBusyChange?: (busy: boolean) => void }) {
+type UploadGroup = { rows: any[]; loading: boolean; reload: () => Promise<void> };
+export function AssessmentUploader({ sessionId, task, onBusyChange, group, readOnly = false, renderExtra }: {
+  sessionId: string; task: any; onBusyChange?: (busy: boolean) => void;
+  group?: UploadGroup; readOnly?: boolean; renderExtra?: (testId: string) => React.ReactNode;
+}) {
   const assessment = parseAssessment(task.assessment);
-  const [rows, setRows] = useState<any[]>([]);
+  const [localRows, setRows] = useState<any[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [localLoading, setLoading] = useState(true);
   const [pending, setPending] = useState<{ id: string; pathname: string } | null>(null);
+  const rows = group?.rows ?? localRows;
+  const loading = group?.loading ?? localLoading;
   async function load() {
+    if (group) return group.reload();
     const r = await fetch("/api/assessments?sessionId=" + encodeURIComponent(sessionId), { cache: "no-store" });
     if (!r.ok) throw new Error("No se pudieron cargar tus entregas.");
     setRows(await r.json());
   }
-  useEffect(() => { load().catch(e => setError(e.message)).finally(() => setLoading(false)); }, [sessionId]);
+  useEffect(() => { if (!group) load().catch(e => setError(e.message)).finally(() => setLoading(false)); }, [sessionId, !!group]);
   useEffect(() => {
     onBusyChange?.(!!busy);
     const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
@@ -48,7 +55,7 @@ export function AssessmentUploader({ sessionId, task, onBusyChange }: { sessionI
   const delivered = assessment.tests.filter(t => rows.some(r => r.taskId === task.id && r.testId === t.id && r.url)).length;
   return <div className="space-y-4">
     {assessment.instructions && <p className="text-sm whitespace-pre-wrap">{assessment.instructions}</p>}
-    <p className="rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-950">Recorta cada vídeo a <strong>un minuto como máximo</strong>. Puedes subir archivos de hasta 1 GB. Mantén esta pantalla abierta hasta que termine la subida.</p>
+    {!group && <p className="rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-950">Recorta cada vídeo a <strong>un minuto como máximo</strong>. Puedes subir archivos de hasta 1 GB. Mantén esta pantalla abierta hasta que termine la subida.</p>}
     <p className="text-xs" aria-live="polite">{loading ? "Cargando entregas…" : delivered + " de " + assessment.tests.length + " test entregados"}</p>
     {!assessment.tests.length && <p className="text-sm">Tu fisio está preparando los test de esta valoración.</p>}
     {assessment.tests.map((t, i) => {
@@ -60,7 +67,8 @@ export function AssessmentUploader({ sessionId, task, onBusyChange }: { sessionI
         {t.videoUrl && <details><summary className="cursor-pointer text-sm">Ver vídeo de ejemplo</summary>{embed ? <iframe src={embed} title={"Ejemplo: " + t.name} className="w-full aspect-video rounded-lg mt-2" allowFullScreen /> : <a href={t.videoUrl} target="_blank" rel="noreferrer" className="text-sm underline">Abrir ejemplo</a>}</details>}
         {row?.url && <video src={row.url} controls playsInline preload="metadata" className="w-full max-h-72 rounded-lg bg-black" />}
         {row?.coachNotes && <p className="rounded-lg bg-blue-50 p-3 text-sm text-blue-900 whitespace-pre-wrap"><strong>Comentario de tu fisio: </strong>{row.coachNotes}</p>}
-        {!row?.reviewedAt && <label className={"inline-flex cursor-pointer items-center rounded-lg px-4 py-2 text-sm font-semibold focus-within:ring-2 focus-within:ring-indigo-400 " + (busy || loading || pending ? "opacity-50" : "")} style={{ background: "var(--p-accent, #171717)", color: "var(--p-accent-ink, #ffffff)" }}>{row?.url ? "Sustituir mi vídeo" : "Subir vídeo de este test"}<input type="file" accept="video/mp4,video/quicktime,video/webm,.mov,.mp4,.webm" disabled={!!busy || loading || !!pending} className="sr-only" onChange={e => { const f = e.target.files?.[0]; if (f) void send(t.id, f); e.target.value = ""; }} /></label>}
+        {renderExtra?.(t.id)}
+        {!readOnly && !row?.reviewedAt && <label className={"inline-flex cursor-pointer items-center rounded-lg px-4 py-2 text-sm font-semibold focus-within:ring-2 focus-within:ring-indigo-400 " + (busy || loading || pending ? "opacity-50" : "")} style={{ background: "var(--p-accent, #171717)", color: "var(--p-accent-ink, #ffffff)" }}>{row?.url ? "Sustituir mi vídeo" : "Subir vídeo de este test"}<input type="file" accept="video/mp4,video/quicktime,video/webm,.mov,.mp4,.webm" disabled={!!busy || loading || !!pending} className="sr-only" onChange={e => { const f = e.target.files?.[0]; if (f) void send(t.id, f); e.target.value = ""; }} /></label>}
         {busy === t.id && <div role="status" className="text-sm"><progress max={100} value={progress} className="w-full" />{progress < 100 ? "Subiendo… " + progress + "%" : "Confirmando vídeo…"}</div>}
       </section>;
     })}

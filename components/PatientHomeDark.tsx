@@ -39,6 +39,7 @@ import { PatientNav } from "@/components/PatientNav";
 import { PatientSessionMenu, patientLogout } from "@/components/PatientSessionMenu";
 
 type TodaySession = {
+  pilotTitle?: string;
   id: string;
   programName: string;
   completed: boolean;
@@ -48,6 +49,7 @@ type TodaySession = {
 };
 
 type NextSession = {
+  pilotTitle?: string;
   id: string;
   date: string;
   programName: string;
@@ -491,7 +493,7 @@ export function PatientHomeDark({
                           {new Date(nextSession.date).toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
                         </div>
                         <div className="text-xs mt-0.5" style={{ color: "var(--p-text-dim)" }}>
-                          {nextSession.tasksCount} tareas
+                          {nextSession.pilotTitle ?? (nextSession.tasksCount + (nextSession.tasksCount === 1 ? " tarea" : " tareas"))}
                         </div>
                       </div>
                       <ChevronRight size={18} style={{ color: "var(--p-accent)" }} />
@@ -535,7 +537,7 @@ export function PatientHomeDark({
                     <div className="flex justify-between items-start">
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium flex items-center gap-2" style={{ letterSpacing: "-0.015em" }}>
-                          Sesión de hoy
+                          {pending.length === 1 && pending[0].pilotTitle ? pending[0].pilotTitle : "Sesión de hoy"}
                           {pending.length > 1 && (
                             <span className="flex gap-1">
                               {uniqueAccents.map((a, i) => (
@@ -579,7 +581,7 @@ export function PatientHomeDark({
                       <div className="flex justify-between items-start">
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium" style={{ letterSpacing: "-0.015em" }}>
-                            Sesión completada
+                            {s.pilotTitle ? <Link className="underline" href={`/paciente/${patient.id}/sesion/${s.id}`}>{s.pilotTitle}</Link> : "Sesión completada"}
                           </div>
                           <div className="text-xs mt-0.5" style={{ color: "var(--p-text-dim)" }}>
                             {s.tasksCount} {s.tasksCount === 1 ? "tarea" : "tareas"}
