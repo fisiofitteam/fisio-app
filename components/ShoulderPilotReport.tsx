@@ -2,7 +2,11 @@
 
 import { PILOT_TESTS, scorePilot, legacyPositionLossNeedsReview, type PilotObservations, type PilotPain } from "@/lib/shoulder-pilot";
 
+import type { ShoulderTestFeedbackMap } from "@/lib/shoulder-test-feedback";
+import { PublishedShoulderTestFeedback } from "@/components/ShoulderTestFeedbackDisplay";
+
 export type PilotReportSnapshot = {
+  testFeedback?: ShoulderTestFeedbackMap;
   weekNumber: number;
   publishedAt: string;
   rubricVersion: string;
@@ -96,6 +100,7 @@ export function ShoulderPilotReport({report,previous}: {report:PilotReportSnapsh
         <p>Dolor antes: {pilotNumber(report.pain.before)} · Dolor después: {pilotNumber(report.pain.after)}</p><p>Tests dolorosos: {report.pain.painfulTestIds==null?"Sin registrar":report.pain.painfulTestIds.length===0?"Ninguno":report.pain.painfulTestIds.map(id=>PILOT_TESTS.find(t=>t.id===id)?.name??"Test").join(", ")}.</p>
       </div>:<div className="mt-2 space-y-2">{(capacity?.tests??[]).map(k=>{const t=PILOT_TESTS.find(test=>test.key===k);return t?<div key={t.id}><h4 className="text-sm font-semibold">{t.name}</h4><TestFacts id={t.id} report={report} axis={a.key}/></div>:null;})}</div>}</details>;
     })}</div>
+    <PublishedShoulderTestFeedback current={report} previous={report.weekNumber===14 && previous?.weekNumber===1?previous:null} retest={report.weekNumber===14}/>
     <div><h3 className="font-semibold">Simetría de fuerza · 8RM</h3><p className="text-xs text-neutral-500">Comparamos el brazo afectado con el de referencia para ocho repeticiones válidas.</p>
       <div className="mt-2 grid gap-2 sm:grid-cols-2">{symmetry.map(s=><div key={s.key} className="rounded-xl border border-neutral-200 p-3"><div className="font-medium text-sm">{s.label}</div><p className="text-sm">{s.affectedKg==null||s.referenceKg==null?"Sin valorar":pilotNumber(s.affectedKg)+" kg / "+pilotNumber(s.referenceKg)+" kg · "+pilotNumber(s.score)+"/10"}</p>{compare&&<p className="text-xs text-neutral-500">Inicial: {pilotNumber(compare.scores.symmetry.find(b=>b.key===s.key)?.score)} / 10</p>}</div>)}</div></div>
     <div><h3 className="font-semibold">Cómo te mueves</h3><p className="text-xs text-neutral-500">Observaciones revisadas por tu fisio.</p>
