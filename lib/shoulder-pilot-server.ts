@@ -9,6 +9,8 @@ import { pilotSnapshotRefs } from "@/lib/shoulder-pilot-snapshot";
 import { PILOT_PROGRAM_ID, RUBRIC_VERSION, PILOT_TESTS, scorePilot, validatePilotConfig, legacyPositionLossNeedsReview, sanitizePilotObservations, validatePilotPain,
   type PilotObservations, type PilotPain, type PilotConfig } from "@/lib/shoulder-pilot";
 
+import { cleanShoulderNarrative, readReviewDraft, writeReviewDraft, type ShoulderNarrative } from "@/lib/shoulder-narrative";
+import { makeNarrativeEvidence } from "@/lib/shoulder-narrative-evidence";
 import { mergeTestFeedback, effectivePilotPain, readPatientInput, writePatientInput, type ShoulderTestFeedbackMap } from "@/lib/shoulder-test-feedback";
 
 export class PilotHttpError extends Error {
@@ -24,7 +26,7 @@ function allowedKeys(obj: Record<string,unknown>, keys: readonly string[]) {
 const decode = <T,>(s: string | undefined | null, fallback: T): T => s ? JSON.parse(s) : fallback;
 const rmIds = new Set(["86d6177e-a02e-4ef9-a62c-677323e9f8b9","701ef4c7-6de1-4428-b55e-fefa01ae2336"]);
 type Marks = Record<string,{ source: string|null; reviewerId: string; reviewedAt: string }>;
-type Published = { weekNumber:number; scheduledDate:string; publishedAt:string; rubricVersion:string; config:PilotConfig; videoVersions:Record<string,string>; observations:PilotObservations; pain:PilotPain; testFeedback?:ShoulderTestFeedbackMap; notAssessable:Record<string,string>; scores:ReturnType<typeof scorePilot> };
+type Published = { weekNumber:number; scheduledDate:string; publishedAt:string; rubricVersion:string; config:PilotConfig; videoVersions:Record<string,string>; observations:PilotObservations; pain:PilotPain; testFeedback?:ShoulderTestFeedbackMap; notAssessable:Record<string,string>; scores:ReturnType<typeof scorePilot>; narrative?:ShoulderNarrative };
 const apiInput = <T,>(f: () => T): T => { try { return f(); } catch(e) { throw new PilotHttpError(400, e instanceof Error ? e.message : "Datos incorrectos."); } };
 
 export async function requirePilotAccess(sessionId: string, professionalOnly = false) {
@@ -57,13 +59,13 @@ async function media(db:ReadDb, sessionId:string, patientId:string, refs:Map<str
 const sourceMap=(videos:Awaited<ReturnType<typeof media>>): Record<string,string> =>
   Object.fromEntries(videos.map(v=>[v.testId,v.id+"@"+v.uploadedAt]));
 function unpack(row:ShoulderPilotReview|null, config:PilotConfig) {
-  const stored=decode<PilotObservations>(row?.observationsJson,{}), marks=decode<Marks>(row?.reviewedJson,{});
+  const {observations:stored,narrative}=readReviewDraft(row?.observationsJson), marks=decode<Marks>(row?.reviewedJson,{});
   // A verified legacy aggregate may include shaking. Keep all other checks and fields,
   // but never publish that mark or expose that value as a position-loss measurement.
   for(const [id,fields] of Object.entries(stored)) if(legacyPositionLossNeedsReview(id,fields)) delete marks[id];
   const {globalPain,testFeedback}=readPatientInput(row?.painJson);
   return {
-    globalPain,testFeedback,pain:effectivePilotPain(globalPain,testFeedback), loads:decode<PilotObservations>(row?.loadsJson,{}),
+    globalPain,testFeedback,narrative,pain:effectivePilotPain(globalPain,testFeedback), loads:decode<PilotObservations>(row?.loadsJson,{}),
     observations:sanitizePilotObservations(stored,config), marks,
     notAssessable:decode<Record<string,string>>(row?.notAssessableJson,{})
   };
@@ -99,7 +101,26 @@ export async function getPilotView(sessionId:string) {
     previous?media(prisma,previous.sessionId,patientId,pilotSnapshotRefs(previous.session.tasksSnapshot)||new Map(),previous):Promise.resolve([])]);
   // Never present a replacement upload as the evidence for a previously published baseline.
   const baselineEvidence=baselineVideos.filter(v=>common.baseline?.videoVersions?.[v.testId]===v.id+"@"+v.uploadedAt);
-  return {...common,observations:raw.observations,reviewedTestIds:validMarks(raw.marks,sourceMap(videos)),notAssessable:raw.notAssessable,initialFormContext,videos,baselineVideos:baselineEvidence,baselineSessionId:previous?.sessionId||null};
+  return {...common,narrative:raw.narrative,observations:raw.observations,reviewedTestIds:validMarks(raw.marks,sourceMap(videos)),notAssessable:raw.notAssessable,initialFormContext,videos,baselineVideos:baselineEvidence,baselineSessionId:previous?.sessionId||null};
+}
+
+// Generate only from the saved clinical measurements. Do not read anamnesis or media
+// contents here, and never send patient- or clinician-authored text to the provider.
+export async function getShoulderNarrativeEvidence(sessionId:string,version:number){
+  const a=await requirePilotAccess(sessionId,true);
+  if((a.row?.version??0)!==version)throw conflict();
+  const d=unpack(a.row,a.config);
+  const prior=a.session.weekNumber===14?await prisma.shoulderPilotReview.findFirst({
+    where:{publishedAt:{not:null},session:{assignmentId:a.session.assignmentId,weekNumber:1,scheduledDate:{lte:a.session.scheduledDate}}},
+    orderBy:[{session:{scheduledDate:"desc"}},{sessionId:"asc"}],select:{publishedJson:true}
+  }):null;
+  const videos=await media(prisma,sessionId,a.session.assignment.patientId,a.refs,a.row);
+  const sources=sourceMap(videos);
+  // A replacement video invalidates any measurement verified against the previous revision.
+  const observations=Object.fromEntries(Object.entries(d.observations).filter(([id])=>
+    !d.notAssessable[id] && (!d.marks[id] || d.marks[id].source===(sources[id]??null))));
+  return makeNarrativeEvidence({weekNumber:a.session.weekNumber,config:a.config,observations,pain:d.pain,testFeedback:d.testFeedback},
+    decode<Published|null>(prior?.publishedJson,null));
 }
 
 function parseReasons(raw: unknown, ids:Set<string>) {
@@ -165,12 +186,12 @@ export async function updatePilot(sessionId:string, input:unknown) {
               raw.loads[id]=record;raw.observations[id]={...raw.observations[id],...record};delete raw.marks[id];
             }
           }
-          data.loadsJson=JSON.stringify(raw.loads);data.observationsJson=JSON.stringify(raw.observations);data.reviewedJson=JSON.stringify(raw.marks);
+          data.loadsJson=JSON.stringify(raw.loads);data.observationsJson=writeReviewDraft(raw.observations,raw.narrative);data.reviewedJson=JSON.stringify(raw.marks);
         }
       }else{
         const videos=await media(tx,sessionId,session.assignment.patientId,refs,row), sources=sourceMap(videos);
         if(b.action==="save"){
-          allowedKeys(b,["action","version","observations","reviewedTestIds","notAssessable","videoVersions"]);
+          allowedKeys(b,["action","version","observations","reviewedTestIds","notAssessable","videoVersions","narrative"]);
           const reasons=parseReasons(b.notAssessable??{},testIds);
           const obs=apiInput(()=>sanitizePilotObservations(b.observations,config));
           for(const id of Object.keys(reasons))delete obs[id];
@@ -187,7 +208,7 @@ export async function updatePilot(sessionId:string, input:unknown) {
             const old=raw.marks[id],same=old&&old.source===(sources[id]??null)&&raw.notAssessable[id]===reasons[id]&&JSON.stringify(raw.observations[id])===JSON.stringify(obs[id]);
             marks[id]=same?old:{source:sources[id]??null,reviewerId:actor.pro.id,reviewedAt:new Date().toISOString()};
           }
-          data.notAssessableJson=JSON.stringify(reasons);data.reviewedJson=JSON.stringify(marks);data.observationsJson=JSON.stringify(obs);
+          data.notAssessableJson=JSON.stringify(reasons);data.reviewedJson=JSON.stringify(marks);data.observationsJson=writeReviewDraft(obs,b.narrative===undefined?raw.narrative:apiInput(()=>cleanShoulderNarrative(b.narrative)));
         }else{
           allowedKeys(b,["action","version"]);
           const reviewed=validMarks(raw.marks,sources);
@@ -196,7 +217,7 @@ export async function updatePilot(sessionId:string, input:unknown) {
           if(PILOT_TESTS.some(t=>!raw.notAssessable[t.id]&&scores.tests[t.id]?.missing!==false))throw new PilotHttpError(409,"Hay tests pendientes de revisión.");
           if(reviewed.every(id=>!!raw.notAssessable[id]))throw new PilotHttpError(409,"Hace falta al menos un test valorado.");
           const when=new Date();
-          const published:Published={weekNumber:session.weekNumber,scheduledDate:session.scheduledDate.toISOString(),publishedAt:when.toISOString(),rubricVersion:RUBRIC_VERSION,config,videoVersions:sources,observations:raw.observations,pain:raw.pain,testFeedback:raw.testFeedback,notAssessable:raw.notAssessable,scores};
+          const published:Published={weekNumber:session.weekNumber,scheduledDate:session.scheduledDate.toISOString(),publishedAt:when.toISOString(),rubricVersion:RUBRIC_VERSION,config,videoVersions:sources,observations:raw.observations,pain:raw.pain,testFeedback:raw.testFeedback,narrative:raw.narrative,notAssessable:raw.notAssessable,scores};
           // A reviewed upload uses the normal assessment locking rules; a pending replacement cannot silently replace it.
           if(videos.length)await tx.assessmentVideo.updateMany({where:{id:{in:videos.map(v=>v.id)},sessionId,patientId:session.assignment.patientId,reviewedAt:null},data:{
             reviewedAt:when,reviewedById:actor.pro.id,pendingPath:null,pendingUntil:null,pendingMime:null,pendingSize:null,

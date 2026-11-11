@@ -4195,6 +4195,7 @@ model ShoulderPilotProtocol {
 }
 
 model ShoulderPilotReview {
+  reportShare        ShoulderReportShare?
   sessionId          String @id
   session            ProgramSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   version            Int @default(0)
@@ -4209,4 +4210,18 @@ model ShoulderPilotReview {
   publishedAt        DateTime?
   publishedById      String?
   updatedAt          DateTime @updatedAt
+}
+
+// Revocable public copy of an already published shoulder report, never of the draft.
+model ShoulderReportShare {
+  sessionId            String @id
+  review               ShoulderPilotReview @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+  patientId            String
+  assignmentId         String
+  tokenHash            String @unique
+  reportJson           String
+  issuedAt             DateTime @default(now())
+  publishedAt          DateTime
+  baselinePublishedAt  DateTime?
+  expiresAt            DateTime
 }
