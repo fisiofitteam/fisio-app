@@ -4,13 +4,14 @@ import type { Task } from "./SessionRunner";
 import { AssessmentUploader } from "./AssessmentUploader";
 import { ShoulderPilotReport, type PilotReportSnapshot } from "./ShoulderPilotReport";
 import { PILOT_TESTS } from "@/lib/shoulder-pilot";
+import { SHOULDER_UPLOAD_FLOW } from "@/lib/shoulder-video-policy";
 import { parseAssessment } from "@/lib/assessments";
 import { patientShoulderTitle } from "@/lib/patient-shoulder-session";
 
 type Load = { affectedKg?: number | null; referenceKg?: number | null };
 type Pain = { before?: number | null; after?: number | null; painfulTestIds?: string[] | null };
-type State = { version: number; pain: Pain; loads: Record<string,Load>; aiConsent: boolean; published: PilotReportSnapshot | null; baseline: PilotReportSnapshot | null };
-type Change = { pain?: Partial<Pain>; loads?: Record<string,Load>; aiConsent?: boolean };
+type State = { version: number; pain: Pain; loads: Record<string,Load>; aiReviewBlocked: boolean; published: PilotReportSnapshot | null; baseline: PilotReportSnapshot | null };
+type Change = { pain?: Partial<Pain>; loads?: Record<string,Load> };
 const strengthTests = ["86d6177e-a02e-4ef9-a62c-677323e9f8b9", "701ef4c7-6de1-4428-b55e-fefa01ae2336"];
 const surface = { background: "var(--p-surface)", color: "var(--p-text)", border: "1px solid var(--p-border)" };
 const actionStyle = { background: "var(--p-accent)", color: "var(--p-accent-ink)" };
@@ -122,7 +123,7 @@ export function ShoulderPatientBattery({sessionId,week,tasks,onBusyChange}: {ses
         {data.pain?.before==null&&data.pain?.after!=null?<p className="text-xs" style={dim}>Dolor inicial no registrado.</p>:<button type="button" disabled={locked||before===""||Number(before)===data.pain?.before||data.pain?.after!=null} className={btnClass} style={actionStyle} onClick={()=>save({pain:{before:Number(before)}},"Dolor inicial guardado.")}>{before!==""&&Number(before)===data.pain?.before?"Dolor inicial guardado":"Guardar dolor inicial"}</button>}
         {!started&&<button type="button" className="text-xs underline block" onClick={()=>setMissedBaseline(true)}>Ya empecé y no anoté mi dolor inicial</button>}
       </section>}
-      <label className="flex items-start gap-2 text-xs"><input type="checkbox" className="mt-0.5" checked={!!data.aiConsent} disabled={saving||needsRefresh||!!data.published&&!data.aiConsent} onChange={e=>save({aiConsent:e.target.checked},e.target.checked?"Permiso guardado.":"Permiso retirado.")}/><span>Permito que FisioFit envíe fotogramas de mis vídeos de esta valoración a Anthropic para que una IA proponga medidas que revisará mi fisio. Es opcional: puedo subir mis vídeos para revisión manual.</span></label>
+      <p className="text-xs" style={dim}>{data.aiReviewBlocked ? "Tu fisio revisará manualmente los vídeos de esta valoración." : "Tu fisio puede analizar fotogramas de los vídeos que subas con la IA de Anthropic. Revisará los resultados antes de compartirlos contigo."}</p>
       {started&&<>
         <p className="text-xs" style={dim}>Abre cada bloque para ver sus pruebas. Puedes volver a subir los vídeos más tarde. Recorta cada uno a un minuto como máximo (hasta 1 GB) y mantén abierta la pantalla hasta que termine la subida.</p>
         {tasks.map((t,i)=>{
@@ -130,7 +131,7 @@ export function ShoulderPatientBattery({sessionId,week,tasks,onBusyChange}: {ses
           const received=ts.filter(x=>rows.some(r=>r.taskId===t.id&&r.testId===x.id&&r.url)).length;
           return <details key={t.id} className="border rounded-xl p-3" style={{borderColor:"var(--p-border)"}}>
             <summary className="cursor-pointer font-semibold text-sm">{i+1}. {t.title}<span className="text-xs font-normal ml-1" style={dim}>{loadingRows||rowError?"":received+" / "+ts.length}</span></summary>
-            <div className="mt-3"><AssessmentUploader sessionId={sessionId} task={t} group={group} readOnly={!!data.published} renderExtra={kgEditor} onBusyChange={b=>onBusyChange(t.id,b)}/></div>
+            <div className="mt-3"><AssessmentUploader sessionId={sessionId} task={t} group={group} uploadFlow={SHOULDER_UPLOAD_FLOW} readOnly={!!data.published} renderExtra={kgEditor} onBusyChange={b=>onBusyChange(t.id,b)}/></div>
           </details>;
         })}
         {!data.published&&<section className="space-y-3">

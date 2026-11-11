@@ -4,9 +4,9 @@ import { upload } from "@vercel/blob/client";
 import { parseAssessment, MAX_ASSESSMENT_BYTES, ASSESSMENT_MIMES } from "@/lib/assessments";
 import { youtubeEmbedUrl } from "@/lib/youtube";
 type UploadGroup = { rows: any[]; loading: boolean; reload: () => Promise<void> };
-export function AssessmentUploader({ sessionId, task, onBusyChange, group, readOnly = false, renderExtra }: {
+export function AssessmentUploader({ sessionId, task, onBusyChange, group, readOnly = false, uploadFlow, renderExtra }: {
   sessionId: string; task: any; onBusyChange?: (busy: boolean) => void;
-  group?: UploadGroup; readOnly?: boolean; renderExtra?: (testId: string) => React.ReactNode;
+  group?: UploadGroup; readOnly?: boolean; uploadFlow?: string; renderExtra?: (testId: string) => React.ReactNode;
 }) {
   const assessment = parseAssessment(task.assessment);
   const [localRows, setRows] = useState<any[]>([]);
@@ -43,7 +43,7 @@ export function AssessmentUploader({ sessionId, task, onBusyChange, group, readO
     if (!ASSESSMENT_MIMES.includes(mimeType) || file.size > MAX_ASSESSMENT_BYTES || file.size === 0) { setError("Elige un vídeo MP4, MOV o WebM de hasta 1 GB."); return; }
     setBusy(testId); setProgress(0);
     try {
-      const r = await fetch("/api/assessments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId, taskId: task.id, testId, mimeType, size: file.size }) });
+      const r = await fetch("/api/assessments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId, taskId: task.id, testId, mimeType, size: file.size, uploadFlow }) });
       const p = await r.json();
       if (!r.ok) throw new Error(p.error || "No se pudo preparar la subida.");
       await upload(p.pathname, file, { access: "private", contentType: mimeType, handleUploadUrl: "/api/assessments/upload", clientPayload: JSON.stringify({ id: p.id }), multipart: true, onUploadProgress: e => setProgress(Math.round(e.percentage)) });

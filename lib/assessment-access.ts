@@ -10,7 +10,7 @@ export async function assessmentAccess(patientId: string, patientOnly = false) {
   return !patientOnly && actor?.kind === "professional" && await canAccessEvidencePatient(patientId, actor.pro);
 }
 export async function assignedAssessment(sessionId: string, taskId: string, testId: string) {
-  const session = await prisma.programSession.findUnique({ where: { id: sessionId }, include: { assignment: { select: { patientId: true } } } });
+  const session = await prisma.programSession.findUnique({ where: { id: sessionId }, include: { assignment: { select: { patientId: true, programId: true, patient: {select:{isTest:true}} } } } });
   if (!session || !await assessmentAccess(session.assignment.patientId, true)) throw new Error("Valoración no disponible.");
   const { task, test } = assessmentTestFromSnapshot(session.tasksSnapshot, taskId, testId);
   return { session, task, test };

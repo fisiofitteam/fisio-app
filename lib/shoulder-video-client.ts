@@ -25,10 +25,10 @@ export async function analyzeShoulderVideo(input:VideoInput, progress?:(message:
   const endpoint="/api/shoulder-pilot/"+encodeURIComponent(input.sessionId)+"/analyze";
   const url=new URL(endpoint,window.location.origin);
   for(const key of ["videoId","testId","uploadedAt"] as const)url.searchParams.set(key,input[key]);
-  // Check staff access, current consent, source revision and provider BEFORE reading the private media.
+  // Check staff access, source revision and provider BEFORE reading the private media.
   const check=await fetch(url.toString(),{cache:"no-store",credentials:"same-origin",signal});
   const session=await check.json().catch(()=>null);
-  if(!check.ok||!session?.consentVersion)throw new Error(session?.error||"Análisis no disponible.");
+  if(!check.ok||session?.available!==true)throw new Error(session?.error||"Análisis no disponible.");
   const v=document.createElement("video");
   v.preload="auto";v.muted=true;v.playsInline=true;
   const fps=SHOULDER_VIDEO_TESTS[input.testId].kind==="hold"?8:3;
@@ -69,7 +69,7 @@ export async function analyzeShoulderVideo(input:VideoInput, progress?:(message:
     progress?.("Analizando la secuencia. El resultado será un borrador…");
     const res=await fetch(endpoint,{method:"POST",credentials:"same-origin",cache:"no-store",
       headers:{"Content-Type":"application/json"},signal,body:JSON.stringify({
-        videoId:input.videoId,testId:input.testId,uploadedAt:input.uploadedAt,consentVersion:session.consentVersion,duration,fps,sheets,
+        videoId:input.videoId,testId:input.testId,uploadedAt:input.uploadedAt,duration,fps,sheets,
       })});
     const result=await res.json().catch(()=>null);if(!res.ok||!result?.draft)throw new Error(result?.error||"Análisis no disponible; puedes continuar manualmente.");
     return result.draft as ShoulderAIDraft;

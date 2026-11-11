@@ -8,10 +8,17 @@ import { HOLD_PVC } from "../lib/shoulder-analysis-types";
 import { DEFAULT_PILOT_CONFIG as config } from "../lib/shoulder-pilot";
 
 async function main(){
-  const b={testId:HOLD_PVC,videoId:"synthetic-upload",uploadedAt:"2026-01-01T00:00:00.000Z",consentVersion:"test",duration:24,fps:8,sheets:[] as {times:number[],jpeg:string}[]};
-  const response={hold:{start:2,end:24},rangeVisible:true,stabilityVisible:true,aboveEars:[{start:2,end:10},{start:8,end:14}],lossOfPosition:[{start:10,end:12}],tremor:[{start:11,end:12},{start:13,end:14},{start:17,end:19},{start:23,end:24}],notes:"Borrador verificable.",findings:[{start:10,end:12,text:"Cambio de posición."}],limitations:[]};
+  const b={testId:HOLD_PVC,videoId:"synthetic-upload",uploadedAt:"2026-01-01T00:00:00.000Z",duration:24,fps:8,sheets:[] as {times:number[],jpeg:string}[]};
+  const response={hold:{start:2,end:24},rangeVisible:true,stabilityVisible:true,aboveEars:[{start:2,end:10},{start:8,end:14}],lossOfPosition:[{start:10,end:12}],notes:"Borrador verificable.",findings:[{start:10,end:12,text:"Cambio de posición."}],limitations:[]};
   const d=parseAIDraft(response,b,config);
-  assert.deepEqual(d.observationFields,{holdSeconds:20,inRangeSeconds:12,unstableSeconds:5});
+  assert.deepEqual(d.observationFields,{holdSeconds:20,inRangeSeconds:12,positionLossSeconds:2});
+  assert.deepEqual(Object.keys(d.intervals).sort(),["aboveEars","lossOfPosition"]);
+  // Disregard obsolete model fields even if a provider still includes them.
+  assert.deepEqual(parseAIDraft({...response,tremor:[{start:2,end:19}]},b,config),d);
+  assert.equal(parseAIDraft({...response,lossOfPosition:[]},b,config).observationFields.positionLossSeconds,0);
+  assert(!("positionLossSeconds" in parseAIDraft({...response,lossOfPosition:null},b,config).observationFields));
+  // Only count observable loss within the scored portion of the hold; overlap counts once.
+  assert.equal(parseAIDraft({...response,lossOfPosition:[{start:1,end:4},{start:3,end:5},{start:21,end:24}]},b,config).observationFields.positionLossSeconds,4);
   assert.deepEqual(parseAIDraft({...response,rangeVisible:false,stabilityVisible:false},b,config).observationFields,{holdSeconds:20});
   assert.deepEqual(parseAIDraft({...response,hold:null},b,config).observationFields,{});
   assert.deepEqual(parseAIDraft({...response,lossOfPosition:[{start:-3,end:4}]},b,config).observationFields,{holdSeconds:20,inRangeSeconds:12});
@@ -30,7 +37,7 @@ async function main(){
   const mock=createServer((req,res)=>{
     const chunks:Buffer[]=[];req.on("data",x=>chunks.push(Buffer.from(x)));req.on("end",()=>{
       const body=JSON.parse(Buffer.concat(chunks).toString());assert.equal(req.url,"/v1/messages");assert.equal(req.headers["x-api-key"],"synthetic-only");
-      const parts=body.messages[0].content;assert.equal(parts.filter((x:any)=>x.type==="image").length,b.sheets.length);
+      const parts=body.messages[0].content;assert.doesNotMatch(parts[0].text,/temblor|tremor/i);assert.match(parts[0].text,/lossOfPosition/);assert.equal(parts.filter((x:any)=>x.type==="image").length,b.sheets.length);
       assert.equal(parts.find((x:any)=>x.type==="image").source.media_type,"image/jpeg");assert(!JSON.stringify(body).includes("synthetic-upload"));
       received=true;res.writeHead(200,{"Content-Type":"application/json"});res.end(JSON.stringify({
         id:"mock-only",type:"message",role:"assistant",model:"synthetic",content:[{type:"text",text:JSON.stringify(response)}],stop_reason:"end_turn",usage:{input_tokens:20,output_tokens:12}
