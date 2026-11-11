@@ -2,10 +2,12 @@
 
 import { PILOT_TESTS, scorePilot, legacyPositionLossNeedsReview, type PilotObservations, type PilotPain } from "@/lib/shoulder-pilot";
 
+import type { ShoulderNarrative, ShoulderAxis } from "@/lib/shoulder-narrative";
 import type { ShoulderTestFeedbackMap } from "@/lib/shoulder-test-feedback";
 import { PublishedShoulderTestFeedback } from "@/components/ShoulderTestFeedbackDisplay";
 
 export type PilotReportSnapshot = {
+  narrative?: ShoulderNarrative;
   testFeedback?: ShoulderTestFeedbackMap;
   weekNumber: number;
   publishedAt: string;
@@ -85,20 +87,28 @@ export function ShoulderPilotReport({report,previous}: {report:PilotReportSnapsh
   const legacy=usesPreviousStability(report);
   const differentStability=!!compare && usesPreviousStability(compare)!==legacy;
   const comparableAxes=compare?.scores.axes.map(a=>differentStability&&a.key==="stability"?{...a,score:null}:a)??null;
-  return <section className="card space-y-3 text-neutral-900 sm:p-6" aria-label="Informe del perfil de hombro">
+  return <section className="card space-y-3 text-neutral-900 sm:p-6" aria-label="Informe del perfil de hombro" data-shoulder-report>
     <div><p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">Valoración de hombro · Semana {report.weekNumber}</p><h2 className="font-bold text-xl">Tu perfil de hombro</h2></div>
     <div className="flex flex-wrap gap-4 text-xs items-center">{compare&&<span><span aria-hidden="true" className="inline-block w-6 mr-1 border-t-2 border-dashed border-slate-500 align-middle"/>Inicial · semana 1</span>}<span><span className="inline-block w-6 mr-1 align-middle border-t-[3px] border-teal-700"/>{report.weekNumber===14?"Revaloración · semana 14":"Valoración inicial · semana 1"}</span><span className="text-neutral-500">Escala 0–10</span></div>
     <Radar axes={axes} before={comparableAxes}/>
+    {report.narrative?.general?.trim()&&<section aria-label="Comentario general de tu fisio" className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3">
+      <h3 className="text-sm font-semibold text-teal-900">Comentario general de tu fisio</h3>
+      <p className="mt-1 text-sm leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]">{report.narrative.general}</p>
+    </section>}
     {differentStability&&<p className="text-xs text-neutral-500">La estabilidad no se compara porque cambió el criterio de valoración. Las demás capacidades sí son comparables.</p>}
     {axes.some(a=>a.score===null)&&<p className="text-xs text-neutral-500">Los ejes sin datos suficientes quedan sin valorar.</p>}
     <h3 className="font-semibold">Capacidad por capacidad</h3>
     <div className="divide-y divide-neutral-200">{axes.map(a=>{
       const initial=comparableAxes?.find(x=>x.key===a.key)?.score;
       const capacity=CAPACITIES[a.key];
-      return <details key={a.key} className="py-2"><summary className="cursor-pointer text-sm font-semibold">{a.label}<span className="ml-3 font-normal tabular-nums">{compare&&!(differentStability&&a.key==="stability")&&pilotNumber(initial)+" → "}{pilotNumber(a.score)}{a.score!==null?" / 10":""}</span></summary><p className="mt-2 text-sm text-neutral-600">{legacy&&a.key==="stability"?"Esta puntuación corresponde al criterio de estabilidad vigente al publicar el informe.":capacity?.description}</p>
+      const note=report.narrative?.[a.key as ShoulderAxis]?.trim();
+      return <div key={a.key} className="py-3"><h4 className="text-sm font-semibold">{a.label}<span className="ml-3 font-normal tabular-nums">{compare&&!(differentStability&&a.key==="stability")&&pilotNumber(initial)+" → "}{pilotNumber(a.score)}{a.score!==null?" / 10":""}</span></h4>
+      {note&&<p className="mt-1 text-sm leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]">{note}</p>}
+      <details className="mt-1"><summary data-pdf-ignore className="cursor-pointer text-xs font-medium text-teal-800" aria-label={"Ver mediciones de "+a.label}>Ver mediciones</summary>
+      <p className="mt-2 text-sm text-neutral-600">{legacy&&a.key==="stability"?"Esta puntuación corresponde al criterio de estabilidad vigente al publicar el informe.":capacity?.description}</p>
       {a.key==="tolerance"?<div className="mt-2 text-sm">
         <p>Dolor antes: {pilotNumber(report.pain.before)} · Dolor después: {pilotNumber(report.pain.after)}</p><p>Tests dolorosos: {report.pain.painfulTestIds==null?"Sin registrar":report.pain.painfulTestIds.length===0?"Ninguno":report.pain.painfulTestIds.map(id=>PILOT_TESTS.find(t=>t.id===id)?.name??"Test").join(", ")}.</p>
-      </div>:<div className="mt-2 space-y-2">{(capacity?.tests??[]).map(k=>{const t=PILOT_TESTS.find(test=>test.key===k);return t?<div key={t.id}><h4 className="text-sm font-semibold">{t.name}</h4><TestFacts id={t.id} report={report} axis={a.key}/></div>:null;})}</div>}</details>;
+      </div>:<div className="mt-2 space-y-2">{(capacity?.tests??[]).map(k=>{const t=PILOT_TESTS.find(test=>test.key===k);return t?<div key={t.id}><h4 className="text-sm font-semibold">{t.name}</h4><TestFacts id={t.id} report={report} axis={a.key}/></div>:null;})}</div>}</details></div>;
     })}</div>
     <PublishedShoulderTestFeedback current={report} previous={report.weekNumber===14 && previous?.weekNumber===1?previous:null} retest={report.weekNumber===14}/>
     <div><h3 className="font-semibold">Simetría de fuerza · 8RM</h3><p className="text-xs text-neutral-500">Comparamos el brazo afectado con el de referencia para ocho repeticiones válidas.</p>
@@ -107,6 +117,6 @@ export function ShoulderPilotReport({report,previous}: {report:PilotReportSnapsh
       <div className="mt-2 space-y-2">{PILOT_TESTS.filter(t=>t.kind==="qualitative").map(t=><details key={t.id} className="border-b border-neutral-200 pb-2"><summary className="cursor-pointer text-sm">{t.name}</summary>
       {compare&&<p className="mt-2 whitespace-pre-wrap text-sm"><b>Inicial: </b>{String(compare.observations[t.id]?.comment||compare.notAssessable?.[t.id]||"Sin valorar")}</p>}
       <p className="mt-2 whitespace-pre-wrap text-sm">{compare&&<b>Revaloración: </b>}{String(report.observations[t.id]?.comment||report.notAssessable?.[t.id]||"Sin valorar")}</p></details>)}</div></div>
-    <details className="border-t border-neutral-200 pt-3"><summary className="text-sm font-semibold cursor-pointer">Ver todas las puntuaciones por test</summary><ul className="mt-2 space-y-1 text-sm">{PILOT_TESTS.filter(t=>t.kind==="numeric").map(t=><li key={t.id}>{t.name}: <strong>{compare&&pilotNumber(compare.scores.tests[t.id]?.score)+" → "}{pilotNumber(tests[t.id]?.score)}</strong></li>)}</ul></details>
+    <details className="border-t border-neutral-200 pt-3"><summary data-pdf-heading="Puntuaciones por test" className="text-sm font-semibold cursor-pointer">Ver todas las puntuaciones por test</summary><ul className="mt-2 space-y-1 text-sm">{PILOT_TESTS.filter(t=>t.kind==="numeric").map(t=><li key={t.id}>{t.name}: <strong>{compare&&pilotNumber(compare.scores.tests[t.id]?.score)+" → "}{pilotNumber(tests[t.id]?.score)}</strong></li>)}</ul></details>
   </section>;
 }

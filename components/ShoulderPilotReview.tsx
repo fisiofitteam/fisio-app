@@ -7,6 +7,9 @@ import { ShoulderPilotReport, pilotNumber, type PilotReportSnapshot } from "@/co
 import type { ShoulderTestFeedbackMap } from "@/lib/shoulder-test-feedback";
 import { ShoulderTestFeedbackReadout, ShoulderTestPainOverview } from "@/components/ShoulderTestFeedbackDisplay";
 import { ShoulderVideoProposal } from "@/components/ShoulderVideoProposal";
+import { ShoulderNarrativeEditor } from "@/components/ShoulderNarrativeEditor";
+import { ShoulderReportActions } from "@/components/ShoulderReportActions";
+import type { ShoulderNarrative } from "@/lib/shoulder-narrative";
 
 import { canAnalyzeShoulderTest } from "@/lib/shoulder-analysis-types";
 import { pendingSources, proposalConflicts, revisionKey, type ShoulderVideoSource } from "@/lib/shoulder-analysis-queue";
@@ -15,7 +18,7 @@ import { useShoulderVideoQueue } from "@/components/useShoulderVideoQueue";
 type Video=ShoulderVideoSource & {taskId:string};
 type Data={sessionId:string;weekNumber:number;scheduledDate:string;assignmentId:string;patientId:string;patientName:string;
   observations:PilotObservations;loads:PilotObservations;reviewedTestIds:string[];notAssessable?:Record<string,string>;pain:PilotPain;
-  testFeedback?:ShoulderTestFeedbackMap;videos:Video[];baselineVideos?:Video[];initialFormContext:{label:string,value:string}[];aiReviewBlocked?:boolean;version:number;
+  narrative?:ShoulderNarrative;testFeedback?:ShoulderTestFeedbackMap;videos:Video[];baselineVideos?:Video[];initialFormContext:{label:string,value:string}[];aiReviewBlocked?:boolean;version:number;
   published:PilotReportSnapshot|null;baseline:PilotReportSnapshot|null;config:PilotConfig};
 const groups=[...new Set(PILOT_TESTS.map(t=>t.group))];
 function mergeInputs(d:Data):PilotObservations {
@@ -28,9 +31,10 @@ export function ShoulderPilotReview({sessionId}:{sessionId:string}) {
 function ReviewSession({sessionId}:{sessionId:string}) {
   const ai=useShoulderVideoQueue();
   const [includeReviewed,setIncludeReviewed]=useState(false);
+  const [narrative,setNarrative]=useState<ShoulderNarrative>({}),[evidenceRevision,setEvidenceRevision]=useState(0);
   const [data,setData]=useState<Data|null>(null),[facts,setFacts]=useState<PilotObservations>({}),[checked,setChecked]=useState<string[]>([]),[skip,setSkip]=useState<Record<string,string>>({});
   const [dirty,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState(""),[conflict,setConflict]=useState(false);
-  const apply=useCallback((value:Data)=>{setData(value);setFacts(mergeInputs(value));setChecked(value.reviewedTestIds??[]);setSkip(value.notAssessable??{});setDirty(false);setConflict(false);},[]);
+  const apply=useCallback((value:Data)=>{setData(value);setFacts(mergeInputs(value));setNarrative(value.narrative??{});setChecked(value.reviewedTestIds??[]);setSkip(value.notAssessable??{});setDirty(false);setConflict(false);},[]);
   const load=useCallback(async(signal?:AbortSignal)=>{
     setError("");
     try{const r=await fetch("/api/shoulder-pilot/"+encodeURIComponent(sessionId),{cache:"no-store",signal});const d=await r.json();if(!r.ok)throw Error(d.error||"No se pudo cargar la valoración.");if(!signal?.aborted)apply(d);}
@@ -38,13 +42,13 @@ function ReviewSession({sessionId}:{sessionId:string}) {
   },[sessionId,apply]);
   useEffect(()=>{const c=new AbortController();load(c.signal);return()=>c.abort();},[load]);
   useEffect(()=>{if(!dirty)return;const warn=(e:BeforeUnloadEvent)=>{e.preventDefault();e.returnValue="";};window.addEventListener("beforeunload",warn);return()=>window.removeEventListener("beforeunload",warn);},[dirty]);
-  function edited(id:string){setChecked(prev=>prev.filter(t=>t!==id));setDirty(true);setNotice("");}
+  function edited(id:string){setEvidenceRevision(n=>n+1);setChecked(prev=>prev.filter(t=>t!==id));setDirty(true);setNotice("");}
   function patchFields(id:string, values:Record<string,string|number|null>){setFacts(prev=>({...prev,[id]:{...prev[id],...values}}));edited(id);}
   async function persist(action:"save"|"publish"){
     if(!data||busy||ai.active)return;setBusy(true);setError("");setNotice("");
     try{const versions=Object.fromEntries(data.videos.filter(v=>v.uploadedAt&&v.url).map(v=>[v.testId,v.id+"@"+v.uploadedAt]));
       const obs=Object.fromEntries(Object.entries(facts).filter(([id])=>!(id in skip)).map(([id,values])=>[id,Object.fromEntries(Object.entries(values).filter(([,v])=>v!==""&&v!=null))]));
-      const r=await fetch("/api/shoulder-pilot/"+encodeURIComponent(data.sessionId),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(action==="publish"?{action,version:data.version}:{action,version:data.version,observations:obs,reviewedTestIds:checked,notAssessable:skip,videoVersions:versions})});
+      const r=await fetch("/api/shoulder-pilot/"+encodeURIComponent(data.sessionId),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(action==="publish"?{action,version:data.version}:{action,version:data.version,observations:obs,narrative,reviewedTestIds:checked,notAssessable:skip,videoVersions:versions})});
       const d=await r.json();if(!r.ok){if(r.status===409)setConflict(true);throw Error(d.error||"No se han podido guardar los cambios.");}
       apply(d);setNotice(action==="publish"?"Informe publicado. El atleta ya puede verlo en su valoración.":"Borrador guardado.");
     }catch(e){setError(e instanceof Error?e.message:"No se ha podido guardar.");}finally{setBusy(false);}
@@ -83,7 +87,9 @@ function ReviewSession({sessionId}:{sessionId:string}) {
           return <li key={k}><button type="button" className="underline text-left" onClick={()=>openTest(v.testId)}>{PILOT_TESTS.find(t=>t.id===v.testId)?.name}: {current?"analizando":ai.outcomes[k]==="error"?"ver error":ai.outcomes[k]==="ready"?(entry?.applied?"incorporada":"ver propuesta"):ai.active?"en cola":"pendiente"}</button></li>;
         })}</ul>}
       </div>
+      <a href="#comentarios-del-informe" className="inline-block text-sm font-medium underline">Ir a los comentarios del informe</a>
     </header>
+    {data.published&&<ShoulderReportActions sessionId={sessionId} publishedAt={data.published.publishedAt}/>}
     <section className="card space-y-2"><h2 className="font-semibold">Dolor y respuesta a la carga</h2>
       <div className="grid sm:grid-cols-3 gap-2 text-sm"><p>Antes: <b>{pilotNumber(data.pain.before)}</b></p><p>Después: <b>{pilotNumber(data.pain.after)}</b></p><p>Tests dolorosos: <b>{data.pain.painfulTestIds==null?"Pendiente":data.pain.painfulTestIds.length}</b></p></div>
       <ShoulderTestPainOverview current={data} openTest={openTest}/>
@@ -125,10 +131,13 @@ function ReviewSession({sessionId}:{sessionId:string}) {
               </label>;
             })}</div>
           </>}
-          <label className={"flex items-center gap-2 rounded-lg bg-neutral-50 p-3 text-sm font-medium "+(!canCheck?"opacity-60":"")}><input type="checkbox" checked={reviewed} disabled={!!ai.active||(!canCheck&&!reviewed)} onChange={e=>{const val=e.target.checked;setChecked(p=>[...p.filter(x=>x!==t.id),...(val?[t.id]:[])]);setDirty(true);setNotice("");}}/>He revisado este test</label>
+          <label className={"flex items-center gap-2 rounded-lg bg-neutral-50 p-3 text-sm font-medium "+(!canCheck?"opacity-60":"")}><input type="checkbox" checked={reviewed} disabled={!!ai.active||(!canCheck&&!reviewed)} onChange={e=>{const val=e.target.checked;setChecked(p=>[...p.filter(x=>x!==t.id),...(val?[t.id]:[])]);setEvidenceRevision(n=>n+1);setDirty(true);setNotice("");}}/>He revisado este test</label>
         </div></details>;})}</div></section>)}
     </fieldset>
-    <details className="card"><summary className="cursor-pointer font-semibold">Vista previa del perfil que verá el atleta</summary><div className="mt-3"><ShoulderPilotReport report={{weekNumber:data.weekNumber,publishedAt:"",rubricVersion:data.published?.rubricVersion??"",observations:measured,pain:data.pain,testFeedback:data.testFeedback,notAssessable:skip,scores}} previous={data.baseline}/></div></details>
+    <ShoulderNarrativeEditor key={data.version+":"+evidenceRevision} sessionId={sessionId} version={data.version} axes={scores.axes}
+      values={narrative} dirty={dirty} disabled={busy||conflict} onConflict={()=>setConflict(true)}
+      onChange={next=>{setNarrative(next);setDirty(true);setNotice("");}}/>
+    <details className="card"><summary className="cursor-pointer font-semibold">Vista previa del perfil que verá el atleta</summary><div className="mt-3"><ShoulderPilotReport report={{weekNumber:data.weekNumber,publishedAt:"",rubricVersion:data.published?.rubricVersion??"",observations:measured,pain:data.pain,testFeedback:data.testFeedback,narrative,notAssessable:skip,scores}} previous={data.baseline}/></div></details>
     <section className="card space-y-3 sticky bottom-2 shadow-lg z-10">
       {error&&<p role="alert" className="text-red-700 text-sm">{error}</p>}{notice&&<p role="status" className="text-sm">{notice}</p>}
       <div className="flex flex-wrap items-center gap-2"><span className="mr-auto text-xs text-neutral-600">{done}/{PILOT_TESTS.length} revisados{dirty?" · Cambios sin guardar":""}</span>

@@ -155,7 +155,10 @@ export function ShoulderPatientBattery({sessionId,week,tasks,onBusyChange}: {ses
     {error&&<p role="alert" className="text-sm">{error}</p>}
     {(!data&&error||needsRefresh)&&<button type="button" className={btnClass} style={actionStyle} onClick={()=>{if(!unsaved||window.confirm("¿Recargar y descartar los cambios sin guardar?"))setRetry(n=>n+1);}}>Volver a cargar los datos guardados</button>}
     {rowError&&<button type="button" className={btnClass} style={actionStyle} onClick={()=>void reloadRows().catch(()=>{})}>Reintentar carga de entregas</button>}
-    {data?.published&&<ShoulderPilotReport report={data.published} previous={week===14?data.baseline:null}/>}
+    {data?.published&&<>
+      <a href={"/valoraciones/hombro/"+encodeURIComponent(sessionId)+"/informe"} className="inline-flex rounded-lg px-3 py-2 text-sm font-semibold" style={actionStyle}>Abrir informe y descargar PDF</a>
+      <ShoulderPilotReport report={data.published} previous={week===14?data.baseline:null}/>
+    </>}
     {data&&<>
       {!data.published&&<section className="space-y-2">
         <h3 className="font-semibold">Antes de empezar</h3>
