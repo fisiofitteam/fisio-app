@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { PILOT_PROGRAM_ID, PILOT_TESTS } from "../lib/shoulder-pilot";
+import { HOLD_PVC } from "../lib/shoulder-analysis-types";
+import { SHOULDER_UPLOAD_FLOW, canUseShoulderVideo } from "../lib/shoulder-video-policy";
 import Module from "node:module";
 import { NextRequest } from "next/server";
 import { validateAssessment, assessmentTestFromSnapshot, MAX_ASSESSMENT_BYTES } from "../lib/assessments";
@@ -7,7 +10,7 @@ const task = { id: "task-1", title: "Inicial", type: "ASSESSMENT", assessment };
 let actor: any = { kind: "patient", patient: { id: "p1" } };
 let row: any = null;
 let blob: any = null;
-const session = { id: "s1", tasksSnapshot: JSON.stringify([task]), scheduledDate: new Date("2026-10-22"), assignment: { patientId: "p1" } };
+const session = { weekNumber:1, id: "s1", tasksSnapshot: JSON.stringify([task]), scheduledDate: new Date("2026-10-22"), assignment: { patientId: "p1", programId:"other", patient:{isTest:false} } };
 const originalLoad = (Module as any)._load;
 (Module as any)._load = function(request: string, ...args: any[]) {
   if (request.endsWith("/lib/session") || request.endsWith("/lib/session.ts")) return {
@@ -110,6 +113,19 @@ async function main() {
     assert.equal(stream.headers.get("content-range"), "bytes 0-9/100");
     assert.equal(await stream.text(), "0123456789");
   } finally { globalThis.fetch = originalFetch; }
+  // Genuine new-flow uploads are eligible; other programs, real patients, and old clients
+  // keep the original path and cannot become eligible on the strength of the request flag.
+  row=null;actor={kind:"patient",patient:{id:"p1"}};
+  session.tasksSnapshot=JSON.stringify([{...task,assessment:{...assessment,tests:PILOT_TESTS.map(t=>({...assessment.tests[0],id:t.id,name:t.name}))}}]);
+  for(const [programId,isTest,flow,expected] of [
+    ["other",true,SHOULDER_UPLOAD_FLOW,false],[PILOT_PROGRAM_ID,false,SHOULDER_UPLOAD_FLOW,false],
+    [PILOT_PROGRAM_ID,true,undefined,false],[PILOT_PROGRAM_ID,true,SHOULDER_UPLOAD_FLOW,true],
+  ] as const){
+    session.assignment.programId=programId;session.assignment.patient.isTest=isTest;
+    const prepared=await api.POST(req({...payload,testId:HOLD_PVC,uploadFlow:flow}));assert.equal(prepared.status,200);
+    const {pathname,id}=await prepared.json();
+    assert.equal(canUseShoulderVideo(null,id,"https://test.private.blob.vercel-storage.com/"+pathname),expected);
+  }
   console.log("PASS: assigned-test-only upload, patient isolation, 1GB boundary, MIME validation, verified completion, replacement, stale review, review lock and self-prescription denied.");
 }
 main().catch(e => { console.error(e); process.exitCode = 1; }).finally(() => { (Module as any)._load = originalLoad; });

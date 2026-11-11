@@ -14,8 +14,8 @@ function example(retest:boolean,config:PilotConfig){
  const time=config.holdTargetSeconds;
  field("wallFlexion",{leftProgress:retest?90:65,rightProgress:retest?95:80});
  field("pullover",{angle:retest?174:155});field("wallPress",{externalDeficit:0,abduction:retest?130:105});
- field("pvcHold",{holdSeconds:time*(retest?1:.75),inRangeSeconds:time*(retest?.9:.45),unstableSeconds:time*(retest?.05:.15)});
- field("bumperHold",{holdSeconds:time*(retest?.9:.5),inRangeSeconds:time*(retest?.8:.25),unstableSeconds:time*(retest?.12:.2)});
+ field("pvcHold",{holdSeconds:time*(retest?1:.75),inRangeSeconds:time*(retest?.9:.45),positionLossSeconds:time*(retest?.05:.15)});
+ field("bumperHold",{holdSeconds:time*(retest?.9:.5),inRangeSeconds:time*(retest?.8:.25),positionLossSeconds:time*(retest?.12:.2)});
  field("bumperRaises",{reps5:8,range5:retest?8:6,reps10:retest?8:6,range10:retest?7:4,reps15:retest?4:0,range15:retest?3:0});
  for(const k of ["facePull8rm","press8rm"])field(k,{affectedKg:retest?12:8,referenceKg:12});
  for(const k of ["scapLateral","scapFlexion","scapPress"]){

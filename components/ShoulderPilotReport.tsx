@@ -1,6 +1,6 @@
 "use client";
 
-import { PILOT_TESTS, scorePilot, type PilotObservations, type PilotPain } from "@/lib/shoulder-pilot";
+import { PILOT_TESTS, scorePilot, legacyPositionLossNeedsReview, type PilotObservations, type PilotPain } from "@/lib/shoulder-pilot";
 
 export type PilotReportSnapshot = {
   weekNumber: number;
@@ -20,7 +20,7 @@ const CAPACITIES: Record<string, {lines: [string, string?]; description: string;
   mobility: {lines:["Movilidad"], description:"El recorrido que puedes alcanzar manteniendo la posición solicitada en los tres tests.",tests:["wallFlexion","pullover","wallPress"]},
   endRange: {lines:["Fuerza al final","del rango"],description:"Hasta qué punto mantienes los brazos en la altura solicitada cuando trabajas con el disco.",tests:["bumperRaises","bumperHold"]},
   endurance: {lines:["Resistencia"], description:"Cuánto tiempo sostienes la posición con la pica y con el disco. La altura se valora por separado.",tests:["pvcHold","bumperHold"]},
-  stability: {lines:["Estabilidad"],description:"Qué parte del tiempo mantienes la posición sin perderla, recolocarte o presentar temblores frecuentes.",tests:["pvcHold","bumperHold"]},
+  stability: {lines:["Estabilidad"],description:"Qué parte del tiempo mantienes la posición sin perder la postura ni tener que recolocar los hombros.",tests:["pvcHold","bumperHold"]},
   coordination: {lines:["Coordinación"],description:"Cómo se coordinan ambas escápulas: se valoran la fluidez y la simetría en tres movimientos.",tests:["scapLateral","scapFlexion","scapPress"]},
   tolerance: {lines:["Tolerancia","a la carga"],description:"Tu respuesta inmediata a la batería: se consideran el dolor al terminar, el cambio respecto al inicio y los tests que te han dolido.",tests:[]},
 };
@@ -55,10 +55,11 @@ function TestFacts({id, report,axis}: {id:string;report:PilotReportSnapshot;axis
   if(!test)return null;
   const obs=report.observations[id]??{};
   if(report.notAssessable?.[id])return <p className="text-xs">Sin valorar: {report.notAssessable[id]}</p>;
-  const hold=obs.holdSeconds, above=obs.inRangeSeconds, unstable=obs.unstableSeconds;
+  const hold=obs.holdSeconds, above=obs.inRangeSeconds, unstable=obs.positionLossSeconds;
   if(test.key==="pvcHold"||test.key==="bumperHold"){
     if(typeof hold!=="number")return <p className="text-xs">Sin tiempo de sostén registrado.</p>;
     if(axis==="endurance")return <p className="text-xs">Sostuviste la posición durante {pilotNumber(hold)} segundos.</p>;
+    if(axis==="stability" && legacyPositionLossNeedsReview(id,obs))return <p className="text-xs">Estabilidad registrada con el criterio anterior.</p>;
     if(axis==="stability")return <p className="text-xs">{typeof unstable==="number"?pilotNumber(hold-unstable)+" segundos estables de "+pilotNumber(hold)+" de sostén.":"Estabilidad sin valorar."}</p>;
     return <p className="text-xs">{typeof above==="number"?pilotNumber(above)+" segundos por encima de las orejas de "+pilotNumber(hold)+" de sostén.":"Altura sin valorar."}</p>;
   }
@@ -76,16 +77,21 @@ function TestFacts({id, report,axis}: {id:string;report:PilotReportSnapshot;axis
 export function ShoulderPilotReport({report,previous}: {report:PilotReportSnapshot;previous?:PilotReportSnapshot|null}) {
   const compare=report.weekNumber===14&&previous?.weekNumber===1&&(!report.rubricVersion||report.rubricVersion===previous.rubricVersion)?previous:null;
   const {axes,symmetry,tests}=report.scores;
+  const usesPreviousStability=(r:PilotReportSnapshot)=>Object.entries(r.observations).some(([id,obs])=>legacyPositionLossNeedsReview(id,obs));
+  const legacy=usesPreviousStability(report);
+  const differentStability=!!compare && usesPreviousStability(compare)!==legacy;
+  const comparableAxes=compare?.scores.axes.map(a=>differentStability&&a.key==="stability"?{...a,score:null}:a)??null;
   return <section className="card space-y-3 text-neutral-900 sm:p-6" aria-label="Informe del perfil de hombro">
     <div><p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">Valoración de hombro · Semana {report.weekNumber}</p><h2 className="font-bold text-xl">Tu perfil de hombro</h2></div>
     <div className="flex flex-wrap gap-4 text-xs items-center">{compare&&<span><span aria-hidden="true" className="inline-block w-6 mr-1 border-t-2 border-dashed border-slate-500 align-middle"/>Inicial · semana 1</span>}<span><span className="inline-block w-6 mr-1 align-middle border-t-[3px] border-teal-700"/>{report.weekNumber===14?"Revaloración · semana 14":"Valoración inicial · semana 1"}</span><span className="text-neutral-500">Escala 0–10</span></div>
-    <Radar axes={axes} before={compare?.scores.axes??null}/>
+    <Radar axes={axes} before={comparableAxes}/>
+    {differentStability&&<p className="text-xs text-neutral-500">La estabilidad no se compara porque cambió el criterio de valoración. Las demás capacidades sí son comparables.</p>}
     {axes.some(a=>a.score===null)&&<p className="text-xs text-neutral-500">Los ejes sin datos suficientes quedan sin valorar.</p>}
     <h3 className="font-semibold">Capacidad por capacidad</h3>
     <div className="divide-y divide-neutral-200">{axes.map(a=>{
-      const initial=compare?.scores.axes.find(x=>x.key===a.key)?.score;
+      const initial=comparableAxes?.find(x=>x.key===a.key)?.score;
       const capacity=CAPACITIES[a.key];
-      return <details key={a.key} className="py-2"><summary className="cursor-pointer text-sm font-semibold">{a.label}<span className="ml-3 font-normal tabular-nums">{compare&&pilotNumber(initial)+" → "}{pilotNumber(a.score)}{a.score!==null?" / 10":""}</span></summary><p className="mt-2 text-sm text-neutral-600">{capacity?.description}</p>
+      return <details key={a.key} className="py-2"><summary className="cursor-pointer text-sm font-semibold">{a.label}<span className="ml-3 font-normal tabular-nums">{compare&&!(differentStability&&a.key==="stability")&&pilotNumber(initial)+" → "}{pilotNumber(a.score)}{a.score!==null?" / 10":""}</span></summary><p className="mt-2 text-sm text-neutral-600">{legacy&&a.key==="stability"?"Esta puntuación corresponde al criterio de estabilidad vigente al publicar el informe.":capacity?.description}</p>
       {a.key==="tolerance"?<div className="mt-2 text-sm">
         <p>Dolor antes: {pilotNumber(report.pain.before)} · Dolor después: {pilotNumber(report.pain.after)}</p><p>Tests dolorosos: {report.pain.painfulTestIds==null?"Sin registrar":report.pain.painfulTestIds.length===0?"Ninguno":report.pain.painfulTestIds.map(id=>PILOT_TESTS.find(t=>t.id===id)?.name??"Test").join(", ")}.</p>
       </div>:<div className="mt-2 space-y-2">{(capacity?.tests??[]).map(k=>{const t=PILOT_TESTS.find(test=>test.key===k);return t?<div key={t.id}><h4 className="text-sm font-semibold">{t.name}</h4><TestFacts id={t.id} report={report} axis={a.key}/></div>:null;})}</div>}</details>;

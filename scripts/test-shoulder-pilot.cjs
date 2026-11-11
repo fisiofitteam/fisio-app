@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 require("tsx/cjs");
 const {
   PILOT_TESTS, DEFAULT_PILOT_CONFIG: C, validatePilotConfig, sanitizePilotObservations,
-  validatePilotPain, scorePilot, intervalDuration, unstableDuration,
+  validatePilotPain, scorePilot, intervalDuration, legacyPositionLossNeedsReview,
 } = require("../lib/shoulder-pilot.ts");
 const ids = Object.fromEntries(PILOT_TESTS.map(t => [t.key,t.id]));
 const keyObs = o => Object.fromEntries(Object.entries(o).map(([k,v])=>[ids[k],v]));
@@ -18,8 +18,10 @@ assert(scorePilot({}).axes.every(a=>a.score===null));
 assert.equal(scorePilot({}).hasResults,false);
 assert.equal(validatePilotConfig(C).mobilityFlexionPct,100/3);
 assert.throws(()=>validatePilotConfig({...C,mobilityFlexionPct:80,mobilityPulloverPct:35}));
-assert.throws(()=>validatePilotConfig({...C,holdTargetSeconds:1}));
-assert.throws(()=>validatePilotConfig({...C,tremorMinBursts:1.5}));
+assert.equal(validatePilotConfig({...C,holdTargetSeconds:1}).holdTargetSeconds,1);
+// Read previously pinned configuration without restoring retired controls.
+const custom={...C,holdTargetSeconds:12,stabilityPvcPct:42};
+assert.deepEqual(validatePilotConfig({...custom,tremorWindowSeconds:5,tremorMinBursts:2,tremorContinuousSeconds:2}),custom);
 assert.throws(()=>validatePilotConfig({...C,pulloverStepDegrees:0}));
 assert.throws(()=>validatePilotConfig({...C,unknown:10}));
 assert.throws(()=>sanitizePilotObservations({unknownId:{}}));
@@ -40,8 +42,8 @@ assert.throws(()=>validatePilotPain({guess:1}));
 assert.deepEqual(validatePilotPain({painfulTestIds:null}),{painfulTestIds:null});
 
 // Same test score, distinct athlete profiles: keep time and range separate.
-const fullTime={holdSeconds:20,inRangeSeconds:12,unstableSeconds:0};
-const fullRange={holdSeconds:12,inRangeSeconds:12,unstableSeconds:3};
+const fullTime={holdSeconds:20,inRangeSeconds:12,positionLossSeconds:0};
+const fullRange={holdSeconds:12,inRangeSeconds:12,positionLossSeconds:3};
 assert.equal(test("pvcHold",fullTime).score,8);
 assert.equal(test("pvcHold",fullRange).score,8);
 assert.equal(test("pvcHold",{...fullTime,inRangeSeconds:0}).score,5);
@@ -49,8 +51,8 @@ assert.equal(test("pvcHold",fullRange).detail.stabilityScore,7.5);
 assert.equal(axis("endurance",{pvcHold:fullTime,bumperHold:fullRange}),8);
 assert.equal(axis("stability",{pvcHold:fullTime,bumperHold:fullRange}),8.75);
 assert.equal(axis("stability",{pvcHold:{holdSeconds:20,inRangeSeconds:12},bumperHold:fullRange}),null);
-assert.equal(test("bumperHold",{holdSeconds:0,inRangeSeconds:0,unstableSeconds:0}).score,null);
-assert.equal(test("bumperHold",{holdSeconds:0,inRangeSeconds:0,unstableSeconds:0}).detail.timeScore,0);
+assert.equal(test("bumperHold",{holdSeconds:0,inRangeSeconds:0,positionLossSeconds:0}).score,null);
+assert.equal(test("bumperHold",{holdSeconds:0,inRangeSeconds:0,positionLossSeconds:0}).detail.timeScore,0);
 assert.equal(test("pvcHold",{...fullRange,holdSeconds:12}, {...C,holdTargetSeconds:12}).score,10);
 // Compare confirmed zero at a load with a not-yet-entered observation.
 const raises={reps5:8,range5:7,reps10:6,range10:3,reps15:0};
@@ -90,19 +92,21 @@ assert.equal(axis("tolerance",{},{before:0,after:10,painfulTestIds:Object.values
 assert.equal(axis("tolerance",{},{before:0,after:0}),null); // unasked != none
 assert.equal(axis("tolerance",{},{before:0,painfulTestIds:[]}),null);
 
-// Time overlap is de-duplicated, short tremor is not automatically instability.
+// Only visible losses of posture count; overlapping ranges and out-of-window footage count once.
 const spans=(...n)=>n.map(([start,end])=>({start,end}));
 near(intervalDuration(20,spans([-2,4],[3,8],[19,56])),9);
-near(unstableDuration(20,[],spans([0,.8])),0);
-near(unstableDuration(20,[],spans([0,.8],[5,5.4])),1.2); // inclusive 5 s
-near(unstableDuration(20,[],spans([0,.8],[5.01,5.4])),0);
-near(unstableDuration(20,[],spans([3,5])),2);
-near(unstableDuration(20,spans([4,6]),spans([3,5])),3);
-near(unstableDuration(20,[],spans([1,1.5],[1.2,1.5])),0); // one burst twice
-near(unstableDuration(20,spans([16,30]),spans([15,16],[18,19],[30,32])),5);
-near(unstableDuration(20,[],spans([1,2],[2.5,3]),{...C,tremorMinBursts:3}),0);
+near(intervalDuration(20,[]),0);
+near(intervalDuration(20,spans([1,3],[2,5],[10,12]),{...C,holdTargetSeconds:10}),4);
 assert.throws(()=>intervalDuration(20,spans([0,Infinity])));
-assert.throws(()=>unstableDuration(20,[],spans([10,5])));
+assert.throws(()=>intervalDuration(20,spans([10,5])));
+const oldHold={holdSeconds:20,inRangeSeconds:12,unstableSeconds:7};
+assert.equal(legacyPositionLossNeedsReview(ids.pvcHold,oldHold),true);
+assert.equal(legacyPositionLossNeedsReview(ids.pvcHold,{...oldHold,positionLossSeconds:0}),false);
+assert.equal(test("pvcHold",oldHold).detail.stabilityScore,null);
+assert.equal(test("pvcHold",oldHold).score,8);
+assert.equal(test("pvcHold",{...oldHold,positionLossSeconds:0}).detail.stabilityScore,10);
+assert.deepEqual(sanitizePilotObservations(keyObs({pvcHold:oldHold})),keyObs({pvcHold:{holdSeconds:20,inRangeSeconds:12}}));
+assert.equal(axis("stability",{pvcHold:oldHold,bumperHold:fullTime}),null);
 // Qualitative movements never become radar points; clinical signoff is external to this pure rubric.
 for(const key of ["overheadSquat","frontSquat","pushJerk","scapPullUps"]){
   assert.equal(test(key,{}).missing,true);
@@ -117,4 +121,4 @@ const report=scorePilot(sanitizePilotObservations(keyObs(full)),explicitNoPain);
 assert.equal(report.complete,true); assert.deepEqual(report.missing,[]);
 assert.equal(report.axes.length,6); assert.equal(report.symmetry.length,2);
 assert.equal(scorePilot(keyObs({...full,pushJerk:{}}),explicitNoPain).complete,false);
-console.log("PASS: shoulder protocol: 15 tests, 6 independent axes, missing data, journaled configurations, pain, weighted ratios, tremor interval union and clinical notes");
+console.log("PASS: shoulder protocol: 15 tests, 6 independent axes, missing data, journaled configurations, pain, weighted ratios, posture-only stability (legacy and current) and clinical notes");

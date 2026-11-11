@@ -28,7 +28,7 @@ const wallHelp = "Recorrido observado sin despegar la lumbar ni extender la muñ
 const holdFields = [
   num("holdSeconds", "Tiempo de sostén (s)", 0, 60, 0.1, "Solo el intento medido, hasta el objetivo configurado."),
   num("inRangeSeconds", "Tiempo con los brazos por encima de las orejas (s)", 0, 60, 0.1),
-  num("unstableSeconds", "Segundos inestables (sin duplicar solapamientos)", 0, 60, 0.1, "Tiempo con pérdida de posición o temblor que cumple el umbral configurado. No penalices por duración ni altura aquí."),
+  num("positionLossSeconds", "Tiempo con pérdida de posición o recolocación (s)", 0, 60, 0.1, "Cuenta solo los segundos en los que pierde la postura o recoloca los hombros. Si mantuvo la postura durante todo el sostén, indica 0."),
 ];
 const raiseFields = [5, 10, 15].flatMap(kg => [
   num("reps" + kg, "Repeticiones completadas · " + kg + " kg", 0, 8, 1, "Si se confirma que no se hizo esta carga, indica 0. En blanco = pendiente."),
@@ -79,7 +79,7 @@ export const DEFAULT_PILOT_CONFIG = {
   mobilityFlexionPct:100/3, mobilityPulloverPct:100/3,
   endRangeRaisesPct:66, endurancePvcPct:50, stabilityPvcPct:50, coordinationFluencyPct:50,
   painFinalPenalty:0.5, painRisePenalty:0.5, painTestPenalty:0.25,
-  holdTargetSeconds:20, tremorWindowSeconds:5, tremorMinBursts:2, tremorContinuousSeconds:2, pulloverStepDegrees:5,
+  holdTargetSeconds:20, pulloverStepDegrees:5,
 };
 export type PilotConfig = typeof DEFAULT_PILOT_CONFIG;
 export const PILOT_CONFIG_FIELDS: PilotField[] = [
@@ -93,9 +93,6 @@ export const PILOT_CONFIG_FIELDS: PilotField[] = [
   num("painRisePenalty","Descuento por punto de aumento del dolor",0,10,0.05),
   num("painTestPenalty","Descuento por test doloroso",0,10,0.05),
   num("holdTargetSeconds","Duración objetivo del sostén (s)",1,60,1),
-  num("tremorWindowSeconds","Ventana para detectar temblor frecuente (s)",0.1,60,0.1),
-  num("tremorMinBursts","Ráfagas en esa ventana para penalizar",1,20,1),
-  num("tremorContinuousSeconds","Duración mínima de un temblor continuo (s)",0.1,60,0.1),
   num("pulloverStepDegrees","Grados que equivalen a un punto en pull over",0.1,90,0.1),
 ];
 function obj(v: unknown): v is Record<string,unknown> {
@@ -106,15 +103,17 @@ function n(v: unknown,min: number,max: number,integer=false): number | null {
   return v;
 }
 function fieldValue(f:PilotField,v:unknown):number|null { return n(v,f.min??0,f.max??Infinity,f.step===1); }
+// First-generation settings are pinned to assignments. Drop retired options without
+// resetting any of the weights or timing targets chosen by the clinical team.
+const retiredConfigKeys = new Set(["tremorWindowSeconds","tremorMinBursts","tremorContinuousSeconds"]);
 export function validatePilotConfig(input:unknown):PilotConfig {
-  if(!obj(input) || Object.keys(input).some(key=>!Object.hasOwn(DEFAULT_PILOT_CONFIG,key))) throw Error("Configuración de baremo no válida.");
+  if(!obj(input) || Object.keys(input).some(key=>!Object.hasOwn(DEFAULT_PILOT_CONFIG,key)&&!retiredConfigKeys.has(key))) throw Error("Configuración de baremo no válida.");
   const c={...DEFAULT_PILOT_CONFIG};
   for(const f of PILOT_CONFIG_FIELDS){
     const v=fieldValue(f,input[f.key]); if(v===null) throw Error("Revisa: "+f.label+".");
     c[f.key as keyof PilotConfig]=v;
   }
   if(c.mobilityFlexionPct+c.mobilityPulloverPct>100+1e-9) throw Error("Los pesos de movilidad no pueden sumar más del 100 %.");
-  if(c.tremorContinuousSeconds>c.holdTargetSeconds || c.tremorWindowSeconds>c.holdTargetSeconds) throw Error("Los umbrales de temblor no pueden superar la duración objetivo del sostén.");
   return c;
 }
 export function validatePilotPain(input:unknown):PilotPain {
@@ -134,6 +133,12 @@ export function validatePilotPain(input:unknown):PilotPain {
   }
   return out;
 }
+// A legacy aggregate could contain shaking, posture loss, or overlapping intervals.
+// It cannot supply a posture-only measurement or be assumed to be zero.
+export function legacyPositionLossNeedsReview(id:string, observation?:PilotObservation):boolean {
+  const key=PILOT_TEST_BY_ID[id]?.key;
+  return (key==="pvcHold"||key==="bumperHold") && typeof observation?.unstableSeconds==="number" && typeof observation.positionLossSeconds!=="number";
+}
 export function sanitizePilotObservations(input:unknown,config:PilotConfig=DEFAULT_PILOT_CONFIG):PilotObservations {
   if(!obj(input)) throw Error("Observaciones no válidas.");
   const out:PilotObservations={};
@@ -141,6 +146,7 @@ export function sanitizePilotObservations(input:unknown,config:PilotConfig=DEFAU
     if(!Object.hasOwn(PILOT_TEST_BY_ID,id)||!obj(fields)) throw Error("Test no válido para esta batería.");
     const test=PILOT_TEST_BY_ID[id], clean:PilotObservation={};
     for(const [key,value] of Object.entries(fields)){
+      if(key==="unstableSeconds"&&(test.key==="pvcHold"||test.key==="bumperHold")) continue;
       const field=test.fields.find(f=>f.key===key); if(!field) throw Error("Campo de observación no válido.");
       if(value===null){clean[key]=null;continue;}
       if(field.type==="text"){if(typeof value!=="string"||value.length>4000) throw Error("El comentario no puede superar 4000 caracteres."); clean[key]=value.trim();}
@@ -148,9 +154,9 @@ export function sanitizePilotObservations(input:unknown,config:PilotConfig=DEFAU
     }
     if(test.key==="pvcHold"||test.key==="bumperHold"){
       const hold=clean.holdSeconds;
-      if([hold,clean.inRangeSeconds,clean.unstableSeconds].some(v=>typeof v==="number"&&v>config.holdTargetSeconds))
+      if([hold,clean.inRangeSeconds,clean.positionLossSeconds].some(v=>typeof v==="number"&&v>config.holdTargetSeconds))
         throw Error("Registra solo el tramo de sostén hasta el objetivo configurado.");
-      if(typeof hold==="number"&&[clean.inRangeSeconds,clean.unstableSeconds].some(v=>typeof v==="number"&&v>hold))
+      if(typeof hold==="number"&&[clean.inRangeSeconds,clean.positionLossSeconds].some(v=>typeof v==="number"&&v>hold))
         throw Error("El tiempo en rango o inestable no puede superar el sostén.");
     }
     if(test.key==="bumperRaises") for(const kg of [5,10,15]){
@@ -178,16 +184,6 @@ function merged(hold:number,intervals:PilotInterval[],config:PilotConfig):PilotI
 }
 export function intervalDuration(hold:number,intervals:PilotInterval[],config=DEFAULT_PILOT_CONFIG){
   return merged(hold,intervals,config).reduce((a,i)=>a+i.end-i.start,0);
-}
-export function unstableDuration(hold:number,lossIntervals:PilotInterval[],tremorIntervals:PilotInterval[],config=DEFAULT_PILOT_CONFIG){
-  const bursts=merged(hold,tremorIntervals,config);
-  const eligible=new Set(bursts.filter(i=>i.end-i.start>=config.tremorContinuousSeconds));
-  // Count distinct onsets in an inclusive rolling window; mark all qualifying bursts, not the entire window.
-  for(let i=0;i<bursts.length;i++){
-    let j=i+1; while(j<bursts.length && bursts[j].start-bursts[i].start<=config.tremorWindowSeconds)j++;
-    if(j-i>=config.tremorMinBursts)for(let k=i;k<j;k++)eligible.add(bursts[k]);
-  }
-  return intervalDuration(hold,[...lossIntervals,...eligible],config);
 }
 const clamp=(x:number)=>Math.max(0,Math.min(10,x));
 const rnd=(x:number)=>Math.round((x+Number.EPSILON)*100)/100;
@@ -222,7 +218,7 @@ export function scorePilot(observations:PilotObservations={},pain:PilotPain={},c
         break;
       }
       case "pvcHold":case "bumperHold":{
-        const h=read("holdSeconds"),v=read("inRangeSeconds"),u=read("unstableSeconds");
+        const h=read("holdSeconds"),v=read("inRangeSeconds"),u=read("positionLossSeconds");
         const hold=h!==null && h<=config.holdTargetSeconds?h:null;
         d.timeScore=hold===null?null:10*hold/config.holdTargetSeconds;
         d.rangeScore=ratio(v,hold);

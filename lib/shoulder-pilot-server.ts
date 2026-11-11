@@ -1,11 +1,12 @@
 import type { Prisma, ShoulderPilotReview } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { canUseShoulderVideo, wasShoulderReviewWithdrawn } from "@/lib/shoulder-video-policy";
 import { getSessionUser } from "@/lib/session";
 import { canAccessEvidencePatient } from "@/lib/patient-evidence";
 import { getOnboardingConfig } from "@/lib/onboarding-config";
 import { getCurrentPilotConfig } from "@/lib/shoulder-pilot-config-server";
 import { pilotSnapshotRefs } from "@/lib/shoulder-pilot-snapshot";
-import { PILOT_PROGRAM_ID, RUBRIC_VERSION, PILOT_TESTS, scorePilot, validatePilotConfig, sanitizePilotObservations, validatePilotPain,
+import { PILOT_PROGRAM_ID, RUBRIC_VERSION, PILOT_TESTS, scorePilot, validatePilotConfig, legacyPositionLossNeedsReview, sanitizePilotObservations, validatePilotPain,
   type PilotObservations, type PilotPain, type PilotConfig } from "@/lib/shoulder-pilot";
 
 export class PilotHttpError extends Error {
@@ -47,16 +48,20 @@ export async function requirePilotAccess(sessionId: string, professionalOnly = f
 }
 type Access = Awaited<ReturnType<typeof requirePilotAccess>>;
 type ReadDb = Pick<Prisma.TransactionClient,"assessmentVideo">;
-async function media(db:ReadDb, sessionId:string, patientId:string, refs:Map<string,string>) {
-  const rows=await db.assessmentVideo.findMany({where:{sessionId, patientId,uploadedAt:{not:null},url:{not:null}},select:{id:true,sessionId:true,testId:true,taskId:true,uploadedAt:true}});
-  return rows.filter(r=>refs.get(r.testId)===r.taskId).map(r=>({...r,uploadedAt:r.uploadedAt!.toISOString(),url:"/api/assessments/media?id="+encodeURIComponent(r.id)+"&v="+r.uploadedAt!.getTime()}));
+async function media(db:ReadDb, sessionId:string, patientId:string, refs:Map<string,string>, preference:Pick<ShoulderPilotReview,"aiConsent"|"aiConsentAt">|null) {
+  const rows=await db.assessmentVideo.findMany({where:{sessionId, patientId,uploadedAt:{not:null},url:{not:null}},select:{id:true,sessionId:true,testId:true,taskId:true,uploadedAt:true,url:true}});
+  return rows.filter(r=>refs.get(r.testId)===r.taskId).map(({url,...r})=>({...r,aiReviewBlocked:!canUseShoulderVideo(preference,r.id,url),uploadedAt:r.uploadedAt!.toISOString(),url:"/api/assessments/media?id="+encodeURIComponent(r.id)+"&v="+r.uploadedAt!.getTime()}));
 }
 const sourceMap=(videos:Awaited<ReturnType<typeof media>>): Record<string,string> =>
   Object.fromEntries(videos.map(v=>[v.testId,v.id+"@"+v.uploadedAt]));
-function unpack(row:ShoulderPilotReview|null) {
+function unpack(row:ShoulderPilotReview|null, config:PilotConfig) {
+  const stored=decode<PilotObservations>(row?.observationsJson,{}), marks=decode<Marks>(row?.reviewedJson,{});
+  // A verified legacy aggregate may include shaking. Keep all other checks and fields,
+  // but never publish that mark or expose that value as a position-loss measurement.
+  for(const [id,fields] of Object.entries(stored)) if(legacyPositionLossNeedsReview(id,fields)) delete marks[id];
   return {
     pain:decode<PilotPain>(row?.painJson,{}), loads:decode<PilotObservations>(row?.loadsJson,{}),
-    observations:decode<PilotObservations>(row?.observationsJson,{}), marks:decode<Marks>(row?.reviewedJson,{}),
+    observations:sanitizePilotObservations(stored,config), marks,
     notAssessable:decode<Record<string,string>>(row?.notAssessableJson,{})
   };
 }
@@ -78,17 +83,17 @@ async function contextFields(patientId:string) {
 export async function getPilotView(sessionId:string) {
   const a=await requirePilotAccess(sessionId);
   const {row,session,actor,config}=a, patientId=session.assignment.patientId;
-  const raw=unpack(row);
+  const raw=unpack(row,config);
   const previous=session.weekNumber===14?await prisma.shoulderPilotReview.findFirst({
     where:{publishedAt:{not:null},session:{assignmentId:session.assignmentId,weekNumber:1,scheduledDate:{lte:session.scheduledDate}}},
     orderBy:[{session:{scheduledDate:"desc"}},{sessionId:"asc"}],
-    select:{sessionId:true,publishedJson:true,session:{select:{tasksSnapshot:true}}}
+    select:{sessionId:true,publishedJson:true,aiConsent:true,aiConsentAt:true,session:{select:{tasksSnapshot:true}}}
   }):null;
-  const common={sessionId,weekNumber:session.weekNumber,scheduledDate:session.scheduledDate.toISOString(),assignmentId:session.assignmentId,patientId,patientName:session.assignment.patient.fullName,version:row?.version||0,aiConsent:row?.aiConsent||false,
+  const common={sessionId,weekNumber:session.weekNumber,scheduledDate:session.scheduledDate.toISOString(),assignmentId:session.assignmentId,patientId,patientName:session.assignment.patient.fullName,version:row?.version||0,aiReviewBlocked:wasShoulderReviewWithdrawn(row),
     pain:raw.pain,loads:raw.loads,config,rubricVersion:RUBRIC_VERSION,published:decode<Published|null>(row?.publishedJson,null),baseline:decode<Published|null>(previous?.publishedJson,null)};
   if(actor.kind==="patient")return common;
-  const [videos,initialFormContext,baselineVideos]=await Promise.all([media(prisma,sessionId,patientId,a.refs),contextFields(patientId),
-    previous?media(prisma,previous.sessionId,patientId,pilotSnapshotRefs(previous.session.tasksSnapshot)||new Map()):Promise.resolve([])]);
+  const [videos,initialFormContext,baselineVideos]=await Promise.all([media(prisma,sessionId,patientId,a.refs,row),contextFields(patientId),
+    previous?media(prisma,previous.sessionId,patientId,pilotSnapshotRefs(previous.session.tasksSnapshot)||new Map(),previous):Promise.resolve([])]);
   // Never present a replacement upload as the evidence for a previously published baseline.
   const baselineEvidence=baselineVideos.filter(v=>common.baseline?.videoVersions?.[v.testId]===v.id+"@"+v.uploadedAt);
   return {...common,observations:raw.observations,reviewedTestIds:validMarks(raw.marks,sourceMap(videos)),notAssessable:raw.notAssessable,initialFormContext,videos,baselineVideos:baselineEvidence,baselineSessionId:previous?.sessionId||null};
@@ -122,11 +127,15 @@ export async function updatePilot(sessionId:string, input:unknown) {
       if (protocol.rubricVersion!==RUBRIC_VERSION) throw conflict();
       const row=await tx.shoulderPilotReview.upsert({where:{sessionId},create:{sessionId},update:{}});
       if(row.version!==b.version)throw conflict();
-      const raw=unpack(row);
+      const raw=unpack(row,config);
       const data:ChangeData={version:{increment:1}};
       if(actor.kind==="patient") {
         allowedKeys(b,["action","version","pain","loads","aiConsent"]);
-        if(b.aiConsent!==undefined){if(typeof b.aiConsent!=="boolean")throw new PilotHttpError(400,"Consentimiento no válido."); if(row.publishedAt && b.aiConsent && !row.aiConsent)throw new PilotHttpError(409,"La revisión está publicada; el consentimiento solo puede retirarse."); if(b.aiConsent!==row.aiConsent){data.aiConsent=b.aiConsent;data.aiConsentAt=new Date();}}
+        // An old browser can still withdraw permission. New uploads never create a consent record.
+        if(b.aiConsent!==undefined){
+          if(b.aiConsent!==false) throw new PilotHttpError(400,"Recarga la valoración antes de continuar.");
+          data.aiConsent=false; data.aiConsentAt=new Date();
+        }
         if (row.publishedAt && (b.pain!==undefined||b.loads!==undefined)) throw new PilotHttpError(409,"Tu informe ya está publicado; pide al fisio cualquier corrección.");
         if (b.pain!==undefined){
           if(!object(b.pain))throw new PilotHttpError(400,"Datos de dolor inválidos.");
@@ -147,13 +156,16 @@ export async function updatePilot(sessionId:string, input:unknown) {
           data.loadsJson=JSON.stringify(raw.loads);data.observationsJson=JSON.stringify(raw.observations);data.reviewedJson=JSON.stringify(raw.marks);
         }
       }else{
-        const videos=await media(tx,sessionId,session.assignment.patientId,refs), sources=sourceMap(videos);
+        const videos=await media(tx,sessionId,session.assignment.patientId,refs,row), sources=sourceMap(videos);
         if(b.action==="save"){
           allowedKeys(b,["action","version","observations","reviewedTestIds","notAssessable","videoVersions"]);
           const reasons=parseReasons(b.notAssessable??{},testIds);
           const obs=apiInput(()=>sanitizePilotObservations(b.observations,config));
           for(const id of Object.keys(reasons))delete obs[id];
           const reviewed=parseReviewed(b.reviewedTestIds,testIds);
+          const submitted=b.observations as PilotObservations;
+          if(reviewed.some(id=>!reasons[id] && legacyPositionLossNeedsReview(id,submitted?.[id])))
+            throw new PilotHttpError(409,"El criterio de estabilidad ha cambiado. Recarga y revisa el sostén antes de guardarlo.");
           const computed=scorePilot(obs,raw.pain,config);
           const marks:Marks={};
           for(const id of reviewed){

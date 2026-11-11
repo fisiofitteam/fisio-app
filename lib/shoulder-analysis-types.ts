@@ -18,7 +18,7 @@ export type ShoulderAIDraft = {
   observationFields:Record<string,number>; notes:string;
   findings:Array<TimeSpan & {text:string}>; limitations:string[];
   method:string; hold:TimeSpan|null;
-  intervals:{aboveEars:TimeSpan[]|null;lossOfPosition:TimeSpan[]|null;tremor:TimeSpan[]|null};
+  intervals:{aboveEars:TimeSpan[]|null;lossOfPosition:TimeSpan[]|null};
 };
 export const MAX_CLIP_SECONDS = 60;
 export const MAX_FRAME_REQUEST_BYTES = 3_800_000;

@@ -6,7 +6,7 @@ type Field = [keyof PilotConfig,string,string?];
 const groups: {title:string;fields:Field[]}[]=[
  {title:"Movilidad · reparto entre los tres tests",fields:[["mobilityFlexionPct","Flexión en pared (%)"],["mobilityPulloverPct","Pull over sobre wallball (%)"]]},
  {title:"Fuerza, resistencia y estabilidad",fields:[["endRangeRaisesPct","Fuerza al final del rango: elevación de bumper (%)","El resto corresponde al bumper hold en prono."],["endurancePvcPct","Resistencia: PVC lift off (%)","El resto corresponde al bumper hold en prono."],["stabilityPvcPct","Estabilidad: PVC lift off (%)","El resto corresponde al bumper hold en prono."],["holdTargetSeconds","Objetivo de sostén isométrico (s)"],["pulloverStepDegrees","Grados de recorrido por punto en el pull over"]]},
- {title:"Coordinación y temblor",fields:[["coordinationFluencyPct","Coordinación: fluidez (%)","El resto corresponde a la simetría escapular."],["tremorWindowSeconds","Intervalo de observación de ráfagas (s)"],["tremorMinBursts","Mínimo de ráfagas en el intervalo"],["tremorContinuousSeconds","Temblor continuo mínimo (s)"]]},
+ {title:"Coordinación escapular",fields:[["coordinationFluencyPct","Coordinación: fluidez (%)","El resto corresponde a la simetría escapular."]]},
  {title:"Tolerancia inmediata a la carga",fields:[["painFinalPenalty","Descuento por punto de dolor al terminar"],["painRisePenalty","Descuento por punto de aumento del dolor"],["painTestPenalty","Descuento por test doloroso"]]}
 ];
 const decimal=(n:number)=>Number(n.toFixed(4));
