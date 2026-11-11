@@ -100,7 +100,7 @@ export default async function PatientsListPage({
   // pestaña del propio usuario para no duplicar "Míos".
   const professionals = user.isManager
     ? await prisma.professional.findMany({
-        where: { role: { in: ["fisio", "head_success", "ceo"] } },
+        where: { active: true, deletedAt: null, role: { in: ["fisio", "head_success", "ceo"] } },
         orderBy: { fullName: "asc" },
       })
     : [];

@@ -39,7 +39,7 @@ export function InviteView({ currentUserId, canDelete = false, team, canEditComp
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState("");
   async function removeMember(m: TeamMember) {
-    if (!confirm('¿Eliminar a ' + m.fullName + ' del equipo? Perderá el acceso y desaparecerá del listado. Su historial se conservará.')) return;
+    if (!confirm('¿Eliminar a ' + m.fullName + ' del equipo? Perderá el acceso al confirmar. Sus pacientes terminados conservarán su nombre en el historial.')) return;
     setDeleting(m.id);
     setDeleteError("");
     try {
