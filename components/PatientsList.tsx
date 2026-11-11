@@ -491,15 +491,23 @@ function ReassignModal({
 
   async function save() {
     setSaving(true);
-    await fetch("/api/patients", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id: patient.id,
-        assignedProfessionalId: selected || null,
-      }),
-    });
-    onSaved();
+    try {
+      const res = await fetch("/api/patients", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: patient.id, assignedProfessionalId: selected || null }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || "No se pudo cambiar el fisio.");
+        return;
+      }
+      onSaved();
+    } catch {
+      alert("No se pudo conectar. Vuelve a intentarlo.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -1395,6 +1403,7 @@ function FinishedPatientList({
         alert(data?.error || "No se pudo reactivar");
         return;
       }
+      if (data.requiresAssignment) alert("Paciente reactivado. Su fisio anterior ya no está en el equipo; puedes asignarle uno en «Por asignar».");
       router.refresh();
     } finally {
       setReactivating(null);

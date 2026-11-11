@@ -1,3 +1,4 @@
+import { withClinicalAssignee, assigneeConflict } from "@/lib/clinical-assignment";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
@@ -58,7 +59,9 @@ export async function POST(req: NextRequest) {
     ? phone.trim()
     : (phoneFromLead?.trim() || null);
 
-  const patient = await prisma.patient.create({
+  const periodEnd = new Date(startDate);
+  periodEnd.setMonth(periodEnd.getMonth() + months);
+  const patient = await withClinicalAssignee(assignedProfessionalId || null, tx => tx.patient.create({
     data: {
       fullName: lead.fullName,
       email: normalizedEmail,
@@ -81,24 +84,19 @@ export async function POST(req: NextRequest) {
       // completada. Sin esto, la vista de pacientes lo trata como legacy
       // porque onboardingTasks queda null.
       onboardingTasks: { anamnesis: false, contract: false, firstSession: false },
+      // El alta y su primer periodo se hacen visibles a la vez al dar de baja al fisio.
+      renewals: { create: {
+        programType: programType || null,
+        periodMonths: months,
+        startDate,
+        endDate: periodEnd,
+        status: "active",
+        amountPaid: amountPaid && Number(amountPaid) > 0 ? Number(amountPaid) : null,
+        notes: "Alta inicial (conversión de lead)",
+      } },
     },
-  });
-
-  // 1b) Crear automáticamente Periodo 1 en SubscriptionRenewal
-  const periodEnd = new Date(startDate);
-  periodEnd.setMonth(periodEnd.getMonth() + months);
-  await prisma.subscriptionRenewal.create({
-    data: {
-      patientId: patient.id,
-      programType: programType || null,
-      periodMonths: months,
-      startDate,
-      endDate: periodEnd,
-      status: "active",
-      amountPaid: amountPaid && Number(amountPaid) > 0 ? Number(amountPaid) : null,
-      notes: "Alta inicial (conversión de lead)",
-    },
-  });
+  }));
+  if (!patient) return NextResponse.json({ error: assigneeConflict }, { status: 409 });
 
   // 2) Marcar lead como won + linkear paciente
   await prisma.lead.update({

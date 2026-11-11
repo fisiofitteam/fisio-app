@@ -1,3 +1,4 @@
+import { withClinicalAssignee, assigneeConflict } from "@/lib/clinical-assignment";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
@@ -118,7 +119,7 @@ export async function POST(req: NextRequest) {
   const programEndDate = new Date(startDate);
   programEndDate.setMonth(programEndDate.getMonth() + months);
 
-  const patient = await prisma.patient.create({
+  const patient = await withClinicalAssignee(finalAssigneeId, tx => tx.patient.create({
     data: {
       fullName: fullName.trim(),
       email: normalizedEmail,
@@ -141,27 +142,19 @@ export async function POST(req: NextRequest) {
       onboardingTasks: isLegacy
         ? undefined // se queda en null → el gate lo trata como legacy y no se lo pide
         : { anamnesis: false, contract: false, firstSession: false },
+      // El alta y su primer periodo se hacen visibles a la vez al dar de baja al fisio.
+      renewals: { create: {
+        programType: programType || null,
+        periodMonths: months,
+        startDate: startDate,
+        endDate: programEndDate,
+        status: "active",
+        amountPaid: !isLegacy && amountPaid && Number(amountPaid) > 0 ? Number(amountPaid) : null,
+        notes: isLegacy ? "Migración (paciente existente)" : "Alta inicial",
+      } },
     },
-  });
-
-  // 1b) Crear automáticamente Periodo 1 en SubscriptionRenewal con la fecha
-  // de inicio real (puede ser pasada para legacy). Esto es lo que alimenta
-  // la lógica de "renueva en X días" y el flujo de RenewalCheckout.
-  const periodStart = patient.subscriptionStartDate ?? new Date();
-  const periodEnd = new Date(periodStart);
-  periodEnd.setMonth(periodEnd.getMonth() + patient.subscriptionPeriodMonths);
-  await prisma.subscriptionRenewal.create({
-    data: {
-      patientId: patient.id,
-      programType: programType || null,
-      periodMonths: patient.subscriptionPeriodMonths,
-      startDate: periodStart,
-      endDate: periodEnd,
-      status: "active",
-      amountPaid: !isLegacy && amountPaid && Number(amountPaid) > 0 ? Number(amountPaid) : null,
-      notes: isLegacy ? "Migración (paciente existente)" : "Alta inicial",
-    },
-  });
+  }));
+  if (!patient) return NextResponse.json({ error: assigneeConflict }, { status: 409 });
 
   // 2) Si NO es legacy y se indicó importe, generar transacción de ingreso.
   // En el flujo legacy nunca generamos Transaction para no contaminar métricas.
@@ -310,7 +303,7 @@ export async function PATCH(req: NextRequest) {
     forceFixedCleanup = true;
   }
 
-  const updated = await prisma.patient.update({
+  const updatePatient = (db: Pick<typeof prisma, "patient">, assignment: string | null | undefined) => db.patient.update({
     where: { id },
     data: {
       ...(fullName !== undefined && { fullName }),
@@ -331,8 +324,8 @@ export async function PATCH(req: NextRequest) {
       ...(instagram !== undefined && {
         instagram: instagram?.trim().replace(/^@+/, "") || null,
       }),
-      ...(assignedProfessionalId !== undefined && {
-        assignedProfessionalId: assignedProfessionalId || null,
+      ...(assignment !== undefined && {
+        assignedProfessionalId: assignment,
       }),
       ...(programType !== undefined && {
         programType: programType || null,
@@ -390,5 +383,9 @@ export async function PATCH(req: NextRequest) {
       }),
     },
   });
+  const updated = assignedProfessionalId === undefined
+    ? await updatePatient(prisma, undefined)
+    : await withClinicalAssignee(assignedProfessionalId || null, updatePatient, id);
+  if (!updated) return NextResponse.json({ error: assigneeConflict }, { status: 409 });
   return NextResponse.json(updated);
 }

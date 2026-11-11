@@ -139,7 +139,7 @@ export default async function LlamadasVentaPage({
   });
 
   const fisios = await prisma.professional.findMany({
-    where: { role: { in: ["fisio", "head_success"] } },
+    where: { active: true, deletedAt: null, role: { in: ["fisio", "head_success"] } },
     orderBy: { fullName: "asc" },
   });
 

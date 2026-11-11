@@ -48,7 +48,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const endDate = new Date(today);
   endDate.setMonth(endDate.getMonth() + periodMonths);
 
-  await prisma.$transaction(async (tx) => {
+  const requiresAssignment = await prisma.$transaction(async (tx) => {
     // Cerrar cualquier active colgado por si acaso (con endDate vencido).
     await tx.subscriptionRenewal.updateMany({
       where: { patientId: patient.id, status: "active" },
@@ -79,10 +79,21 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         programDurationMonths: periodMonths,
       },
     });
+    // Only when a new period begins: keep an active owner, free the slot of a
+    // removed owner. The relationship predicate protects a concurrent reassignment.
+    const cleared = await tx.patient.updateMany({
+      where: { id: patient.id, assignedProfessional: { is: { deletedAt: { not: null } } } },
+      data: { assignedProfessionalId: null },
+    });
+    return cleared.count > 0;
+  }, { isolationLevel: "Serializable" }).catch((error: unknown) => {
+    if ((error as { code?: string })?.code === "P2034") return null;
+    throw error;
   });
-
+  if (requiresAssignment === null) return NextResponse.json({ error: "La ficha ha cambiado. Actualízala antes de reactivar." }, { status: 409 });
   return NextResponse.json({
     ok: true,
+    requiresAssignment,
     patientId: patient.id,
     periodMonths,
     programType,
