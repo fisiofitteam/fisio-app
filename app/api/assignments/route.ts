@@ -86,6 +86,7 @@ export async function PATCH(req: NextRequest) {
         where: {
           assignmentId: id,
           completedAt: null,
+          shoulderPilotReview: null,
           scheduledDate: { gte: today },
         },
       });
@@ -111,6 +112,8 @@ export async function PATCH(req: NextRequest) {
           assignmentId: id,
           scheduledDate: { gte: today },
           completedAt: null,
+          shoulderPilotReview: null,
+          assessmentVideos: { none: {} },
         },
       });
     }

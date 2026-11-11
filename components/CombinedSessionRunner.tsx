@@ -9,6 +9,8 @@
  *   otras al guardar (lo hace el endpoint complete-combined).
  * - Un único botón "Completar sesión" marca todas las sesiones a la vez.
  */
+import { isShoulderPilotTask } from "@/lib/patient-shoulder-session";
+import { ShoulderPatientBattery } from "@/components/ShoulderPatientBattery";
 import { AssessmentUploader } from "@/components/AssessmentUploader";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -26,6 +28,7 @@ import { youtubeEmbedUrl } from "@/lib/youtube";
 export type CombinedGroup = {
   sessionId: string;
   programName: string;
+  pilotWeek?: 1 | 14;
   tasks: Task[];
 };
 
@@ -49,7 +52,8 @@ export function CombinedSessionRunner({
   // faltaba aqui y el fisio no recibia feedback subjetivo cuando el atleta
   // hacia >=2 sesiones el mismo dia.
   const [patientNotes, setPatientNotes] = useState("");
-  const NOTES_MIN = 20;
+  const pilotOnly = groups.length > 0 && groups.every(g => !!g.pilotWeek && g.tasks.every(isShoulderPilotTask));
+  const NOTES_MIN = pilotOnly ? 0 : 20;
 
   function setTaskResponse(taskId: string, data: any) {
     setResponses((prev) => ({ ...prev, [taskId]: data }));
@@ -92,7 +96,12 @@ export function CombinedSessionRunner({
     <div className="space-y-4">
       {groupsWithoutEvolution.map((g) => (
         <div key={g.sessionId} className="space-y-3">
-          {g.tasks.map((task) => (
+          {g.tasks.map((task) => g.pilotWeek && isShoulderPilotTask(task) ?
+            (task === g.tasks.find(isShoulderPilotTask) ? <ShoulderPatientBattery
+              key={g.sessionId} sessionId={g.sessionId} week={g.pilotWeek}
+              tasks={g.tasks.filter(isShoulderPilotTask)}
+              onBusyChange={(key, busy) => setUploads(prev => ({ ...prev, [g.sessionId + key]: busy }))}
+            /> : null) : (
             <TaskBlock
               key={task.id}
               sessionId={g.sessionId}
@@ -128,7 +137,7 @@ export function CombinedSessionRunner({
             ¿Cómo te has sentido en esta sesión?
           </label>
           <p className="text-xs mt-0.5" style={{ color: "var(--p-text-dim)" }}>
-            Detalla las sensaciones que has tenido durante esta sesión — a tu fisio le sirve para ajustar tu plan.
+            {pilotOnly ? "Si quieres, añade algún detalle para tu fisio." : "Detalla las sensaciones que has tenido durante esta sesión — a tu fisio le sirve para ajustar tu plan."}
           </p>
         </div>
         <textarea
@@ -139,7 +148,7 @@ export function CombinedSessionRunner({
           onChange={(e) => setPatientNotes(e.target.value)}
         />
         <div className="text-[11px] text-right" style={{ color: patientNotes.trim().length >= NOTES_MIN ? "var(--p-text-dim)" : "var(--p-text-faint)" }}>
-          {patientNotes.trim().length}/{NOTES_MIN} mínimo
+          {pilotOnly ? "Comentario opcional" : patientNotes.trim().length+"/"+NOTES_MIN+" mínimo"}
         </div>
         <button
           onClick={complete}

@@ -157,8 +157,9 @@ export async function PATCH(req: NextRequest) {
   if (!canUseEvidence(await getActiveProfessional())) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   const { id, scheduledDate, tasksSnapshot } = await req.json();
 
-  const owner = await prisma.programSession.findUnique({ where: { id }, select: { assignment: { select: { patientId: true } } } });
+  const owner = await prisma.programSession.findUnique({ where: { id }, select: { assignment: { select: { patientId: true } }, shoulderPilotReview:{ select:{sessionId:true} } } });
   if (!owner || !await canAccessEvidencePatient(owner.assignment.patientId)) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  if (owner.shoulderPilotReview && tasksSnapshot !== undefined) return NextResponse.json({error:"La valoración ya tiene datos. No se pueden sustituir sus pruebas."},{status:409});
   try { for (const t of tasksSnapshot || []) if (t.type === "ASSESSMENT") validateAssessment(t.assessment); } catch { return NextResponse.json({ error: "Revisa los test de la valoración" }, { status: 400 }); }
   const data: any = {};
   if (scheduledDate !== undefined) {

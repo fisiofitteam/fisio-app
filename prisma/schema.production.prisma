@@ -889,6 +889,7 @@ model MetricDefinition {
 // ============================================================================
 
 model ProgramAssignment {
+  shoulderPilotProtocol ShoulderPilotProtocol?
   id          String   @id @default(cuid())
   patientId   String
   patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
@@ -907,6 +908,7 @@ model ProgramAssignment {
 }
 
 model ProgramSession {
+  shoulderPilotReview ShoulderPilotReview?
   assessmentVideos AssessmentVideo[]
   id            String   @id @default(cuid())
   assignmentId  String
@@ -4174,4 +4176,37 @@ model PayrollAdjustment {
   createdAt      DateTime @default(now())
 
   @@index([professionalId, year, month])
+}
+
+model ShoulderPilotRubricRevision {
+  revision    Int      @id
+  config      String
+  createdAt   DateTime @default(now())
+  createdById String?
+}
+
+// A single frozen protocol per assignment keeps the initial assessment and its retest comparable.
+model ShoulderPilotProtocol {
+  assignmentId   String @id
+  assignment     ProgramAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  rubricVersion  String
+  configJson     String
+  createdAt      DateTime @default(now())
+}
+
+model ShoulderPilotReview {
+  sessionId          String @id
+  session            ProgramSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  version            Int @default(0)
+  painJson           String @default("{}")
+  loadsJson          String @default("{}")
+  aiConsent          Boolean @default(false)
+  aiConsentAt        DateTime?
+  observationsJson   String @default("{}")
+  reviewedJson       String @default("{}")
+  notAssessableJson  String @default("{}")
+  publishedJson      String?
+  publishedAt        DateTime?
+  publishedById      String?
+  updatedAt          DateTime @updatedAt
 }

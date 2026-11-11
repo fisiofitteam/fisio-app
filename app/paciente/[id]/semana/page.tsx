@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { PatientShoulderHistory } from "@/components/PatientShoulderHistory";
 import { PatientNav } from "@/components/PatientNav";
 import { buildAssignmentIndexMap, colorForSession, colorForTask } from "@/lib/session-colors";
 import { todayForPatient, dowForPatient, weekStartForPatient } from "@/lib/patient-dates";
-import { parseAndSortTasksSnapshot } from "@/lib/task-order";
+import { patientDisplayedTasks } from "@/lib/patient-shoulder-session";
 
 const DAY_NAMES = ["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 
@@ -75,6 +76,7 @@ export default async function PatientWeekPage({
       assignment: { patientId: patient.id, isActive: true },
       scheduledDate: { gte: rangeStart, lt: rangeEndExclusive },
     },
+    include: { assignment: { select: { programId: true, patient: { select: { isTest: true } } } } },
     orderBy: [{ scheduledDate: "asc" }, { dayOrder: "asc" }],
   });
 
@@ -137,6 +139,8 @@ export default async function PatientWeekPage({
               : "Esta semana · lunes a domingo"}
           </p>
         </header>
+
+        {patient.isTest && <PatientShoulderHistory patientId={patient.id} />}
 
         {/* Selector de semana. "Siguiente" solo aparece desde el viernes,
             antes no tiene mucho sentido programación. */}
@@ -219,7 +223,7 @@ function DayCard({
   day: {
     date: Date;
     key: string;
-    sessions: { id: string; completedAt: Date | null; tasksSnapshot: string; assignmentId: string }[];
+    sessions: { id: string; completedAt: Date | null; tasksSnapshot: string; assignmentId: string; weekNumber: number; assignment: { programId: string; patient: { isTest: boolean } } }[];
   };
   assignmentIndex: Map<string, number>;
   /** "YYYY-MM-DD" de hoy calculado en la TZ del paciente. Se compara con
@@ -253,7 +257,7 @@ function DayCard({
       ) : (
         <div className="space-y-2">
           {daySessions.map((s) => {
-            const tasks = parseAndSortTasksSnapshot(s.tasksSnapshot);
+            const tasks = patientDisplayedTasks(s.assignment.patient.isTest, s.assignment.programId,s.weekNumber,s.tasksSnapshot);
             const idx = assignmentIndex.get(s.assignmentId) ?? 0;
             const c = colorForSession({
               tasksSnapshot: s.tasksSnapshot,

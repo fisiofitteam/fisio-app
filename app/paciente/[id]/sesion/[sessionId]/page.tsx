@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { PatientNav } from "@/components/PatientNav";
+import { patientShoulderWeek, patientShoulderTitle } from "@/lib/patient-shoulder-session";
 import { SessionRunner } from "@/components/SessionRunner";
 import { parseAndSortTasksSnapshot } from "@/lib/task-order";
 
@@ -20,6 +21,7 @@ export default async function PatientSessionPage({
   if (!session) notFound();
   if (session.assignment.patientId !== params.id) notFound();
 
+  const pilotWeek = patientShoulderWeek(session.assignment.patient.isTest, session.assignment.programId, session.weekNumber, session.tasksSnapshot);
   const date = new Date(session.scheduledDate);
   const dow = date.getDay() === 0 ? 7 : date.getDay();
   const tasks = parseAndSortTasksSnapshot(session.tasksSnapshot);
@@ -40,14 +42,14 @@ export default async function PatientSessionPage({
             {DAY_NAMES[dow]} · {date.toLocaleDateString("es-ES", { day: "numeric", month: "long" })}
           </div>
           <h1 className="text-3xl font-bold flex items-center gap-2" style={{ letterSpacing: "-0.03em" }}>
-            💪 Tu sesión
+            {pilotWeek ? patientShoulderTitle(pilotWeek) : "💪 Tu sesión"}
           </h1>
         </header>
 
         <SessionRunner
           sessionId={session.id}
           patientId={params.id}
-          tasks={tasks}
+          tasks={tasks} pilotWeek={pilotWeek}
           completed={!!session.completedAt}
           existingResponses={session.responses}
           existingPatientNotes={session.patientNotes ?? null}

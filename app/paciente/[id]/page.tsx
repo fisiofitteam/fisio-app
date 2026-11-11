@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { patientDisplayedTasks, patientShoulderTitle, patientShoulderWeek } from "@/lib/patient-shoulder-session";
 import { prisma } from "@/lib/prisma";
 import { PatientHomeDark } from "@/components/PatientHomeDark";
 import { PatientHomeRolling } from "@/components/PatientHomeRolling";
@@ -645,7 +646,8 @@ export default async function PatientHome({ params }: { params: { id: string } }
         id: s.id,
         programName: s.assignment.program.name,
         completed: s.completedAt !== null,
-        tasksCount: (JSON.parse(s.tasksSnapshot) as any[]).length,
+        tasksCount: patientDisplayedTasks(patient.isTest, s.assignment.programId, s.weekNumber, s.tasksSnapshot).length,
+        pilotTitle: patientShoulderWeek(patient.isTest, s.assignment.programId,s.weekNumber,s.tasksSnapshot) ? patientShoulderTitle(s.weekNumber) : undefined,
         tasksSnapshot: s.tasksSnapshot,
         assignmentId: s.assignmentId,
       }))}
@@ -655,7 +657,8 @@ export default async function PatientHome({ params }: { params: { id: string } }
               id: nextSession.id,
               date: nextSession.scheduledDate.toISOString(),
               programName: nextSession.assignment.program.name,
-              tasksCount: (JSON.parse(nextSession.tasksSnapshot) as any[]).length,
+              tasksCount: patientDisplayedTasks(patient.isTest, nextSession.assignment.programId,nextSession.weekNumber,nextSession.tasksSnapshot).length,
+              pilotTitle: patientShoulderWeek(patient.isTest, nextSession.assignment.programId,nextSession.weekNumber,nextSession.tasksSnapshot) ? patientShoulderTitle(nextSession.weekNumber) : undefined,
               tasksSnapshot: nextSession.tasksSnapshot,
               assignmentId: nextSession.assignmentId,
             }
