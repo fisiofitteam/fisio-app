@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
         assessmentTitle: task.title, testTitle: test.name, assessedAt: session.scheduledDate }, update: {},
     });
     if (row.reviewedAt) return NextResponse.json({ error: "Tu fisio ya ha revisado este vídeo." }, { status: 409 });
-    // Only the pilot battery shows the new review notice. Old clients, other uploads and
+    // Only the pilot battery supplies this upload-flow marker. Old clients, other uploads and
     // unrelated programs keep the original path; pending uploads retain their original policy.
     const newShoulderFlow = b.uploadFlow === SHOULDER_UPLOAD_FLOW && session.assignment.patient.isTest &&
       session.assignment.programId === PILOT_PROGRAM_ID && [1,14].includes(session.weekNumber) &&
