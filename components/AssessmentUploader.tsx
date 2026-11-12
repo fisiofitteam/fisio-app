@@ -1,4 +1,5 @@
 "use client";
+import { AssessmentVideoPlayer } from "@/components/AssessmentVideoPlayer";
 import { useEffect, useState } from "react";
 import { upload } from "@vercel/blob/client";
 import { parseAssessment, MAX_ASSESSMENT_BYTES, ASSESSMENT_MIMES } from "@/lib/assessments";
@@ -14,6 +15,7 @@ export function AssessmentUploader({ sessionId, task, onBusyChange, group, readO
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
   const [localLoading, setLoading] = useState(true);
+  const [openExamples, setOpenExamples] = useState<Record<string, boolean>>({});
   const [pending, setPending] = useState<{ id: string; pathname: string } | null>(null);
   const rows = group?.rows ?? localRows;
   const loading = group?.loading ?? localLoading;
@@ -64,8 +66,11 @@ export function AssessmentUploader({ sessionId, task, onBusyChange, group, readO
       return <section key={t.id} className="rounded-xl border border-neutral-200 p-3 space-y-3">
         <div className="flex justify-between gap-2"><h3 className="font-semibold text-sm">{i + 1}. {t.name}</h3><span className="text-xs">{row?.reviewedAt ? "✓ Revisado" : row?.url ? "✓ Recibido" : "Pendiente de subir"}</span></div>
         {t.instructions && <p className="text-sm whitespace-pre-wrap">{t.instructions}</p>}
-        {t.videoUrl && <details><summary className="cursor-pointer text-sm">Ver vídeo de ejemplo</summary>{embed ? <iframe src={embed} title={"Ejemplo: " + t.name} className="w-full aspect-video rounded-lg mt-2" allowFullScreen /> : <a href={t.videoUrl} target="_blank" rel="noreferrer" className="text-sm underline">Abrir ejemplo</a>}</details>}
-        {row?.url && <video src={row.url} controls playsInline preload="metadata" className="w-full max-h-72 rounded-lg bg-black" />}
+        {t.videoUrl && <details onToggle={e => { const open = e.currentTarget.open; setOpenExamples(prev => prev[t.id] === open ? prev : { ...prev, [t.id]: open }); }}>
+          <summary className="cursor-pointer text-sm">Ver vídeo de ejemplo</summary>
+          {openExamples[t.id] && (embed ? <iframe src={embed} title={"Ejemplo: " + t.name} className="w-full aspect-video rounded-lg mt-2" allowFullScreen /> : <a href={t.videoUrl} target="_blank" rel="noreferrer" className="text-sm underline">Abrir ejemplo</a>)}
+        </details>}
+        {row?.url && <AssessmentVideoPlayer src={row.url} label={t.name} className="w-full max-h-72 rounded-lg bg-black" />}
         {row?.coachNotes && <p className="rounded-lg bg-blue-50 p-3 text-sm text-blue-900 whitespace-pre-wrap"><strong>Comentario de tu fisio: </strong>{row.coachNotes}</p>}
         {renderExtra?.(t.id)}
         {!readOnly && !row?.reviewedAt && <label className={"inline-flex cursor-pointer items-center rounded-lg px-4 py-2 text-sm font-semibold focus-within:ring-2 focus-within:ring-indigo-400 " + (busy || loading || pending ? "opacity-50" : "")} style={{ background: "var(--p-accent, #171717)", color: "var(--p-accent-ink, #ffffff)" }}>{row?.url ? "Sustituir mi vídeo" : "Subir vídeo de este test"}<input type="file" accept="video/mp4,video/quicktime,video/webm,.mov,.mp4,.webm" disabled={!!busy || loading || !!pending} className="sr-only" onChange={e => { const f = e.target.files?.[0]; if (f) void send(t.id, f); e.target.value = ""; }} /></label>}

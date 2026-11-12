@@ -1,4 +1,5 @@
 "use client";
+import { AssessmentVideoPlayer } from "@/components/AssessmentVideoPlayer";
 import { useEffect, useState } from "react";
 import { AssessmentVideoLabels } from "@/components/AssessmentVideoLabels";
 import type { CaseAttachment } from "@/lib/case-attachments";
@@ -36,7 +37,7 @@ export function AssessmentMaterial({ patientId, existing = [], selectedIds = [],
           const already = existing.some(v => v.url === item.url);
           const selected = selectedIds.includes(id);
           return <article key={id} className={"rounded-xl border overflow-hidden bg-white " + (selected || already ? "border-amber-500" : "border-neutral-200")}>
-            <video src={item.url} controls playsInline preload="metadata" className="h-40 w-full bg-neutral-900" />
+            <AssessmentVideoPlayer src={item.url} label={item.videoTitle || item.testTitle} className="h-40 w-full bg-neutral-900" />
             <div className="p-3 space-y-2">
               <h3 className="font-semibold">{item.videoTitle || item.testTitle}</h3>
               {item.videoDescription && <p className="text-sm whitespace-pre-wrap break-words">{item.videoDescription}</p>}

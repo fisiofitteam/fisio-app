@@ -8,13 +8,18 @@ export const MAX_WHATSAPP_BYTES = 50 * 1024 * 1024;
 export function canUseEvidence(user: ActiveProfessional | null): user is ActiveProfessional {
   return !!user && [user.role, ...user.extraRoles].some(r => ["ceo", "head_success", "fisio"].includes(r));
 }
+// Return null rather than an empty filter when the actor has no clinical role.
+export function evidencePatientScope(actor: ActiveProfessional | null) {
+  if (!canUseEvidence(actor)) return null;
+  return actor.isManager ? {} : { OR: [
+    { assignedProfessionalId: actor.id },
+    { derivations: { some: { toProfessionalId: actor.id } } },
+  ] };
+}
 export async function canAccessEvidencePatient(patientId: string, user?: ActiveProfessional | null) {
-  const actor = user === undefined ? await getActiveProfessional() : user;
-  if (!canUseEvidence(actor)) return false;
-  const patient = await prisma.patient.findUnique({ where: { id: patientId }, select: { assignedProfessionalId: true } });
-  if (!patient) return false;
-  if (actor.isManager || patient.assignedProfessionalId === actor.id) return true;
-  return !!await prisma.patientDerivation.findFirst({ where: { patientId, toProfessionalId: actor.id }, select: { id: true } });
+  const scope = evidencePatientScope(user === undefined ? await getActiveProfessional() : user);
+  if (!scope) return false;
+  return !!await prisma.patient.findUnique({ where: { id: patientId, ...scope }, select: { id: true } });
 }
 export async function evidencePatientIds(user: ActiveProfessional): Promise<string[] | undefined> {
   if (user.isManager) return undefined;

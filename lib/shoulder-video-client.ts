@@ -21,7 +21,8 @@ function mediaEvent(video:HTMLVideoElement,event:string,act:()=>void,signal?:Abo
   });
 }
 export async function analyzeShoulderVideo(input:VideoInput, progress?:(message:string)=>void, signal?:AbortSignal):Promise<ShoulderAIDraft> {
-  if(!canAnalyzeShoulderTest(input.testId)||!input.videoId||!input.uploadedAt)throw new Error("Esta entrega no admite análisis automático.");
+  const revision=Date.parse(input.uploadedAt);
+  if(!canAnalyzeShoulderTest(input.testId)||!input.videoId||!Number.isFinite(revision))throw new Error("Esta entrega no admite análisis automático.");
   const endpoint="/api/shoulder-pilot/"+encodeURIComponent(input.sessionId)+"/analyze";
   const url=new URL(endpoint,window.location.origin);
   for(const key of ["videoId","testId","uploadedAt"] as const)url.searchParams.set(key,input[key]);
@@ -34,7 +35,7 @@ export async function analyzeShoulderVideo(input:VideoInput, progress?:(message:
   const fps=SHOULDER_VIDEO_TESTS[input.testId].kind==="hold"?8:3;
   try{
     progress?.("Preparando fotogramas del vídeo…");
-    await mediaEvent(v,"loadeddata",()=>{v.src="/api/assessments/media?id="+encodeURIComponent(input.videoId);v.load();},signal);
+    await mediaEvent(v,"loadeddata",()=>{v.src="/api/assessments/media?id="+encodeURIComponent(input.videoId)+"&v="+revision;v.load();},signal);
     const duration=v.duration;
     if(!Number.isFinite(duration)||duration<0.5||duration>MAX_CLIP_SECONDS+0.01)
       throw new Error("Para el borrador IA utiliza un vídeo de entre 0,5 y 60 segundos. El vídeo original sigue disponible para revisión manual.");

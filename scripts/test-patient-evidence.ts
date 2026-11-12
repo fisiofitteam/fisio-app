@@ -11,7 +11,7 @@ async function main() {
     tasksSnapshot: JSON.stringify([{ id: "form-1", type: "FORM", title: "Seguimiento", questions: JSON.stringify([{ id: "q1", text: "¿Cómo te encuentras?" }]) }]),
     responses: JSON.stringify({ "form-1": { q1: "He vuelto a entrenar" } }) };
   const db: any = {
-    patient: { findUnique: async () => patient, findMany: async () => [patient] },
+    patient: { findUnique: async (q:any) => q.where.OR && !q.where.OR.some((w:any)=>w.assignedProfessionalId===patient.assignedProfessionalId || (w.derivations?.some.toProfessionalId==="fisio-1" && derivation)) ? null : patient, findMany: async () => [patient] },
     patientDerivation: { findFirst: async () => derivation ? { id: "derived" } : null },
     wodLog: { findMany: async (q: any) => q.distinct ? [{ patientId: patient.id }] : [{ id: "w1", completedAt: null, submittedAt: new Date("2026-10-22T10:00:00Z"), rawText: "5 pull-ups", notes: "Sin dolor", painScore: 0, rpe: 6 }] },
     patientCallFormResponse: { findMany: async () => [] },
