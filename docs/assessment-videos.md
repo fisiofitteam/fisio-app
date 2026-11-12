@@ -6,6 +6,12 @@ El cliente puede entregar un MP4/MOV/WebM de hasta 1 GiB por test asignado, medi
 
 Evolución muestra valoraciones, entregas y comentarios del fisio. El historial semanal y el contexto del caso de éxito incluyen los vídeos entregados y sus comentarios. La IA recibe metadatos y texto, no analiza visualmente el vídeo. No se convierten automáticamente en testimonios públicos.
 
+## Reproducir una entrega
+
+En Evolución, los vídeos de test de Éxitos, el historial y la revisión de hombro, cada entrega espera hasta que se pulse **Reproducir vídeo**. Abrir la ficha no inicia descargas de clips en otros bloques. Una marca temporal de la revisión abre la entrega en ese punto. Si la carga se interrumpe o el formato no se puede reproducir, se puede reintentar o descargar el original manteniendo los permisos de la ficha.
+
+El reproductor pide los tramos del archivo que necesita para empezar o avanzar. El punto de acceso sirve los datos en streaming y permite consultar las cabeceras sin transferir el vídeo. Comprueba el acceso a la entrega y, cuando la URL contiene una versión, que siga siendo la que se está revisando. La descarga conserva todo el archivo original. No se modifica el formato de los vídeos ya entregados.
+
 ## Activación
 1. Creado el almacén **privado** fisiofit-valoraciones (fra1), store_yCVBBlYg58E5QvZx.
 2. Conectado al proyecto fisio-app en Production y Preview con ASSESSMENT_BLOB_READ_WRITE_TOKEN. Se conserva el almacén público existente.
@@ -14,6 +20,7 @@ Evolución muestra valoraciones, entregas y comentarios del fisio. El historial 
 5. Verificar en móvil iOS/Android antes de anunciar el flujo al equipo. No se han modificado workouts existentes.
 
 ## Verificación realizada
+- scripts/test-assessment-media.ts: peticiones de rango, saltos, lectura de cabeceras, cancelación y descarga completa con un origen simulado.
 - scripts/test-assessment-videos.ts: permisos de paciente y fisio, solo test asignados, rechazo de autoasignación, límite exacto de tamaño, MIME, confirmación verificada, sustitución, revisión obsoleta, bloqueo tras revisar y reproducción privada con HTTP Range. Base de datos/Blob simulados; no usa datos clínicos.
 - scripts/test-patient-evidence.ts: regresión de permisos y resúmenes.
 - Compilación de producción.

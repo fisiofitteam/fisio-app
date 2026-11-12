@@ -26,10 +26,15 @@ function matches(where: any) {
 }
 const db: any = {
   programSession: { findUnique: async (q: any) => q.where.id === "s1" ? session : null },
-  patient: { findUnique: async () => ({ assignedProfessionalId: "physio" }) },
+  patient: { findUnique: async (q:any) => q.where.OR && !q.where.OR.some((w:any)=>w.assignedProfessionalId==="physio") ? null : {id:"p1",assignedProfessionalId:"physio"} },
   patientDerivation: { findFirst: async () => null },
   assessmentVideo: {
-    findUnique: async () => row ? { ...row } : null,
+    findUnique: async (q:any) => {
+      const scope=q.where.patient?.is;
+      if(scope?.id && scope.id!==row?.patientId)return null;
+      if(scope?.OR && !scope.OR.some((w:any)=>w.assignedProfessionalId==="physio" || w.derivations?.some.toProfessionalId==="derived"))return null;
+      return row && q.where.id===row.id ? { ...row } : null;
+    },
     findMany: async (q: any) => row ? [Object.fromEntries(Object.keys(q.select).map(k => [k, row[k]]))] : [],
     upsert: async (q: any) => {
       if (!row) row = { ...q.create, id: "v1", reviewedAt: null, uploadedAt: null, url: null, updatedAt: new Date(), coachNotes: "" };
@@ -106,7 +111,18 @@ async function main() {
     actor = { kind: "patient", patient: { id: "p2" } };
     assert.equal((await media.GET(new NextRequest("https://example.test/api/assessments/media?id=v1"))).status, 403);
     assert.equal(fetches, 0);
+    for (const [id, role, extraRoles, allowed] of [
+      ["other","fisio",[],false], ["physio","setter",[],false], ["physio","setter",["fisio"],true],
+      ["derived","fisio",[],true], ["head","ceo",[],true]
+    ] as const) {
+      actor={kind:"professional",pro:{id,role,extraRoles,isManager:role==="ceo"}};
+      const hx=await media.GET(new NextRequest("https://example.test/api/assessments/media?id=v1",{headers:{range:"bytes=0-9"}}));
+      assert.equal(hx.status,allowed?206:403);await hx.body?.cancel();
+    }
     actor = { kind: "patient", patient: { id: "p1" } };
+    const seen=fetches;
+    assert.equal((await media.GET(new NextRequest("https://example.test/api/assessments/media?id=v1&v=0"))).status,409);
+    assert.equal(fetches,seen);
     const stream = await media.GET(new NextRequest("https://example.test/api/assessments/media?id=v1", { headers: { range: "bytes=0-9" } }));
     assert.equal(stream.status, 206);
     assert.equal(stream.headers.get("cache-control"), "private, no-store");

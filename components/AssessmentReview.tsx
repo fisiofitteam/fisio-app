@@ -1,4 +1,5 @@
 "use client";
+import { AssessmentVideoPlayer } from "@/components/AssessmentVideoPlayer";
 import { AssessmentVideoLabels } from "@/components/AssessmentVideoLabels";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -20,7 +21,7 @@ export function AssessmentReview({ row }: { row: any }) {
     } catch (e) { setError(e instanceof Error ? e.message : "No se pudo guardar."); } finally { setBusy(false); }
   }
   return <div className="space-y-2">
-    <video controls playsInline preload="metadata" src={row.url} className="w-full max-h-80 rounded-lg bg-black" />
+    <AssessmentVideoPlayer src={row.url} label={labels.videoTitle || row.testTitle || "Vídeo del test"} className="w-full max-h-80 rounded-lg bg-black" />
     {labels.videoTitle && <h3 className="font-semibold">{labels.videoTitle}</h3>}
     {labels.videoDescription && <p className="text-sm whitespace-pre-wrap">{labels.videoDescription}</p>}
     <AssessmentVideoLabels row={{ ...row, ...labels }} onSaved={setLabels} />
