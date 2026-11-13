@@ -69,8 +69,8 @@ export async function POST(_req: Request, { params }: { params: { token: string 
   const installments = sale.installmentCount ?? 0;
   const useSubscription = installments >= 2;
 
-  const productName = `FisioFit ${config.programType} ${config.durationMonths}m${(sale as any).isReservation ? " · Reserva" : ""}`;
-  const productDescription = (sale as any).isReservation
+  const productName = sale.isReservation ? "FisioFit · Señal de reserva de plaza" : `FisioFit ${config.programType} ${config.durationMonths}m`;
+  const productDescription = sale.isReservation
     ? `Reserva de plaza · ${sale.lead.fullName}`
     : `${config.label} · ${sale.lead.fullName}`;
 

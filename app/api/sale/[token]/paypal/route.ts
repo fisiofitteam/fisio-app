@@ -100,11 +100,11 @@ export async function POST(_req: Request, { params }: { params: { token: string 
     const order = await createOrder({
       requestId: `sale-${sale.id}`,
       amountEur: totalEur,
-      description: config.label,
+      description: sale.isReservation ? "Señal de reserva de plaza FisioFit" : config.label,
       returnUrl,
       cancelUrl,
       customId: sale.paymentToken,
-      referenceLabel: `FisioFit ${config.programType} ${config.durationMonths}m`,
+      referenceLabel: sale.isReservation ? "FisioFit · Señal de reserva" : `FisioFit ${config.programType} ${config.durationMonths}m`,
       locale: "es-ES",
     });
     await prisma.sale.update({

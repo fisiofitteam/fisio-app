@@ -8,13 +8,15 @@ type PatientReader = Pick<Prisma.TransactionClient, "patient">;
  * this clinical stage; the sales endpoint decides whether that credit is usable. */
 export const reservedPatientWhere: Prisma.PatientWhereInput = {
   AND: [
-    { OR: [
-      { onboardingStatus: "reserved" },
-      {
-        sales: { some: { isReservation: true, status: "paid", refundedAt: null } },
-        renewals: { some: { isReservation: true, amountPaid: { gt: 0 } } },
-      },
-    ] },
+    {
+      OR: [
+        { onboardingStatus: "reserved" },
+        {
+          sales: { some: { isReservation: true, status: "paid", refundedAt: null } },
+          renewals: { some: { isReservation: true, amountPaid: { gt: 0 } } },
+        },
+      ],
+    },
     { renewals: { none: programPeriodWhere } },
     { sales: { none: { isReservation: false, status: "paid" } } },
     { renewalCheckouts: { none: { isReservation: false, status: "paid", programType: { not: "ADHOC" } } } },
@@ -23,9 +25,12 @@ export const reservedPatientWhere: Prisma.PatientWhereInput = {
 
 export async function getReservedPatientIds(db: PatientReader, ids: string[]): Promise<Set<string>> {
   if (!ids.length) return new Set();
-  const rows = await db.patient.findMany({ where: { id: { in: ids }, ...reservedPatientWhere }, select: { id: true } });
-  return new Set(rows.map(p => p.id));
+  const rows = await db.patient.findMany({
+    where: { id: { in: ids }, ...reservedPatientWhere },
+    select: { id: true },
+  });
+  return new Set(rows.map((p) => p.id));
 }
 export async function isReservedPatient(db: PatientReader, id: string): Promise<boolean> {
-  return !!await db.patient.findFirst({ where:{ id, ...reservedPatientWhere }, select:{ id:true } });
+  return !!(await db.patient.findFirst({ where: { id, ...reservedPatientWhere }, select: { id: true } }));
 }
