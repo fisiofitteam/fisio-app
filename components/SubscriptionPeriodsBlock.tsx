@@ -109,6 +109,10 @@ export function SubscriptionPeriodsBlock({
     });
   }
 
+  const periodOrdinals = new Map(
+    renewals.filter(r => !r.isReservation && r.status !== "assessment_only" && r.status !== "reserved").map((r, i) => [r.id, i + 1])
+  );
+
   return (
     <div className="mt-4 pt-4" style={{ borderTop: "1px dashed #E5E5E5" }}>
       <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
@@ -142,8 +146,9 @@ export function SubscriptionPeriodsBlock({
         </p>
       ) : (
         <div className="space-y-2">
-          {renewals.map((r, i) => {
-            const periodPauses = pausesInsidePeriod(r);
+          {renewals.map(r => {
+            const preliminary = !periodOrdinals.has(r.id);
+            const periodPauses = preliminary ? [] : pausesInsidePeriod(r);
             const typeColor = r.programType ? TYPE_COLORS[r.programType] : null;
             const isScheduled = r.status === "scheduled";
             return (
@@ -162,9 +167,9 @@ export function SubscriptionPeriodsBlock({
                 <div className="flex items-start justify-between gap-2 mb-1">
                   <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
                     <span className="text-xs font-bold tracking-wider" style={{ color: "#525252" }}>
-                      PERIODO {i + 1}
+                      {r.isReservation ? "SEÑAL DE RESERVA" : preliminary ? "VALORACIÓN PREVIA" : "PERIODO " + periodOrdinals.get(r.id)}
                     </span>
-                    {r.status === "active" && (
+                    {!preliminary && r.status === "active" && (
                       <span className="text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded" style={{ background: "#0A0A0A", color: "#FAFAFA" }}>
                         ACTUAL
                       </span>
@@ -174,7 +179,7 @@ export function SubscriptionPeriodsBlock({
                         PROGRAMADO · empieza {formatDate(r.startDate)}
                       </span>
                     )}
-                    {r.programType && typeColor && (
+                    {!preliminary && r.programType && typeColor && (
                       <span
                         className="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded"
                         style={{ background: typeColor.bg, color: typeColor.color }}
@@ -186,13 +191,13 @@ export function SubscriptionPeriodsBlock({
                       <span
                         className="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded"
                         style={{ background: "#FEF3C7", color: "#78350F", border: "1px solid #F59E0B" }}
-                        title="Reserva de plaza: señal para mantener el sitio hasta que renueve del todo."
+                        title="Señal de reserva, separada del programa completo."
                       >
                         🎟️ RESERVA
                       </span>
                     )}
                   </div>
-                  {allowEdit && (
+                  {allowEdit && r.status !== "reserved" && r.status !== "assessment_only" && (
                     <div className="flex gap-1 shrink-0">
                       <button
                         onClick={() => setEditing(r)}
@@ -213,7 +218,7 @@ export function SubscriptionPeriodsBlock({
                 </div>
 
                 <div className="text-xs flex items-baseline gap-3 flex-wrap" style={{ color: "#737373" }}>
-                  <span className="font-medium" style={{ color: "#0A0A0A" }}>
+                  {!preliminary && <span className="font-medium" style={{ color: "#0A0A0A" }}>
                     {(() => {
                       // Calcular meses reales desde las fechas; fallback al
                       // periodMonths guardado si faltan.
@@ -227,10 +232,8 @@ export function SubscriptionPeriodsBlock({
                       }
                       return `${m} ${m === 1 ? "mes" : "meses"}`;
                     })()}
-                  </span>
-                  <span>
-                    {formatDate(r.startDate)} → {formatDate(r.endDate)}
-                  </span>
+                  </span>}
+                  {r.startDate && <span>{formatDate(r.startDate)}{r.endDate && <> → {formatDate(r.endDate)}</>}</span>}
                   {r.amountPaid != null && (
                     <span>
                       {r.amountPaid.toLocaleString("es-ES", { style: "currency", currency: "EUR" })}

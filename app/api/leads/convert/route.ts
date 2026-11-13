@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
   const lead = await prisma.lead.findUnique({ where: { id: leadId } });
   if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
 
+  if(lead.convertedPatientId || lead.status==="reserved") return NextResponse.json({error:"Este lead ya tiene ficha. Vende el programa desde la ficha de reserva."},{status:409});
   // Closer solo puede convertir SUS leads
   if (user.role === "closer" && lead.closerId !== user.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

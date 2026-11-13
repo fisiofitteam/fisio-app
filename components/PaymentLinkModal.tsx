@@ -21,6 +21,7 @@ type Lead = {
 };
 
 type ActiveSale = {
+  isReservation: boolean;
   id: string;
   paymentToken: string;
   landingUrl: string;
@@ -80,9 +81,11 @@ export function PaymentLinkModal({
   // Fraccionamiento (null = pago único; 2..12 = N cuotas mensuales vía PayPal Subscription)
   const [installmentCount, setInstallmentCount] = useState<number | null>(null);
   // Reserva de plaza: si true, la señal (típ. 100€) se cobra ahora y luego
-  // el paciente paga el programa entero con una renovación (donde se le
+  // el paciente paga el programa entero con una primera venta (donde se le
   // descuenta lo pagado por la reserva). Fraccionamiento se desactiva.
   const [isReservation, setIsReservation] = useState(false);
+  const [depositEuros, setDepositEuros] = useState("100");
+  const chargeInput = isReservation ? depositEuros : priceEuros;
   // Proveedor de pago: paypal (default) o stripe.
   const [paymentProvider, setPaymentProvider] = useState<"paypal" | "stripe">("paypal");
 
@@ -120,12 +123,15 @@ export function PaymentLinkModal({
   }, [lead.id]);
 
   // ── Helpers ──────────────────────────────────────────────────────────────
-  function buildWhatsAppLink(fullUrl: string, programLabel: string, months: number): string | null {
+  function buildWhatsAppLink(fullUrl: string, programLabel: string, months: number, depositCents?: number): string | null {
     if (lead.contactType !== "phone") return null;
     // Normalizar teléfono: dejar solo dígitos y +
     const raw = lead.contactValue.replace(/[^\d+]/g, "");
     if (!raw) return null;
-    const message = `Hola ${lead.fullName.split(" ")[0]}, aquí tienes tu link para el programa ${programLabel} de ${months} meses: ${fullUrl}`;
+    const greeting = `Hola ${lead.fullName.split(" ")[0]}`;
+    const message = depositCents != null
+      ? `${greeting}, aquí tienes el enlace para pagar la señal de reserva de ${formatAmount(depositCents, "eur")}: ${fullUrl}`
+      : `${greeting}, aquí tienes tu link para el programa ${programLabel} de ${months} meses: ${fullUrl}`;
     return `https://wa.me/${raw.replace(/^\+/, "")}?text=${encodeURIComponent(message)}`;
   }
 
@@ -182,7 +188,7 @@ export function PaymentLinkModal({
   async function generate() {
     if (!program || !duration) return;
     const productCode = `${program}_${duration}M` as `${ProgramType}_${Duration}M`;
-    const amountEuros = Number((priceEuros ?? "").replace(",", "."));
+    const amountEuros = Number(chargeInput.replace(",", "."));
     if (!Number.isFinite(amountEuros) || amountEuros <= 0) {
       setError("Indica un importe válido (> 0).");
       return;
@@ -200,11 +206,11 @@ export function PaymentLinkModal({
 
       const url = fullUrl(data.landingUrl);
       setGeneratedLink(url);
-      setGeneratedLabel(data.productLabel);
+      setGeneratedLabel(isReservation ? "Señal de reserva · " + formatAmount(Math.round(amountEuros * 100), "eur") : data.productLabel);
 
       // Si tiene teléfono, abrir WhatsApp en pestaña nueva
       const programLabelShort = program;
-      const wa = buildWhatsAppLink(url, programLabelShort, duration);
+      const wa = buildWhatsAppLink(url, programLabelShort, duration, isReservation ? Math.round(amountEuros * 100) : undefined);
       if (wa) {
         window.open(wa, "_blank", "noopener,noreferrer");
       }
@@ -328,7 +334,7 @@ export function PaymentLinkModal({
 
             {lead.contactType === "phone" && (
               <a
-                href={buildWhatsAppLink(fullUrl(activeSale.landingUrl), activeSale.productCode.split("_")[0], parseInt(activeSale.productCode.split("_")[1])) || "#"}
+                href={buildWhatsAppLink(fullUrl(activeSale.landingUrl), activeSale.productCode.split("_")[0], parseInt(activeSale.productCode.split("_")[1]), activeSale.isReservation ? activeSale.amountCents : undefined) || "#"}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn btn-accent w-full text-sm text-center block"
@@ -476,29 +482,30 @@ export function PaymentLinkModal({
               ← Cambiar duración
             </button>
             <p className="text-sm text-neutral-700">
-              <strong>{program}</strong> · {duration} meses. ¿Qué precio le pones?
+              <strong>{program}</strong> · {duration} meses. {isReservation ? "¿Qué señal quieres cobrar?" : "¿Qué precio le pones?"}
             </p>
 
-            {loadingPrice && (
+            {!isReservation && loadingPrice && (
               <div className="text-xs text-neutral-400 italic">Consultando precio sugerido…</div>
             )}
 
-            {!loadingPrice && priceSuggested !== null && (
+            {!isReservation && !loadingPrice && priceSuggested !== null && (
               <div className="text-[11px] text-neutral-500">
                 Precio sugerido (Stripe): <strong>{(priceSuggested / 100).toFixed(2).replace(".", ",")} €</strong>. Puedes cambiarlo abajo.
               </div>
             )}
 
             <div>
-              <label className="text-xs text-neutral-500 block mb-1">Importe TOTAL a cobrar (€)</label>
+              <label htmlFor="payment-link-charge" className="text-xs text-neutral-500 block mb-1">{isReservation ? "Señal a cobrar ahora (€)" : "Importe total del programa (€)"}</label>
               <div className="flex items-center gap-2">
                 <input
                   type="text"
                   inputMode="decimal"
                   className="input flex-1"
-                  value={priceEuros}
-                  onChange={(e) => setPriceEuros(e.target.value.replace(/[^\d.,]/g, ""))}
-                  placeholder="Ej: 749 o 749,00"
+                  id="payment-link-charge"
+                  value={chargeInput}
+                  onChange={(e) => (isReservation ? setDepositEuros : setPriceEuros)(e.target.value.replace(/[^\d.,]/g, ""))}
+                  placeholder={isReservation ? "Ej: 100" : "Ej: 749 o 749,00"}
                   autoFocus
                 />
                 <span className="text-sm text-neutral-500">€</span>
@@ -543,18 +550,14 @@ export function PaymentLinkModal({
                   onChange={(e) => {
                     const on = e.target.checked;
                     setIsReservation(on);
-                    if (on) {
-                      // Reserva → forzar pago único y sugerir 100€ si no hay importe.
-                      setInstallmentCount(null);
-                      if (!priceEuros.trim()) setPriceEuros("100");
-                    }
+                    if (on) setInstallmentCount(null);
                   }}
                   className="mt-0.5 h-4 w-4 accent-neutral-900 cursor-pointer"
                 />
                 <span>
                   <span className="text-xs font-medium text-neutral-800 block">🎫 Reserva de plaza</span>
                   <span className="text-[10px] text-neutral-500 block leading-snug">
-                    Señal (típ. 100€) para mantener plaza. Se descontará cuando pague el programa entero. Cambio de duración a 1 mes; sin fraccionar.
+                    Se cobra solo la señal, en un pago. La ficha quedará en reserva para pautar test y el importe se descontará al vender el primer programa.
                   </span>
                 </span>
               </label>
@@ -608,7 +611,7 @@ export function PaymentLinkModal({
 
             <button
               onClick={generate}
-              disabled={working || !priceEuros.trim()}
+              disabled={working || !chargeInput.trim()}
               className="btn btn-accent w-full text-sm"
             >
               {working ? "Generando link…" : "Generar link de pago"}

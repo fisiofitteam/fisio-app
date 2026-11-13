@@ -38,6 +38,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     where: { id: params.id },
     select: {
       id: true,
+      isReservation: true,
+      grossAmountCents:true,
       status: true,
       paypalCaptureId: true,
       paypalSubscriptionId: true,
@@ -46,6 +48,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     },
   });
   if (!sale) return NextResponse.json({ error: "Venta no encontrada" }, { status: 404 });
+  // The legacy refund closes the entire patient and deletes every income_new row.
+  // A deposit and the balance are independent charges on one clinical account.
+  // Reject before contacting a gateway or touching an unrelated receipt.
+  const sharedReservation = sale.isReservation && sale.patientId && (
+    !!await prisma.subscriptionRenewal.findUnique({where:{id:"deposit:"+sale.id},select:{id:true}}) ||
+    !!await prisma.sale.findFirst({where:{patientId:sale.patientId,grossAmountCents:{not:null}},select:{id:true}})
+  );
+  if (sale.grossAmountCents!=null || sharedReservation) {
+    return NextResponse.json({error:"La señal y el pago del programa comparten ficha. Esta devolución por paciente no se puede usar: revisa y concilia solo el cobro que corresponda."},{status:409});
+  }
   // Si el sale ya está marcado como refundeado, permitimos re-ejecutar para
   // aplicar cualquier efecto que faltase (p.ej. terminar renewals añadido
   // después). Todos los pasos siguientes son idempotentes.

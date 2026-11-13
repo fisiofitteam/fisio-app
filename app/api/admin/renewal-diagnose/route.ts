@@ -10,6 +10,7 @@
  *   ?month=2026-08&fisio=<id>  → solo del fisio indicado
  */
 import { NextRequest, NextResponse } from "next/server";
+import { isProgramPeriod, programPeriodWhere } from "@/lib/program-period-kind";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 
@@ -79,7 +80,7 @@ async function handleByPatient(name: string) {
       orderBy: [{ startDate: "asc" }, { decidedAt: "asc" }],
     });
     const real = renewals
-      .filter((r) => !r.isReservation && r.startDate)
+      .filter((r) => isProgramPeriod(r) && r.startDate)
       .sort((a, b) => (a.startDate?.getTime() ?? 0) - (b.startDate?.getTime() ?? 0));
 
     const attribution: string[] = [];
@@ -137,7 +138,7 @@ async function handleByMonth(monthParam: string | null, fisioFilter: string | nu
     prisma.subscriptionRenewal.findMany({
       where: {
         decidedAt: { gte: start, lt: end },
-        isReservation: false,
+        ...programPeriodWhere,
         patient: { isTest: false },
       },
       select: { patientId: true },
@@ -145,7 +146,7 @@ async function handleByMonth(monthParam: string | null, fisioFilter: string | nu
     prisma.subscriptionRenewal.findMany({
       where: {
         endDate: { gte: start, lt: end },
-        isReservation: false,
+        ...programPeriodWhere,
         patient: { isTest: false },
       },
       select: { patientId: true },
@@ -215,7 +216,7 @@ async function handleByMonth(monthParam: string | null, fisioFilter: string | nu
 
   for (const [patientId, list] of historyByPatient) {
     const real = list
-      .filter((h) => !h.isReservation && h.startDate)
+      .filter((h) => isProgramPeriod(h) && h.startDate)
       .sort((a, b) => (a.startDate?.getTime() ?? 0) - (b.startDate?.getTime() ?? 0));
     for (let i = 1; i < real.length; i++) {
       const follow = real[i];

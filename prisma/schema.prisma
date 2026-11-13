@@ -2561,6 +2561,14 @@ model Sale {
   // Reserva de plaza (extiende el patrón de RenewalCheckout.isReservation).
   isReservation           Boolean  @default(false)
 
+  // First program bought from the reservation file, distinct from a renewal.
+  // amountCents is the amount still payable. Gross and the exact credited period are immutable.
+  grossAmountCents        Int?
+  depositAppliedCents     Int?
+  firstSaleReservationId  String?
+  initialPeriodId         String?
+  checkoutStartedAt       DateTime?
+
   // Proveedor de pago elegido al generar el link.
   paymentProvider         String   @default("paypal")
 
@@ -2627,6 +2635,8 @@ model OnboardingConfig {
 // vinculado al Patient y con precio definido al vuelo. Al pagar, el webhook crea
 // el SubscriptionRenewal correspondiente.
 model RenewalCheckout {
+  // A legacy program signup may have been paid via a renewal link. Keep the provider identity intact.
+  isInitialSale Boolean @default(false)
   id            String   @id @default(cuid())
   patientId     String
   patient       Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)

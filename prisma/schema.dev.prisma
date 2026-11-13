@@ -2093,6 +2093,14 @@ model Sale {
   paypalPlanId            String?
   // Si null/0 → pago único. Si 2..12 → N cobros mensuales del mismo importe.
   installmentCount        Int?
+  // First program bought from the reservation file, distinct from a renewal.
+  // amountCents is the amount still payable. Gross and the exact credited period are immutable.
+  grossAmountCents        Int?
+  depositAppliedCents     Int?
+  firstSaleReservationId  String?
+  initialPeriodId         String?
+  checkoutStartedAt       DateTime?
+
 
   // ─── Estado de la venta ─────────────────────────────────────────────────
   // "pending"  → link generado, todavía no pagado
@@ -2145,6 +2153,8 @@ model OnboardingConfig {
 // vinculado al Patient y con precio definido al vuelo. Al pagar, el webhook crea
 // el SubscriptionRenewal correspondiente.
 model RenewalCheckout {
+  // A legacy program signup may have been paid via a renewal link. Keep the provider identity intact.
+  isInitialSale Boolean @default(false)
   id            String   @id @default(cuid())
   patientId     String
   patient       Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
 import { prisma } from "../lib/prisma";
+import { computeMonthlySalary } from "../lib/compensation";
 import { computeBusinessMetrics, computeMonthlyBusinessMetrics } from "../lib/business-metrics";
 import { calculateFinanceSummary, parseSpecificMonth, getPeriodRange } from "../lib/finance";
 import { calculateSalesMetrics } from "../lib/sales";
@@ -35,6 +36,7 @@ function matches(row: FixtureRow, where: FixtureRow | undefined): boolean {
       return actual === condition;
     }
     return Object.entries(condition).every(([operator, expected]) => {
+      if (operator === "notIn") return !(expected as unknown[]).includes(actual);
       if (operator === "in") return (expected as unknown[]).includes(actual);
       if (operator === "not") return actual !== expected;
       if (operator === "gte") return actual != null && actual >= (expected as any);
@@ -84,6 +86,7 @@ function installFixture(t: TestContext, fixture: Fixture) {
   // Test cleanup restores methods even on failure. Assert the actual
   // source rows remain untouched as well as forbidding database/network IO.
   t.after(() => assert.deepEqual(fixture, savedFixture));
+  return patch;
 }
 
 function program(
@@ -303,4 +306,47 @@ test("integration: a receipt at the final millisecond of a reporting period is r
     const summary = await calculateFinanceSummary(range.start, range.end);
     assert.equal(summary.income, expected);
   }
+});
+
+test("free test period and paid signal don't make the first verified program a renewal or a loss", async (t) => {
+  const before = date("2025-09-01T12:00:00Z"), paid = date("2025-11-01T12:00:00Z"), next = date("2026-02-28T12:00:00Z");
+  const paidPeriod = { id: "first-program", patientId:"test-athlete", isReservation:false, status:"active",
+    programType:"RECUPERA",periodMonths:4, startDate:paid,endDate:next,decidedAt:paid,amountPaid:1097 };
+  const patch = installFixture(t,{
+    patients:[{id:paidPeriod.patientId,isTest:false,assignedProfessionalId:"coach"}],sales:[],
+    renewals:[
+      {...paidPeriod,id:"test-access",status:"assessment_only",amountPaid:null,decidedAt:before,startDate:before,endDate:paid},
+      {...paidPeriod,id:"deposit",isReservation:true,status:"reserved",periodMonths:0,amountPaid:100,decidedAt:before,startDate:before,endDate:paid,reservationConsumedAt:paid},
+      paidPeriod,
+      {...paidPeriod,id:"real-continuation",decidedAt:next,startDate:next,endDate:date("2026-06-28T12:00:00Z"),amountPaid:500},
+    ],
+    checkouts:[{id:"verified-link",status:"paid",patientId:paidPeriod.patientId,amountCents:109700,grossAmountCents:109700,
+      depositAppliedCents:0,paidAt:paid,isReservation:false,isInitialSale:true,renewalId:paidPeriod.id,
+      createdById:"closer",programType:"RECUPERA",durationMonths:4}],
+    transactions:[
+      {id:"paid-signal",type:"income_new",patientId:paidPeriod.patientId,professionalId:"closer",amount:100,occurredAt:before,description:"Alta - Caso sintético"},
+      {id:"first-installment",type:"income_new",patientId:paidPeriod.patientId,professionalId:"closer",amount:182.83,occurredAt:paid,description:"Pago [ff-receipt:v1 provider=stripe receipt=inv_fake contract=renewal:verified-link]"},
+    ],
+  });
+  const month = await computeMonthlyBusinessMetrics(2025);
+  assert.equal(month.months[8].altasCount,0);
+  assert.equal(month.months[8].incomeNew,100);
+  assert.equal(month.months[10].billedNew,1097);
+  assert.equal(month.months[10].incomeNew,182.83);
+  assert.equal(month.months[10].renewedCount,0); assert.equal(month.months[10].lostCount,0);
+  assert.equal(month.annual.altasCount,1);
+  const nextYear=await computeMonthlyBusinessMetrics(2026);
+  assert.equal(nextYear.months[1].renewedCount,1);
+
+  patch(prisma.compensation, "findUnique", async () => ({
+    baseSalary: 0, perActivePatient: 0, renewalOwnPct: 10, renewalOthersPct: 0,
+    newSaleCommissionPct: 0, newSaleScope: "own", notes: null,
+  }));
+  patch(prisma.patient, "count", async () => 0);
+  patch(prisma.professionalLeave, "findMany", async () => []);
+  patch(prisma.payrollAdjustment, "findMany", async () => []);
+  const initialSalary = await computeMonthlySalary("coach", 2025, 10);
+  const continuingSalary = await computeMonthlySalary("coach", 2026, 1);
+  assert.deepEqual([initialSalary.renewalOwnCount, initialSalary.breakdown.renewals], [0, 0]);
+  assert.deepEqual([continuingSalary.renewalOwnCount, continuingSalary.breakdown.renewals], [1, 50]);
 });

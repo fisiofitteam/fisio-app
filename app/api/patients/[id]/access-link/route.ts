@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
+import { isReservedPatient } from "@/lib/reserved-patients";
+import { canAccessEvidencePatient } from "@/lib/patient-evidence";
 import { getOrCreatePatientAccessPath } from "@/lib/auth";
 
 const TOKEN_VALIDITY_DAYS = 365;
@@ -9,8 +11,8 @@ const TOKEN_VALIDITY_DAYS = 365;
 // POST /api/patients/[id]/access-link
 // Devuelve el "magic link" de acceso 1-clic del paciente. Si ya existe uno
 // vigente, lo reutiliza (estable para reenviar por WhatsApp varias veces).
-// Si está caducado o no existe, genera uno nuevo. Cualquier miembro del
-// equipo puede pedirlo.
+// Si está caducado o no existe, genera uno nuevo. Las reservas previas a la primera venta
+// limitan esta credencial clínica al responsable, fisios derivados y managers.
 // Body opcional: { regenerate: true } → fuerza nuevo token (invalida el viejo).
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const user = await getActiveProfessional();
@@ -21,6 +23,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     select: { id: true },
   });
   if (!patient) return NextResponse.json({ error: "Paciente no encontrado" }, { status: 404 });
+
+  if (!user.isManager && await isReservedPatient(prisma, patient.id)) {
+    if (!await canAccessEvidencePatient(patient.id, user)) return NextResponse.json({ error: "No puedes gestionar el acceso clínico de esta reserva." }, { status: 403 });
+  }
 
   const body = await req.json().catch(() => ({}));
   const forceRegenerate = body?.regenerate === true;

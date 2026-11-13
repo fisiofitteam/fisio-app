@@ -2,6 +2,7 @@
 // Solo servidor (usa prisma).
 import { prisma } from "@/lib/prisma";
 import { activePatientCondition, currentlyPausedCondition } from "@/lib/patient-active";
+import { listRealRenewalsInPeriod } from "@/lib/renewals";
 import { getCloserSalesInPeriod, sumContracted } from "@/lib/closer-sales";
 
 // Umbral de días de vacaciones para activar descuento de salario.
@@ -104,113 +105,14 @@ export async function computeMonthlySalary(
     },
   });
 
-  // Renovaciones del mes: propias vs resto del equipo.
-  //
-  // Ojo: el modelo SubscriptionRenewal representa "periodo de suscripcion"
-  // — incluye el ALTA INICIAL, no solo renovaciones. Para compensacion
-  // solo cuentan las verdaderas renovaciones: aquellas donde ya existia
-  // otro periodo previo para el mismo paciente antes de este.
-  //
-  // Estrategia: traemos los periodos del mes con la fecha (decidedAt) y,
-  // por paciente, comprobamos si el atleta tiene periodos anteriores a
-  // ese decidedAt. Si no, es el alta inicial y no computa como renovacion.
-  // Renovaciones atribuidas al mes en que se decidieron/pagaron
-  // (2026-08-11, decisión final: siempre attributionDate = followUp.decidedAt).
-  //
-  //  - Renovación tardía: paciente vencía en julio, se decidió en agosto
-  //    → cuenta en AGOSTO (mes en que trabajó el fisio por conseguirla).
-  //  - Renovación anticipada: se decidió en agosto, previo vence en
-  //    septiembre → cuenta en AGOSTO.
-  //  - Renovación puntual: fecha de decisión, siempre.
-  //
-  // Las reservas de plaza no cuentan en count, pero sí suman al revenue
-  // por ser ingreso efectivo. Se contabilizan como cualquier follow-up.
-  const monthStart = start;
-  const monthEnd = end; // exclusivo
-
-  // Candidatos: renovaciones cuya decidedAt cae en el mes (anticipadas) o
-  // cuyo previo tiene endDate en el mes (tardías + puntuales).
-  const [decisionsInMonth, endedInMonth] = await Promise.all([
-    prisma.subscriptionRenewal.findMany({
-      where: {
-        decidedAt: { gte: monthStart, lt: monthEnd },
-        isReservation: false,
-        patient: { isTest: false },
-      },
-      select: { patientId: true },
-    }),
-    prisma.subscriptionRenewal.findMany({
-      where: {
-        endDate: { gte: monthStart, lt: monthEnd },
-        isReservation: false,
-        patient: { isTest: false },
-      },
-      select: { patientId: true },
-    }),
-  ]);
-
-  const patientIds = Array.from(new Set([
-    ...decisionsInMonth.map((r) => r.patientId),
-    ...endedInMonth.map((r) => r.patientId),
-  ]));
-
-  let renewalOwnCount = 0;
-  let renewalOwnRevenue = 0;
-  let renewalOthersRevenue = 0;
-
-  if (patientIds.length > 0) {
-    const [history, patientsInfo] = await Promise.all([
-      prisma.subscriptionRenewal.findMany({
-        where: { patientId: { in: patientIds } },
-        select: {
-          id: true,
-          patientId: true,
-          startDate: true,
-          endDate: true,
-          decidedAt: true,
-          amountPaid: true,
-          isReservation: true,
-        },
-      }),
-      prisma.patient.findMany({
-        where: { id: { in: patientIds } },
-        select: { id: true, assignedProfessionalId: true },
-      }),
-    ]);
-
-    const profByPatient = new Map(patientsInfo.map((p) => [p.id, p.assignedProfessionalId]));
-
-    // Agrupar histórico por paciente y ordenar por startDate asc
-    const historyByPatient = new Map<string, typeof history>();
-    for (const h of history) {
-      if (!historyByPatient.has(h.patientId)) historyByPatient.set(h.patientId, []);
-      historyByPatient.get(h.patientId)!.push(h);
-    }
-
-    for (const [patientId, list] of historyByPatient) {
-      const real = list
-        .filter((h) => !h.isReservation && h.startDate)
-        .sort((a, b) => (a.startDate?.getTime() ?? 0) - (b.startDate?.getTime() ?? 0));
-      for (let i = 1; i < real.length; i++) {
-        const follow = real[i];
-        const previous = real[i - 1];
-        if (!previous.endDate || !follow.startDate) continue;
-        const cutoff = previous.endDate.getTime() - 86400000;
-        if (follow.startDate.getTime() < cutoff) continue;
-        const attributionMs = follow.decidedAt.getTime();
-        if (attributionMs < monthStart.getTime() || attributionMs >= monthEnd.getTime()) continue;
-
-        const isOwn = profByPatient.get(patientId) === professionalId;
-        const amt = follow.amountPaid || 0;
-        if (isOwn) {
-          if (!follow.isReservation) renewalOwnCount++;
-          renewalOwnRevenue += amt;
-        } else {
-          renewalOthersRevenue += amt;
-        }
-      }
-    }
-  }
+  // Only a continuation of an actual program pays a renewal commission. Use the
+  // same source (and month of decision) as the retention metrics and salary detail.
+  const realRenewals = await listRealRenewalsInPeriod(start, new Date(end.getTime() - 1));
+  const own = realRenewals.filter(r => r.assignedProfessionalId === professionalId);
+  const renewalOwnCount = own.length;
+  const renewalOwnRevenue = own.reduce((sum, r) => sum + (r.amountPaid || 0), 0);
+  const renewalOthersRevenue = realRenewals.reduce((sum, r) =>
+    sum + (r.assignedProfessionalId !== professionalId ? r.amountPaid || 0 : 0), 0);
 
   // Ventas nuevas atribuidas al mes. Usamos el helper unificado que
   // devuelve el importe CONTRATADO (no lo cobrado) — asi los fraccionados

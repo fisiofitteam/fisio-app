@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { hasRole } from "@/lib/auth";
+import { isReservedPatient } from "@/lib/reserved-patients";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PatientSidebar } from "@/components/PatientSidebar";
@@ -47,6 +49,8 @@ export default async function PatientLayout({
     }
   }
 
+  const reserved = await isReservedPatient(prisma, patient.id);
+
   // Progreso teniendo en cuenta pausas + semana actual del atleta.
   const subProgress = await getSubscriptionProgress({
     id: patient.id,
@@ -89,10 +93,14 @@ export default async function PatientLayout({
                   👻 Fantasma
                 </span>
               )}
-              <PatientPill value={patient.programType} kind="program" />
+              {reserved ? <span className="rounded-full bg-teal-700 px-2 py-0.5 text-xs font-semibold text-white">En reserva</span> : <PatientPill value={patient.programType} kind="program" />}
               {user.isManager && <PatientPill value={patient.difficulty} kind="difficulty" />}
               <span className="text-sm text-neutral-500">{patient.diagnosis}</span>
             </div>
+            {reserved && <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+              <Link className="font-medium underline" href={`/fisio/paciente/${patient.id}/calendario`}>Pautar test</Link>
+              {!patient.isTest && (user.isManager || hasRole(user, "fisio")) && <Link className="btn btn-accent text-xs" href={`/fisio/paciente/${patient.id}/suscripcion#venta-inicial`}>Vender programa</Link>}
+            </div>}
             {patient.appliedLevel && (
               <p className="text-xs text-emerald-700 mt-1">
                 ✓ Perfil aplicado: <span className="font-medium">{patient.appliedLevel.profile.name}</span> · {patient.appliedLevel.name}
@@ -120,7 +128,7 @@ export default async function PatientLayout({
               patientFirstName={patientFirstName}
             />
             <WhatsAppButton url={patient.whatsappGroupUrl} size="md" />
-            {patient.subscriptionStartDate && (
+            {!reserved && patient.subscriptionStartDate && (
               <div className="bg-neutral-50 rounded-xl px-3 py-2 flex flex-col items-center gap-0.5">
                 <ProgressRing value={consumed} max={total} label="suscripción" mode="subscription" />
                 {subProgress.currentWeek !== null && (

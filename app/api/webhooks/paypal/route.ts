@@ -28,11 +28,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { notifyHeadSuccess } from "@/lib/notifications";
 import { verifyWebhookSignature } from "@/lib/paypal/webhook";
+import { matchesReservationAmount } from "@/lib/reservation-receipt";
 import { paypalCredentials } from "@/lib/paypal/config";
 // activateSaleAsPatient y applyRenewalCheckoutPaid viven en lib/paypal/activation.ts
 // para que también las usen los status endpoints y el reconciliador admin.
 // Antes duplicaban el código aquí y el bug era catastrófico: si el webhook
 // no llegaba, ninguna otra vía podía completar la activación.
+import {firstInstallments} from "@/lib/first-sale-terms";
 import { activateSaleAsPatient, applyRenewalCheckoutPaid } from "@/lib/paypal/activation";
 import { recordInstallmentReceipt, type InstallmentContract } from "@/lib/installment-receipts";
 
@@ -130,6 +132,10 @@ async function handleCaptureCompleted(capture: any) {
     return;
   }
 
+  if ((sale.isReservation || (sale as {grossAmountCents?:number|null}).grossAmountCents!=null) &&
+      (sale.paymentProvider!=="paypal" || sale.installmentCount || (sale.paypalOrderId && capture?.supplementary_data?.related_ids?.order_id && capture.supplementary_data.related_ids.order_id!==sale.paypalOrderId) || capture?.status!=="COMPLETED" || !capture?.id || !matchesReservationAmount(sale.amountCents,sale.currency,capture?.amount))) {
+    throw Error("La captura no coincide con el importe confirmado para este pago.");
+  }
   // Anti-tampering: verificar que el amount coincide.
   const amountValue = Number(capture?.amount?.value ?? 0);
   const receivedCents = Math.round(amountValue * 100);
@@ -174,6 +180,8 @@ async function handleSubscriptionActivated(subscription: any) {
     console.warn("[paypal-webhook] Sale no encontrado para subscription", { paymentToken });
     return;
   }
+  // A subscription approval alone is not a paid first program. Wait for the real first receipt.
+  if(sale.grossAmountCents!=null||sale.isReservation)return;
   const installments = sale.installmentCount ?? 0;
   await activateSaleAsPatient({
     saleId: sale.id,
@@ -198,7 +206,12 @@ async function handleSubscriptionCyclePayment(payment: any) {
   }
 
   let contract: InstallmentContract;
-  const saleRecord = await prisma.sale.findUnique({ where: { paypalSubscriptionId: subscriptionId } });
+  let saleRecord = await prisma.sale.findUnique({ where: { paypalSubscriptionId: subscriptionId } });
+  if(saleRecord?.grossAmountCents!=null && saleRecord.status==="pending"){
+    if(saleRecord.paymentProvider!=="paypal"||!saleRecord.installmentCount || amountCents!==firstInstallments(saleRecord.amountCents,saleRecord.installmentCount).firstCents)throw Error("La primera cuota no coincide con el contrato.");
+    await activateSaleAsPatient({saleId:saleRecord.id,paymentMethod:"paypal_subscription",paypalSubscriptionId:subscriptionId,verifiedFirstInstallment:true});
+    saleRecord=await prisma.sale.findUnique({where:{id:saleRecord.id}});
+  }
   if (saleRecord) {
     if (!saleRecord.patientId || saleRecord.status !== "paid") {
       throw new Error("Cuota PayPal pendiente de activación del Sale; reintentar.");

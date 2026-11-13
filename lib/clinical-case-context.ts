@@ -6,6 +6,7 @@
  * NO calcula texto — solo devuelve un objeto JSON estructurado. La IA
  * escoge que destacar y en que profundidad segun la riqueza de datos.
  */
+import { programPeriodWhere } from "./program-period-kind";
 import { prisma } from "@/lib/prisma";
 
 export type ClinicalCaseContext = {
@@ -111,7 +112,7 @@ export async function buildClinicalCaseContext(patientId: string): Promise<Clini
     weeklyReports,
     advanceLogs,
   ] = await Promise.all([
-    prisma.subscriptionRenewal.count({ where: { patientId, isReservation: false } }),
+    prisma.subscriptionRenewal.count({ where: { patientId, ...programPeriodWhere } }),
     prisma.programSession.findMany({
       where: { assignment: { patientId } },
       include: { assignment: { include: { program: { select: { name: true } } } } },

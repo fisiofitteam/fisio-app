@@ -17,6 +17,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { listRealRenewalsInPeriod } from "@/lib/renewals";
 import { getActiveProfessional } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -46,11 +47,13 @@ async function findTargets(names: string[], monthStr: string | null) {
     },
   });
 
+  if (!patients.length) return [];
+  const patientIds = new Set(patients.map(p => p.id));
+  const ids = (await listRealRenewalsInPeriod(start, new Date(end.getTime() - 1)))
+    .filter(r => patientIds.has(r.patientId)).map(r => r.id);
   const renewals = await prisma.subscriptionRenewal.findMany({
     where: {
-      patientId: { in: patients.map((p) => p.id) },
-      isReservation: false,
-      decidedAt: { gte: start, lt: end },
+      id: { in: ids },
       amountPaid: { not: null },
     },
     select: {

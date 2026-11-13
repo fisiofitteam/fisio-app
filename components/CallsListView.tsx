@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { PaymentLinkModal } from "@/components/PaymentLinkModal";
+import { ReserveLeadDialog } from "@/components/ReserveLeadDialog";
+import { ReservedFirstSale } from "@/components/ReservedFirstSale";
 import { RescheduleLinkButton } from "@/components/RescheduleLinkButton";
 import { SendCaseFlow, type SendCaseTemplate, type SuccessCaseOption } from "@/components/SendCaseFlow";
 import { SendDirectButton } from "@/components/SendDirectButton";
@@ -59,6 +61,7 @@ type Lead = {
 
 const STATUS_TABS = [
   { key: "scheduled", label: "📅 Agendadas" },
+  { key: "reserved", label: "En reserva" },
   { key: "won", label: "🏆 Vendidas" },
   { key: "lost", label: "❌ Perdidas" },
   { key: "cancelled", label: "🚫 Canceladas" },
@@ -127,7 +130,7 @@ export function CallsListView({
   closers: Pro[];
   leads: Lead[];
   fisios: Pro[];
-  counts: { scheduled: number; won: number; lost: number; cancelled: number; no_show: number };
+  counts: { scheduled: number; reserved:number; won: number; lost: number; cancelled: number; no_show: number };
   successCaseTemplates: SendCaseTemplate[];
   meetingReminderTemplates: DirectTemplate[];
   successCases: SuccessCaseOption[];
@@ -139,6 +142,7 @@ export function CallsListView({
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState<Lead | null>(null);
+  const [reserving,setReserving]=useState<Lead|null>(null);
   const [paymentLinkFor, setPaymentLinkFor] = useState<Lead | null>(null);
   const [creating, setCreating] = useState(false);
 
@@ -279,6 +283,7 @@ export function CallsListView({
             setEditing(null);
             router.refresh();
           }}
+          onReserve={(lead)=>{setEditing(null);setReserving(lead);}}
           onConvert={(lead) => {
             setEditing(null);
             setPaymentLinkFor(lead);
@@ -286,6 +291,7 @@ export function CallsListView({
         />
       )}
 
+      {reserving && <ReserveLeadDialog lead={reserving} fisios={fisios} onClose={()=>setReserving(null)} onCreated={()=>{setReserving(null);switchStatus("reserved");}}/>}
       {paymentLinkFor && (
         <PaymentLinkModal
           lead={paymentLinkFor}
@@ -472,7 +478,12 @@ function CallRow({
           {lead.status === "lost" && lead.lostReason && (
             <div className="text-[11px] text-red-600 mt-1">Razón: {lead.lostReason}</div>
           )}
-          {lead.convertedPatient && (
+          {lead.status === "reserved" && (
+            <span className="mt-1 inline-block text-xs font-medium text-teal-800">
+              {currentUser.role === "ceo" || (currentUser.isCloser && lead.closer?.id === currentUser.id) ? "En reserva · Abrir para vender el programa" : "En reserva"}
+            </span>
+          )}
+          {lead.convertedPatient && lead.status !== "reserved" && (
             <div className="flex flex-col">
               <Link
                 href={`/fisio/paciente/${lead.convertedPatient.id}`}
@@ -817,6 +828,7 @@ function CallEditModal({
   onClose,
   onSaved,
   onConvert,
+  onReserve,
 }: {
   lead: Lead;
   currentUser: { id: string; fullName: string; role: string; isCloser: boolean };
@@ -824,6 +836,7 @@ function CallEditModal({
   onClose: () => void;
   onSaved: () => void;
   onConvert: (lead: Lead) => void;
+  onReserve: (lead: Lead) => void;
 }) {
   // Datos editables del lead (closer ya puede editar todo)
   const [fullName, setFullName] = useState(lead.fullName);
@@ -864,13 +877,19 @@ function CallEditModal({
         meetingUrl: meetingUrl.trim() || null,
         callScheduledAt: datetimeLocalInputToUtcIso(callScheduledAt),
         closerId: closerId || null,
-        status,
+        ...(lead.status === "reserved"?{}:{status}),
         ...(status === "lost" && { lostReason }),
         inFollowUp,
         followUpNote,
         aiScheduled,
       }),
     });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setSaving(false);
+      alert(data.error || "No se pudo guardar la llamada.");
+      return;
+    }
     // Si el backend reseteó el CallSummary, disparamos la regeneración desde
     // el navegador con keepalive:true. keepalive garantiza que el fetch se
     // completa aunque cerremos el modal, algo que un fetch normal no asegura.
@@ -1085,7 +1104,7 @@ function CallEditModal({
           <div className="pt-3 border-t border-neutral-200">
             <label className="text-xs text-neutral-500 block mb-1">Resultado</label>
             <div className="grid grid-cols-1 gap-1">
-              {STATUS_TABS.map((tab) => (
+              {STATUS_TABS.filter(tab=>tab.key!=="reserved" && lead.status!=="reserved").map((tab) => (
                 <button
                   key={tab.key}
                   type="button"
@@ -1097,7 +1116,7 @@ function CallEditModal({
                   {tab.label}
                 </button>
               ))}
-              <button
+              {lead.status==="reserved" ? <p className="text-sm text-teal-800">En reserva. La venta se confirmará al pagar el programa.</p> : <button
                 type="button"
                 onClick={() => { setInFollowUp(true); setStatus("scheduled"); }}
                 className={`px-3 py-2 text-xs rounded border font-medium text-left ${
@@ -1105,7 +1124,7 @@ function CallEditModal({
                 }`}
               >
                 🔁 En follow-up
-              </button>
+              </button>}
             </div>
             {inFollowUp && !lead.inFollowUp && (
               <p className="text-[11px] text-neutral-500 mt-1.5 italic">
@@ -1138,6 +1157,7 @@ function CallEditModal({
             </div>
           )}
 
+          {lead.status==="reserved" && lead.convertedPatient && (currentUser.role==="ceo"||currentUser.isCloser&&lead.closer?.id===currentUser.id) && <ReservedFirstSale patientId={lead.convertedPatient.id}/>}
           {/* Trazabilidad: ¿agendado por IA? — para métricas a futuro */}
           <label className="flex items-center gap-2 text-sm cursor-pointer pt-1">
             <input
@@ -1168,7 +1188,8 @@ function CallEditModal({
               </button>
               <RescheduleLinkButton leadId={lead.id} leadStatus={lead.status} />
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              {lead.status==="scheduled" && !lead.convertedPatient && (currentUser.role==="ceo"||currentUser.isCloser&&lead.closer?.id===currentUser.id) && <button type="button" className="btn btn-ghost text-sm" onClick={()=>onReserve(lead)}>Reservar plaza para valoración</button>}
               {status !== "lost" && !lead.convertedPatient && (
                 <button onClick={() => onConvert(lead)} className="btn btn-accent text-sm">
                   💳 Generar link de pago

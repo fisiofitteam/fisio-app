@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getReservedPatientIds } from "@/lib/reserved-patients";
 import { calculateAdherence } from "@/lib/adherence";
 import { getActiveProfessional } from "@/lib/session";
 import { PatientsList } from "@/components/PatientsList";
@@ -120,7 +121,7 @@ export default async function PatientsListPage({
   // Sin este filtro salían fantasmas en "Por asignar" (cuenta > 0 pero la
   // lista mostraba "No hay pacientes por asignar" porque el filtro isFinished
   // los descartaba después).
-  const excludePrevention = { programType: { not: "PREVENTION" } };
+  const excludePrevention = { AND: [{ OR: [{ programType: { not: "PREVENTION" } }, { programType: null, onboardingStatus: "reserved" }] }] };
   let where: any = { ...excludePrevention };
   if (tab === "mine") {
     // "Míos" incluye tanto los ASIGNADOS al fisio como los DERIVADOS a él
@@ -192,6 +193,9 @@ export default async function PatientsListPage({
     derivedByPro.get(d.toProfessionalId)!.add(d.patientId);
   }
   const derivedPatientIdsForMe = derivedByPro.get(user.id) ?? new Set<string>();
+  let reserved: Set<string>;
+  const now = Date.now();
+  const visibleIds = patients.map(p => p.id);
   if (user.isManager) {
     // Contamos SIN los Prevention ni pacientes fantasma (isTest) — coherente
     // con lo que ven las metricas del panel y con la exclusion de KPIs.
@@ -199,17 +203,18 @@ export default async function PatientsListPage({
     // las tabs deben mostrar solo pacientes vigentes (activos + pausados),
     // no los ya salidos del programa.
     const allEver = await prisma.patient.findMany({
-      where: { programType: { not: "PREVENTION" }, isTest: false },
+      where: { ...excludePrevention, isTest: false },
       select: { id: true, assignedProfessionalId: true },
     });
+    reserved = await getReservedPatientIds(prisma, [...new Set([...visibleIds, ...allEver.map(p => p.id)])]);
     const allActive = await prisma.subscriptionRenewal.findMany({
       where: { patientId: { in: allEver.map((p) => p.id) }, status: "active" },
       select: { patientId: true, endDate: true },
     });
     const vigentes = new Set(
-      allActive.filter((r) => r.endDate && r.endDate.getTime() > Date.now()).map((r) => r.patientId)
+      allActive.filter((r) => r.endDate && r.endDate.getTime() > now).map((r) => r.patientId)
     );
-    const vigentesArr = allEver.filter((p) => vigentes.has(p.id));
+    const vigentesArr = allEver.filter(p => reserved.has(p.id) || vigentes.has(p.id));
 
     counts.all = vigentesArr.length;
     counts.unassigned = vigentesArr.filter((p) => p.assignedProfessionalId === null).length;
@@ -239,21 +244,22 @@ export default async function PatientsListPage({
           { assignedProfessionalId: user.id },
           { id: { in: Array.from(derivedPatientIdsForMe) } },
         ],
-        programType: { not: "PREVENTION" },
+        ...excludePrevention,
         isTest: false,
       },
       select: { id: true, assignedProfessionalId: true },
     });
+    reserved = await getReservedPatientIds(prisma, [...new Set([...visibleIds, ...mine.map(p => p.id)])]);
     const active = await prisma.subscriptionRenewal.findMany({
       where: { patientId: { in: mine.map((p) => p.id) }, status: "active" },
       select: { patientId: true, endDate: true },
     });
     const vigentes = new Set(
-      active.filter((r) => r.endDate && r.endDate.getTime() > Date.now()).map((r) => r.patientId)
+      active.filter((r) => r.endDate && r.endDate.getTime() > now).map((r) => r.patientId)
     );
-    counts.mine = mine.filter((p) => vigentes.has(p.id)).length;
+    counts.mine = mine.filter(p => vigentes.has(p.id) || reserved.has(p.id)).length;
     // Terminados: solo los asignados que ya cerraron (no los derivados).
-    counts.finished = mine.filter((p) => !vigentes.has(p.id) && p.assignedProfessionalId === user.id).length;
+    counts.finished = mine.filter((p) => !vigentes.has(p.id) && !reserved.has(p.id) && p.assignedProfessionalId === user.id).length;
   }
 
   const adherences = await Promise.all(patients.map((p) => calculateAdherence(p.id)));
@@ -278,7 +284,7 @@ export default async function PatientsListPage({
   });
   const activeEndByPatient = new Map<string, Date>();
   for (const r of activePeriods) {
-    if (r.endDate) activeEndByPatient.set(r.patientId, r.endDate);
+    if (r.endDate && r.endDate > (activeEndByPatient.get(r.patientId) ?? new Date(0))) activeEndByPatient.set(r.patientId, r.endDate);
   }
 
   // Para el bloque "Terminados": último endDate de cualquier
@@ -302,7 +308,6 @@ export default async function PatientsListPage({
   //   - "first_weeks": no onboarding, subscriptionStartDate dentro de las
   //     últimas 4 semanas. Recuadro gris claro.
   //   - "steady": el resto. Vista habitual.
-  const now = Date.now();
   const DAYS_14_MS = 14 * 86400000;
   const WEEKS_4_MS = 28 * 86400000;
   function groupFor(p: (typeof patients)[number]): "onboarding" | "first_weeks" | "steady" {
@@ -325,7 +330,8 @@ export default async function PatientsListPage({
 
   const mapped = patients.map((p, idx) => {
     const activeEnd = activeEndByPatient.get(p.id);
-    const renewalDays = activeEnd
+    const inReservation = reserved.has(p.id);
+    const renewalDays = inReservation ? null : activeEnd
       ? Math.round((activeEnd.getTime() - Date.now()) / 86400000)
       : p.subscriptionStartDate
       ? Math.round(
@@ -333,11 +339,11 @@ export default async function PatientsListPage({
             Date.now()) / 86400000
         )
       : null;
-    const stage = groupFor(p);
+    const stage = inReservation ? "reserved" as const : groupFor(p);
     // "Terminado" = sin periodo activo con endDate en el futuro. Cubre
     // ambos casos: (1) no hay ningún SubscriptionRenewal activo,
     // (2) hay uno pero su endDate ya pasó (sanitize aún no lo cerró).
-    const isFinished = !activeEnd || activeEnd.getTime() <= now;
+    const isFinished = !inReservation && (!activeEnd || activeEnd.getTime() <= now);
     // Fecha en la que "terminó": el endDate más reciente de cualquier
     // renewal del paciente (incluso los finished antiguos). Sirve para
     // mostrar "Terminó el X" y para el filtro "últimos 30 días".

@@ -3,6 +3,7 @@
  * This module never changes historical rows. Identity matching happens before
  * period filtering so installments from earlier sales remain cash this month.
  */
+import { isProgramPeriod } from "./program-period-kind";
 import { moneyCents, roundMoney } from "./money";
 
 export type FinanceIncomeType = "income_new" | "income_renewal" | "income_other";
@@ -37,12 +38,14 @@ export type LedgerSale = {
   id: string; status: string; amountCents: number; paidAt: Date | null;
   patientId: string | null; closerId: string | null; programType: string;
   durationMonths: number; isReservation: boolean; isTest?: boolean;
+  grossAmountCents?: number | null; depositAppliedCents?: number | null;
+  firstSaleReservationId?: string | null; initialPeriodId?: string | null;
 };
 export type LedgerCheckout = {
   id: string; status: string; amountCents: number; paidAt: Date | null;
   patientId: string; createdById: string | null; programType: string;
   durationMonths: number; isReservation: boolean; renewalId: string | null;
-  isTest?: boolean;
+  isTest?: boolean; isInitialSale?: boolean;
   grossAmountCents?: number | null;
   depositAppliedCents?: number | null;
   reservationId?: string | null;
@@ -50,7 +53,7 @@ export type LedgerCheckout = {
 export type LedgerPeriod = {
   id: string; patientId: string; amountPaid: number | null; decidedAt: Date;
   startDate: Date | null; programType: string | null; periodMonths: number;
-  isReservation: boolean; reservationConsumedAt?: Date | null;
+  isReservation: boolean; status?: string; reservationConsumedAt?: Date | null;
   professionalId?: string | null; isTest?: boolean;
 };
 export type FinanceLedgerSources = {
@@ -80,7 +83,7 @@ export function buildFinanceLedger(
   const unverified: FinanceLedger["legacyUnverified"] = [];
   const warnings = new Set<string>();
   const linkedPeriods = new Set<string>();
-  const periods = [...sources.renewals].filter((period) => !period.isTest && !period.isReservation)
+  const periods = [...sources.renewals].filter((period) => !period.isTest && isProgramPeriod(period))
     .sort((a, b) => (a.startDate ?? a.decidedAt).getTime() - (b.startDate ?? b.decidedAt).getTime()
       || a.decidedAt.getTime() - b.decidedAt.getTime() || a.id.localeCompare(b.id));
   const periodById = new Map(sources.renewals.map((period) => [period.id, period]));
@@ -105,6 +108,13 @@ export function buildFinanceLedger(
   for (const sale of confirmedSales) {
     if (!sale.patientId || sale.isReservation || sale.isTest) continue;
     const candidates = (byPatient.get(sale.patientId) ?? []).filter((period) => !linkedPeriods.has(period.id));
+    if (sale.initialPeriodId) {
+      // New reserve conversions carry the exact period, even if old manual records share dates.
+      const match = candidates.find(row => row.id === sale.initialPeriodId);
+      if (match) { salePeriod.set(sale.id, match); linkedPeriods.add(match.id); }
+      else if (inPeriod(sale.paidAt)) warnings.add("La referencia al periodo inicial de una venta no coincide con su paciente; requiere revisión.");
+      continue;
+    }
     const exact = candidates.filter((period) => sameTime(sale.paidAt, period.decidedAt));
     let pair: LedgerPeriod | undefined = exact.length === 1 ? exact[0] : undefined;
     if (!pair && exact.length === 0) {
@@ -153,38 +163,42 @@ export function buildFinanceLedger(
       professionalId, programType, source });
   }
 
+  // Full contract value is separate from money charged on this checkout. Validate against
+  // the exact deposit, not an inferred amount or the closest date. Counts span both channels.
+  const reservationUses = new Map<string, number>();
+  for (const id of [
+    ...confirmedSales.filter(s => !s.isReservation).map(s => s.firstSaleReservationId),
+    ...confirmedCheckouts.filter(c => !c.isReservation).map(c => c.reservationId),
+  ]) if (id) reservationUses.set(id, (reservationUses.get(id) || 0) + 1);
+  function grossOrNet(contract: LedgerCheckout | LedgerSale, source: string, date: Date | null, reservationId?: string | null) {
+    const gross = contract.grossAmountCents, deposit = contract.depositAppliedCents;
+    if (gross == null && deposit == null && reservationId == null) return contract.amountCents;
+    const reservation = reservationId ? periodById.get(reservationId) : undefined;
+    const matches = typeof gross === "number" && Number.isSafeInteger(gross) && gross > 0
+      && typeof deposit === "number" && Number.isSafeInteger(deposit) && deposit >= 0
+      && Number.isSafeInteger(contract.amountCents) && contract.amountCents > 0 && gross === contract.amountCents + deposit;
+    const proof = deposit === 0 ? !reservationId : !!reservation && reservation.isReservation
+      && reservation.patientId === contract.patientId && !!reservation.reservationConsumedAt
+      && reservation.amountPaid != null && cents(reservation.amountPaid) === deposit && reservationUses.get(reservation.id) === 1;
+    if (matches && proof) return gross;
+    if (inPeriod(date)) warnings.add("Un contrato tiene datos de señal o precio completo incoherentes. Se conserva el saldo guardado y se requiere revisar el contrato.");
+    unverified.push({ id: source + ":" + contract.id, amount: contract.amountCents / 100,
+      occurredAt: date, patientId: contract.patientId, source: source === "sale" ? "sale" : "renewal-checkout", issue: "contract-incomplete",
+      reason: "El precio completo no coincide con saldo y señal, o la reserva exacta no es verificable." });
+    return contract.amountCents;
+  }
   for (const sale of confirmedSales) {
     if (sale.status !== "paid" || sale.isReservation || sale.isTest) continue;
-    addContract("sale:" + sale.id, "income_new", sale.amountCents / 100,
-      sale.paidAt ?? salePeriod.get(sale.id)?.decidedAt ?? null,
-      sale.patientId, sale.closerId, sale.programType, "sale");
+    const date = sale.paidAt ?? salePeriod.get(sale.id)?.decidedAt ?? null;
+    addContract("sale:" + sale.id, "income_new", grossOrNet(sale, "sale", date, sale.firstSaleReservationId) / 100,
+      date, sale.patientId, sale.closerId, sale.programType, "sale");
   }
   for (const checkout of confirmedCheckouts) {
     if (checkout.isReservation || checkout.programType === "ADHOC" || checkout.isTest) continue;
     const date = checkout.paidAt ?? (checkout.renewalId ? periodById.get(checkout.renewalId)?.decidedAt : null) ?? null;
-    let contractualCents = checkout.amountCents;
+    const contractualCents = grossOrNet(checkout, "renewal", date, checkout.reservationId);
     const hasSnapshot = checkout.grossAmountCents != null || checkout.depositAppliedCents != null || checkout.reservationId != null;
-    if (hasSnapshot) {
-      const gross = checkout.grossAmountCents;
-      const deposit = checkout.depositAppliedCents;
-      const reservation = checkout.reservationId ? periodById.get(checkout.reservationId) : undefined;
-      const uniqueReservation = !checkout.reservationId || confirmedCheckouts.filter((row) => row.reservationId === checkout.reservationId).length === 1;
-      const amountsValid = typeof gross === "number" && Number.isSafeInteger(gross) && gross > 0
-        && typeof deposit === "number" && Number.isSafeInteger(deposit) && deposit >= 0
-        && Number.isSafeInteger(checkout.amountCents) && checkout.amountCents > 0
-        && gross === checkout.amountCents + deposit;
-      const depositValid = deposit === 0 ? !checkout.reservationId : !!reservation && reservation.isReservation
-        && reservation.patientId === checkout.patientId && !!reservation.reservationConsumedAt
-        && reservation.amountPaid != null && cents(reservation.amountPaid) === deposit && uniqueReservation;
-      if (amountsValid && depositValid) contractualCents = gross!;
-      else {
-        if (inPeriod(date)) warnings.add("Una renovación tiene datos de señal o precio completo incoherentes. Se conserva el saldo guardado y se requiere revisar el contrato.");
-        unverified.push({ id: "renewal:" + checkout.id, amount: checkout.amountCents / 100,
-          occurredAt: date, patientId: checkout.patientId, source: "renewal-checkout", issue: "contract-incomplete",
-          reason: "El precio completo no coincide con saldo y señal, o la reserva exacta no es verificable." });
-      }
-    }
-    addContract("renewal:" + checkout.id, "income_renewal", contractualCents / 100, date,
+    addContract("renewal:" + checkout.id, checkout.isInitialSale ? "income_new" : "income_renewal", contractualCents / 100, date,
       checkout.patientId, checkout.createdById, checkout.programType, "renewal-checkout");
     // The original gross amount/deposit application was not persisted on the
     // checkout. Never invent that link from the patient or an approximate date.
@@ -214,12 +228,23 @@ export function buildFinanceLedger(
       .map((sale) => ({ patientId: sale.patientId, amount: sale.amountCents / 100, occurredAt: sale.paidAt })),
     ...confirmedCheckouts.filter((checkout) => checkout.isReservation || checkout.programType === "ADHOC" || checkout.isTest)
       .map((checkout) => ({ patientId: checkout.patientId, amount: checkout.amountCents / 100, occurredAt: checkout.paidAt })),
+    ...confirmedSales.filter((sale) => !sale.isReservation && !sale.isTest && sale.grossAmountCents != null && sale.grossAmountCents !== sale.amountCents)
+      .map((sale) => ({ patientId: sale.patientId, amount: sale.amountCents / 100, occurredAt: sale.paidAt })),
     // A deposit-aware contract bills the gross price, while its one-shot
     // generated receipt still contains ONLY the net balance actually charged.
     ...confirmedCheckouts.filter((checkout) => !checkout.isReservation && !checkout.isTest
       && checkout.grossAmountCents != null && checkout.grossAmountCents !== checkout.amountCents)
       .map((checkout) => ({ patientId: checkout.patientId, amount: checkout.amountCents / 100, occurredAt: checkout.paidAt })),
   ];
+  const preparationPayments = new Map<string, number[]>();
+  for (const period of sources.renewals) {
+    if (!isProgramPeriod(period) && !period.isTest && period.amountPaid != null) {
+      const key = period.patientId + ":" + cents(period.amountPaid);
+      const dates = preparationPayments.get(key) ?? [];
+      dates.push(period.decidedAt.getTime());
+      preparationPayments.set(key, dates);
+    }
+  }
   for (const tx of sources.transactions) {
     if (!incomeTypes.has(tx.type)) continue;
     const description = tx.description ?? "";
@@ -242,6 +267,12 @@ export function buildFinanceLedger(
       continue;
     }
     if (reservationReceipt.test(description) || tx.category === "ADHOC") continue;
+    // An explicitly corrected pre-program period is not another sale. The old generated
+    // receipt remains in cash; a standalone/manual payment with different evidence is untouched.
+    if (tx.type === "income_new" && tx.patientId && /^Alta\s*-/i.test(description)
+        && preparationPayments.get(tx.patientId + ":" + cents(tx.amount))?.some(
+          date => Math.abs(date - tx.occurredAt.getTime()) <= 300_000,
+        )) continue;
     if (installmentReceipt.test(description)) {
       // Its face value is a payment, never evidence of the full program price.
       if (inPeriod(tx.occurredAt)) unverified.push({ id: "transaction:" + tx.id, amount: tx.amount,
@@ -319,18 +350,19 @@ export async function getFinanceLedger(start: Date, end: Date): Promise<FinanceL
       where: { status: { in: ["paid", "refunded"] } },
       select: { id: true, status: true, amountCents: true, paidAt: true, patientId: true,
         closerId: true, programType: true, durationMonths: true, isReservation: true,
+        initialPeriodId: true, grossAmountCents: true, depositAppliedCents: true, firstSaleReservationId: true,
         patient: { select: { isTest: true } } },
     }),
     prisma.renewalCheckout.findMany({
       where: { status: "paid" },
       select: { id: true, status: true, amountCents: true, paidAt: true, patientId: true,
-        createdById: true, programType: true, durationMonths: true, isReservation: true,
+        createdById: true, programType: true, durationMonths: true, isReservation: true, isInitialSale: true,
         grossAmountCents: true, depositAppliedCents: true, reservationId: true,
         renewalId: true, patient: { select: { isTest: true } } },
     }),
     prisma.subscriptionRenewal.findMany({
       select: { id: true, patientId: true, amountPaid: true, decidedAt: true, startDate: true,
-        programType: true, periodMonths: true, isReservation: true, reservationConsumedAt: true,
+        programType: true, periodMonths: true, status: true, isReservation: true, reservationConsumedAt: true,
         patient: { select: { isTest: true, assignedProfessionalId: true } } },
     }),
   ]);

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/auth";
+import { reservedPatientWhere } from "@/lib/reserved-patients";
 import { activePatientCondition, currentlyPausedCondition } from "@/lib/patient-active";
 
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
@@ -16,14 +17,14 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
     // A finished patient's links identify their former team. Leave them in place.
     const patients = await tx.patient.count({ where: { AND: [
       { OR: [{ assignedProfessionalId: member.id }, { derivations: { some: { toProfessionalId: member.id } } }] },
-      { OR: [activePatientCondition(), currentlyPausedCondition()] },
+      { OR: [activePatientCondition(), currentlyPausedCondition(), reservedPatientWhere] },
     ] } });
     const calls = await tx.lead.count({ where: { closerId: member.id, OR: [{ status: "scheduled" }, { inFollowUp: true }] } });
     if (patients || calls) {
       const reasons = [
         patients && (patients === 1
-          ? "Revisa la asignación o derivación de 1 paciente vigente o en pausa."
-          : `Revisa las asignaciones o derivaciones de ${patients} pacientes vigentes o en pausa.`),
+          ? "Revisa la asignación o derivación de 1 paciente vigente, en pausa o en reserva."
+          : `Revisa las asignaciones o derivaciones de ${patients} pacientes vigentes, en pausa o en reserva.`),
         calls && (calls === 1
           ? "Reasigna 1 llamada pendiente o en seguimiento."
           : `Reasigna ${calls} llamadas pendientes o en seguimiento.`),

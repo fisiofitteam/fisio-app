@@ -14,8 +14,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PRODUCT_CONFIG } from "@/lib/stripe";
-import { createOrder } from "@/lib/paypal/orders";
-import { createPlan, createSubscription } from "@/lib/paypal/subscriptions";
+import { createOrder, getOrder } from "@/lib/paypal/orders";
+import { createPlan, createSubscription, getSubscription } from "@/lib/paypal/subscriptions";
 import { appBaseUrl, paypalCredentials } from "@/lib/paypal/config";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +34,15 @@ export async function POST(_req: Request, { params }: { params: { token: string 
   if (sale.tokenExpiresAt < new Date()) return NextResponse.json({ error: "Este link ha expirado" }, { status: 410 });
   if (sale.status === "paid") return NextResponse.json({ error: "Este pago ya está completado" }, { status: 409 });
 
+  const newFlow=sale.grossAmountCents!=null || sale.isReservation;
+  if(newFlow){
+    if(sale.paymentProvider!=="paypal"||sale.status!=="pending")return NextResponse.json({error:"El enlace no admite este pago."},{status:409});
+    // Mark it before contacting a provider: a simultaneous cancel/replacement must not
+    // issue a second collectible order. Provider calls below have stable idempotency keys.
+    const lock=await prisma.sale.updateMany({where:{id:sale.id,status:"pending",paymentProvider:"paypal",tokenExpiresAt:{gt:new Date()}},data:{checkoutStartedAt:sale.checkoutStartedAt??new Date()}});
+    if(!lock.count)return NextResponse.json({error:"Este enlace ha cambiado. Vuelve a abrirlo."},{status:409});
+  }
+
   const config = PRODUCT_CONFIG[sale.productCode as keyof typeof PRODUCT_CONFIG];
   if (!config) {
     return NextResponse.json({ error: "Configuración del producto no encontrada" }, { status: 500 });
@@ -48,6 +57,17 @@ export async function POST(_req: Request, { params }: { params: { token: string 
   const useSubscription = installments >= 2;
 
   try {
+    // A provider's request-id has limited retention. Once the ID is known, never create
+    // another collectible order or subscription just because the patient opened the link again.
+    if(newFlow && (sale.paypalSubscriptionId || sale.paypalOrderId)){
+      const prior=sale.paypalSubscriptionId ? await getSubscription(sale.paypalSubscriptionId) : await getOrder(sale.paypalOrderId!);
+      if(prior?.id!==(sale.paypalSubscriptionId||sale.paypalOrderId))throw Error("No se ha podido verificar la referencia de PayPal.");
+      const proceed=["CREATED","SAVED","PAYER_ACTION_REQUIRED","APPROVAL_PENDING"].includes(prior.status);
+      const url=proceed ? prior.links?.find((l:{rel:string})=>l.rel==="approve"||l.rel==="payer-action")?.href :
+        ["APPROVED","ACTIVE","COMPLETED"].includes(prior.status)?returnUrl:null;
+      if(!url)return NextResponse.json({error:"El intento de PayPal requiere revisión antes de emitir otro."},{status:409});
+      return NextResponse.json({url,...(sale.paypalSubscriptionId?{subscriptionId:prior.id,mode:"subscription"}:{orderId:prior.id,mode:"order"})});
+    }
     if (useSubscription) {
       // ─── Rama Subscription: N cobros mensuales ───────────────────────────
       const plan = await createPlan({
@@ -55,6 +75,7 @@ export async function POST(_req: Request, { params }: { params: { token: string 
         name: `FisioFit ${config.programType} ${config.durationMonths}m — ${installments} cuotas`,
         totalAmountEur: totalEur,
         totalCycles: installments,
+        exactTotal: sale.grossAmountCents!=null,
       });
       const sub = await createSubscription({
         requestId: `sub-${sale.id}`,
@@ -79,11 +100,11 @@ export async function POST(_req: Request, { params }: { params: { token: string 
     const order = await createOrder({
       requestId: `sale-${sale.id}`,
       amountEur: totalEur,
-      description: config.label,
+      description: sale.isReservation ? "Señal de reserva de plaza FisioFit" : config.label,
       returnUrl,
       cancelUrl,
       customId: sale.paymentToken,
-      referenceLabel: `FisioFit ${config.programType} ${config.durationMonths}m`,
+      referenceLabel: sale.isReservation ? "FisioFit · Señal de reserva" : `FisioFit ${config.programType} ${config.durationMonths}m`,
       locale: "es-ES",
     });
     await prisma.sale.update({

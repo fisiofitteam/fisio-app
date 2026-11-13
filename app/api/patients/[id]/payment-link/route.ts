@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { isReservedPatient } from "@/lib/reserved-patients";
 import { getActiveProfessional } from "@/lib/session";
 import { generatePaymentToken } from "@/lib/stripe";
 
@@ -11,7 +12,6 @@ const TOKEN_VALIDITY_DAYS = 7;
  * Genera un enlace de cobro "suelto" para un paciente ya con programa.
  * Pensado para casos donde no procede abrir un nuevo periodo:
  *   - Suscripción inicial fallida que hay que recobrar.
- *   - Diferencia tras una reserva de plaza ya cobrada.
  *   - Recargos ad-hoc puntuales.
  *
  * El enlace reutiliza la landing /renovar/[token] y la plumería PayPal/
@@ -40,6 +40,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     select: { id: true },
   });
   if (!patient) return NextResponse.json({ error: "Paciente no encontrado" }, { status: 404 });
+
+  if (await isReservedPatient(prisma, patient.id)) {
+    return NextResponse.json({ error: "Esta ficha está en reserva. Usa «Vender programa» para aplicar la señal al primer programa." }, { status: 409 });
+  }
 
   const body = await req.json().catch(() => ({}));
   const amountEuros = Number(body?.amountEuros);

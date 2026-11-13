@@ -75,6 +75,7 @@ export async function PATCH(req: NextRequest) {
   if (rest.callScheduledAt !== undefined) updateData.callScheduledAt = new Date(rest.callScheduledAt);
   if (rest.closerId !== undefined) updateData.closerId = rest.closerId || null;
   if (rest.status !== undefined) {
+    if (rest.status==="reserved") return NextResponse.json({error:"Utiliza la acción de reserva para crear una ficha de valoración."},{status:409});
     updateData.status = rest.status;
     updateData.decidedAt = new Date();
   }
@@ -137,7 +138,11 @@ export async function PATCH(req: NextRequest) {
     previousMeetingUrl = prev?.meetingUrl ?? null;
   }
 
-  const lead = await prisma.lead.update({ where: { id }, data: updateData });
+  const lead = await prisma.lead.update({where: {id,...(rest.status!==undefined?{status:{not:"reserved"}}:{})},data:updateData}).catch((e:unknown)=>{
+    if((e as {code?:string})?.code==="P2025")return null;
+    throw e;
+  });
+  if(!lead)return NextResponse.json({error:"No se puede cambiar manualmente el estado de una reserva. Usa su ficha para vender el programa."},{status:409});
 
   // Si cambió el meetingUrl: reseteamos el CallSummary síncronamente y le
   // devolvemos al cliente un flag para que dispare la regeneración desde

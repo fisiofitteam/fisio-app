@@ -18,6 +18,7 @@
  * Un lead won del closer sin Patient asociado (ni por convertedPatientId
  * ni por email) se ignora — no podemos atribuir un importe fiable.
  */
+import { programPeriodWhere } from "./program-period-kind";
 import { prisma } from "@/lib/prisma";
 
 export type CloserSaleRow = {
@@ -53,7 +54,7 @@ export async function getCloserSalesInPeriod(
             select: { amountCents: true },
           },
           renewals: {
-            where: { isReservation: false },
+            where: programPeriodWhere,
             orderBy: { startDate: "asc" },
             take: 1,
             select: { amountPaid: true, notes: true, periodMonths: true },
@@ -91,7 +92,7 @@ export async function getCloserSalesInPeriod(
         id: true, email: true, phone: true, fullName: true, programType: true,
         subscriptions: { orderBy: { createdAt: "asc" }, take: 1, select: { amountCents: true } },
         renewals: {
-          where: { isReservation: false },
+          where: programPeriodWhere,
           orderBy: { startDate: "asc" },
           take: 1,
           select: { amountPaid: true, notes: true },

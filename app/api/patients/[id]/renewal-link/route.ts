@@ -1,3 +1,4 @@
+import { isReservedPatient } from "@/lib/reserved-patients";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
@@ -106,6 +107,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   tokenExpiresAt.setDate(tokenExpiresAt.getDate() + TOKEN_VALIDITY_DAYS);
   try {
     const result = await prisma.$transaction(async (tx) => {
+      if (await isReservedPatient(tx, patient.id)) {
+        throw new RenewalLinkError("Este paciente está en reserva. Utiliza «Vender programa» desde su ficha para registrar la primera alta.", 409);
+      }
       let discountCents = 0;
       let reservationId: string | null = null;
       if (!isReservation) {

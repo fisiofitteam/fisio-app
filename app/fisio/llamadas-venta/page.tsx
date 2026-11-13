@@ -16,7 +16,7 @@ export default async function LlamadasVentaPage({
   // cargos (p.ej. una fisio que además cierra) entra por sus extras.
   if (!hasAnyRole(user, ["ceo", "closer", "setter"])) redirect("/fisio");
 
-  const status = ["scheduled", "won", "lost", "cancelled", "no_show"].includes(searchParams.status ?? "")
+  const status = ["scheduled", "reserved", "won", "lost", "cancelled", "no_show"].includes(searchParams.status ?? "")
     ? searchParams.status!
     : "scheduled";
 
@@ -77,6 +77,7 @@ export default async function LlamadasVentaPage({
       generatedAt: string;
     }> = {};
     for (const c of fuSummariesRaw) {
+      if (!c.leadId) continue;
       fuCallSummaryByLeadId[c.leadId] = {
         salesSummary: c.salesSummary,
         salesKeyPoints: c.salesKeyPoints,
@@ -126,6 +127,7 @@ export default async function LlamadasVentaPage({
     prisma.lead.count({ where: { ...baseWhere, status: "lost" } }),
     prisma.lead.count({ where: { ...baseWhere, status: "cancelled" } }),
     prisma.lead.count({ where: { ...baseWhere, status: "no_show" } }),
+    prisma.lead.count({ where: { ...baseWhere, status: "reserved" } }),
   ]);
 
   const leads = await prisma.lead.findMany({
@@ -135,11 +137,11 @@ export default async function LlamadasVentaPage({
       closer: { select: { id: true, fullName: true, role: true } },
       convertedPatient: { select: { id: true, fullName: true } },
     },
-    orderBy: status === "scheduled" ? { callScheduledAt: "asc" } : { decidedAt: "desc" },
+    orderBy: status === "scheduled" ? { callScheduledAt: "asc" } : status === "reserved" ? { callScheduledAt: "desc" } : { decidedAt: "desc" },
   });
 
   const fisios = await prisma.professional.findMany({
-    where: { active: true, deletedAt: null, role: { in: ["fisio", "head_success"] } },
+    where: { active: true, deletedAt: null, role: { in: ["fisio", "head_success", "ceo"] } },
     orderBy: { fullName: "asc" },
   });
 
@@ -198,6 +200,7 @@ export default async function LlamadasVentaPage({
     generatedAt: string;
   }> = {};
   for (const c of callSummariesRaw) {
+    if (!c.leadId) continue;
     callSummaryByLeadId[c.leadId] = {
       salesSummary: c.salesSummary,
       salesKeyPoints: c.salesKeyPoints,
@@ -252,6 +255,7 @@ export default async function LlamadasVentaPage({
         lost: counts[2],
         cancelled: counts[3],
         no_show: counts[4],
+        reserved: counts[5],
       }}
       successCaseTemplates={successCaseTemplates.map((t) => ({ id: t.id, name: t.name, body: t.body }))}
       meetingReminderTemplates={meetingReminderTemplates.map((t) => ({ id: t.id, name: t.name, body: t.body, actionType: "send_meeting_reminder" as const }))}

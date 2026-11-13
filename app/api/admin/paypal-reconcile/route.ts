@@ -17,6 +17,7 @@
  * un cron cada hora que lo llama con secreto para hacer autorescate.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { assertReservationPayPalOrder } from "@/lib/reservation-receipt";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 import { getOrder, captureOrder } from "@/lib/paypal/orders";
@@ -65,7 +66,7 @@ async function listOrphans() {
       },
       select: {
         id: true, paymentToken: true, paypalOrderId: true, paypalSubscriptionId: true,
-        status: true, patientId: true, amountCents: true, createdAt: true,
+        status: true, patientId: true, amountCents: true, currency:true, isReservation:true, grossAmountCents:true, createdAt: true,
         installmentCount: true, paymentMethod: true, paypalCaptureId: true,
         lead: { select: { fullName: true, email: true } },
       },
@@ -100,11 +101,13 @@ export async function GET(req: NextRequest) {
 
 async function tryFixSale(sale: {
   id: string; paymentToken: string; paypalOrderId: string | null; paypalSubscriptionId: string | null;
-  paypalCaptureId: string | null; paymentMethod: string | null; status: string; patientId: string | null;
+  paypalCaptureId: string | null; paymentMethod: string | null; status: string; patientId: string | null; isReservation:boolean; grossAmountCents:number|null; amountCents:number;currency:string;
 }, report: Report) {
   try {
     if (sale.paypalOrderId) {
+      const scoped=sale.isReservation || sale.grossAmountCents!=null;
       let order = await getOrder(sale.paypalOrderId);
+      if(scoped)assertReservationPayPalOrder(sale,order);
       if (order?.status === "APPROVED") {
         try {
           await captureOrder(sale.paypalOrderId);
@@ -114,6 +117,7 @@ async function tryFixSale(sale: {
         }
       }
       if (order?.status === "COMPLETED") {
+        if(scoped)assertReservationPayPalOrder(sale,order);
         const capture = order?.purchase_units?.[0]?.payments?.captures?.[0];
         await activateSaleAsPatient({
           saleId: sale.id,
@@ -129,6 +133,7 @@ async function tryFixSale(sale: {
       return;
     }
     if (sale.paypalSubscriptionId) {
+      if(sale.isReservation || sale.grossAmountCents!=null){report.saleUntouched++;return;} // First programme requires a verified receipt, not a subscription ID alone.
       // Suscripción: si el paciente ya no existe pero la subscripción está
       // ACTIVE en PayPal, activamos igual (webhook activated se perdió).
       await activateSaleAsPatient({

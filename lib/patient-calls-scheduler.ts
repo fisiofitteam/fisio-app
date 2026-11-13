@@ -23,6 +23,7 @@
  * cuando quede con el paciente. Hasta entonces se muestra como
  * "Pendiente de agendar".
  */
+import { programPeriodWhere } from "./program-period-kind";
 import { prisma } from "@/lib/prisma";
 import { activePatientCondition } from "@/lib/patient-active";
 import { notifyProfessional } from "@/lib/notifications";
@@ -96,7 +97,7 @@ export async function schedulePatientCalls(now: Date = new Date()): Promise<Sche
             where: { patientId: p.id, type: "optimizacion" },
           }),
           prisma.subscriptionRenewal.count({
-            where: { patientId: p.id },
+            where: { patientId: p.id, ...programPeriodWhere },
           }),
         ]);
         // periodsCount === 1 significa "solo tiene el alta inicial",

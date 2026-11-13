@@ -50,6 +50,11 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     );
   }
 
+  // A checkout for a reservation or a sale on an existing file is never an
+  // authentication credential for the clinical account (even after an upgrade).
+  if(sale.isReservation || sale.grossAmountCents != null)
+    return NextResponse.json({error:"Este paciente debe iniciar sesión con su acceso habitual.",loginRequired:true},{status:403});
+
   const passwordHash = password ? await bcrypt.hash(password, 10) : null;
 
   // Crear o vincular Patient

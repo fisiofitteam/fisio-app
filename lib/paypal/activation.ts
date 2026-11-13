@@ -23,7 +23,9 @@
  *
  * Cualquier caller puede invocarlas dos veces sin daño.
  */
+import { activateReservedFirstSale } from "@/lib/reserved-first-sale";
 import { prisma } from "@/lib/prisma";
+import { activateInitialReservation } from "@/lib/initial-reservation";
 import { notifyHeadSuccess } from "@/lib/notifications";
 import { applyRenewal } from "@/lib/renewals";
 
@@ -38,6 +40,7 @@ import { applyRenewal } from "@/lib/renewals";
 export async function activateSaleAsPatient(input: {
   saleId: string;
   paymentMethod: string;
+  verifiedFirstInstallment?:boolean;
   paypalCaptureId?: string | null;
   paypalSubscriptionId?: string | null;
   notifyTitle?: string;
@@ -48,6 +51,19 @@ export async function activateSaleAsPatient(input: {
     include: { lead: true },
   });
   if (!sale) return null;
+  if (sale.grossAmountCents != null) {
+    if (sale.installmentCount && sale.paymentProvider==="paypal" && sale.status!=="paid" && !input.verifiedFirstInstallment)return null;
+    return activateReservedFirstSale(input);
+  }
+  if (sale.isReservation) {
+    const reserved = await activateInitialReservation(input);
+    if (reserved.created) {
+      await notifyHeadSuccess({ type:"patient_new_unassigned", title:"Nueva reserva de plaza",
+        body:sale.lead.fullName+" ha pagado la señal. Su ficha está disponible para pautar test.",
+        actionUrl:"/fisio/paciente/"+reserved.patientId+"/ficha" }).catch(()=>{});
+    }
+    return {patientId:reserved.patientId};
+  }
   if (sale.status === "paid" && sale.patientId) {
     console.log("[paypal-activation] Sale ya procesado, skipping", { saleId: sale.id });
     return { patientId: sale.patientId };
@@ -67,16 +83,6 @@ export async function activateSaleAsPatient(input: {
     }
   }
 
-  // Reserva de plaza: el Sale.isReservation=true cambia el trato.
-  // Duración del "periodo" del renewal = 1 mes (señal para mantener plaza),
-  // NO la durationMonths del producto entero (que se cobrará luego con una
-  // renovación real). El paciente tiene acceso a la app durante ese mes.
-  const isReservation = (sale as any).isReservation === true;
-  const reservationMonths = 1;
-  const effectiveMonths = isReservation ? reservationMonths : sale.durationMonths;
-  const effectiveEndDate = new Date(now);
-  effectiveEndDate.setMonth(effectiveEndDate.getMonth() + effectiveMonths);
-
   const patient = await prisma.$transaction(async (tx) => {
     const leadEmailRaw =
       sale.lead.contactType === "email" ? sale.lead.contactValue : sale.lead.email;
@@ -91,8 +97,8 @@ export async function activateSaleAsPatient(input: {
         sport: "CrossFit",
         startedAt: now,
         subscriptionStartDate: now,
-        subscriptionPeriodMonths: effectiveMonths,
-        subscriptionTotalMonths: effectiveMonths,
+        subscriptionPeriodMonths: sale.durationMonths,
+        subscriptionTotalMonths: sale.durationMonths,
         programType: sale.programType,
         programMode: "fixed",
         onboardingStatus: manualAlta.assignedProfessionalId ? "active" : "pending_assignment",
@@ -100,9 +106,9 @@ export async function activateSaleAsPatient(input: {
           ? { assignedProfessionalId: manualAlta.assignedProfessionalId }
           : {}),
         ...(manualAlta.diagnosis ? { diagnosis: manualAlta.diagnosis } : {}),
-        programDurationMonths: effectiveMonths,
+        programDurationMonths: sale.durationMonths,
         programStartDate: now,
-        programEndDate: effectiveEndDate,
+        programEndDate,
         onboardingTasks: { anamnesis: false, contract: false, firstSession: false } as any,
       },
     });
@@ -131,9 +137,7 @@ export async function activateSaleAsPatient(input: {
           type: "income_new",
           category: `${sale.programType} ${sale.durationMonths}M`,
           amount: sale.amountCents / 100,
-          description: isReservation
-            ? `Reserva de plaza PayPal · ${sale.programType}`
-            : `Pago vía PayPal · ${sale.programType} ${sale.durationMonths} meses · ${input.paymentMethod}`,
+          description: `Pago vía PayPal · ${sale.programType} ${sale.durationMonths} meses · ${input.paymentMethod}`,
           occurredAt: now,
           patientId: patient.id,
           professionalId: sale.closerId,
@@ -145,18 +149,14 @@ export async function activateSaleAsPatient(input: {
       data: {
         patientId: patient.id,
         programType: sale.programType,
-        periodMonths: effectiveMonths,
+        periodMonths: sale.durationMonths,
         startDate: patient.programStartDate ?? now,
-        endDate: effectiveEndDate,
+        endDate: programEndDate,
         status: "active",
         amountPaid: sale.amountCents / 100,
         decidedAt: now,
-        isReservation,
-        notes: isReservation
-          ? "Reserva de plaza (alta PayPal)"
-          : isSubscription
-            ? `Alta inicial (PayPal ${installments} cuotas)`
-            : "Alta inicial (pago PayPal)",
+        isReservation: false,
+        notes: isSubscription ? `Alta inicial (PayPal ${installments} cuotas)` : "Alta inicial (pago PayPal)",
       },
     });
 
@@ -177,14 +177,8 @@ export async function activateSaleAsPatient(input: {
 
   console.log("[paypal-activation] Patient creado", { patientId: patient.id, saleId: sale.id });
 
-  const notifyTitle = input.notifyTitle ?? (isReservation
-    ? "Nueva reserva de plaza"
-    : "Nuevo paciente sin asignar");
-  const notifyBody =
-    input.notifyBody ??
-    (isReservation
-      ? `{{fullName}} ha pagado la señal de reserva del programa ${sale.programType}. Contacta con él para cerrar el alta completa.`
-      : `{{fullName}} ha pagado el programa ${sale.programType} de ${sale.durationMonths} meses. Asígnale fisio.`);
+  const notifyTitle = input.notifyTitle ?? "Nuevo paciente sin asignar";
+  const notifyBody = input.notifyBody ?? `{{fullName}} ha pagado el programa ${sale.programType} de ${sale.durationMonths} meses. Asígnale fisio.`;
   try {
     await notifyHeadSuccess({
       type: "patient_new_unassigned",

@@ -3,6 +3,7 @@
 // misma semántica que el alta manual de /api/renewals (anticipada → scheduled,
 // vencida/sin activo → active cerrando el anterior).
 import { prisma } from "@/lib/prisma";
+import { programPeriodWhere, preparatoryStatuses } from "@/lib/program-period-kind";
 
 export type RenewalActivityRow = {
   patientId: string;
@@ -61,7 +62,7 @@ function attributionsFor(historyByPatient: Map<string, HistoryRow[]>): Array<{
     // Solo consideramos los "reales" para follow-ups y previos (reservas
     // fuera). Ordenados por startDate asc.
     const real = list
-      .filter((h) => !h.isReservation && h.startDate)
+      .filter((h) => h.startDate)
       .sort((a, b) => (a.startDate?.getTime() ?? 0) - (b.startDate?.getTime() ?? 0));
     for (let i = 1; i < real.length; i++) {
       const follow = real[i];
@@ -81,7 +82,7 @@ function attributionsFor(historyByPatient: Map<string, HistoryRow[]>): Array<{
  *  pacientes agrupado por patientId. */
 async function loadHistoryFor(patientIds: string[]): Promise<Map<string, HistoryRow[]>> {
   const rows = await prisma.subscriptionRenewal.findMany({
-    where: { patientId: { in: patientIds } },
+    where: { patientId: { in: patientIds }, ...programPeriodWhere },
     select: {
       id: true,
       patientId: true,
@@ -113,7 +114,7 @@ export async function getRenewalActivityInPeriod(from: Date, to: Date): Promise<
     prisma.subscriptionRenewal.findMany({
       where: {
         decidedAt: { gte: from, lte: to },
-        isReservation: false,
+        ...programPeriodWhere,
         patient: { isTest: false },
       },
       select: { id: true, patientId: true },
@@ -121,7 +122,7 @@ export async function getRenewalActivityInPeriod(from: Date, to: Date): Promise<
     prisma.subscriptionRenewal.findMany({
       where: {
         endDate: { gte: from, lte: to },
-        isReservation: false,
+        ...programPeriodWhere,
         patient: { isTest: false },
       },
       select: {
@@ -203,7 +204,7 @@ export async function listRealRenewalsInPeriod(from: Date, to: Date): Promise<Re
     prisma.subscriptionRenewal.findMany({
       where: {
         decidedAt: { gte: from, lte: to },
-        isReservation: false,
+        ...programPeriodWhere,
         patient: { isTest: false },
       },
       select: { id: true, patientId: true },
@@ -211,7 +212,7 @@ export async function listRealRenewalsInPeriod(from: Date, to: Date): Promise<Re
     prisma.subscriptionRenewal.findMany({
       where: {
         endDate: { gte: from, lte: to },
-        isReservation: false,
+        ...programPeriodWhere,
         patient: { isTest: false },
       },
       select: { id: true, patientId: true },
@@ -314,7 +315,7 @@ export async function applyRenewal(opts: {
 
   // Recalcular total acumulado de meses
   const all = await prisma.subscriptionRenewal.findMany({
-    where: { patientId },
+    where: { patientId, status: { notIn: preparatoryStatuses } },
     select: { periodMonths: true },
   });
   const total = all.reduce((sum, r) => sum + (r.periodMonths || 0), 0);

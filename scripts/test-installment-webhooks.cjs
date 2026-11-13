@@ -5,6 +5,15 @@ const fs = require('node:fs');
 const path = require('node:path');
 const ts = require('typescript');
 
+function localPureModule(file) {
+  const source = fs.readFileSync(path.join(__dirname, '../lib', file + '.ts'), 'utf8');
+  const {outputText} = ts.transpileModule(source, { compilerOptions:{module:ts.ModuleKind.CommonJS} });
+  const result={exports:{}};
+  new Function('require','module','exports',outputText)((id)=>{throw Error('Unexpected I/O in pure payment rules: '+id);},result,result.exports);
+  return result.exports;
+}
+const paymentTerms=localPureModule('first-sale-terms'), reservationReceipt=localPureModule('reservation-receipt');
+
 const paidAt = Date.parse('2026-09-03T10:20:00Z') / 1000;
 const baseSale = {
   id: 'sale-current', patientId: 'patient-shared', status: 'paid',
@@ -60,6 +69,8 @@ function setup(provider, options = {}) {
   };
   const unexpected = () => { throw Error('Unexpected activation or external dependency'); };
   const modules = {
+    '@/lib/first-sale-terms': paymentTerms,
+    '@/lib/reservation-receipt': reservationReceipt,
     'next/server': { NextResponse: { json: (body, options) => ({ body, status: options?.status ?? 200 }) } },
     stripe: class { constructor() { return client; } },
     '@/lib/prisma': { prisma },

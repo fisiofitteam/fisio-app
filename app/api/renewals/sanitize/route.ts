@@ -15,6 +15,7 @@
  * Idempotente: ejecutarlo varias veces produce el mismo resultado.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { preparatoryStatuses } from "@/lib/program-period-kind";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 
@@ -24,7 +25,7 @@ function daysBetween(a: Date, b: Date): number {
 
 export async function sanitizePatientRenewals(patientId: string) {
   const renewals = await prisma.subscriptionRenewal.findMany({
-    where: { patientId },
+    where: { patientId, status: { notIn: preparatoryStatuses } },
     orderBy: { startDate: "asc" },
   });
 
@@ -65,7 +66,7 @@ export async function sanitizePatientRenewals(patientId: string) {
 
   // 2. Releer
   const clean = await prisma.subscriptionRenewal.findMany({
-    where: { patientId },
+    where: { patientId, status: { notIn: preparatoryStatuses } },
     orderBy: { startDate: "asc" },
   });
 
@@ -104,7 +105,7 @@ export async function sanitizePatientRenewals(patientId: string) {
     const candidate = await prisma.subscriptionRenewal.findFirst({
       where: {
         patientId,
-        status: { not: "scheduled" },
+        status: { notIn: ["scheduled", ...preparatoryStatuses] },
         startDate: { lte: today },
         endDate: { gte: today },
       },
@@ -143,7 +144,7 @@ export async function sanitizePatientRenewals(patientId: string) {
 
   // 6. Recalcular subscriptionTotalMonths y sincronizar paciente con su periodo activo
   const finalAll = await prisma.subscriptionRenewal.findMany({
-    where: { patientId },
+    where: { patientId, status: { notIn: preparatoryStatuses } },
     orderBy: { startDate: "asc" },
   });
   const totalMonths = finalAll.reduce((sum, r) => sum + (r.periodMonths || 0), 0);

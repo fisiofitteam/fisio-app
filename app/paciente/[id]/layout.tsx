@@ -10,6 +10,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PatientShell } from "@/components/PatientShell";
+import { isReservedPatient } from "@/lib/reserved-patients";
 import { needsOnboarding } from "@/lib/onboarding-content";
 import { getPatientThemeFromCookie } from "@/lib/theme";
 import { getPauseSnapshot } from "@/lib/program-pauses";
@@ -30,7 +31,8 @@ export default async function PatientLayout({
   if (
     patient &&
     patient.programType !== "PREVENTION" &&
-    needsOnboarding(patient.onboardingTasks)
+    needsOnboarding(patient.onboardingTasks) &&
+    !(await isReservedPatient(prisma, params.id))
   ) {
     redirect("/paciente/onboarding");
   }

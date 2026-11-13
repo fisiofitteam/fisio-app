@@ -15,12 +15,17 @@ export const dynamic = "force-dynamic";
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  if (user.role !== "ceo" && user.role !== "closer") {
-    return NextResponse.json({ error: "Solo CEO o closer" }, { status: 403 });
-  }
 
-  const sale = await prisma.sale.findUnique({ where: { id: params.id } });
+  const sale = await prisma.sale.findUnique({ where: { id: params.id }, include: {
+    lead:{select:{closerId:true}}, patient:{select:{assignedProfessionalId:true,derivations:{where:{toProfessionalId:user.id},select:{id:true},take:1}}}
+  } });
   if (!sale) return NextResponse.json({ error: "Sale no encontrado" }, { status: 404 });
+
+  const roles=[user.role,...user.extraRoles];
+  const isOwnLead=roles.includes("closer")&&sale.lead.closerId===user.id;
+  const isTreatingFisio=sale.grossAmountCents!=null&&roles.includes("fisio")&&
+    (sale.patient?.assignedProfessionalId===user.id || !!sale.patient?.derivations.length);
+  if(!user.isManager&&!isOwnLead&&!isTreatingFisio)return NextResponse.json({error:"No puedes gestionar este enlace."},{status:403});
 
   if (sale.status !== "pending") {
     return NextResponse.json(
@@ -29,10 +34,11 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     );
   }
 
-  await prisma.sale.update({
-    where: { id: sale.id },
+  const result = await prisma.sale.updateMany({
+    where: { id:sale.id,status:"pending",...(sale.isReservation || sale.grossAmountCents!=null?{checkoutStartedAt:null,stripeSessionId:null,paypalOrderId:null,paypalSubscriptionId:null}:{}) },
     data: { status: "expired" },
   });
 
+  if(!result.count)return NextResponse.json({error:"El pago ya está iniciado o ha cambiado. Verifica su estado antes de crear otro enlace."},{status:409});
   return NextResponse.json({ ok: true });
 }

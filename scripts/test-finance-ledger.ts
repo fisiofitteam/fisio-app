@@ -226,3 +226,22 @@ test("cash profit stays cash based and decimal cents are stable", () => {
   assert.equal(result.expense, 30.02);
   assert.equal(result.collectedCountOther, 1);
 });
+
+test("first sale consumes one exact deposit, bills gross once and collects actual cash by month", () => {
+  const paidAt=d("2026-01-09"), depositAt=d("2025-12-16");
+  const initial=period("paid-period",{amountPaid:997,decidedAt:paidAt,startDate:paidAt});
+  const deposit=period("signal",{amountPaid:100,isReservation:true,status:"reserved",decidedAt:depositAt,reservationConsumedAt:paidAt});
+  const paidSale=sale("first-sale",{amountCents:89700,grossAmountCents:99700,depositAppliedCents:10000,firstSaleReservationId:deposit.id,initialPeriodId:initial.id,paidAt});
+  const fixture=sources({sales:[paidSale],renewals:[deposit,initial],transactions:[
+    tx("signal-payment",{amount:100,occurredAt:depositAt,description:"Reserva de plaza"}),
+    tx("balance",{amount:897,occurredAt:paidAt,description:"Pago vía Stripe · RECUPERA"}),
+  ]});
+  const january=summarizeFinanceLedger(buildFinanceLedger(fixture,start,end));
+  assert.equal(january.countNew,1);assert.equal(january.countRenewal,0);
+  assert.equal(january.billedNew,997);assert.equal(january.income,897);
+  const whole=summarizeFinanceLedger(buildFinanceLedger(fixture,d("2025-12-01"),end));
+  assert.equal(whole.countNew,1);assert.equal(whole.income,997);
+  assert.equal(whole.billed,997);
+  const invalid=buildFinanceLedger({...fixture,sales:[{...paidSale,firstSaleReservationId:"wrong"}]},start,end);
+  assert.equal(summarizeFinanceLedger(invalid).billedNew,897);assert(invalid.warnings.length>0);
+});
