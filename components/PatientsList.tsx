@@ -21,7 +21,7 @@ type Patient = {
   subscriptionTotalMonths: number;
   renewalDays: number | null;
   /** Etapa del paciente para agruparlo visualmente en la lista. */
-  stage: "onboarding" | "first_weeks" | "steady";
+  stage: "reserved" | "onboarding" | "first_weeks" | "steady";
   /** True si su suscripción ya terminó (sin periodo activo vigente). */
   isFinished: boolean;
   /** Fecha del último endDate de cualquier renewal. Sirve para
@@ -358,7 +358,7 @@ function PatientRow({
   return (
     <div
       className="card relative flex items-center gap-3 hover:border-neutral-300"
-      style={patient.isDerived ? { background: "#EFF6FF", borderColor: "#BFDBFE" } : undefined}
+      style={patient.stage === "reserved" ? {borderColor:"#20a39e",borderLeftWidth:4} : patient.isDerived ? { background: "#EFF6FF", borderColor: "#BFDBFE" } : undefined}
     >
       {isCeo && (
         <button
@@ -399,7 +399,7 @@ function PatientRow({
             patientId={patient.id}
             whatsappGroupUrl={patient.whatsappGroupUrl ?? null}
           />
-          <PatientPill value={patient.programType} kind="program" />
+          {patient.stage === "reserved" ? <span className="rounded-full bg-teal-700 px-2 py-0.5 text-[11px] font-semibold text-white">En reserva</span> : <PatientPill value={patient.programType} kind="program" />}
           {isManager && <PatientPill value={patient.difficulty} kind="difficulty" />}
           {patient.bodyZone && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600">{patient.bodyZone}</span>
@@ -421,7 +421,7 @@ function PatientRow({
           </span>
         )}
         <div className="flex items-center gap-3">
-          {patient.subscriptionStartDate && (
+          {patient.stage !== "reserved" && patient.subscriptionStartDate && (
             <div className="flex flex-col items-center gap-1">
               <ProgressRing
                 value={patient.consumedMonths}
@@ -565,6 +565,7 @@ function FisioSummary({ patients, isManager }: { patients: Patient[]; isManager:
   const difficultyCounts: Record<string, number> = { FACIL: 0, MEDIO: 0, DIFICIL: 0, _none: 0 };
 
   for (const p of patients) {
+    if (p.stage === "reserved") continue;
     if (p.programType && programCounts[p.programType] !== undefined) {
       programCounts[p.programType]++;
     } else {
@@ -1216,12 +1217,18 @@ function StagedPatientList({
   isCeo: boolean;
   onReassign: (p: Patient) => void;
 }) {
+  const reserves = patients.filter(p => p.stage === "reserved");
   const onboarding = patients.filter((p) => p.stage === "onboarding");
   const firstWeeks = patients.filter((p) => p.stage === "first_weeks");
   const steady = patients.filter((p) => p.stage === "steady");
 
   return (
     <div className="space-y-4">
+      {reserves.length > 0 && <section className="space-y-2 rounded-2xl border border-teal-300 p-3">
+        <h2 className="text-sm font-semibold">Reservas para valoración · {reserves.length}</h2>
+        <p className="text-xs text-neutral-500">Ya puedes pautar test desde la ficha. El programa empieza cuando se confirma la primera venta.</p>
+        {reserves.map(p => <PatientRow key={p.id} patient={p} isManager={isManager} isCeo={isCeo} onReassign={()=>onReassign(p)}/>)}
+      </section>}
       {onboarding.length > 0 && (
         <section
           className="rounded-2xl p-3"

@@ -6,6 +6,7 @@
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { canOperateReservation } from "@/lib/initial-reservation";
 import { getActiveProfessional } from "@/lib/session";
 import { PRODUCT_CONFIG, type ProductCode } from "@/lib/stripe";
 
@@ -14,9 +15,8 @@ export const dynamic = "force-dynamic";
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  if (user.role !== "ceo" && user.role !== "closer") {
-    return NextResponse.json({ error: "Solo CEO o closer" }, { status: 403 });
-  }
+  const lead = await prisma.lead.findUnique({where:{id:params.id},select:{closerId:true}});
+  if (!lead || !canOperateReservation(user, lead.closerId)) return NextResponse.json({ error: "Lead no disponible." }, { status: 403 });
 
   const sale = await prisma.sale.findFirst({
     where: {
@@ -39,7 +39,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       paymentToken: sale.paymentToken,
       landingUrl: `/contratar/${sale.paymentToken}`,
       productCode: sale.productCode,
-      productLabel: config?.label || sale.productCode,
+      productLabel: (sale.isReservation ? "Señal de reserva · " : "") + (config?.label || sale.productCode),
+      isReservation: sale.isReservation,
       amountCents: sale.amountCents,
       currency: sale.currency,
       installmentCount: sale.installmentCount ?? null,

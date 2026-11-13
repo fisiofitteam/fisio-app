@@ -14,6 +14,7 @@
  * `ORDER_ALREADY_CAPTURED` y aquí lo tratamos como éxito.
  */
 import { NextResponse } from "next/server";
+import { assertReservationPayPalOrder } from "@/lib/reservation-receipt";
 import { prisma } from "@/lib/prisma";
 import { captureOrder, getOrder } from "@/lib/paypal/orders";
 import { paypalCredentials } from "@/lib/paypal/config";
@@ -29,7 +30,7 @@ export async function POST(_req: Request, { params }: { params: { token: string 
 
   const sale = await prisma.sale.findUnique({
     where: { paymentToken: params.token },
-    select: { id: true, status: true, paypalOrderId: true, paypalCaptureId: true, paymentMethod: true },
+    select: { id: true, paymentToken:true, amountCents:true, currency:true, isReservation:true, grossAmountCents:true, status: true, paypalOrderId: true, paypalCaptureId: true, paymentMethod: true },
   });
   if (!sale) return NextResponse.json({ ok: false, reason: "sale_not_found" }, { status: 404 });
   if (sale.status === "paid") {
@@ -40,7 +41,10 @@ export async function POST(_req: Request, { params }: { params: { token: string 
   }
 
   try {
+    const scoped = sale.isReservation || sale.grossAmountCents!=null;
+    if (scoped && sale.status!=="pending") return NextResponse.json({ok:false,reason:"not_pending"},{status:409});
     let order = await getOrder(sale.paypalOrderId);
+    if (scoped) assertReservationPayPalOrder(sale,order);
     if (order?.status === "APPROVED") {
       try {
         await captureOrder(sale.paypalOrderId);
@@ -59,6 +63,7 @@ export async function POST(_req: Request, { params }: { params: { token: string 
     }
 
     if (order?.status === "COMPLETED") {
+      if (scoped) assertReservationPayPalOrder(sale,order);
       const capture = order?.purchase_units?.[0]?.payments?.captures?.[0];
       // Ejecuta la activación completa (Patient + SubscriptionRenewal +
       // Transaction). Idempotente con el webhook.

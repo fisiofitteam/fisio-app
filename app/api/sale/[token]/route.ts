@@ -36,10 +36,13 @@ export async function GET(_req: Request, { params }: { params: { token: string }
   if (sale.status === "paid") {
     return NextResponse.json({
       status: "paid",
+      isReservation: sale.isReservation,
       sessionId: sale.stripeSessionId,
       message: "Este pago ya está completado.",
     });
   }
+
+  if (sale.status !== "pending") return NextResponse.json({ error:"Este enlace de pago ya no está activo. Pide uno nuevo al equipo." }, {status:410});
 
   const config = PRODUCT_CONFIG[sale.productCode as keyof typeof PRODUCT_CONFIG];
 
@@ -52,9 +55,10 @@ export async function GET(_req: Request, { params }: { params: { token: string }
     durationMonths: sale.durationMonths,
     label: config?.label || sale.productCode,
     amountCents: sale.amountCents,
+    grossAmountCents:sale.grossAmountCents, depositCents:sale.depositAppliedCents,
     currency: sale.currency,
     installmentCount: sale.installmentCount ?? null,
     paymentProvider: (sale as any).paymentProvider ?? "paypal",
-    isReservation: (sale as any).isReservation ?? false,
+    isReservation: sale.isReservation,
   });
 }

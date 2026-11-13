@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getActivePatient } from "@/lib/auth";
 import { PatientShell } from "@/components/PatientShell";
 import { OnboardingFlow } from "@/components/OnboardingFlow";
+import { isReservedPatient } from "@/lib/reserved-patients";
 import { needsOnboarding, parseOnboardingTasks } from "@/lib/onboarding-content";
 import { getOnboardingConfig } from "@/lib/onboarding-config";
 
@@ -22,7 +23,7 @@ export default async function OnboardingPage() {
   if (!patient) redirect("/paciente/login");
 
   // Ya completado (o paciente legacy sin onboarding) → directo a la app
-  if (!needsOnboarding(patient.onboardingTasks)) {
+  if (!needsOnboarding(patient.onboardingTasks) || await isReservedPatient(prisma, patient.id)) {
     redirect(`/paciente/${patient.id}`);
   }
 

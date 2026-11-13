@@ -9,7 +9,7 @@ type Row = LegacyReceiptRow & { patientId: string; type: string; professionalId?
 
 // No Prisma connection or provider network. Exercise the writer with a
 // transactional in-memory adapter, including concurrent deliveries.
-function database(initial: Row[] = []) {
+function database(initial: Row[] = [], initialSaleCheckoutId?:string) {
   let rows = structuredClone(initial);
   let tail = Promise.resolve();
   let locks = 0;
@@ -22,6 +22,7 @@ function database(initial: Row[] = []) {
       const before = structuredClone(rows);
       const tx = {
         $queryRaw: async () => { locks++; return []; },
+        renewalCheckout: { findUnique: async ({where}: {where:{id:string}}) => ({ patientId:"patient1",isInitialSale:where.id===initialSaleCheckoutId }) },
         transaction: {
           findUnique: async ({ where }: any) => rows.find((r) => r.id === where.id) ?? null,
           findFirst: async ({ where }: any) => rows.find((r) => r.description?.includes(where.description.contains)) ?? null,
@@ -162,6 +163,18 @@ async function main() {
     assert.ok(mem.rows()[0].description?.includes("contract=renewal:renewal1"));
     assert.equal(mem.rows()[0].id, receiptTransactionId(input));
     assert.ok(receiptMarker(renewal).includes("subscription=sub_contract1"));
+  });
+  await check("A first sale paid through a renewal checkout keeps its provider identity and books every installment once as new income", async () => {
+    const mem = database([], "used_for_first_sale");
+    const contract = { ...input.contract, kind:"renewal" as const, id:"used_for_first_sale" };
+    const first = { ...input, contract };
+    const next = { ...first, receiptId:"in_next", paidAt:new Date("2026-08-03T10:20:00Z") };
+    assert.equal((await recordInstallmentReceipt(first, mem.db)).status,"created");
+    assert.equal((await recordInstallmentReceipt(next, mem.db)).status,"created");
+    assert.equal((await recordInstallmentReceipt(next, mem.db)).status,"existing");
+    assert.deepEqual(mem.rows().map(r=>r.type), ["income_new","income_new"]);
+    assert.equal(mem.rows()[1].id,receiptTransactionId(next));
+    assert.ok(mem.rows().every(r=>r.description?.includes("contract=renewal:used_for_first_sale ")));
   });
   console.log(`${passed} installment receipt checks passed; no database or payment API used.`);
 }

@@ -13,6 +13,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { stripe } from "@/lib/stripe";
 import { captureOrder, getOrder } from "@/lib/paypal/orders";
+import { assertReservationPayPalOrder } from "@/lib/reservation-receipt";
+import { stripeFirstPaymentMatches } from "@/lib/first-sale-terms";
 import { activateSaleAsPatient } from "@/lib/paypal/activation";
 
 export const dynamic = "force-dynamic";
@@ -30,15 +32,18 @@ export async function GET(_req: Request, { params }: { params: { token: string }
     return NextResponse.json({ error: "Link no válido" }, { status: 404 });
   }
 
+  const scoped=sale.isReservation || sale.grossAmountCents!=null;
+  const accessFlags={loginRequired:scoped,reservation:sale.isReservation};
   // ─── Fallback PayPal ────────────────────────────────────────────────
   // Si el Sale sigue pending y tiene paypalOrderId, consultamos el estado
   // real. Si PayPal dice APPROVED, disparamos capture. Si COMPLETED,
   // marcamos Sale paid — así el paciente entra aunque el webhook no haya
   // llegado todavía (era el bug que dejaba al paciente 60s con el
   // spinner y luego "escríbenos por WhatsApp").
-  if (sale.status !== "paid" && sale.paypalOrderId) {
+  if ((scoped?sale.status==="pending":sale.status!=="paid") && sale.paypalOrderId) {
     try {
       let order = await getOrder(sale.paypalOrderId);
+      if(scoped)assertReservationPayPalOrder(sale,order);
 
       // Si está APPROVED pero no capturado, capturamos ahora (idempotente).
       if (order?.status === "APPROVED") {
@@ -51,6 +56,7 @@ export async function GET(_req: Request, { params }: { params: { token: string }
       }
 
       if (order?.status === "COMPLETED") {
+        if(scoped)assertReservationPayPalOrder(sale,order);
         const capture = order?.purchase_units?.[0]?.payments?.captures?.[0];
         // CAMBIO CRÍTICO (bug 2026-09-24): antes solo hacíamos update de
         // status="paid". Ahora ejecutamos la activación COMPLETA para no
@@ -73,7 +79,7 @@ export async function GET(_req: Request, { params }: { params: { token: string }
             status: updated?.status ?? "paid",
             leadName: sale.lead.fullName,
             leadEmail: sale.lead.email,
-            hasPatient: !!updated?.patientId,
+            hasPatient: !!updated?.patientId, ...accessFlags,
           }),
           { headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } }
         );
@@ -85,10 +91,18 @@ export async function GET(_req: Request, { params }: { params: { token: string }
   }
 
   // ─── Fallback Stripe (legacy) ───────────────────────────────────────
-  if (sale.status !== "paid" && stripe && sale.stripeSessionId) {
+  if ((scoped?sale.status==="pending":sale.status!=="paid") && stripe && sale.stripeSessionId) {
     try {
       const session = await stripe.checkout.sessions.retrieve(sale.stripeSessionId);
       if (session.payment_status === "paid") {
+        if(scoped){
+          if(!stripeFirstPaymentMatches(sale,session))throw Error("El pago de Stripe no coincide con esta oferta.");
+          const sub=typeof session.subscription==="string"?session.subscription:session.subscription?.id;
+          await prisma.sale.update({where:{id:sale.id},data:{stripePaymentIntentId:typeof session.payment_intent==="string"?session.payment_intent:session.payment_intent?.id}});
+          const result=await activateSaleAsPatient({saleId:sale.id,paymentMethod:sub?"stripe_subscription":"stripe",paypalSubscriptionId:sub});
+          if(result)return NextResponse.json({...accessFlags,status:"paid",leadName:sale.lead.fullName,leadEmail:sale.lead.email,hasPatient:true},{headers:{"Cache-Control":"private, no-store"}});
+          throw Error("Pendiente de activación.");
+        }
         // Marcar Sale como pagado
         const updated = await prisma.sale.update({
           where: { id: sale.id },
@@ -121,7 +135,7 @@ export async function GET(_req: Request, { params }: { params: { token: string }
       status: sale.status,
       leadName: sale.lead.fullName,
       leadEmail: sale.lead.email,
-      hasPatient: !!sale.patientId,
+      hasPatient: !!sale.patientId, ...accessFlags,
     }),
     {
       headers: {

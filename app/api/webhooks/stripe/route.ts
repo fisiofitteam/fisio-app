@@ -20,6 +20,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
+import { stripeFirstPaymentMatches } from "@/lib/first-sale-terms";
 import { prisma } from "@/lib/prisma";
 import { isPreventionPlan } from "@/lib/stripe";
 import { createPreventionSubscription, ensurePreventionRollingProgram } from "@/lib/prevention";
@@ -82,6 +83,14 @@ export async function POST(req: NextRequest) {
             mode: session.mode,
             productType,
           });
+        }
+        break;
+      }
+      case "checkout.session.async_payment_succeeded": {
+        const session=event.data.object as Stripe.Checkout.Session;
+        if(session.metadata?.productType==="sale" && session.metadata.saleId){
+          const scoped=await prisma.sale.findUnique({where:{id:session.metadata.saleId},select:{isReservation:true,grossAmountCents:true}});
+          if(scoped?.isReservation || scoped?.grossAmountCents!=null)await handleSaleCheckoutCompleted(session);
         }
         break;
       }
@@ -413,6 +422,15 @@ async function handleSaleCheckoutCompleted(session: Stripe.Checkout.Session) {
   if (!saleId) {
     console.warn("[stripe-webhook] sale checkout sin saleId en metadata", { sessionId: session.id });
     return;
+  }
+  const scope=await prisma.sale.findUnique({where:{id:saleId},select:{id:true,isReservation:true,grossAmountCents:true,amountCents:true,currency:true,paymentToken:true,paymentProvider:true,installmentCount:true,stripeSessionId:true}});
+  if(!scope)return;
+  if(scope.isReservation || scope.grossAmountCents!=null){
+    if(session.payment_status!=="paid")return;
+    if(!stripeFirstPaymentMatches(scope,session))throw Error("El importe o la sesión de la primera venta no coincide.");
+    if(session.metadata?.paymentToken!==scope.paymentToken)throw Error("Referencia de pago no válida.");
+    if(scope.isReservation && (scope.paymentProvider!=="stripe" || (scope.stripeSessionId && scope.stripeSessionId!==session.id) || session.mode!=="payment" || scope.amountCents!==session.amount_total || scope.currency.toLowerCase()!==session.currency?.toLowerCase()))
+      throw Error("La confirmación no corresponde al importe de la reserva.");
   }
   // Guardar el PaymentIntent id para trazabilidad (mode=payment). Para
   // mode=subscription, guardamos el subscription id (viene en session.subscription).

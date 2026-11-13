@@ -1,3 +1,4 @@
+import { isReservedPatient } from "@/lib/reserved-patients";
 /**
  * POST /api/patients/[id]/reactivate
  *
@@ -35,6 +36,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: "Paciente no encontrado" }, { status: 404 });
   }
 
+  if (await isReservedPatient(prisma, patient.id)) {
+    return NextResponse.json({ error: "La reserva ya tiene acceso clínico. Usa «Vender programa» para iniciar su primer periodo." }, {status:409});
+  }
   const body = await req.json().catch(() => ({}));
   const periodMonths = Number.isFinite(Number(body?.periodMonths)) && Number(body?.periodMonths) > 0
     ? Number(body.periodMonths)

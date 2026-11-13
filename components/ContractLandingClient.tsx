@@ -1,5 +1,6 @@
 "use client";
 
+import { firstInstallments } from "@/lib/first-sale-terms";
 import { useEffect, useState } from "react";
 import type { ContractLandingCopy } from "@/lib/landing-content";
 
@@ -12,6 +13,9 @@ type SaleInfo = {
   durationMonths: number;
   label: string;
   amountCents: number;
+  isReservation: boolean;
+  grossAmountCents?: number | null;
+  depositCents?: number | null;
   currency: string;
   installmentCount: number | null;
   paymentProvider?: "paypal" | "stripe";
@@ -44,7 +48,7 @@ export function ContractLandingClient({ token, copy }: { token: string; copy: Co
         }
         const data = await res.json();
         if (data.status === "paid") {
-          setError("Este pago ya está completado. Si necesitas acceso, escríbenos.");
+          setError(data.isReservation ? "Tu señal ya está pagada. Entra en la app con tu correo para ver tus test." : "Este pago ya está completado. Si necesitas acceso, escríbenos.");
           setLoading(false);
           return;
         }
@@ -105,7 +109,7 @@ export function ContractLandingClient({ token, copy }: { token: string; copy: Co
               }}
             >
               <p className="text-sm" style={{ color: "#A3A3A3" }}>
-                Cargando tu programa...
+                Cargando los datos del pago…
               </p>
             </div>
           )}
@@ -141,10 +145,10 @@ export function ContractLandingClient({ token, copy }: { token: string; copy: Co
                   className="text-3xl sm:text-4xl font-bold mb-2 tracking-tight"
                   style={{ color: "#FAFAFA" }}
                 >
-                  {copy.headline}
+                  {sale.isReservation ? "Reserva de plaza" : copy.headline}
                 </h1>
                 <p className="text-sm" style={{ color: "#A3A3A3" }}>
-                  {copy.subheadline}
+                  {sale.isReservation ? "Con esta señal reservas tu plaza para la valoración." : copy.subheadline}
                 </p>
               </div>
 
@@ -172,9 +176,9 @@ export function ContractLandingClient({ token, copy }: { token: string; copy: Co
                       }`,
                     }}
                   >
-                    {headline.title.toUpperCase()}
+                    {sale.isReservation ? "VALORACIÓN" : headline.title.toUpperCase()}
                   </span>
-                  <span
+                  {!sale.isReservation && <span
                     className="inline-block px-2.5 py-1 rounded-md text-[10px] font-semibold"
                     style={{
                       background: "rgba(255, 212, 0, 0.1)",
@@ -183,7 +187,7 @@ export function ContractLandingClient({ token, copy }: { token: string; copy: Co
                     }}
                   >
                     {sale.durationMonths} MESES
-                  </span>
+                  </span>}
                 </div>
 
                 {/* Title + subtitle */}
@@ -191,21 +195,23 @@ export function ContractLandingClient({ token, copy }: { token: string; copy: Co
                   className="text-2xl sm:text-3xl font-bold mb-1 tracking-tight"
                   style={{ color: "#FAFAFA" }}
                 >
-                  {headline.title}
+                  {sale.isReservation ? "Tu señal" : headline.title}
                 </h2>
                 <p className="text-sm mb-6" style={{ color: "#A3A3A3" }}>
-                  {headline.subtitle}
+                  {sale.isReservation ? "Cuando se confirme el pago, podrás entrar en la app y ver los test que te asigne tu fisio. Si después contratas el programa, descontaremos esta señal del precio." : headline.subtitle}
                 </p>
 
                 {/* Lista beneficios */}
-                <ul className="space-y-2.5 mb-6">
+                {!sale.isReservation && <ul className="space-y-2.5 mb-6">
                   {headline.bullets.map((b, i) => (
                     <li key={i} className="flex items-start gap-2.5 text-sm" style={{ color: "#D4D4D4" }}>
                       <span style={{ color: "#FFD400" }}>✓</span>
                       <span>{b}</span>
                     </li>
                   ))}
-                </ul>
+                </ul>}
+
+                {!sale.isReservation && !!sale.depositCents && sale.grossAmountCents != null && <p className="mt-3 text-sm" style={{color:"#D4D4D4"}}>Precio del programa: {formatEuros(sale.grossAmountCents)} · Señal ya pagada: {formatEuros(sale.depositCents)} · Pendiente: {formatEuros(sale.amountCents)}</p>}
 
                 {/* Separador */}
                 <div
@@ -217,33 +223,36 @@ export function ContractLandingClient({ token, copy }: { token: string; copy: Co
                 <div className="flex items-baseline justify-between mb-6">
                   <div>
                     <p className="text-xs uppercase tracking-wider mb-1" style={{ color: "#737373" }}>
-                      Total
+                      {sale.isReservation ? "Señal a pagar ahora" : sale.depositCents ? "Saldo pendiente" : "Total"}
                     </p>
                     <p className="text-3xl font-bold tabular-nums" style={{ color: "#FAFAFA" }}>
                       {formatEuros(sale.amountCents)}
                     </p>
                   </div>
-                  <div className="text-right">
+                  {!sale.isReservation && <div className="text-right">
                     <p className="text-xs uppercase tracking-wider mb-1" style={{ color: "#737373" }}>
                       Duración
                     </p>
                     <p className="text-lg font-semibold tabular-nums" style={{ color: "#FAFAFA" }}>
                       {sale.durationMonths} meses
                     </p>
-                  </div>
+                  </div>}
                 </div>
 
                 {/* Botón pago (copy cambia si es suscripción de N cuotas) */}
                 {(() => {
                   const n = sale.installmentCount;
                   const isSub = typeof n === "number" && n >= 2;
-                  const perCycleCents = isSub ? Math.round(sale.amountCents / n) : sale.amountCents;
-                  const buttonLabel = isSub
-                    ? `Suscribirme por ${formatEuros(perCycleCents)}/mes (${n} meses) →`
+                  const terms=isSub?firstInstallments(sale.amountCents,n):null;
+                  const perCycleCents=sale.grossAmountCents!=null && terms?terms.regularCents:isSub?Math.round(sale.amountCents/n):sale.amountCents;
+                  const provider=sale.paymentProvider==="stripe"?"Stripe":"PayPal";
+                  const differences=sale.grossAmountCents!=null && !!terms?.remainderCents;
+                  const buttonLabel = sale.isReservation ? `Pagar señal de ${formatEuros(sale.amountCents)}` : isSub
+                    ? differences ? `Pagar la primera cuota de ${formatEuros(terms!.firstCents)} →` : `Suscribirme por ${formatEuros(perCycleCents)}/mes (${n} meses) →`
                     : `Pagar ${formatEuros(sale.amountCents)} →`;
                   const footerCopy = isSub
-                    ? `${n} cuotas mensuales vía PayPal · Total ${formatEuros(sale.amountCents)} · Pago seguro`
-                    : "PayPal, tarjeta o Paga en 3 plazos sin intereses · Pago seguro";
+                    ? `${differences ? "Primera cuota de "+formatEuros(terms!.firstCents)+" y "+(n-1)+" de "+formatEuros(perCycleCents) : n+" cuotas mensuales"} vía ${provider} · Total pendiente ${formatEuros(sale.amountCents)}`
+                    : `Pago seguro con ${provider}`;
                   return (
                     <>
                       <button
@@ -267,7 +276,7 @@ export function ContractLandingClient({ token, copy }: { token: string; copy: Co
               {/* Footer pequeño */}
               <div className="text-center">
                 <p className="text-[11px]" style={{ color: "#525252" }}>
-                  {copy.footer}
+                  {sale.isReservation ? "La contratación del programa se realiza por separado." : copy.footer}
                 </p>
               </div>
             </>

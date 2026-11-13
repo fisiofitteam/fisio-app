@@ -95,13 +95,20 @@ export async function recordInstallmentReceipt(
   }
   const db = database ?? (await import("./prisma")).prisma;
   const id = receiptTransactionId(input);
-  const type = input.contract.kind === "sale" ? "income_new" : "income_renewal";
   const marker = receiptMarker(input);
   const identity = `${RECEIPT_PREFIX}provider=${input.provider} receipt=${encodeURIComponent(input.receiptId)} `;
 
   return db.$transaction<ReceiptResult>(async (tx) => {
     // Cast the void result so Prisma's raw result decoder receives supported text.
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`ff-receipt:${input.provider}:${input.receiptId}`}))::text`;
+    // A checkout's provider identity is immutable; its business classification is independent.
+    let initialSale = input.contract.kind === "sale";
+    if (input.contract.kind === "renewal") {
+      const checkout = await tx.renewalCheckout.findUnique({ where: { id: input.contract.id }, select: { patientId: true, isInitialSale: true } });
+      if (!checkout || checkout.patientId !== input.contract.patientId) throw new Error("El contrato no pertenece al paciente del recibo.");
+      initialSale = checkout.isInitialSale;
+    }
+    const type = initialSale ? "income_new" : "income_renewal";
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`ff-installments:${input.contract.patientId}:${type}`}))::text`;
     const existing = await tx.transaction.findUnique({ where: { id } });
     if (existing) {
@@ -150,7 +157,7 @@ export async function recordInstallmentReceipt(
       return { status: "adopted", transactionId: original.id };
     }
     if (input.dryRun) return { status: "would-create", transactionId: id };
-    const label = input.contract.kind === "renewal" ? "Renovación" : "Pago vía";
+    const label = initialSale ? "Pago vía" : "Renovación";
     const created = await tx.transaction.upsert({
       where: { id },
       update: {},

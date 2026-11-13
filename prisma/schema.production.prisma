@@ -2558,6 +2558,14 @@ model Sale {
   // Proveedor elegido por el closer al generar el link: "paypal" (default)
   // o "stripe". La landing /contratar y los webhooks usan este campo para
   // enrutar el flujo. Sales antiguos sin este campo se leen como "paypal".
+  // First program bought from the reservation file, distinct from a renewal.
+  // amountCents is the amount still payable. Gross and the exact credited period are immutable.
+  grossAmountCents        Int?
+  depositAppliedCents     Int?
+  firstSaleReservationId  String?
+  initialPeriodId         String?
+  checkoutStartedAt       DateTime?
+
   paymentProvider         String   @default("paypal")
 
   // ─── Estado de la venta ─────────────────────────────────────────────────
@@ -2623,6 +2631,8 @@ model OnboardingConfig {
 // vinculado al Patient y con precio definido al vuelo. Al pagar, el webhook crea
 // el SubscriptionRenewal correspondiente.
 model RenewalCheckout {
+  // A legacy program signup may have been paid via a renewal link. Keep the provider identity intact.
+  isInitialSale Boolean @default(false)
   id            String   @id @default(cuid())
   patientId     String
   patient       Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)

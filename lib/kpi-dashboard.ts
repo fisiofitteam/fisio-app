@@ -1,3 +1,4 @@
+import { preparatoryStatuses } from "./program-period-kind";
 import { prisma } from "@/lib/prisma";
 import { computeBusinessMetrics, type BusinessMetrics } from "@/lib/business-metrics";
 import { activePatientCondition } from "@/lib/patient-active";
@@ -108,7 +109,7 @@ export async function getKpiDashboardData(
     }),
     prisma.patient.count({ where: { isTest: false, ...activePatientCondition() } }),
     prisma.subscriptionRenewal.findMany({
-      where: { patient: { isTest: false }, isReservation: false, status: { not: "cancelled" } },
+      where: { patient: { isTest: false }, isReservation: false, status: { notIn: ["cancelled", ...preparatoryStatuses] } },
       select: { patientId: true, startDate: true, endDate: true },
     }),
     prisma.transaction.findMany({

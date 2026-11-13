@@ -1,3 +1,4 @@
+import { assertReservationPayPalOrder } from "@/lib/reservation-receipt";
 import { prisma } from "@/lib/prisma";
 import { captureOrder, getOrder } from "@/lib/paypal/orders";
 import { activateSaleAsPatient } from "@/lib/paypal/activation";
@@ -67,7 +68,7 @@ async function capturePayPalIfPending(paymentToken: string, orderIdFromUrl: stri
   try {
     const sale = await prisma.sale.findUnique({
       where: { paymentToken },
-      select: { id: true, status: true, paypalOrderId: true, paypalCaptureId: true, paymentMethod: true, patientId: true },
+      select: { id: true, paymentToken:true, amountCents:true, currency:true, isReservation:true, grossAmountCents:true, status: true, paypalOrderId: true, paypalCaptureId: true, paymentMethod: true, patientId: true },
     });
     if (!sale) {
       console.log("[pagar/gracias] Sale no encontrado", { paymentToken: paymentToken.slice(0, 8) + "…" });
@@ -77,7 +78,10 @@ async function capturePayPalIfPending(paymentToken: string, orderIdFromUrl: stri
       console.log("[pagar/gracias] Sale ya activado", { saleId: sale.id });
       return;
     }
-    const orderId = orderIdFromUrl ?? sale.paypalOrderId;
+    const scoped = sale.isReservation || sale.grossAmountCents!=null;
+    if (scoped && sale.status!=="pending") return;
+    if (scoped && orderIdFromUrl && orderIdFromUrl!==sale.paypalOrderId) return;
+    const orderId = scoped ? sale.paypalOrderId : (orderIdFromUrl ?? sale.paypalOrderId);
     if (!orderId) {
       console.log("[pagar/gracias] Sale sin orderId, imposible capturar", { saleId: sale.id });
       return;
@@ -88,6 +92,7 @@ async function capturePayPalIfPending(paymentToken: string, orderIdFromUrl: stri
     let order = await getOrder(orderId);
     console.log("[pagar/gracias] Order status", { saleId: sale.id, orderId, status: order?.status });
 
+    if (scoped) assertReservationPayPalOrder(sale,order);
     if (order?.status === "APPROVED") {
       try {
         await captureOrder(orderId);
@@ -104,6 +109,7 @@ async function capturePayPalIfPending(paymentToken: string, orderIdFromUrl: stri
     }
 
     if (order?.status === "COMPLETED") {
+      if (scoped) assertReservationPayPalOrder(sale,order);
       const capture = order?.purchase_units?.[0]?.payments?.captures?.[0];
       const detectPayLater = JSON.stringify(capture ?? {}).toLowerCase().includes("pay_later")
         || JSON.stringify(capture ?? {}).toLowerCase().includes("paylater");

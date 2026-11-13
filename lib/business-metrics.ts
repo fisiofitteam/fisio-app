@@ -223,7 +223,7 @@ export async function computeBusinessMetrics(start: Date, end: Date): Promise<Bu
   // Pacientes activos = suscripción vigente (fin = inicio + meses contratados > hoy)
   // Excluimos pacientes fantasma (isTest) del conteo de negocio.
   const patients = await prisma.patient.findMany({
-    where: { isTest: false },
+    where: { isTest: false, onboardingStatus: { not: "reserved" } },
     select: { subscriptionStartDate: true, subscriptionTotalMonths: true },
   });
   const now = new Date();

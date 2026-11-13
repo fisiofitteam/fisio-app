@@ -14,6 +14,8 @@ type Status = {
   leadName?: string;
   leadEmail?: string;
   message?: string;
+  loginRequired?: boolean;
+  reservation?: boolean;
 };
 
 export function ThankYouClient({ token, sessionId }: { token: string; sessionId: string }) {
@@ -45,7 +47,7 @@ export function ThankYouClient({ token, sessionId }: { token: string; sessionId:
         const data = await res.json();
         if (cancelled) return;
         if (data.status === "paid" && data.leadName) {
-          setStatus({ phase: "ready", leadName: data.leadName, leadEmail: data.leadEmail });
+          setStatus({ phase: "ready", leadName: data.leadName, leadEmail: data.leadEmail,loginRequired:!!data.loginRequired,reservation:!!data.reservation });
           return;
         }
         if (attempts >= maxAttempts) {
@@ -127,6 +129,7 @@ export function ThankYouClient({ token, sessionId }: { token: string; sessionId:
         body: JSON.stringify({ password: passwordToSet || null }),
       });
       const data = await res.json();
+      if(data.loginRequired){ window.location.assign("/paciente/login"); return; }
       if (!res.ok) {
         setStatus((s) => ({ ...s, phase: "ready", message: data.error }));
         return;
@@ -212,24 +215,24 @@ export function ThankYouClient({ token, sessionId }: { token: string; sessionId:
                 style={{ background: "rgba(20, 20, 20, 0.85)", border: "1px solid #262626", backdropFilter: "blur(8px)" }}
               >
                 <p className="text-sm mb-4" style={{ color: "#D4D4D4" }}>
-                  Tu cuenta está lista. Entra a la app para empezar tu programa.
+                  {status.reservation ? "Tu plaza está reservada. Entra con tu correo para ver los tests que te asigne el equipo." : status.loginRequired ? "Tu programa ya está en tu ficha. Entra con tu acceso habitual." : "Tu cuenta está lista. Entra a la app para empezar tu programa."}
                 </p>
 
                 <button
-                  onClick={() => enterApp()}
+                  onClick={() => status.loginRequired ? window.location.assign("/paciente/login") : enterApp()}
                   className="w-full py-3.5 rounded-xl text-sm font-semibold tracking-tight transition-all hover:opacity-90"
                   style={{ background: "#FFD400", color: "#0A0A0A" }}
                 >
                   Entrar a la app →
                 </button>
 
-                <button
+                {!status.loginRequired && <button
                   onClick={() => setSetPasswordOpen(true)}
                   className="w-full mt-3 py-2.5 rounded-xl text-xs font-medium tracking-tight transition-all hover:bg-neutral-800"
                   style={{ background: "transparent", color: "#A3A3A3", border: "1px solid #404040" }}
                 >
                   Crear contraseña antes de entrar (opcional)
-                </button>
+                </button>}
               </div>
 
               <p className="text-[11px] text-center" style={{ color: "#525252" }}>

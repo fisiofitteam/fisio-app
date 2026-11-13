@@ -1,4 +1,6 @@
+import { isReservedPatient } from "@/lib/reserved-patients";
 import { NextRequest, NextResponse } from "next/server";
+import { preparatoryStatuses } from "@/lib/program-period-kind";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 
@@ -85,6 +87,10 @@ export async function POST(req: NextRequest) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
+  if (await isReservedPatient(prisma, patientId)) {
+    return NextResponse.json({ error: "Este paciente está en reserva. Utiliza «Vender programa» para su primera alta." }, {status:409});
+  }
+
   // Buscar periodo activo
   const activePeriod = await prisma.subscriptionRenewal.findFirst({
     where: { patientId, status: "active" },
@@ -167,7 +173,7 @@ export async function POST(req: NextRequest) {
 
   // Recalcular subscriptionTotalMonths = suma de todos los periodos
   const all = await prisma.subscriptionRenewal.findMany({
-    where: { patientId },
+    where: { patientId, status: { notIn: preparatoryStatuses } },
     select: { periodMonths: true },
   });
   const total = all.reduce((sum, r) => sum + (r.periodMonths || 0), 0);
@@ -211,6 +217,7 @@ export async function PATCH(req: NextRequest) {
 
   const allowed = await canEditPatientSubscription(user, current.patientId);
   if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (preparatoryStatuses.includes(current.status)) return NextResponse.json({ error: "Este registro previo al programa se conserva en el historial y no es un periodo de suscripción editable." }, { status: 409 });
 
   // Si solo cambian meses sin tocar endDate, recalcular endDate
   let computedEndDate: Date | undefined;
@@ -237,7 +244,7 @@ export async function PATCH(req: NextRequest) {
 
   // Recalcular subscriptionTotalMonths y sincronizar paciente
   const all = await prisma.subscriptionRenewal.findMany({
-    where: { patientId: current.patientId },
+    where: { patientId: current.patientId, status: { notIn: preparatoryStatuses } },
   });
   const total = all.reduce((sum, r) => sum + (r.periodMonths || 0), 0);
   const active = all.find((r) => r.status === "active");
@@ -271,12 +278,13 @@ export async function DELETE(req: NextRequest) {
 
   const allowed = await canEditPatientSubscription(user, current.patientId);
   if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (preparatoryStatuses.includes(current.status)) return NextResponse.json({ error: "Este registro previo al programa se conserva en el historial y no es un periodo de suscripción editable." }, { status: 409 });
 
   await prisma.subscriptionRenewal.delete({ where: { id } });
 
   // Recalcular subscriptionTotalMonths del paciente
   const all = await prisma.subscriptionRenewal.findMany({
-    where: { patientId: current.patientId },
+    where: { patientId: current.patientId, status: { notIn: preparatoryStatuses } },
   });
   const total = all.reduce((sum, r) => sum + (r.periodMonths || 0), 0);
   const active = all.find((r) => r.status === "active");

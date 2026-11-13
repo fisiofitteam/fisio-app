@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const ts = require('typescript');
 
-function setup({ reservation = true, claimFails = false, createFails = false } = {}) {
+function setup({ reservation = true, claimFails = false, createFails = false, reserved = false } = {}) {
   const state = {
     reservations: reservation ? [{ id: 'exact-deposit', patientId: 'patient', isReservation: true,
       amountPaid: 100, reservationConsumedAt: null, decidedAt: new Date('2026-09-01T12:00:00Z') }] : [],
@@ -54,6 +54,7 @@ function setup({ reservation = true, claimFails = false, createFails = false } =
   const modules = {
     'next/server': { NextResponse: { json: (body, options) => ({ body, status: options?.status ?? 200 }) } },
     '@/lib/prisma': { prisma },
+    '@/lib/reserved-patients': { isReservedPatient: async () => reserved },
     '@/lib/session': { getActiveProfessional: async () => ({ id: 'coach' }) },
     '@/lib/stripe': { generatePaymentToken: () => 'unchanged-opaque-token' },
   };
@@ -122,5 +123,12 @@ function setup({ reservation = true, claimFails = false, createFails = false } =
     assert.equal(s.state.reservations[0].reservationConsumedAt, null);
     assert.deepEqual(s.events, ['select']);
   }
-  console.log('6 renewal-link tests passed: gross/net snapshot, no deposit, reservation-only, claim race, rollback, invalid balance.');
+  {
+    const s = setup({ reserved: true });
+    const refused = await s.post();
+    assert.equal(refused.status, 409);
+    assert.equal(s.state.checkouts.length, 0);
+    assert.equal(s.state.reservations[0].reservationConsumedAt, null);
+  }
+  console.log('7 renewal-link tests passed: gross/net snapshot, no deposit, reservation-only, claim race, rollback, invalid balance.');
 })().catch((error) => { console.error(error); process.exitCode = 1; });

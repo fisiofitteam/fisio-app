@@ -14,7 +14,9 @@
  * El precio se consulta a Stripe API en vivo (no se hardcodea en código).
  */
 import { NextRequest, NextResponse } from "next/server";
+import { isReservedPatient } from "@/lib/reserved-patients";
 import { prisma } from "@/lib/prisma";
+import { canOperateReservation, createReservationSaleLink, ReservationConflict } from "@/lib/initial-reservation";
 import { getActiveProfessional } from "@/lib/session";
 import {
   stripe,
@@ -31,9 +33,6 @@ const TOKEN_VALIDITY_DAYS = 3;
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  if (user.role !== "ceo" && user.role !== "closer") {
-    return NextResponse.json({ error: "Solo CEO o closer pueden generar links de pago" }, { status: 403 });
-  }
 
   if (!stripe) {
     return NextResponse.json({ error: "Stripe no está configurado" }, { status: 503 });
@@ -58,9 +57,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // 1. Buscar lead
   const lead = await prisma.lead.findUnique({ where: { id: params.id } });
   if (!lead) return NextResponse.json({ error: "Lead no encontrado" }, { status: 404 });
+  if (!canOperateReservation(user, lead.closerId)) return NextResponse.json({error:"Lead no disponible."},{status:403});
   // Bloqueamos solo si el lead está marcado como "perdido". En cualquier otro
   // estado (scheduled, won, etc) se puede generar el link — el webhook marcará
   // el Lead como "won" automáticamente al confirmarse el pago.
+  if (!isReservation && lead.convertedPatientId && await isReservedPatient(prisma,lead.convertedPatientId)) {
+    return NextResponse.json({error:"Vende el primer programa desde la ficha de reserva para aplicar la señal y conservar sus tests."},{status:409});
+  }
   if (lead.status === "lost") {
     return NextResponse.json(
       { error: 'Este lead está marcado como "Perdido". Cámbialo de estado antes de generar el link.' },
@@ -77,6 +80,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     },
   });
   if (existingPending) {
+    if (existingPending.isReservation !== isReservation) return NextResponse.json({
+      error: "Ya hay un enlace de otro tipo para este lead. Comprueba si es una señal o un programa antes de continuar.",
+    }, { status: 409 });
     return NextResponse.json(
       {
         error: "Ya hay un link activo para este lead",
@@ -101,6 +107,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const customEuros = Number(body?.amountEuros);
   let amountCents: number;
   let currency = "eur";
+  if (isReservation && (!Number.isFinite(customEuros) || customEuros < 1 || customEuros > 99999 || Math.abs(customEuros * 100 - Math.round(customEuros * 100)) > 0.000001)) {
+    return NextResponse.json({error:"Indica el importe de la señal, entre 1 y 99.999 €, con hasta dos decimales."},{status:400});
+  }
 
   if (Number.isFinite(customEuros) && customEuros > 0) {
     if (customEuros < 1 || customEuros > 99999) {
@@ -145,8 +154,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // installmentCount=null si viene isReservation=true.
   const finalInstallmentCount = isReservation ? null : installmentCount;
 
-  const sale = await prisma.sale.create({
-    data: {
+  const saleData = {
       leadId: lead.id,
       closerId: user.id,
       productCode,
@@ -161,8 +169,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       installmentCount: finalInstallmentCount,
       isReservation,
       paymentProvider,
-    } as any, // as any por si el cliente Prisma aún no incluye isReservation/paymentProvider (self-migration)
-  });
+  };
+  let sale;
+  try {
+    sale = isReservation ? await createReservationSaleLink(saleData,user) : await prisma.sale.create({data:saleData});
+  } catch(e) {
+    if(e instanceof ReservationConflict)return NextResponse.json({error:e.message},{status:e.status});
+    throw e;
+  }
 
   return NextResponse.json({
     ok: true,

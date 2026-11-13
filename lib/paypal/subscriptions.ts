@@ -77,6 +77,7 @@ export async function ensureProductId(): Promise<string> {
 // ─── Plan ─────────────────────────────────────────────────────────────────
 
 export type CreatePlanInput = {
+  exactTotal?: boolean;
   /** Idempotencia. Usa saleId. */
   requestId: string;
   /** Nombre visible en el checkout (max 127). */
@@ -106,19 +107,23 @@ export async function createPlan(input: CreatePlanInput): Promise<{
   // acumulado) es aceptable y PayPal lo tolera.
   const perCycle = Math.round((input.totalAmountEur * 100) / input.totalCycles) / 100;
 
+  const cents=Math.round(input.totalAmountEur*100),base=Math.floor(cents/input.totalCycles);
+  const extra=input.exactTotal?cents-base*input.totalCycles:0;
+  const regular=input.exactTotal?base/100:perCycle;
   const body: any = {
     product_id: productId,
     name: input.name.slice(0, 127),
     status: "ACTIVE",
     billing_cycles: [
+      ...(extra ? [{frequency:{interval_unit:"MONTH",interval_count:1},tenure_type:"TRIAL",sequence:1,total_cycles:1,pricing_scheme:{fixed_price:{value:((base+extra)/100).toFixed(2),currency_code:"EUR"}}}] : []),
       {
         frequency: { interval_unit: "MONTH", interval_count: 1 },
         tenure_type: "REGULAR",
-        sequence: 1,
-        total_cycles: input.totalCycles,
+        sequence: extra?2:1,
+        total_cycles: input.totalCycles-(extra?1:0),
         pricing_scheme: {
           fixed_price: {
-            value: perCycle.toFixed(2),
+            value: regular.toFixed(2),
             currency_code: "EUR",
           },
         },

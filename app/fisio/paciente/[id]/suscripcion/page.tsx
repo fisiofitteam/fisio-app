@@ -1,4 +1,7 @@
+import { isReservedPatient } from "@/lib/reserved-patients";
+import { ReservedFirstSale } from "@/components/ReservedFirstSale";
 import { notFound } from "next/navigation";
+import { programPeriodWhere } from "@/lib/program-period-kind";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 import { SubscriptionView } from "@/components/SubscriptionView";
@@ -26,6 +29,7 @@ export default async function PatientSuscripcionTab({ params }: { params: { id: 
     },
   });
   if (!patient) notFound();
+  if (await isReservedPatient(prisma, patient.id)) return <ReservedFirstSale patientId={patient.id} />;
 
   // Buscar el Sale (compra de Stripe) más reciente vinculado a este Patient.
   // Puede no existir si el paciente fue creado manualmente antes de v57.
@@ -55,7 +59,7 @@ export default async function PatientSuscripcionTab({ params }: { params: { id: 
 
   // Métricas (solo se muestran al CEO en SubscriptionView, las calculamos siempre por simplicidad)
   const renewals = await prisma.subscriptionRenewal.findMany({
-    where: { patientId: patient.id },
+    where: { patientId: patient.id, ...programPeriodWhere },
     select: { periodMonths: true, amountPaid: true, startDate: true, endDate: true },
   });
 
@@ -80,7 +84,7 @@ export default async function PatientSuscripcionTab({ params }: { params: { id: 
       select: { startDate: true, endDate: true, periodMonths: true, programType: true },
     })) ||
     (await prisma.subscriptionRenewal.findFirst({
-      where: { patientId: patient.id },
+      where: { patientId: patient.id, ...programPeriodWhere },
       orderBy: { startDate: "desc" },
       select: { startDate: true, endDate: true, periodMonths: true, programType: true },
     }));
