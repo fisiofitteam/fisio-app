@@ -15,6 +15,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "node:crypto";
+import { hasRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 
@@ -26,13 +27,15 @@ function makeToken(): string {
 export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
   const user = await getActiveProfessional();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  if (!["ceo", "closer", "setter"].includes(user.role)) {
+  const teamAccess = user.role === "ceo" || user.role === "setter";
+  if (!teamAccess && !hasRole(user, "closer")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const scope = teamAccess ? { id: params.id } : { id: params.id, closerId: user.id };
   const lead = await prisma.lead.findUnique({
-    where: { id: params.id },
-    select: { id: true, status: true, rescheduleToken: true },
+    where: scope,
+    select: { status: true, rescheduleToken: true },
   });
   if (!lead) return NextResponse.json({ error: "Lead no encontrado" }, { status: 404 });
 
@@ -45,11 +48,22 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
 
   let token = lead.rescheduleToken;
   if (!token) {
-    token = makeToken();
-    await prisma.lead.update({
-      where: { id: lead.id },
-      data: { rescheduleToken: token, rescheduleTokenAt: new Date() },
+    const candidate = makeToken();
+    const scheduled = { ...scope, status: "scheduled" };
+    const saved = await prisma.lead.updateMany({
+      where: { ...scheduled, rescheduleToken: null },
+      data: { rescheduleToken: candidate, rescheduleTokenAt: new Date() },
     });
+    if (saved.count) {
+      token = candidate;
+    } else {
+      // Otra petición puede haber generado ya el enlace o cambiado la asignación.
+      const current = await prisma.lead.findUnique({ where: scheduled, select: { rescheduleToken: true } });
+      if (!current?.rescheduleToken) {
+        return NextResponse.json({ error: "La llamada ya no está disponible para reagendar." }, { status: 409 });
+      }
+      token = current.rescheduleToken;
+    }
   }
 
   // Construimos URL absoluta. Si NEXT_PUBLIC_APP_URL no está, caemos al host
