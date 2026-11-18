@@ -35,9 +35,9 @@ export async function requirePilotAccess(sessionId: string, professionalOnly = f
   if (professionalOnly && actor.kind !== "professional") throw new PilotHttpError(403,"Acceso reservado al equipo clínico.");
   const session = await prisma.programSession.findUnique({where:{id:sessionId}, select:{
     id:true,assignmentId:true,scheduledDate:true,weekNumber:true,tasksSnapshot:true,
-    assignment:{select:{id:true,programId:true,patientId:true,patient:{select:{fullName:true,isTest:true}}}}
+    assignment:{select:{id:true,programId:true,patientId:true,patient:{select:{fullName:true}}}}
   }});
-  if (!session?.assignment.patient.isTest || session.assignment.programId !== PILOT_PROGRAM_ID || ![1,14].includes(session.weekNumber)) throw unavailable();
+  if (!session || session.assignment.programId !== PILOT_PROGRAM_ID || ![1,14].includes(session.weekNumber)) throw unavailable();
   if (actor.kind === "patient" ? actor.patient.id !== session.assignment.patientId :
         !await canAccessEvidencePatient(session.assignment.patientId,actor.pro)) throw unavailable();
   const refs=pilotSnapshotRefs(session.tasksSnapshot);
@@ -54,7 +54,7 @@ type Access = Awaited<ReturnType<typeof requirePilotAccess>>;
 type ReadDb = Pick<Prisma.TransactionClient,"assessmentVideo">;
 async function media(db:ReadDb, sessionId:string, patientId:string, refs:Map<string,string>, preference:Pick<ShoulderPilotReview,"aiConsent"|"aiConsentAt">|null) {
   const rows=await db.assessmentVideo.findMany({where:{sessionId, patientId,uploadedAt:{not:null},url:{not:null}},select:{id:true,sessionId:true,testId:true,taskId:true,uploadedAt:true,url:true}});
-  return rows.filter(r=>refs.get(r.testId)===r.taskId).map(({url,...r})=>({...r,aiReviewBlocked:!canUseShoulderVideo(preference,r.id,url),uploadedAt:r.uploadedAt!.toISOString(),url:"/api/assessments/media?id="+encodeURIComponent(r.id)+"&v="+r.uploadedAt!.getTime()}));
+  return rows.filter(r=>refs.get(r.testId)===r.taskId).map(({url,...r})=>({...r,aiReviewBlocked:!canUseShoulderVideo(preference,r.id,url,{allowAssignedLegacy:true}),uploadedAt:r.uploadedAt!.toISOString(),url:"/api/assessments/media?id="+encodeURIComponent(r.id)+"&v="+r.uploadedAt!.getTime()}));
 }
 const sourceMap=(videos:Awaited<ReturnType<typeof media>>): Record<string,string> =>
   Object.fromEntries(videos.map(v=>[v.testId,v.id+"@"+v.uploadedAt]));

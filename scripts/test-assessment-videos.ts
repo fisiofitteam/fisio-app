@@ -129,18 +129,23 @@ async function main() {
     assert.equal(stream.headers.get("content-range"), "bytes 0-9/100");
     assert.equal(await stream.text(), "0123456789");
   } finally { globalThis.fetch = originalFetch; }
-  // Genuine new-flow uploads are eligible; other programs, real patients, and old clients
-  // keep the original path and cannot become eligible on the strength of the request flag.
+  // Complete shoulder-battery uploads are marked for both real and test patients.
+  // Other programs and old clients cannot mint the marker from the request flag alone.
   row=null;actor={kind:"patient",patient:{id:"p1"}};
   session.tasksSnapshot=JSON.stringify([{...task,assessment:{...assessment,tests:PILOT_TESTS.map(t=>({...assessment.tests[0],id:t.id,name:t.name}))}}]);
   for(const [programId,isTest,flow,expected] of [
-    ["other",true,SHOULDER_UPLOAD_FLOW,false],[PILOT_PROGRAM_ID,false,SHOULDER_UPLOAD_FLOW,false],
+    ["other",true,SHOULDER_UPLOAD_FLOW,false],[PILOT_PROGRAM_ID,false,SHOULDER_UPLOAD_FLOW,true],
     [PILOT_PROGRAM_ID,true,undefined,false],[PILOT_PROGRAM_ID,true,SHOULDER_UPLOAD_FLOW,true],
   ] as const){
     session.assignment.programId=programId;session.assignment.patient.isTest=isTest;
     const prepared=await api.POST(req({...payload,testId:HOLD_PVC,uploadFlow:flow}));assert.equal(prepared.status,200);
     const {pathname,id}=await prepared.json();
     assert.equal(canUseShoulderVideo(null,id,"https://test.private.blob.vercel-storage.com/"+pathname),expected);
+    if(programId===PILOT_PROGRAM_ID && !flow){
+      const legacyUrl="https://test.private.blob.vercel-storage.com/"+pathname;
+      assert.equal(canUseShoulderVideo(null,id,legacyUrl,{allowAssignedLegacy:true}),true,"bound existing shoulder delivery is reusable without changing its path");
+      assert.equal(canUseShoulderVideo({aiConsent:false,aiConsentAt:new Date()},id,legacyUrl,{allowAssignedLegacy:true}),false,"explicit withdrawal is preserved");
+    }
   }
   console.log("PASS: assigned-test-only upload, patient isolation, 1GB boundary, MIME validation, verified completion, replacement, stale review, review lock and self-prescription denied.");
 }

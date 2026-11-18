@@ -22,7 +22,9 @@ async function checked(a:Awaited<ReturnType<typeof requirePilotAccess>>,v:{video
   if(!item||item.patientId!==a.session.assignment.patientId||item.sessionId!==a.session.id||
       item.testId!==v.testId||item.taskId!==a.refs.get(v.testId)||!item.url)throw new VideoError(404,"Entrega no disponible.");
   if(!item.uploadedAt||item.uploadedAt.toISOString()!==v.uploadedAt)throw new VideoError(409,"El vídeo ha cambiado. Recarga la revisión.");
-  if(!canUseShoulderVideo(a.row,v.videoId,item.url))throw new VideoError(409,"Este vídeo se conserva para revisión manual.");
+  // Access and immutable patient/session/task/test/version bindings above also cover
+  // recordings submitted through the original assessment uploader before rollout.
+  if(!canUseShoulderVideo(a.row,v.videoId,item.url,{allowAssignedLegacy:true}))throw new VideoError(409,"Este vídeo se conserva para revisión manual.");
   if(!configuredProvider())throw new VideoError(503,"Proveedor IA no configurado. La revisión manual sigue disponible.");
 }
 export async function GET(req:NextRequest,{params}:RouteCtx){

@@ -140,7 +140,7 @@ export default async function PatientWeekPage({
           </p>
         </header>
 
-        {patient.isTest && <PatientShoulderHistory patientId={patient.id} />}
+        <PatientShoulderHistory patientId={patient.id} />
 
         {/* Selector de semana. "Siguiente" solo aparece desde el viernes,
             antes no tiene mucho sentido programación. */}
@@ -257,7 +257,7 @@ function DayCard({
       ) : (
         <div className="space-y-2">
           {daySessions.map((s) => {
-            const tasks = patientDisplayedTasks(s.assignment.patient.isTest, s.assignment.programId,s.weekNumber,s.tasksSnapshot);
+            const tasks = patientDisplayedTasks(s.assignment.programId,s.weekNumber,s.tasksSnapshot);
             const idx = assignmentIndex.get(s.assignmentId) ?? 0;
             const c = colorForSession({
               tasksSnapshot: s.tasksSnapshot,
