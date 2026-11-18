@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 const SECTIONS = [
   { id: "calendario", label: "Calendario", icon: "📅", desc: "Programas asignados y vista mensual" },
   { id: "cargas", label: "Control de cargas", icon: "🏋️", desc: "Adaptaciones por movimiento" },
-  { id: "info", label: "Evolución e historial", icon: "📋", desc: "Ficha, evolución, historial, formularios, WODs y éxitos" },
+  { id: "info", label: "Evolución e historial", icon: "📋", desc: "Ficha, valoraciones, evolución, historial, formularios, WODs y éxitos" },
   { id: "suscripcion", label: "Suscripción", icon: "💳", desc: "Pago, programa, pausas" },
 ];
 

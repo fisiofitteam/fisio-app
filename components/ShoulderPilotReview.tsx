@@ -70,7 +70,7 @@ function ReviewSession({sessionId}:{sessionId:string}) {
     if(card){card.open=true;card.querySelector("summary")?.focus();card.scrollIntoView({block:"start"});}
   }
   return <main className="space-y-4 max-w-4xl">
-    <Link href={"/fisio/paciente/"+data.patientId+"/info/evolucion"} className="text-sm text-neutral-600 hover:underline" onClick={e=>{if(dirty&&!window.confirm("¿Salir sin guardar los cambios del borrador?"))e.preventDefault();}}>← Evolución de {data.patientName}</Link>
+    <Link href={"/fisio/paciente/"+data.patientId+"/info/valoraciones"} className="text-sm text-neutral-600 hover:underline" onClick={e=>{if(dirty&&!window.confirm("¿Salir sin guardar los cambios del borrador?"))e.preventDefault();}}>← Valoraciones de {data.patientName}</Link>
     <header className="card space-y-2"><p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">Perfil de hombro · {date}</p><h1 className="font-bold text-2xl">{data.weekNumber===14?"Revaloración · semana 14":"Valoración inicial · semana 1"}</h1>
       <p className="text-sm">{data.patientName} · {received}/{PILOT_TESTS.length} vídeos recibidos · {done}/{PILOT_TESTS.length} tests revisados</p>
       <p className="text-sm text-neutral-600">{data.published?"El paciente ve la última versión publicada. Para compartir correcciones, guarda y vuelve a publicar.":"Este borrador es privado. El atleta verá el perfil cuando lo publiques."}</p>
