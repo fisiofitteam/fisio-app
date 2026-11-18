@@ -1,4 +1,3 @@
-import { PatientAssessments } from "@/components/PatientAssessments";
 import { canAccessEvidencePatient } from "@/lib/patient-evidence";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -26,7 +25,6 @@ export default async function PatientEvolucionTab({ params }: { params: { id: st
 
   return (
     <div className="space-y-4">
-      <PatientAssessments patientId={params.id} />
       <CoachDailyLogPanel
         entries={dailyLogs.map((e: any) => ({
           recordedDate: e.recordedDate.toISOString(),
