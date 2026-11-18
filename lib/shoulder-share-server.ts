@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { PilotHttpError, requirePilotAccess } from "@/lib/shoulder-pilot-server";
 import { PILOT_PROGRAM_ID } from "./shoulder-pilot";
+import { matchesPilotSnapshot } from "./shoulder-pilot-snapshot";
 import { publicShoulderSnapshot,type SharedShoulderReports } from "./shoulder-shared-snapshot";
 
 type Access=Awaited<ReturnType<typeof requirePilotAccess>>;
@@ -71,13 +72,14 @@ export async function revokeShoulderShare(sessionId:string){
 }
 export async function getSharedShoulderReports(token:string):Promise<SharedShoulderReports|null>{
  if(!/^[A-Za-z0-9_-]{43}$/.test(token))return null;
- // No draft, user identity, session, asset URL or clinical history is selected for a visitor.
- const rows=await prisma.$queryRaw<{reportJson:string}[]>`SELECT sh."reportJson" FROM "ShoulderReportShare" sh
+ // Only the published report is returned to the visitor. The source snapshot is used
+ // server-side solely to confirm that this is still the complete assigned battery.
+ const rows=await prisma.$queryRaw<{reportJson:string;tasksSnapshot:string}[]>`SELECT sh."reportJson",s."tasksSnapshot" FROM "ShoulderReportShare" sh
  JOIN "ProgramSession" s ON s."id"=sh."sessionId" AND s."assignmentId"=sh."assignmentId"
  JOIN "ProgramAssignment" a ON a."id"=s."assignmentId" AND a."patientId"=sh."patientId"
  JOIN "Patient" p ON p."id"=a."patientId"
- WHERE sh."tokenHash"=${digest(token)} AND sh."expiresAt"> CAST(${utc(new Date())} AS timestamp) AND p."isTest"=true AND a."programId"=${PILOT_PROGRAM_ID} AND s."weekNumber" IN (1,14) LIMIT 1`;
- if(!rows.length)return null;
+ WHERE sh."tokenHash"=${digest(token)} AND sh."expiresAt"> CAST(${utc(new Date())} AS timestamp) AND a."programId"=${PILOT_PROGRAM_ID} AND s."weekNumber" IN (1,14) LIMIT 1`;
+ if(!rows.length||!matchesPilotSnapshot(rows[0].tasksSnapshot))return null;
  const payload=JSON.parse(rows[0].reportJson);
  return {report:publicShoulderSnapshot(payload.report),previous:payload.previous?publicShoulderSnapshot(payload.previous):null};
 }

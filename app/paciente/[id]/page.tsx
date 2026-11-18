@@ -646,8 +646,8 @@ export default async function PatientHome({ params }: { params: { id: string } }
         id: s.id,
         programName: s.assignment.program.name,
         completed: s.completedAt !== null,
-        tasksCount: patientDisplayedTasks(patient.isTest, s.assignment.programId, s.weekNumber, s.tasksSnapshot).length,
-        pilotTitle: patientShoulderWeek(patient.isTest, s.assignment.programId,s.weekNumber,s.tasksSnapshot) ? patientShoulderTitle(s.weekNumber) : undefined,
+        tasksCount: patientDisplayedTasks(s.assignment.programId, s.weekNumber, s.tasksSnapshot).length,
+        pilotTitle: patientShoulderWeek(s.assignment.programId,s.weekNumber,s.tasksSnapshot) ? patientShoulderTitle(s.weekNumber) : undefined,
         tasksSnapshot: s.tasksSnapshot,
         assignmentId: s.assignmentId,
       }))}
@@ -657,8 +657,8 @@ export default async function PatientHome({ params }: { params: { id: string } }
               id: nextSession.id,
               date: nextSession.scheduledDate.toISOString(),
               programName: nextSession.assignment.program.name,
-              tasksCount: patientDisplayedTasks(patient.isTest, nextSession.assignment.programId,nextSession.weekNumber,nextSession.tasksSnapshot).length,
-              pilotTitle: patientShoulderWeek(patient.isTest, nextSession.assignment.programId,nextSession.weekNumber,nextSession.tasksSnapshot) ? patientShoulderTitle(nextSession.weekNumber) : undefined,
+              tasksCount: patientDisplayedTasks(nextSession.assignment.programId,nextSession.weekNumber,nextSession.tasksSnapshot).length,
+              pilotTitle: patientShoulderWeek(nextSession.assignment.programId,nextSession.weekNumber,nextSession.tasksSnapshot) ? patientShoulderTitle(nextSession.weekNumber) : undefined,
               tasksSnapshot: nextSession.tasksSnapshot,
               assignmentId: nextSession.assignmentId,
             }

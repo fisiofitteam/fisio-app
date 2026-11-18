@@ -21,7 +21,7 @@ export default async function PatientSessionPage({
   if (!session) notFound();
   if (session.assignment.patientId !== params.id) notFound();
 
-  const pilotWeek = patientShoulderWeek(session.assignment.patient.isTest, session.assignment.programId, session.weekNumber, session.tasksSnapshot);
+  const pilotWeek = patientShoulderWeek(session.assignment.programId, session.weekNumber, session.tasksSnapshot);
   const date = new Date(session.scheduledDate);
   const dow = date.getDay() === 0 ? 7 : date.getDay();
   const tasks = parseAndSortTasksSnapshot(session.tasksSnapshot);

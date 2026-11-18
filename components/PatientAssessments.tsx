@@ -37,7 +37,7 @@ export async function PatientAssessments({ patientId }: { patientId: string }) {
     id: true, weekNumber: true, scheduledDate: true, tasksSnapshot: true,
     completedAt: true, patientNotes: true,
     assessmentVideos: { where: { url: { not: null } }, select: { id: true }, take: 1 },
-    assignment: { select: { programId: true, patient: { select: { isTest: true } } } },
+    assignment: { select: { programId: true } },
   } as const;
   // Future blank retests have their own limit and cannot displace received history.
   const [historySessions, futureSessions, videos] = await Promise.all([
@@ -48,7 +48,7 @@ export async function PatientAssessments({ patientId }: { patientId: string }) {
   const groups: AssessmentGroup[] = [];
   const included = new Set<string>();
   for (const s of [...historySessions, ...futureSessions]) {
-    const refs = s.assignment.patient.isTest && s.assignment.programId === PILOT_PROGRAM_ID && [1, 14].includes(s.weekNumber)
+    const refs = s.assignment.programId === PILOT_PROGRAM_ID && [1, 14].includes(s.weekNumber)
       ? pilotSnapshotRefs(s.tasksSnapshot) : null;
     const knownShoulderWeek = s.assignment.programId === PILOT_PROGRAM_ID && [1, 14].includes(s.weekNumber);
     const sessionInfo = {
@@ -90,18 +90,15 @@ export async function PatientAssessments({ patientId }: { patientId: string }) {
     const showSessionInfo = !!g.sessionId && !shownSessionInfo.has(g.sessionId);
     if (g.sessionId) shownSessionInfo.add(g.sessionId);
     return <section key={g.key} className="space-y-2">
-      {showSessionInfo && <div className="rounded-xl bg-neutral-50 p-3 space-y-1">
+      {showSessionInfo && <div className="rounded-xl border border-neutral-200 bg-white p-4 space-y-2">
         <h3 className="text-sm font-semibold">{g.sessionTitle}</h3>
         <p className="text-xs text-neutral-600">Prevista para el {dateLabel(g.date)}{g.completedAt && <> · Completada el {dateLabel(g.completedAt)}</>}</p>
+        {g.pilotSessionId && <p className="text-sm text-neutral-600">{g.tests.filter(t => t.row?.url).length}/{g.tests.length} vídeos recibidos</p>}
         {g.patientNotes && <div className="rounded-lg bg-blue-50 p-3 text-sm text-blue-950">
           <p className="font-semibold">Sensaciones del paciente</p>
           <p className="whitespace-pre-wrap">{g.patientNotes}</p>
         </div>}
-      </div>}
-      {g.pilotSessionId && <div className="rounded-xl border border-neutral-200 bg-white p-4 space-y-1">
-        <h3 className="font-semibold">{g.title}</h3>
-        <p className="text-sm text-neutral-600">{dateLabel(g.date)} · {g.tests.filter(t => t.row?.url).length}/{g.tests.length} vídeos</p>
-        <Link className="btn btn-accent inline-block mt-2" href={"/fisio/valoraciones/" + g.pilotSessionId}>Abrir revisión y perfil</Link>
+        {g.pilotSessionId && <Link className="btn btn-accent inline-block mt-2" href={"/fisio/valoraciones/" + g.pilotSessionId}>Abrir revisión y perfil</Link>}
       </div>}
       <details className="rounded-xl border border-neutral-200 bg-white p-4">
         <summary className="cursor-pointer text-sm font-semibold">

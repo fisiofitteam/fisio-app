@@ -25,16 +25,17 @@ const req=()=>({url:"https://unit.example/api/shoulder-pilot/session/analyze",ne
 const ctx={params:{sessionId:"session"}};
 (async()=>{
   // New flow works without writing a consent row; a prior positive choice still covers old revisions.
-  for(const mode of ["new","new-default","prior-optin"]){
+  for(const mode of ["new","new-default","prior-optin","assigned-legacy","assigned-legacy-default"]){
     reset();if(mode==="new-default")row={aiConsent:false,aiConsentAt:null};
     if(mode==="prior-optin"){video.url=oldUrl;row={aiConsent:true,aiConsentAt:date};}
+    if(mode.startsWith("assigned-legacy")){video.url=oldUrl;if(mode.endsWith("default"))row={aiConsent:false,aiConsentAt:null};}
     assert.equal((await api.GET(req(),ctx)).data.available,true);
     const ok=await api.POST(req(),ctx);assert.equal(ok.status,200);assert.equal(sends,1);assert(ok.data.draft);assert(ok.headers["Cache-Control"].includes("no-store"));
   }
-  for(const [mutate,expected] of [[()=>actorAllowed=false,403],[()=>row=withdrawn,409],[()=>video.patientId="other",404],[()=>video.sessionId="other",404],[()=>video.taskId="other",404],[()=>video.testId="other",404],[()=>video.url=null,404],[()=>body.uploadedAt="stale",409],[()=>enabled=false,503],[()=>video.url=oldUrl,409],[()=>video.url=newUrl.replace("/v/","/other/"),409],[()=>video.url=newUrl.replace("test.private.blob.vercel-storage.com","external.example"),409],[()=>video.url=oldUrl+"?path="+newUrl,409],[()=>afterCheck=n=>{if(n===2)row=withdrawn},409]]){
+  for(const [mutate,expected] of [[()=>actorAllowed=false,403],[()=>row=withdrawn,409],[()=>video.patientId="other",404],[()=>video.sessionId="other",404],[()=>video.taskId="other",404],[()=>video.testId="other",404],[()=>video.url=null,404],[()=>body.uploadedAt="stale",409],[()=>enabled=false,503],[()=>{video.url=oldUrl;row=withdrawn},409],[()=>video.url=newUrl.replace("/v/","/other/"),409],[()=>video.url=newUrl.replace("test.private.blob.vercel-storage.com","external.example"),409],[()=>video.url=oldUrl+"?path="+newUrl,409],[()=>video.url=oldUrl.replace("/v/","/other/"),409],[()=>video.url=oldUrl.replace("test.private.blob.vercel-storage.com","external.example"),409],[()=>afterCheck=n=>{if(n===2)row=withdrawn},409]]){
     reset();mutate();const out=await api.POST(req(),ctx);assert.equal(out.status,expected);assert.equal(sends,0);
   }
-  reset();video.url=oldUrl;assert.equal((await api.GET(req(),ctx)).status,409,"legacy manual upload blocked before sampling");
+  reset();video.url=oldUrl;assert.equal((await api.GET(req(),ctx)).status,200,"existing assigned video is reusable without reupload");
   for(const mutate of [()=>row=withdrawn,()=>video.uploadedAt=new Date("2026-11-08")]){
     reset();afterCheck=n=>{if(n===3)mutate()};const stale=await api.POST(req(),ctx);assert.equal(stale.status,409);assert.equal(sends,1);assert(!stale.data.draft);
   }

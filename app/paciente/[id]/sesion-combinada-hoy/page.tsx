@@ -58,7 +58,7 @@ export default async function CombinedSessionTodayPage({ params }: { params: { i
     return {
       sessionId: s.id,
       programName: s.assignment.program.name,
-      pilotWeek: patientShoulderWeek(patient.isTest, s.assignment.programId, s.weekNumber, s.tasksSnapshot),
+      pilotWeek: patientShoulderWeek(s.assignment.programId, s.weekNumber, s.tasksSnapshot),
       tasks,
     };
   });

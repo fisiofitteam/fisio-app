@@ -4,12 +4,12 @@ import { getSessionUser } from "@/lib/session";
 import { PILOT_PROGRAM_ID, matchesPilotSnapshot } from "@/lib/shoulder-pilot-snapshot";
 import { patientShoulderTitle } from "@/lib/patient-shoulder-session";
 
-// Rendered only by the test-patient page; authorize before retrieving review status.
+// Authorize the patient before retrieving their shoulder assessment history.
 export async function PatientShoulderHistory({patientId}:{patientId:string}) {
   const actor=await getSessionUser();
   if(actor?.kind !== "patient" || actor.patient.id !== patientId)return null;
   const sessions=await prisma.programSession.findMany({
-    where:{assignment:{patientId,programId:PILOT_PROGRAM_ID,patient:{isTest:true}},weekNumber:{in:[1,14]},tasksSnapshot:{contains:"ASSESSMENT"}},
+    where:{assignment:{patientId,programId:PILOT_PROGRAM_ID},weekNumber:{in:[1,14]},tasksSnapshot:{contains:"ASSESSMENT"}},
     select:{id:true,scheduledDate:true,weekNumber:true,tasksSnapshot:true,shoulderPilotReview:{select:{publishedAt:true}}},
     orderBy:[{scheduledDate:"desc"},{id:"asc"}],take:50
   });
