@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { hasRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 
@@ -49,15 +50,20 @@ export async function PATCH(req: NextRequest) {
   const data = await req.json();
   const { id, ...rest } = data;
 
-  // El closer puede editar SUS leads completamente (cambio de petición del CEO)
-  if (user.role === "closer") {
-    const lead = await prisma.lead.findUnique({ where: { id } });
-    if (!lead || lead.closerId !== user.id) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-  } else if (user.role !== "setter" && !user.isManager) {
+  if (typeof id !== "string" || !id) {
+    return NextResponse.json({ error: "Falta el identificador del lead." }, { status: 400 });
+  }
+  // El closer (principal o adicional) trabaja en sus llamadas asignadas.
+  const teamAccess = user.role === "setter" || (user.isManager && user.role !== "closer");
+  if (!teamAccess && !hasRole(user, "closer")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  const scope = teamAccess ? { id } : { id, closerId: user.id };
+  const existing = await prisma.lead.findUnique({
+    where: scope,
+    select: { status: true, followUpStartedAt: true, meetingUrl: true },
+  });
+  if (!existing) return NextResponse.json({ error: "Lead no disponible." }, { status: 403 });
 
   const updateData: any = {};
   if (rest.fullName !== undefined) updateData.fullName = rest.fullName;
@@ -75,6 +81,9 @@ export async function PATCH(req: NextRequest) {
   if (rest.callScheduledAt !== undefined) updateData.callScheduledAt = new Date(rest.callScheduledAt);
   if (rest.closerId !== undefined) updateData.closerId = rest.closerId || null;
   if (rest.status !== undefined) {
+    if (existing.status === "reserved") {
+      return NextResponse.json({ error: "No se puede cambiar manualmente el estado de una reserva. Usa su ficha para vender el programa." }, { status: 409 });
+    }
     if (rest.status==="reserved") return NextResponse.json({error:"Utiliza la acción de reserva para crear una ficha de valoración."},{status:409});
     updateData.status = rest.status;
     updateData.decidedAt = new Date();
@@ -87,9 +96,8 @@ export async function PATCH(req: NextRequest) {
 
   // Si marcamos inFollowUp=true y todavía no se había iniciado, autocalculamos las 4 fechas
   if (rest.inFollowUp === true) {
-    const existing = await prisma.lead.findUnique({ where: { id } });
     updateData.inFollowUp = true;
-    if (existing && !existing.followUpStartedAt) {
+    if (!existing.followUpStartedAt) {
       const now = new Date();
       const add = (hours: number) => {
         const d = new Date(now);
@@ -132,17 +140,17 @@ export async function PATCH(req: NextRequest) {
     (rest.meetingUrl || null) !== null &&
     typeof rest.meetingUrl === "string" &&
     rest.meetingUrl.includes("meet.google.com");
-  let previousMeetingUrl: string | null = null;
-  if (meetingUrlChanged) {
-    const prev = await prisma.lead.findUnique({ where: { id }, select: { meetingUrl: true } });
-    previousMeetingUrl = prev?.meetingUrl ?? null;
-  }
-
-  const lead = await prisma.lead.update({where: {id,...(rest.status!==undefined?{status:{not:"reserved"}}:{})},data:updateData}).catch((e:unknown)=>{
-    if((e as {code?:string})?.code==="P2025")return null;
-    throw e;
+  const previousMeetingUrl = existing.meetingUrl;
+  const lead = await prisma.lead.update({
+    where: { ...scope, ...(rest.status !== undefined ? { status: { not: "reserved" } } : {}) },
+    data: updateData,
+  }).catch((error: unknown) => {
+    if ((error as { code?: string }).code === "P2025") return null;
+    throw error;
   });
-  if(!lead)return NextResponse.json({error:"No se puede cambiar manualmente el estado de una reserva. Usa su ficha para vender el programa."},{status:409});
+  if (!lead) {
+    return NextResponse.json({ error: "La llamada ya no está disponible para este cambio. Actualiza el panel." }, { status: 409 });
+  }
 
   // Si cambió el meetingUrl: reseteamos el CallSummary síncronamente y le
   // devolvemos al cliente un flag para que dispare la regeneración desde

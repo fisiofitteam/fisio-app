@@ -55,6 +55,22 @@ function toLocalInput(iso: string | null): string {
   return new Date(d.getTime() - off * 60000).toISOString().slice(0, 16);
 }
 
+async function saveFollowUp(id: string, changes: Record<string, unknown>) {
+  try {
+    const res = await fetch("/api/leads", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, ...changes }),
+    });
+    if (res.ok) return true;
+    const data = await res.json().catch(() => ({}));
+    alert(data.error || "No se ha podido guardar el seguimiento.");
+  } catch {
+    alert("No se ha podido guardar el seguimiento. Comprueba tu conexión.");
+  }
+  return false;
+}
+
 export function FollowUpView({
   activeCloserId,
   currentUser,
@@ -82,11 +98,7 @@ export function FollowUpView({
   }
 
   async function toggleCheck(leadId: string, field: string, value: boolean) {
-    await fetch("/api/leads", {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: leadId, [field]: value }),
-    });
-    router.refresh();
+    if (await saveFollowUp(leadId, { [field]: value })) router.refresh();
   }
 
   return (
@@ -225,13 +237,10 @@ function FollowUpEditModal({ lead, onClose, onSaved }: { lead: Lead; onClose: ()
   const [regenerating, setRegenerating] = useState(false);
   const [regenerateResult, setRegenerateResult] = useState<string | null>(null);
 
-  async function patch(extra: any) {
+  async function patch(extra: Record<string, unknown>) {
     setSaving(true);
-    await fetch("/api/leads", {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: lead.id, ...extra }),
-    }).catch(() => {});
-    onSaved();
+    if (await saveFollowUp(lead.id, extra)) onSaved();
+    else setSaving(false);
   }
 
   function save() {
