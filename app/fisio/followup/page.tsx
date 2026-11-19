@@ -25,6 +25,7 @@ export default async function FollowUpPage({
     where: { closerId: activeCloserId, inFollowUp: true },
     include: {
       closer: { select: { id: true, fullName: true, role: true } },
+      referredByPatient: { select: { fullName: true } },
     },
     orderBy: [{ followUpStartedAt: "desc" }, { decidedAt: "desc" }],
   });
@@ -74,6 +75,8 @@ export default async function FollowUpPage({
         phone: l.phone,
         meetingUrl: l.meetingUrl,
         aiSummary: l.aiSummary,
+        source: l.source,
+        referredByPatient: l.referredByPatient,
         followUpNote: l.followUpNote,
         callScheduledAt: l.callScheduledAt.toISOString(),
         status: l.status,

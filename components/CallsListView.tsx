@@ -23,6 +23,7 @@ import type { TemplateActionType } from "@/lib/resource-roles";
 type DirectTemplate = { id: string; name: string; body: string; actionType: TemplateActionType };
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { LeadReferralNotice } from "@/components/LeadReferralNotice";
 
 type Pro = { id: string; fullName: string; role: string };
 
@@ -32,6 +33,7 @@ type Lead = {
   contactType: string;
   contactValue: string;
   aiSummary: string | null;
+  referredByPatient: { fullName: string } | null;
   callScheduledAt: string;
   status: string;
   inFollowUp: boolean;
@@ -402,7 +404,7 @@ function CallRow({
               </span>
             )}
             {/* Etiquetas de estado de workflow comercial */}
-            {lead.status === "scheduled" && lead.source === "landing" && !lead.setterNotifiedAt && (
+            {lead.status === "scheduled" && (lead.source === "landing" || lead.source === "referral") && !lead.setterNotifiedAt && (
               <span className="text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded" style={{ background: "#FEE2E2", color: "#991B1B" }}>
                 SIN CONTACTAR
               </span>
@@ -430,6 +432,8 @@ function CallRow({
               return null;
             })()}
           </div>
+
+          <LeadReferralNotice referrer={lead.referredByPatient} source={lead.source} />
 
           {/* Datos de contacto: email + teléfono en líneas separadas */}
           {(lead.email || lead.phone) ? (
@@ -738,7 +742,7 @@ function WorkflowActionButtons({
   // Setter: ve botón "Avisado" cuando aún no se ha marcado
   if (
     (currentUser.role === "setter" || currentUser.role === "ceo" || currentUser.role === "head_success") &&
-    lead.source === "landing" &&
+    (lead.source === "landing" || lead.source === "referral") &&
     !lead.setterNotifiedAt
   ) {
     return (
@@ -915,6 +919,8 @@ function CallEditModal({
           <h3 className="font-medium">Llamada · {lead.fullName}</h3>
           <button onClick={onClose} className="text-neutral-400 text-xl">✕</button>
         </div>
+
+        <LeadReferralNotice referrer={lead.referredByPatient} source={lead.source} />
 
         <div className="space-y-3">
           {/* Datos del lead - editables */}

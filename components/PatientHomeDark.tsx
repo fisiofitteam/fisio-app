@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { colorForSession, PROGRAM_PALETTE } from "@/lib/session-colors";
 import { PendingFormsBanner } from "@/components/PendingFormsBanner";
+import { PatientReferralBanner } from "@/components/PatientReferralBanner";
 import { writeCachedProgramType } from "@/lib/patient-program-type-cache";
 import {
   Zap,
@@ -350,6 +351,8 @@ export function PatientHomeDark({
             {DAY_NAMES[dow]}, {todayDate.toLocaleDateString("es-ES", { day: "numeric", month: "long" })}
           </p>
         </header>
+
+        <PatientReferralBanner patientId={patient.id} programType={patient.programType} />
 
         {/* 🎯 Sesión de hoy — banner prominente arriba, mismo patrón que
              el header morado de "Trabajo específico" en ADVANCE. Solo si

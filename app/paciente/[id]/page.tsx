@@ -234,6 +234,7 @@ export default async function PatientHome({ params }: { params: { id: string } }
           <PatientHomeRolling
             firstName={firstName}
             patientId={patient.id}
+            programType={patient.programType}
             mode="expired"
             weekStartIso={thisMonday.toISOString()}
             days={[]}

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { LeadReferralNotice } from "@/components/LeadReferralNotice";
 import { RescheduleLinkButton } from "@/components/RescheduleLinkButton";
 import {
   datetimeLocalInputToUtcIso,
@@ -25,6 +26,7 @@ type Lead = {
   tratamientosPrevios: string | null;
   impactoCrossfit: string | null;
   aiSummary: string | null;
+  referredByPatient: { fullName: string } | null;
   meetingUrl: string | null;
   source: string | null;
   aiScheduled: boolean;
@@ -165,6 +167,8 @@ export function SetterLeadsView({
                     )}
                     <LeadSourceTagChip tag={lead.sourceTag} />
                   </div>
+
+                  <LeadReferralNotice referrer={lead.referredByPatient} source={lead.source} />
 
                   {/* Datos de contacto siempre visibles */}
                   {(lead.email || lead.phone) ? (
@@ -392,6 +396,8 @@ function SetterLeadModal({
           <h3 className="font-medium">{isEdit ? `Llamada · ${editingLead!.fullName}` : "Nueva llamada agendada"}</h3>
           <button onClick={onClose} className="text-neutral-400 text-xl">✕</button>
         </div>
+
+        {editingLead && <LeadReferralNotice referrer={editingLead.referredByPatient} source={editingLead.source} />}
 
         <div className="space-y-3">
           <div>
