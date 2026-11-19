@@ -6,7 +6,7 @@ import { canAccessEvidencePatient } from "@/lib/patient-evidence";
 import { getOnboardingConfig } from "@/lib/onboarding-config";
 import { getCurrentPilotConfig } from "@/lib/shoulder-pilot-config-server";
 import { pilotSnapshotRefs } from "@/lib/shoulder-pilot-snapshot";
-import { PILOT_PROGRAM_ID, RUBRIC_VERSION, PILOT_TESTS, scorePilot, validatePilotConfig, legacyPositionLossNeedsReview, sanitizePilotObservations, validatePilotPain,
+import { PILOT_PROGRAM_ID, RUBRIC_VERSION, HOLD_SCORING_VERSION, PILOT_TESTS, scorePilot, validatePilotConfig, legacyPositionLossNeedsReview, legacyHoldRangeNeedsReview, sanitizePilotObservations, validatePilotPain,
   type PilotObservations, type PilotPain, type PilotConfig } from "@/lib/shoulder-pilot";
 
 import { cleanShoulderNarrative, readReviewDraft, writeReviewDraft, type ShoulderNarrative } from "@/lib/shoulder-narrative";
@@ -26,7 +26,7 @@ function allowedKeys(obj: Record<string,unknown>, keys: readonly string[]) {
 const decode = <T,>(s: string | undefined | null, fallback: T): T => s ? JSON.parse(s) : fallback;
 const rmIds = new Set(["86d6177e-a02e-4ef9-a62c-677323e9f8b9","701ef4c7-6de1-4428-b55e-fefa01ae2336"]);
 type Marks = Record<string,{ source: string|null; reviewerId: string; reviewedAt: string }>;
-type Published = { weekNumber:number; scheduledDate:string; publishedAt:string; rubricVersion:string; config:PilotConfig; videoVersions:Record<string,string>; observations:PilotObservations; pain:PilotPain; testFeedback?:ShoulderTestFeedbackMap; notAssessable:Record<string,string>; scores:ReturnType<typeof scorePilot>; narrative?:ShoulderNarrative };
+type Published = { holdScoringVersion?:string; weekNumber:number; scheduledDate:string; publishedAt:string; rubricVersion:string; config:PilotConfig; videoVersions:Record<string,string>; observations:PilotObservations; pain:PilotPain; testFeedback?:ShoulderTestFeedbackMap; notAssessable:Record<string,string>; scores:ReturnType<typeof scorePilot>; narrative?:ShoulderNarrative };
 const apiInput = <T,>(f: () => T): T => { try { return f(); } catch(e) { throw new PilotHttpError(400, e instanceof Error ? e.message : "Datos incorrectos."); } };
 
 export async function requirePilotAccess(sessionId: string, professionalOnly = false) {
@@ -62,7 +62,7 @@ function unpack(row:ShoulderPilotReview|null, config:PilotConfig) {
   const {observations:stored,narrative}=readReviewDraft(row?.observationsJson), marks=decode<Marks>(row?.reviewedJson,{});
   // A verified legacy aggregate may include shaking. Keep all other checks and fields,
   // but never publish that mark or expose that value as a position-loss measurement.
-  for(const [id,fields] of Object.entries(stored)) if(legacyPositionLossNeedsReview(id,fields)) delete marks[id];
+  for(const [id,fields] of Object.entries(stored)) if(legacyPositionLossNeedsReview(id,fields)||legacyHoldRangeNeedsReview(id,fields)) delete marks[id];
   const {globalPain,testFeedback}=readPatientInput(row?.painJson);
   return {
     globalPain,testFeedback,narrative,pain:effectivePilotPain(globalPain,testFeedback), loads:decode<PilotObservations>(row?.loadsJson,{}),
@@ -197,8 +197,8 @@ export async function updatePilot(sessionId:string, input:unknown) {
           for(const id of Object.keys(reasons))delete obs[id];
           const reviewed=parseReviewed(b.reviewedTestIds,testIds);
           const submitted=b.observations as PilotObservations;
-          if(reviewed.some(id=>!reasons[id] && legacyPositionLossNeedsReview(id,submitted?.[id])))
-            throw new PilotHttpError(409,"El criterio de estabilidad ha cambiado. Recarga y revisa el sostén antes de guardarlo.");
+          if(reviewed.some(id=>!reasons[id] && (legacyPositionLossNeedsReview(id,submitted?.[id])||legacyHoldRangeNeedsReview(id,submitted?.[id]))))
+            throw new PilotHttpError(409,"El criterio del sostén ha cambiado. Recarga y revisa sus datos antes de guardarlo.");
           const computed=scorePilot(obs,raw.pain,config);
           const marks:Marks={};
           for(const id of reviewed){
@@ -217,7 +217,7 @@ export async function updatePilot(sessionId:string, input:unknown) {
           if(PILOT_TESTS.some(t=>!raw.notAssessable[t.id]&&scores.tests[t.id]?.missing!==false))throw new PilotHttpError(409,"Hay tests pendientes de revisión.");
           if(reviewed.every(id=>!!raw.notAssessable[id]))throw new PilotHttpError(409,"Hace falta al menos un test valorado.");
           const when=new Date();
-          const published:Published={weekNumber:session.weekNumber,scheduledDate:session.scheduledDate.toISOString(),publishedAt:when.toISOString(),rubricVersion:RUBRIC_VERSION,config,videoVersions:sources,observations:raw.observations,pain:raw.pain,testFeedback:raw.testFeedback,narrative:raw.narrative,notAssessable:raw.notAssessable,scores};
+          const published:Published={holdScoringVersion:HOLD_SCORING_VERSION,weekNumber:session.weekNumber,scheduledDate:session.scheduledDate.toISOString(),publishedAt:when.toISOString(),rubricVersion:RUBRIC_VERSION,config,videoVersions:sources,observations:raw.observations,pain:raw.pain,testFeedback:raw.testFeedback,narrative:raw.narrative,notAssessable:raw.notAssessable,scores};
           // A reviewed upload uses the normal assessment locking rules; a pending replacement cannot silently replace it.
           if(videos.length)await tx.assessmentVideo.updateMany({where:{id:{in:videos.map(v=>v.id)},sessionId,patientId:session.assignment.patientId,reviewedAt:null},data:{
             reviewedAt:when,reviewedById:actor.pro.id,pendingPath:null,pendingUntil:null,pendingMime:null,pendingSize:null,

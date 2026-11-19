@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getActiveProfessional } from "@/lib/session";
 import { canUseEvidence } from "@/lib/patient-evidence";
 import { getCurrentPilotConfig } from "@/lib/shoulder-pilot-config-server";
-import { PILOT_PROGRAM_ID, PILOT_TESTS, RUBRIC_VERSION, scorePilot, type PilotConfig, type PilotObservations } from "@/lib/shoulder-pilot";
+import { PILOT_PROGRAM_ID, PILOT_TESTS, RUBRIC_VERSION, HOLD_SCORING_VERSION, scorePilot, type PilotConfig, type PilotObservations } from "@/lib/shoulder-pilot";
 import { StandaloneShoulderReport } from "@/components/StandaloneShoulderReport";
 export const dynamic="force-dynamic";
 
@@ -14,8 +14,8 @@ function example(retest:boolean,config:PilotConfig){
  const time=config.holdTargetSeconds;
  field("wallFlexion",{leftProgress:retest?90:65,rightProgress:retest?95:80});
  field("pullover",{angle:retest?174:155});field("wallPress",{externalDeficit:0,abduction:retest?130:105});
- field("pvcHold",{holdSeconds:time*(retest?1:.75),inRangeSeconds:time*(retest?.9:.45),positionLossSeconds:time*(retest?.05:.15)});
- field("bumperHold",{holdSeconds:time*(retest?.9:.5),inRangeSeconds:time*(retest?.8:.25),positionLossSeconds:time*(retest?.12:.2)});
+ field("pvcHold",{holdSeconds:time*(retest?1:.75),positionLossSeconds:time*(retest?.05:.15)});
+ field("bumperHold",{holdSeconds:time*(retest?.9:.5),positionLossSeconds:time*(retest?.12:.2)});
  field("bumperRaises",{reps5:8,range5:retest?8:6,reps10:retest?8:6,range10:retest?7:4,reps15:retest?4:0,range15:retest?3:0});
  // The two-rep initial attempt is useful clinical context, but is not a valid 8RM.
  field("facePull8rm",retest?{affectedKg:10,referenceKg:12}:{referenceKg:12});
@@ -40,7 +40,7 @@ function example(retest:boolean,config:PilotConfig){
   general:"En esta revaloración sostuviste los brazos durante más tiempo. En el face pull también pasaste de dos repeticiones con 8 kg a ocho con 10 kg, y el dolor que anotaste bajó de 6 a 3 sobre 10.",
   mobility:"En el pullover llegaste a 174° frente a los 155° iniciales. También alcanzaste más altura en la prueba de pared.",
   stability:"En ambos sostenes pasaste una parte mayor del intento sin perder la postura. Todavía hubo momentos en los que necesitaste recolocarte.",
-  endRange:"Con el disco mantuviste los brazos por encima de las orejas durante una parte mayor del sostén. También completaste más elevaciones a esa altura.",
+  endRange:"Con el disco sostuviste la posición durante más tiempo. En las elevaciones también completaste más repeticiones a la altura exigida.",
   coordination:"En las pruebas escapulares, ambas escápulas se movieron de manera fluida y simétrica en más repeticiones que en la valoración inicial.",
   endurance:"Esta vez alcanzaste el tiempo objetivo con la pica y te acercaste a él con el disco. En la primera valoración terminaste antes en las dos pruebas.",
   tolerance:"Terminaste con dolor 2/10 frente a 4/10 en la primera valoración. El face pull siguió molestando, pero anotaste menos dolor incluso al hacer más repeticiones con más peso."
@@ -48,12 +48,12 @@ function example(retest:boolean,config:PilotConfig){
   general:"En esta primera valoración la altura y el tiempo de sostén variaron según la prueba. En el face pull anotaste que tuviste que parar tras la segunda repetición; queda registrado para poder compararlo en el retest.",
   mobility:"En el pullover alcanzaste 155°. En la flexión de pared hubo diferencia entre los dos lados.",
   stability:"En los dos sostenes hubo momentos de pérdida de postura. El detalle de cada prueba muestra cuánto tiempo mantuviste la posición.",
-  endRange:"Con el disco completaste repeticiones, aunque no todas llegaron a la altura de las orejas. El baremo recoge por separado las repeticiones y la altura alcanzada.",
+  endRange:"Con el disco completaste repeticiones, aunque no todas llegaron a la altura de las orejas. El baremo combina esas repeticiones con el tiempo de sostén del disco en prono.",
   coordination:"Las tres pruebas escapulares tuvieron repeticiones fluidas y otras menos uniformes. Tus resultados distinguen la fluidez de la simetría entre ambos lados.",
   endurance:"Mantuviste el sostén con la pica durante más tiempo que con el disco. En ninguno de los dos llegaste todavía al tiempo objetivo.",
   tolerance:"Empezaste con dolor 2/10 y terminaste con 4/10. El face pull fue la prueba con mayor intensidad de dolor entre las que puntuaste."
  };
- return {weekNumber:retest?14:1,publishedAt:"",rubricVersion:RUBRIC_VERSION,pain,observations,testFeedback,notAssessable,narrative,scores:scorePilot(observations,pain,config)};
+ return {holdScoringVersion:HOLD_SCORING_VERSION,weekNumber:retest?14:1,publishedAt:"",rubricVersion:RUBRIC_VERSION,pain,observations,testFeedback,notAssessable,narrative,scores:scorePilot(observations,pain,config)};
 }
 
 export default async function Example({params,searchParams}:{params:{id:string};searchParams:{semana?:string}}){

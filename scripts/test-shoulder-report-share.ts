@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
 import { middleware } from "../middleware";
 import { publicShoulderSnapshot } from "../lib/shoulder-shared-snapshot";
-import { PILOT_TESTS,scorePilot } from "../lib/shoulder-pilot";
+import { PILOT_TESTS,HOLD_SCORING_VERSION,scorePilot } from "../lib/shoulder-pilot";
 
 const secret="PRIVATE_FIXTURE_DO_NOT_INCLUDE",time="2026-11-11T10:12:30.000Z";
 const id=(key:string)=>PILOT_TESTS.find(t=>t.key===key)!.id;
@@ -20,6 +20,9 @@ const raw={weekNumber:14,rubricVersion:"shoulder-men-v1",publishedAt:time, patie
  scores:{...sc,axes:sc.axes.map(a=>({...a,label:secret,private:secret})),tests:{...sc.tests,[secret]:secret},
   symmetry:sc.symmetry.map(s=>({...s,private:secret})),private:secret,missing:[secret]}};
 const out=publicShoulderSnapshot(raw);
+assert.equal(out.holdScoringVersion,undefined,"historic publication remains identified as historic");
+assert.equal(publicShoulderSnapshot({...raw,holdScoringVersion:HOLD_SCORING_VERSION}).holdScoringVersion,HOLD_SCORING_VERSION);
+assert.equal(publicShoulderSnapshot({...raw,holdScoringVersion:"untrusted"}).holdScoringVersion,undefined);
 assert.ok(!JSON.stringify(out).includes(secret));
 assert.equal(out.narrative?.general,raw.narrative.general);
 assert.equal(out.observations[hold].unstableSeconds,3);

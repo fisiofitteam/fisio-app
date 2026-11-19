@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 require("tsx/cjs");
 const {
   PILOT_TESTS, DEFAULT_PILOT_CONFIG: C, validatePilotConfig, sanitizePilotObservations,
-  validatePilotPain, scorePilot, intervalDuration, legacyPositionLossNeedsReview,
+  validatePilotPain, scorePilot, intervalDuration, legacyPositionLossNeedsReview, legacyHoldRangeNeedsReview,
 } = require("../lib/shoulder-pilot.ts");
 const ids = Object.fromEntries(PILOT_TESTS.map(t => [t.key,t.id]));
 const keyObs = o => Object.fromEntries(Object.entries(o).map(([k,v])=>[ids[k],v]));
@@ -27,7 +27,8 @@ assert.throws(()=>validatePilotConfig({...C,unknown:10}));
 assert.throws(()=>sanitizePilotObservations({unknownId:{}}));
 assert.throws(()=>sanitizePilotObservations(keyObs({wallFlexion:{unknownKey:1}})));
 assert.throws(()=>sanitizePilotObservations(keyObs({wallPress:{externalDeficit:0,abduction:20}})));
-assert.throws(()=>sanitizePilotObservations(keyObs({pvcHold:{holdSeconds:10,inRangeSeconds:12}})));
+assert.deepEqual(sanitizePilotObservations(keyObs({pvcHold:{holdSeconds:10,inRangeSeconds:12}})),keyObs({pvcHold:{holdSeconds:10}}));
+assert.throws(()=>sanitizePilotObservations(keyObs({pvcHold:{holdSeconds:10,positionLossSeconds:12}})));
 assert.throws(()=>sanitizePilotObservations(keyObs({pvcHold:{holdSeconds:22}})));
 assert.throws(()=>sanitizePilotObservations(keyObs({bumperRaises:{reps5:5,range5:6}})));
 assert.throws(()=>sanitizePilotObservations(keyObs({bumperRaises:{reps5:0.3}})));
@@ -41,25 +42,25 @@ assert.throws(()=>validatePilotPain({painfulTestIds:{}}));
 assert.throws(()=>validatePilotPain({guess:1}));
 assert.deepEqual(validatePilotPain({painfulTestIds:null}),{painfulTestIds:null});
 
-// Same test score, distinct athlete profiles: keep time and range separate.
-const fullTime={holdSeconds:20,inRangeSeconds:12,positionLossSeconds:0};
-const fullRange={holdSeconds:12,inRangeSeconds:12,positionLossSeconds:3};
-assert.equal(test("pvcHold",fullTime).score,8);
-assert.equal(test("pvcHold",fullRange).score,8);
-assert.equal(test("pvcHold",{...fullTime,inRangeSeconds:0}).score,5);
+// Holds are scored by sustained time; stability is independent and height-duration is retired.
+const fullTime={holdSeconds:20,positionLossSeconds:0};
+const fullRange={holdSeconds:12,positionLossSeconds:3};
+assert.equal(test("pvcHold",fullTime).score,10);
+assert.equal(test("pvcHold",fullRange).score,6);
+assert.equal(test("pvcHold",{...fullTime,inRangeSeconds:0}).score,10,"retired height cannot lower the score");
 assert.equal(test("pvcHold",fullRange).detail.stabilityScore,7.5);
 assert.equal(axis("endurance",{pvcHold:fullTime,bumperHold:fullRange}),8);
 assert.equal(axis("stability",{pvcHold:fullTime,bumperHold:fullRange}),8.75);
 assert.equal(axis("stability",{pvcHold:{holdSeconds:20,inRangeSeconds:12},bumperHold:fullRange}),null);
-assert.equal(test("bumperHold",{holdSeconds:0,inRangeSeconds:0,positionLossSeconds:0}).score,null);
+assert.equal(test("bumperHold",{holdSeconds:0,positionLossSeconds:0}).score,0);
 assert.equal(test("bumperHold",{holdSeconds:0,inRangeSeconds:0,positionLossSeconds:0}).detail.timeScore,0);
 assert.equal(test("pvcHold",{...fullRange,holdSeconds:12}, {...C,holdTargetSeconds:12}).score,10);
 // Compare confirmed zero at a load with a not-yet-entered observation.
 const raises={reps5:8,range5:7,reps10:6,range10:3,reps15:0};
 assert.equal(test("bumperRaises",raises).score,6.49);
 assert.equal(test("bumperRaises",{...raises,reps15:null}).score,null);
-assert.equal(axis("endRange",{bumperRaises:raises,bumperHold:fullTime}),6.75);
-assert.equal(axis("endRange",{bumperRaises:raises,bumperHold:fullTime,pvcHold:{holdSeconds:20,inRangeSeconds:0}}),6.75);
+assert.equal(axis("endRange",{bumperRaises:raises,bumperHold:fullTime}),8.11);
+assert.equal(axis("endRange",{bumperRaises:raises,bumperHold:fullTime,pvcHold:{holdSeconds:20,inRangeSeconds:0}}),8.11);
 assert.equal(axis("endurance",{bumperHold:fullTime}, {}, {...C,endurancePvcPct:0}),10);
 assert.equal(test("facePull8rm",{affectedKg:8,referenceKg:10}).score,8);
 assert.equal(test("press8rm",{affectedKg:0,referenceKg:10}).score,0);
@@ -101,11 +102,15 @@ assert.throws(()=>intervalDuration(20,spans([0,Infinity])));
 assert.throws(()=>intervalDuration(20,spans([10,5])));
 const oldHold={holdSeconds:20,inRangeSeconds:12,unstableSeconds:7};
 assert.equal(legacyPositionLossNeedsReview(ids.pvcHold,oldHold),true);
+assert.equal(legacyHoldRangeNeedsReview(ids.pvcHold,oldHold),true);
+assert.equal(legacyHoldRangeNeedsReview(ids.bumperHold,{holdSeconds:20,inRangeSeconds:20,positionLossSeconds:0}),true);
+assert.equal(legacyHoldRangeNeedsReview(ids.pvcHold,fullTime),false);
+assert(!PILOT_TESTS.filter(t=>[ids.pvcHold,ids.bumperHold].includes(t.id)).some(t=>t.fields.some(f=>f.key==="inRangeSeconds")));
 assert.equal(legacyPositionLossNeedsReview(ids.pvcHold,{...oldHold,positionLossSeconds:0}),false);
 assert.equal(test("pvcHold",oldHold).detail.stabilityScore,null);
-assert.equal(test("pvcHold",oldHold).score,8);
+assert.equal(test("pvcHold",oldHold).score,10);
 assert.equal(test("pvcHold",{...oldHold,positionLossSeconds:0}).detail.stabilityScore,10);
-assert.deepEqual(sanitizePilotObservations(keyObs({pvcHold:oldHold})),keyObs({pvcHold:{holdSeconds:20,inRangeSeconds:12}}));
+assert.deepEqual(sanitizePilotObservations(keyObs({pvcHold:oldHold})),keyObs({pvcHold:{holdSeconds:20}}));
 assert.equal(axis("stability",{pvcHold:oldHold,bumperHold:fullTime}),null);
 // Qualitative movements never become radar points; clinical signoff is external to this pure rubric.
 for(const key of ["overheadSquat","frontSquat","pushJerk","scapPullUps"]){

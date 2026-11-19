@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import Module from "node:module";
 import { NextRequest } from "next/server";
-import { DEFAULT_PILOT_CONFIG, PILOT_PROGRAM_ID, PILOT_TESTS, RUBRIC_VERSION } from "../lib/shoulder-pilot";
+import { DEFAULT_PILOT_CONFIG, PILOT_PROGRAM_ID, PILOT_TESTS, RUBRIC_VERSION, HOLD_SCORING_VERSION } from "../lib/shoulder-pilot";
 import { HOLD_PVC } from "../lib/shoulder-analysis-types";
 
 const oldMeasure={holdSeconds:20,inRangeSeconds:15,unstableSeconds:4};
@@ -36,7 +36,7 @@ async function main(){
   const current=await get();
   assert.equal(current.reviewedTestIds.length,PILOT_TESTS.length-1);
   assert(!current.reviewedTestIds.includes(HOLD_PVC));
-  assert.deepEqual(current.observations[HOLD_PVC],{holdSeconds:20,inRangeSeconds:15});
+  assert.deepEqual(current.observations[HOLD_PVC],{holdSeconds:20});
   assert.equal((await patch({action:"publish"})).status,409,"cannot republish old check without human review");
   const save={action:"save",notAssessable:reasons,reviewedTestIds:PILOT_TESTS.map(t=>t.id),videoVersions:{}};
   assert.equal((await patch({...save,observations:{[HOLD_PVC]:oldMeasure}})).status,409,"an old browser must refresh");
@@ -44,11 +44,14 @@ async function main(){
   actor={kind:"patient",patient:{id:"p"}};
   const patient=await get();assert.equal(patient.observations,undefined);assert.deepEqual(patient.published,JSON.parse(oldPublication));
   actor={kind:"professional",pro:{id:"staff"}};
-  const reviewed={holdSeconds:20,inRangeSeconds:15,positionLossSeconds:2};
+  assert.equal((await patch({...save,observations:{[HOLD_PVC]:{holdSeconds:20,inRangeSeconds:15,positionLossSeconds:2}}})).status,409,"retired height criterion also invalidates a stale browser without old instability");
+  const reviewed={holdSeconds:20,positionLossSeconds:2};
   assert.equal((await patch({...save,observations:{[HOLD_PVC]:reviewed}})).status,200);
   assert.equal(row.publishedJson,oldPublication,"saving a fresh measurement cannot silently change the old publication");
   assert.equal((await patch({action:"publish"})).status,200);
   assert.deepEqual(JSON.parse(row.publishedJson).observations[HOLD_PVC],reviewed);
+  assert.equal(JSON.parse(row.publishedJson).holdScoringVersion,HOLD_SCORING_VERSION);
+  assert.equal(JSON.parse(row.publishedJson).scores.tests[HOLD_PVC].score,10);
   console.log("PASS: old mixed hold loses only its draft verification; stale saves rejected, publication unchanged until human review and republish.");
 }
 main().catch(e=>{console.error(e);process.exitCode=1}).finally(()=>{(Module as any)._load=load});
