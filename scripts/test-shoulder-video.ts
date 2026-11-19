@@ -9,10 +9,20 @@ import { DEFAULT_PILOT_CONFIG as config,PILOT_TESTS } from "../lib/shoulder-pilo
 
 async function main(){
   const b={testId:HOLD_PVC,videoId:"synthetic-upload",uploadedAt:"2026-01-01T00:00:00.000Z",duration:24,fps:8,sheets:[] as {times:number[],jpeg:string}[]};
-  const response={hold:{start:2,end:24},rangeVisible:true,stabilityVisible:true,aboveEars:[{start:2,end:10},{start:8,end:14}],lossOfPosition:[{start:10,end:12}],notes:"Borrador verificable.",findings:[{start:10,end:12,text:"Cambio de posición."}],limitations:[]};
+  const response={hold:{start:2,end:24},holdPositionVisible:true,rangeVisible:true,stabilityVisible:true,aboveEars:[{start:2,end:10},{start:8,end:14}],lossOfPosition:[{start:10,end:12}],notes:"Borrador verificable.",findings:[{start:10,end:12,text:"Cambio de posición."}],limitations:[]};
   const d=parseAIDraft(response,b,config);
   assert.deepEqual(d.observationFields,{holdSeconds:20,positionLossSeconds:2});
   assert.deepEqual(Object.keys(d.intervals).sort(),["lossOfPosition"]);
+  // A visible person or unchanged posture does not establish that the prescribed
+  // lift-off/hold is actually sustained. Require explicit visual confirmation.
+  for(const holdPositionVisible of [false,undefined,null,"true",1]){
+    const unsupported=parseAIDraft({...response,hold:{start:0,end:20},holdPositionVisible,stabilityVisible:true,lossOfPosition:[]},b,config);
+    assert.deepEqual(unsupported.observationFields,{},"unconfirmed hold position cannot supply timing or stability measures");
+    assert.equal(unsupported.hold,null);
+    assert.deepEqual(unsupported.intervals,{lossOfPosition:null});
+  }
+  assert.deepEqual(parseAIDraft({...response,holdPositionVisible:true,stabilityVisible:false},b,config).observationFields,{holdSeconds:20});
+
   // Disregard obsolete model fields even if a provider still includes them.
   assert.deepEqual(parseAIDraft({...response,tremor:[{start:2,end:19}]},b,config),d);
   assert.equal(parseAIDraft({...response,lossOfPosition:[]},b,config).observationFields.positionLossSeconds,0);
@@ -101,12 +111,13 @@ async function main(){
   for(const test of PILOT_TESTS){
     const schema=buildVideoOutputSchema(test.id) as any,kind=SHOULDER_VIDEO_TESTS[test.id].kind;
     verifySchema(schema);
-    const expected=["notes","findings","limitations",...(kind==="hold"?["hold","lossOfPosition","stabilityVisible"]:kind==="measurement"?["measurements"]:[])];
+    const expected=["notes","findings","limitations",...(kind==="hold"?["hold","holdPositionVisible","lossOfPosition","stabilityVisible"]:kind==="measurement"?["measurements"]:[])];
     assert.deepEqual(Object.keys(schema.properties).sort(),expected.sort());
     if(kind==="hold"){
       assert(schema.properties.hold.anyOf.some((s:any)=>s.type==="null"));
       assert(schema.properties.lossOfPosition.anyOf.some((s:any)=>s.type==="null"));
       assert.equal(schema.properties.stabilityVisible.type,"boolean");
+      assert.equal(schema.properties.holdPositionVisible.type,"boolean");
     }
     if(kind==="measurement"){
       const fields=test.fields.filter(f=>f.type==="number");
@@ -181,7 +192,7 @@ async function main(){
     validateFrames({...b,testId:t.id,duration,fps,sheets:[{jpeg,times}]});
   }
   assert.throws(()=>validateFrames({...b,sheets:[{...b.sheets[0],times:b.sheets[0].times.map(()=>0)},...b.sheets.slice(1)]}));
-  const providerResponse={hold:response.hold,stabilityVisible:response.stabilityVisible,lossOfPosition:response.lossOfPosition,notes:response.notes,findings:response.findings,limitations:response.limitations};
+  const providerResponse={hold:response.hold,holdPositionVisible:response.holdPositionVisible,stabilityVisible:response.stabilityVisible,lossOfPosition:response.lossOfPosition,notes:response.notes,findings:response.findings,limitations:response.limitations};
   let requests=0,expectedInput:FrameRequest=b,expectedModel="claude-opus-5-5";
   let mockReply:any={content:[{type:"text",text:JSON.stringify(providerResponse)}],stop_reason:"end_turn"};
   const mock=createServer((req,res)=>{
@@ -218,6 +229,13 @@ async function main(){
     const opusDraft=await analyzeFrames(b,config);
     assert.deepEqual(opusDraft.observationFields,d.observationFields);
     assert.equal(opusDraft.model,"synthetic","show the model returned by the provider, not the configured alias");
+    mockReply={content:[{type:"text",text:JSON.stringify({...providerResponse,holdPositionVisible:false})}],stop_reason:"end_turn"};
+    const notVisible=await analyzeFrames(b,config);
+    assert.deepEqual(notVisible.observationFields,{});
+    assert.equal(notVisible.hold,null);
+    assert.deepEqual(notVisible.intervals,{lossOfPosition:null});
+    mockReply={content:[{type:"text",text:JSON.stringify(providerResponse)}],stop_reason:"end_turn"};
+
     expectedInput=detailed;
     const detailedDraft=await analyzeFrames(detailed,config);
     assert.deepEqual(detailedDraft.observationFields,d.observationFields);
@@ -238,7 +256,7 @@ async function main(){
       const kind=SHOULDER_VIDEO_TESTS[test.id].kind,fps=kind==="hold"?8:3;
       expectedInput={...b,testId:test.id,duration:1,fps,sheets:[{jpeg,times:Array.from({length:fps},(_,i)=>i/fps)}]};
       const data={notes:"",findings:[],limitations:["No se puede medir con certeza."],
-        ...(kind==="hold"?{hold:null,lossOfPosition:null,stabilityVisible:false}:kind==="measurement"?{measurements:Object.fromEntries(test.fields.filter(f=>f.type==="number").map(f=>[f.key,null]))}:{})};
+        ...(kind==="hold"?{hold:null,holdPositionVisible:false,lossOfPosition:null,stabilityVisible:false}:kind==="measurement"?{measurements:Object.fromEntries(test.fields.filter(f=>f.type==="number").map(f=>[f.key,null]))}:{})};
       mockReply={content:[{type:"text",text:JSON.stringify(data)}],stop_reason:"end_turn"};
       const draft=await analyzeFrames(expectedInput,config);
       assert.deepEqual(draft.observationFields,{},"null measures never become zero");
@@ -252,7 +270,7 @@ async function main(){
       await rejected({content:[{type:"text",text:invalid}],stop_reason:"end_turn"},/formato incorrecto/);
     }
     await rejected({content:[],stop_reason:"end_turn"},/formato incorrecto/);
-    for(const invalid of [{},[],null,{...providerResponse,notes:7},{...providerResponse,findings:"none"},{...providerResponse,limitations:[4]},{...providerResponse,hold:{start:1}},{...providerResponse,stabilityVisible:"true"},{...providerResponse,lossOfPosition:{}},{...providerResponse,unexpected:0}]){
+    for(const invalid of [{},[],null,{...providerResponse,notes:7},{...providerResponse,findings:"none"},{...providerResponse,limitations:[4]},{...providerResponse,hold:{start:1}},{...providerResponse,stabilityVisible:"true"},{...providerResponse,holdPositionVisible:"true"},{...providerResponse,holdPositionVisible:null},Object.fromEntries(Object.entries(providerResponse).filter(([key])=>key!=="holdPositionVisible")),{...providerResponse,lossOfPosition:{}},{...providerResponse,unexpected:0}]){
       await rejected({content:[{type:"text",text:JSON.stringify(invalid)}],stop_reason:"end_turn"},/campos no válidos/);
     }
     expectedInput={...b,testId:numeric.id,fps:3};
