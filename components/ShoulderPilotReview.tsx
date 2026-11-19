@@ -63,6 +63,7 @@ function ReviewSession({sessionId}:{sessionId:string}) {
   const eligible=pendingSources(data.videos,sessionId,[],skip,ai.entries,!!data.aiReviewBlocked);
   const hasReviewedVideos=eligible.some(s=>checked.includes(s.testId));
   const pending=includeReviewed?eligible:eligible.filter(s=>!checked.includes(s.testId));
+  const retryable=pending.filter(source=>ai.entries[revisionKey(source)]?.error);
   const successful=Object.values(ai.outcomes).filter(state=>state==="ready").length;
   const failed=Object.values(ai.outcomes).filter(state=>state==="error").length;
   function openTest(id:string){
@@ -77,6 +78,7 @@ function ReviewSession({sessionId}:{sessionId:string}) {
       <div className="mt-3 border-t border-neutral-200 pt-3 space-y-2">
         <div className="flex flex-wrap gap-2 items-center">
           <button type="button" className="btn btn-accent" disabled={!!ai.active||busy||conflict||!pending.length} onClick={()=>ai.run(pending)}>Revisar todo con IA</button>
+          {!!retryable.length&&<button type="button" className="btn btn-ghost" disabled={!!ai.active||busy||conflict} onClick={()=>ai.run(retryable)}>Reintentar {retryable.length} {retryable.length===1?"fallido":"fallidos"}</button>}
           {ai.active&&<button type="button" className="btn btn-ghost" onClick={ai.stop}>Detener</button>}
           <span className="text-sm text-neutral-600" role="status">{ai.active?"Analizando vídeo "+ai.active.index+" de "+ai.active.total+" · "+ai.active.message:ai.lastRun.length?(ai.stopped?"Análisis detenido. ":"")+successful+" de "+ai.lastRun.length+" con propuesta"+(failed?" · "+failed+" con error":""):pending.length?pending.length+(pending.length===1?" vídeo pendiente de analizar":" vídeos pendientes de analizar"):"Sin vídeos pendientes de analizar"}</span>
         </div>

@@ -118,6 +118,64 @@ export function parseAIDraft(raw:unknown,b:FrameRequest,config:PilotConfig):Shou
     notes:usableNotes,findings,limitations,method:"Borrador sobre fotogramas muestreados; contrasta los tiempos y el movimiento en el vídeo original.",
     hold,intervals:{lossOfPosition}};
 }
+// The API constrains JSON syntax and field types; parseAIDraft still checks
+// visible evidence, rubric limits and clinical cross-field relationships.
+export function buildVideoOutputSchema(testId:string):Record<string,unknown>{
+  const kind=SHOULDER_VIDEO_TESTS[testId].kind;
+  const time={type:"number",description:"Tiempo absoluto en segundos dentro del clip."};
+  const interval={
+    type:"object",properties:{start:time,end:time},required:["start","end"],additionalProperties:false,
+  };
+  const properties:Record<string,unknown>={
+    notes:{type:"string",description:"Comentario breve, como máximo cuatro frases cortas."},
+    findings:{type:"array",description:"Como máximo ocho observaciones con evidencia temporal verificable.",items:{
+      type:"object",properties:{start:time,end:time,text:{type:"string"}},
+      required:["start","end","text"],additionalProperties:false,
+    }},
+    limitations:{type:"array",description:"Como máximo cinco limitaciones breves.",items:{type:"string"}},
+  };
+  if(kind==="hold"){
+    properties.hold={anyOf:[interval,{type:"null"}],description:"Primer sostén con inicio y fin visibles; null si no se puede delimitar."};
+    properties.lossOfPosition={anyOf:[{type:"array",items:interval},{type:"null"}],description:"Intervalos de pérdida visible de postura. null si no es valorable; [] solo si se comprobó todo el sostén."};
+    properties.stabilityVisible={type:"boolean",description:"true solo si se puede valorar la estabilidad de principio a fin."};
+  }else if(kind==="measurement"){
+    const fields=PILOT_TEST_BY_ID[testId].fields.filter(f=>f.type==="number");
+    properties.measurements={
+      type:"object",properties:Object.fromEntries(fields.map(f=>[f.key,{
+        anyOf:[{
+          type:"object",properties:{
+            value:{type:f.step===1?"integer":"number",description:f.label+". "+(f.min!==undefined?"Mínimo "+f.min+". ":"")+(f.max!==undefined?"Máximo "+f.max+". ":"")},
+            start:time,end:time,
+          },required:["value","start","end"],additionalProperties:false,
+        },{type:"null"}],
+        description:"Medida con evidencia temporal visible. null si no puede medirse o identificarse; ausencia de evidencia no equivale a cero.",
+      }])),required:fields.map(f=>f.key),additionalProperties:false,
+    };
+  }
+  // No min/max/maxItems constraints: those are enforced locally because the
+  // provider's constrained JSON grammar does not support these schema keywords.
+  return {type:"object",properties,required:Object.keys(properties),additionalProperties:false};
+}
+// Validate the small schema subset used above locally as well. Completion of
+// the API call is not enough to accept an empty or structurally invalid draft.
+function matchesVideoOutputSchema(value:unknown,schema:any):boolean{
+  if(Array.isArray(schema.anyOf))return schema.anyOf.some((option:unknown)=>matchesVideoOutputSchema(value,option));
+  switch(schema.type){
+    case "null":return value===null;
+    case "string":return typeof value==="string";
+    case "number":return typeof value==="number"&&Number.isFinite(value);
+    case "integer":return typeof value==="number"&&Number.isInteger(value);
+    case "boolean":return typeof value==="boolean";
+    case "array":return Array.isArray(value)&&value.every(item=>matchesVideoOutputSchema(item,schema.items));
+    case "object":{
+      if(!value||typeof value!=="object"||Array.isArray(value))return false;
+      const object=value as Record<string,unknown>,properties=schema.properties as Record<string,unknown>;
+      return schema.required.every((key:string)=>Object.prototype.hasOwnProperty.call(object,key))&&
+        Object.keys(object).every(key=>Object.prototype.hasOwnProperty.call(properties,key)&&matchesVideoOutputSchema(object[key],properties[key]));
+    }
+    default:return false;
+  }
+}
 export function buildVideoInstruction(b:FrameRequest):string{
   const test=SHOULDER_VIDEO_TESTS[b.testId];
   const intro="Test: "+test.task+". Duración "+b.duration.toFixed(3)+" s. Secuencia de fotogramas a "+b.fps+" por segundo. Cada lámina tiene cuatro columnas y cuatro filas. Lee las celdas por filas; cada celda lleva el tiempo absoluto en segundos. Las celdas finales vacías no cuentan. Estos son fotogramas, no vídeo continuo: no inventes sucesos entre ellos. ";
@@ -131,7 +189,7 @@ export function buildVideoInstruction(b:FrameRequest):string{
     "Describe la ejecución, las repeticiones realmente visibles y las compensaciones observables, con evidencias temporales. No determines si se alcanzó el 8RM solo por las imágenes. No infieras cargas, kg, dolor, cuál es el brazo afectado ni valores del brazo que no se grabó. No devuelvas measurements: los kg declarados se verifican aparte. Sin puntuaciones.";
   else instruction=
     "Describe el movimiento específico por planos y repeticiones realmente observados. Prioriza la fase inferior o de recepción según el gesto. Si no ves un plano o una compensación fiable, indícalo en limitations. Sin puntuaciones, sin atribuir causas; notas editables. No inventes repeticiones.";
-  return intro+instruction+" Incluye notes (comentario de hasta 4 frases), findings:[{start,end,text}] con evidencias verificables y limitations:[string]. Ante una grabación inadecuada explica qué falta y deja en null las medidas.";
+  return intro+instruction+" Incluye notes (comentario de hasta 4 frases cortas), findings:[{start,end,text}] con un máximo de 8 observaciones breves y verificables, y limitations:[string] con un máximo de 5 limitaciones breves. Resume los momentos relevantes sin enumerar todos los fotogramas. Ante una grabación inadecuada explica qué falta y deja en null las medidas.";
 }
 export async function analyzeFrames(b:FrameRequest,config:PilotConfig):Promise<ShoulderAIDraft>{
   if(!configuredProvider())throw new VideoError(503,"El proveedor de análisis no está configurado. La revisión manual sigue disponible.");
@@ -142,9 +200,15 @@ export async function analyzeFrames(b:FrameRequest,config:PilotConfig):Promise<S
   for(const sheet of b.sheets){content.push({type:"text",text:"Lámina "+sheet.times[0].toFixed(3)+"–"+sheet.times[sheet.times.length-1].toFixed(3)+" s ("+sheet.times.length+" celdas)."});
     content.push({type:"image",source:{type:"base64",media_type:"image/jpeg",data:sheet.jpeg}});}
   let reply;
-  try{reply=await sdk.messages.create({model:process.env.SHOULDER_VIDEO_AI_MODEL||"claude-sonnet-4-6",max_tokens:4000,system:context,messages:[{role:"user",content}]});}
+  try{reply=await sdk.messages.create({model:process.env.SHOULDER_VIDEO_AI_MODEL||"claude-sonnet-4-6",max_tokens:8000,output_config:{format:{type:"json_schema",schema:buildVideoOutputSchema(b.testId)}},system:context,messages:[{role:"user",content}]});}
   catch{throw new VideoError(502,"El proveedor no ha completado el análisis. No se ha guardado ninguna nota.");}
+  // Never accept partial observations, even if a truncated response happens to
+  // end on syntactically valid JSON. A failed call does not produce a draft.
+  if(reply.stop_reason==="max_tokens")throw new VideoError(502,"La respuesta de la IA se ha interrumpido antes de terminar. Vuelve a intentarlo.");
+  if(reply.stop_reason==="refusal")throw new VideoError(502,"La IA no ha podido revisar este vídeo. La revisión manual sigue disponible.");
+  if(reply.stop_reason!=="end_turn")throw new VideoError(502,"La IA no ha completado la respuesta. Vuelve a intentarlo.");
   const txt=reply.content.filter(block=>block.type==="text").map(block=>block.type==="text"?block.text:"").join("").trim();
-  let obj;try{obj=JSON.parse(txt.replace(/^\s*```(?:json)?\s*/i,"").replace(/\s*```\s*$/,""));}catch{throw new VideoError(502,"El borrador recibido no es legible. Puedes revisar el vídeo manualmente.");}
+  let obj;try{obj=JSON.parse(txt);}catch{throw new VideoError(502,"La IA devolvió una respuesta con formato incorrecto. Vuelve a intentarlo.");}
+  if(!matchesVideoOutputSchema(obj,buildVideoOutputSchema(b.testId)))throw new VideoError(502,"La IA devolvió un borrador incompleto o con campos no válidos. Vuelve a intentarlo.");
   return parseAIDraft(obj,b,config);
 }

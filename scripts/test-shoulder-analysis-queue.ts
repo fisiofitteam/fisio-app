@@ -29,6 +29,20 @@ async function main(){
     if(event.type==="error")afterRun[revisionKey(event.source)]={error:event.message};
   }
   assert.deepEqual(pendingSources(all,sid,[],{},afterRun,false),[all[5]],"Retry only the failed test, preserving other proposals");
+  const savedBeforeRetry=JSON.stringify(afterRun);
+  const retryEvents:QueueEvent[]=[];
+  await runShoulderQueue(pendingSources(all,sid,[],{},afterRun,false),new AbortController().signal,async s=>draft(s),e=>retryEvents.push(e));
+  assert.deepEqual(retryEvents.filter(e=>e.type==="start").map(e=>e.source),[all[5]],"Retry does not resend the 14 successful videos");
+  assert.equal(JSON.stringify(afterRun),savedBeforeRetry,"Queue retry leaves existing successful proposals untouched");
+  assert.deepEqual(pendingSources(all,sid,[all[5].testId],{},afterRun,false),[],"A failed analysis cannot queue a test the clinician has since reviewed");
+  assert.deepEqual(pendingSources(all,sid,[],{[all[5].testId]:"Valorado manualmente como no evaluable"},afterRun,false),[],"Manual exclusions remain respected during retries");
+  const preservedDraftWithError={...afterRun,[revisionKey(all[0])]:{draft:draft(all[0]),applied:true,error:"Reanalysis failed"}};
+  assert.deepEqual(pendingSources(all,sid,[],{},preservedDraftWithError,false),[all[5]],"A failed reanalysis retains its previous incorporated proposal and is not included in a batch retry");
+  const replacement={...all[5],uploadedAt:"2026-11-19T10:00:00.000Z"};
+  const replacementPending=pendingSources([replacement],sid,[],{},afterRun,false);
+  assert.deepEqual(replacementPending,[replacement],"A new video revision can be analyzed normally");
+  assert.equal(afterRun[revisionKey(replacement)]?.error,undefined,"A prior revision's error must not label a replacement video as a failed retry");
+
 
   const candidates=[{...a,sessionId:"other"},{...a,url:""},source("unsupported"),a,a,b,c];
   assert.deepEqual(pendingSources(candidates,sid,[],{}, {},false),[a,b,c]);
