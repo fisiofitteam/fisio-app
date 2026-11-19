@@ -8,9 +8,10 @@ En la ficha del paciente: **Evolución e historial → Grabaciones**.
 
 1. Elegir cámara, micrófono y audio compartido opcionales.
 2. Pulsar «Empezar a grabar» y seleccionar pantalla, ventana o pestaña en el selector del navegador. Puede ser WhatsApp u otra aplicación.
-3. Mantener abierta la pestaña del grabador, aunque se trabaje en otra ventana. Pausar/reanudar y terminar desde ella.
-4. Revisar el vídeo, añadir título/notas y guardarlo. También se puede descargar una copia.
-5. Compartir manualmente mediante un enlace que caduca a los 30 días. Se puede renovar o desactivar desde el historial.
+3. La cámara aparece en una burbuja en directo mientras se graba o está en pausa. Para seguir viéndola sobre WhatsApp u otra ventana, pulsar «Cámara flotante». Se puede mover y redimensionar con los controles del navegador. Cerrarla devuelve la cámara a la burbuja sin detener la grabación.
+4. Mantener abierta la pestaña del grabador, aunque se trabaje en otra ventana. Pausar/reanudar y terminar desde ella.
+5. Revisar el vídeo, añadir título/notas y guardarlo. También se puede descargar una copia.
+6. Compartir manualmente mediante un enlace que caduca a los 30 días. Se puede renovar o desactivar desde el historial.
 
 Límites: 30 minutos / 500 MiB. Chrome o Edge de escritorio son los navegadores recomendados. El audio de ventanas/pestañas depende del navegador y sistema operativo. No es una aplicación nativa: cerrar el navegador interrumpe la captura. La cámara se compone como círculo sobre la pantalla, con una salida de hasta 1280 píxeles de ancho; sin cámara se conserva la resolución seleccionada.
 
