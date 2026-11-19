@@ -24,8 +24,8 @@ export function ShoulderVideoProposal({source,initial,entry,disabled,conflict,ba
       {source?<figure className="max-w-lg"><figcaption className="text-xs text-neutral-500 mb-1">{initial?"Vídeo del retest":"Vídeo del atleta"}</figcaption><AssessmentVideoPlayer playerRef={video} label={initial?"Vídeo del retest":"Vídeo del atleta"} className="w-full max-h-64 bg-neutral-900 rounded-lg" src={source.url}/></figure>:<p className="text-sm">Pendiente de vídeo en el retest.</p>}
     </div>
     {source&&canAnalyzeShoulderTest(source.testId)&&!disabled&&<div className="rounded-lg bg-neutral-50 p-3 space-y-2">
-      {progress?<div className="flex gap-3 items-center"><span role="status" className="text-xs">{progress}</span><button type="button" className="text-xs underline" onClick={onCancel}>Detener análisis</button></div>:<button type="button" className="btn btn-ghost" onClick={onAnalyze} disabled={batchBusy}>{draft?"Volver a analizar el vídeo":"Proponer revisión con IA"}</button>}
-      {entry?.error&&<p role="alert" className="text-sm text-red-700">{entry.error} Puedes continuar manualmente.</p>}
+      {progress?<div className="flex gap-3 items-center"><span role="status" className="text-xs">{progress}</span><button type="button" className="text-xs underline" onClick={onCancel}>Detener análisis</button></div>:<button type="button" className="btn btn-ghost" onClick={onAnalyze} disabled={batchBusy}>{entry?.error?"Reintentar análisis con IA":draft?"Volver a analizar el vídeo":"Proponer revisión con IA"}</button>}
+      {entry?.error&&<p role="alert" className="text-sm text-red-700">{entry.error}</p>}
       {draft&&<div className="text-sm space-y-2"><strong>Propuesta pendiente de verificación</strong>
         {draft.notes&&<p className="whitespace-pre-wrap">{draft.notes}</p>}
         {numericDraft&&<dl>{Object.entries(proposedFields).map(([key,v])=><div key={key}><dt className="inline">{draft.kind==="hold"?holdLabels[key]:testFields.find(f=>f.key===key)?.label}: </dt><dd className="inline font-semibold">{v.toLocaleString("es-ES")}{draft.kind==="hold"?" s":""}</dd></div>)}</dl>}

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { once } from "node:events";
 import { spawnSync } from "node:child_process";
-import { parseAIDraft,readLimitedBody,validateFrames,analyzeFrames,buildVideoInstruction } from "../lib/shoulder-video-analysis";
+import { parseAIDraft,readLimitedBody,validateFrames,analyzeFrames,buildVideoInstruction,buildVideoOutputSchema } from "../lib/shoulder-video-analysis";
 import { HOLD_PVC,SHOULDER_VIDEO_TESTS } from "../lib/shoulder-analysis-types";
 import { DEFAULT_PILOT_CONFIG as config,PILOT_TESTS } from "../lib/shoulder-pilot";
 
@@ -60,6 +60,37 @@ async function main(){
       assert.equal(parseAIDraft({notes:"Sin evidencia"},input,config).notes,"");
     }
   }
+  function verifySchema(node:any){
+    if(!node||typeof node!=="object")return;
+    for(const key of ["minimum","maximum","minLength","maxLength","maxItems","oneOf"])assert(!(key in node),"unsupported provider schema keyword: "+key);
+    if(node.type==="object"){
+      assert.equal(node.additionalProperties,false);
+      assert.deepEqual([...node.required].sort(),Object.keys(node.properties).sort());
+    }
+    for(const value of Object.values(node))if(Array.isArray(value)){for(const child of value)verifySchema(child);}else verifySchema(value);
+  }
+  for(const test of PILOT_TESTS){
+    const schema=buildVideoOutputSchema(test.id) as any,kind=SHOULDER_VIDEO_TESTS[test.id].kind;
+    verifySchema(schema);
+    const expected=["notes","findings","limitations",...(kind==="hold"?["hold","lossOfPosition","stabilityVisible"]:kind==="measurement"?["measurements"]:[])];
+    assert.deepEqual(Object.keys(schema.properties).sort(),expected.sort());
+    if(kind==="hold"){
+      assert(schema.properties.hold.anyOf.some((s:any)=>s.type==="null"));
+      assert(schema.properties.lossOfPosition.anyOf.some((s:any)=>s.type==="null"));
+      assert.equal(schema.properties.stabilityVisible.type,"boolean");
+    }
+    if(kind==="measurement"){
+      const fields=test.fields.filter(f=>f.type==="number");
+      assert.deepEqual(Object.keys(schema.properties.measurements.properties).sort(),fields.map(f=>f.key).sort());
+      for(const field of fields){
+        const union=schema.properties.measurements.properties[field.key].anyOf;
+        assert(union.some((s:any)=>s.type==="null"));
+        const measured=union.find((s:any)=>s.type==="object");
+        assert.deepEqual(Object.keys(measured.properties).sort(),["end","start","value"]);
+        assert.equal(measured.properties.value.type,field.step===1?"integer":"number");
+      }
+    }
+  }
   const q={...b,testId:"08f41761-3bfd-4172-8be8-0b860a0df414",fps:3};
   assert.equal(parseAIDraft({notes:"No verificable",findings:[]},q,config).notes,"");
   assert.deepEqual(parseAIDraft(response,q,config).observationFields,{});
@@ -76,22 +107,75 @@ async function main(){
     validateFrames({...b,testId:t.id,duration,fps,sheets:[{jpeg,times}]});
   }
   assert.throws(()=>validateFrames({...b,sheets:[{...b.sheets[0],times:b.sheets[0].times.map(()=>0)},...b.sheets.slice(1)]}));
-  let received=false;
+  const providerResponse={hold:response.hold,stabilityVisible:response.stabilityVisible,lossOfPosition:response.lossOfPosition,notes:response.notes,findings:response.findings,limitations:response.limitations};
+  let requests=0,expectedInput=b;
+  let mockReply:any={content:[{type:"text",text:JSON.stringify(providerResponse)}],stop_reason:"end_turn"};
   const mock=createServer((req,res)=>{
     const chunks:Buffer[]=[];req.on("data",x=>chunks.push(Buffer.from(x)));req.on("end",()=>{
       const body=JSON.parse(Buffer.concat(chunks).toString());assert.equal(req.url,"/v1/messages");assert.equal(req.headers["x-api-key"],"synthetic-only");
-      const parts=body.messages[0].content;assert.doesNotMatch(parts[0].text,/temblor|tremor|aboveEars|rangeVisible|inRangeSeconds/i);assert.match(parts[0].text,/lossOfPosition/);assert.equal(parts.filter((x:any)=>x.type==="image").length,b.sheets.length);
-      assert.equal(parts.find((x:any)=>x.type==="image").source.media_type,"image/jpeg");assert(!JSON.stringify(body).includes("synthetic-upload"));
-      received=true;res.writeHead(200,{"Content-Type":"application/json"});res.end(JSON.stringify({
-        id:"mock-only",type:"message",role:"assistant",model:"synthetic",content:[{type:"text",text:JSON.stringify(response)}],stop_reason:"end_turn",usage:{input_tokens:20,output_tokens:12}
+      const parts=body.messages[0].content;
+      assert.doesNotMatch(parts[0].text,/temblor|tremor|aboveEars|rangeVisible|inRangeSeconds/i);
+      if(SHOULDER_VIDEO_TESTS[expectedInput.testId].kind==="hold")assert.match(parts[0].text,/lossOfPosition/);
+      assert.equal(parts.filter((x:any)=>x.type==="image").length,expectedInput.sheets.length);
+      assert.equal(parts.find((x:any)=>x.type==="image").source.media_type,"image/jpeg");
+      assert(!JSON.stringify(body).includes("synthetic-upload"));
+      assert(!JSON.stringify(body).includes("2026-01-01T00:00:00.000Z"));
+      assert.equal(body.max_tokens,8000);
+      assert.deepEqual(body.output_config,{format:{type:"json_schema",schema:buildVideoOutputSchema(expectedInput.testId)}});
+      assert.match(parts[0].text,/máximo de 8 observaciones/);
+      assert.match(parts[0].text,/máximo de 5 limitaciones/);
+      requests++;res.writeHead(200,{"Content-Type":"application/json"});res.end(JSON.stringify({
+        id:"mock-only",type:"message",role:"assistant",model:"synthetic",usage:{input_tokens:20,output_tokens:12},...mockReply,
       }));
     });
   });mock.listen(0,"127.0.0.1");await once(mock,"listening");const addr=mock.address();assert(addr&&typeof addr==="object");
   const old=process.env.ANTHROPIC_API_KEY,oldUrl=process.env.ANTHROPIC_BASE_URL;
+  async function rejected(reply:any,message:RegExp){
+    mockReply=reply;const before=requests;
+    await assert.rejects(()=>analyzeFrames(expectedInput,config),message);
+    assert.equal(requests,before+1,"failed analysis does not automatically resend patient images");
+  }
   try{process.env.ANTHROPIC_API_KEY="synthetic-only";process.env.ANTHROPIC_BASE_URL="http://127.0.0.1:"+addr.port;
-    assert.deepEqual((await analyzeFrames(b,config)).observationFields,d.observationFields);assert(received);
+    assert.deepEqual((await analyzeFrames(b,config)).observationFields,d.observationFields);
+    // Every analysis kind uses its own precise schema through the actual SDK.
+    for(const test of PILOT_TESTS){
+      const kind=SHOULDER_VIDEO_TESTS[test.id].kind,fps=kind==="hold"?8:3;
+      expectedInput={...b,testId:test.id,duration:1,fps,sheets:[{jpeg,times:Array.from({length:fps},(_,i)=>i/fps)}]};
+      const data={notes:"",findings:[],limitations:["No se puede medir con certeza."],
+        ...(kind==="hold"?{hold:null,lossOfPosition:null,stabilityVisible:false}:kind==="measurement"?{measurements:Object.fromEntries(test.fields.filter(f=>f.type==="number").map(f=>[f.key,null]))}:{})};
+      mockReply={content:[{type:"text",text:JSON.stringify(data)}],stop_reason:"end_turn"};
+      const draft=await analyzeFrames(expectedInput,config);
+      assert.deepEqual(draft.observationFields,{},"null measures never become zero");
+      assert(draft.limitations.length>0);
+    }
+    expectedInput=b;
+    const text=JSON.stringify(providerResponse),cut=Math.floor(text.length/2);
+    mockReply={content:[{type:"text",text:text.slice(0,cut)},{type:"text",text:text.slice(cut)}],stop_reason:"end_turn"};
+    assert.deepEqual((await analyzeFrames(b,config)).observationFields,d.observationFields);
+    for(const invalid of ["","No se pudo analizar.","\u0060\u0060\u0060json\n"+text+"\n\u0060\u0060\u0060","Aquí está el análisis: "+text,text.slice(0,-1)]){
+      await rejected({content:[{type:"text",text:invalid}],stop_reason:"end_turn"},/formato incorrecto/);
+    }
+    await rejected({content:[],stop_reason:"end_turn"},/formato incorrecto/);
+    for(const invalid of [{},[],null,{...providerResponse,notes:7},{...providerResponse,findings:"none"},{...providerResponse,limitations:[4]},{...providerResponse,hold:{start:1}},{...providerResponse,stabilityVisible:"true"},{...providerResponse,lossOfPosition:{}},{...providerResponse,unexpected:0}]){
+      await rejected({content:[{type:"text",text:JSON.stringify(invalid)}],stop_reason:"end_turn"},/campos no válidos/);
+    }
+    expectedInput={...b,testId:numeric.id,fps:3};
+    for(const invalid of [
+      {notes:"",findings:[],limitations:[],measurements:{}},
+      {notes:"",findings:[],limitations:[],measurements:{leftProgress:3,rightProgress:null}},
+      {notes:"",findings:[],limitations:[],measurements:{leftProgress:{value:70,start:1},rightProgress:null}},
+      {notes:"",findings:[],limitations:[],measurements:{leftProgress:null,rightProgress:null,affectedKg:10}},
+    ])await rejected({content:[{type:"text",text:JSON.stringify(invalid)}],stop_reason:"end_turn"},/campos no válidos/);
+    expectedInput=b;
+    for(const incomplete of [text,text.slice(0,-1)]){
+      await rejected({content:[{type:"text",text:incomplete}],stop_reason:"max_tokens"},/interrumpido antes de terminar/);
+    }
+    await rejected({content:[{type:"text",text}],stop_reason:"refusal"},/no ha podido revisar/);
+    for(const reason of ["pause_turn","tool_use","stop_sequence",null]){
+      await rejected({content:[{type:"text",text}],stop_reason:reason},/no ha completado la respuesta/);
+    }
   }finally{if(old===undefined)delete process.env.ANTHROPIC_API_KEY;else process.env.ANTHROPIC_API_KEY=old;
     if(oldUrl===undefined)delete process.env.ANTHROPIC_BASE_URL;else process.env.ANTHROPIC_BASE_URL=oldUrl;mock.close();}
-  console.log("PASS: all 15 tests, bounded measurements and evidence, retired range ignored, interval clipping, missing ≠ zero and local SDK transport");
+  console.log("PASS: all 15 tests, bounded evidence, strict per-test schemas, complete-response checks, null ≠ zero and offline SDK transport failures without automatic resends");
 }
 main().catch(e=>{console.error(e.message);process.exitCode=1;});
