@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { PilotHttpError, requirePilotAccess } from "@/lib/shoulder-pilot-server";
 import { canAnalyzeShoulderTest } from "@/lib/shoulder-analysis-types";
 import { configuredProvider,VideoError,readLimitedBody,validateFrames,analyzeFrames } from "@/lib/shoulder-video-analysis";
+import { analyzeContactProbe, validateContactProbe } from "@/lib/shoulder-contact-analysis";
 export const dynamic="force-dynamic";
 export const runtime="nodejs";
 export const maxDuration=120;
@@ -40,16 +41,21 @@ export async function POST(req:NextRequest,{params}:RouteCtx){
     const a=await requirePilotAccess(params.sessionId,true);
     if(wasShoulderReviewWithdrawn(a.row))throw new VideoError(409,"Esta valoración se conserva para revisión manual.");
     if(!pilotSameOrigin(req))throw new VideoError(403,"Origen no permitido.");
-    const input=validateFrames(await readLimitedBody(req));
+    const raw=await readLimitedBody(req);
+    const probeInput=raw&&typeof raw==="object"&&"mode" in raw&&raw.mode==="contact-probe"?validateContactProbe(raw):undefined;
+    const frameInput=probeInput?undefined:validateFrames(raw);
+    const input=probeInput??frameInput!;
     // Recheck the assigned source revision and its review policy immediately before and after inference.
     const fresh=await requirePilotAccess(params.sessionId,true);
     await checked(fresh,input);
     const key=params.sessionId+"/"+input.videoId;
     if(inFlight.has(key))throw new VideoError(409,"Este vídeo ya se está analizando.");
     inFlight.add(key);activeKey=key;
-    const draft=await analyzeFrames(input,fresh.config);
+    // Contact probes are isolated observations, never clinical draft fields.
+    // Both paths share patient/source/revision/origin/concurrency checks.
+    const result=probeInput?{probe:await analyzeContactProbe(probeInput)}:{draft:await analyzeFrames(frameInput!,fresh.config)};
     const after=await requirePilotAccess(params.sessionId,true);
     await checked(after,input);
-    return json({draft});
+    return json(result);
   }catch(e){return failure(e);}finally{if(activeKey)inFlight.delete(activeKey);}
 }
