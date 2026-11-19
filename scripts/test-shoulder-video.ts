@@ -77,10 +77,102 @@ async function main(){
   assert.deepEqual(parseAIDraft({measurements:{reps5:{value:4,start:2,end:2},range5:{value:2,start:2,end:2}}},raises,config).observationFields,{});
 
   const wallPress={...b,testId:PILOT_TESTS.find(t=>t.key==="wallPress")!.id,fps:3};
-  assert.deepEqual(parseAIDraft({measurements:{externalDeficit:{...validMeasurement,value:0},abduction:{...validMeasurement,value:45}}},wallPress,config).observationFields,{externalDeficit:0});
-  assert.deepEqual(parseAIDraft({measurements:{externalDeficit:{...validMeasurement,value:15},abduction:{...validMeasurement,value:120}}},wallPress,config).observationFields,{externalDeficit:15});
-  assert.deepEqual(parseAIDraft({measurements:{abduction:{...validMeasurement,value:120}}},wallPress,config).observationFields,{});
-  assert.deepEqual(parseAIDraft({measurements:{externalDeficit:{value:0,start:2,end:2},abduction:{value:125,start:4,end:4}}},wallPress,config).observationFields,{externalDeficit:0,abduction:125});
+  const visibleSupport={leftImageArm:"visible_contact",rightImageArm:"visible_contact",backContact:true,wristsNeutral:true,start:2,end:3,reason:"Ambos antebrazos y manos contactan directamente con la pared."};
+  const hiddenSupport={leftImageArm:"not_visible",rightImageArm:"not_visible",backContact:null,wristsNeutral:null,start:null,end:null,reason:"El contacto no se distingue; las sombras no lo confirman."};
+  const wallEvidence={initial:{...visibleSupport,deficitAngleVisible:false},elevation:{...visibleSupport,start:2,end:8}};
+  const hiddenWallEvidence={initial:{...hiddenSupport,deficitAngleVisible:false},elevation:{...hiddenSupport}};
+  const wallMeasures={externalDeficit:{value:0,start:2,end:3},abduction:{value:160,start:8,end:8}};
+  const parseWall=(wallPressEvidence:any,measurements:any=wallMeasures)=>parseAIDraft({measurements,wallPressEvidence},wallPress,config);
+  assert.deepEqual(parseWall(wallEvidence).observationFields,{externalDeficit:0,abduction:160},"direct bilateral contact and a continuously supported elevation are measurable");
+  assert.deepEqual(parseWall({...wallEvidence,initial:{...wallEvidence.initial,start:2,end:2}},{
+    externalDeficit:{value:0,start:2,end:2},abduction:{value:125,start:4,end:4},
+  }).observationFields,{externalDeficit:0,abduction:125},"static contact frames remain usable when the elevation path is covered");
+  assert.deepEqual(parseWall(wallEvidence,{externalDeficit:wallMeasures.externalDeficit,abduction:{...validMeasurement,value:45}}).observationFields,{externalDeficit:0},"the established 0 or 90–180 abduction rubric still applies");
+  assert.deepEqual(parseWall(wallEvidence,{abduction:wallMeasures.abduction}).observationFields,{},"abduction cannot survive a missing initial deficit");
+  for(const evidence of [undefined,null,{},hiddenWallEvidence]){
+    const unverified=parseWall(evidence);
+    assert.deepEqual(unverified.observationFields,{},"missing or occluded support is not zero deficit or full elevation");
+    assert(!unverified.findings.some(f=>f.text.startsWith("Estimación")),"rejected numbers must not remain as generated numeric findings");
+    assert(unverified.limitations.some(x=>x.includes("0°")),"the rejected zero has an actionable reason");
+  }
+  const shadowInference=parseAIDraft({
+    measurements:wallMeasures,wallPressEvidence:hiddenWallEvidence,
+    notes:"El apoyo se infiere por las sombras, no se ve directamente.",
+    findings:[{start:2,end:3,text:"Antebrazos verticales; contacto oculto."}],
+    limitations:["No se ve directamente el contacto del antebrazo y de la mano."],
+  },wallPress,config);
+  assert.deepEqual(shadowInference.observationFields,{},"regression: shadow inference must not become 0° and 10/10");
+  assert.match(shadowInference.notes,/sombras/,"useful narrative remains available without unsupported measurements");
+  // The structured contact check can be useful clinical commentary even when
+  // every numeric claim was rejected and the model supplied no extra findings.
+  const unmeasurableComment="Se observa separación del antebrazo, pero la perspectiva no permite estimar los grados.";
+  const timedUnmeasurable={...hiddenSupport,start:2,end:3,reason:"Separación visible; referencias angulares ocultas."};
+  for(const wallPressEvidence of [
+    {...hiddenWallEvidence,initial:{...timedUnmeasurable,deficitAngleVisible:false}},
+    {...hiddenWallEvidence,elevation:timedUnmeasurable},
+    {...hiddenWallEvidence,initial:{...timedUnmeasurable,start:2,end:2,deficitAngleVisible:false}},
+  ]){
+    const commentary=parseAIDraft({measurements:wallMeasures,wallPressEvidence,notes:unmeasurableComment,findings:[]},wallPress,config);
+    assert.deepEqual(commentary.observationFields,{});
+    assert.deepEqual(commentary.findings,[],"structured evidence does not duplicate findings or retain rejected numbers");
+    assert.equal(commentary.notes,unmeasurableComment,"timed structured evidence keeps the comment available for incorporation");
+    assert(!commentary.limitations.some(x=>x.includes("No hay observaciones con una referencia temporal")),"valid structured timing must not be reported as missing temporal evidence");
+  }
+  for(const wallPressEvidence of [
+    undefined,null,{},hiddenWallEvidence,
+    {...hiddenWallEvidence,initial:{...timedUnmeasurable,start:-1,deficitAngleVisible:false}},
+    {...hiddenWallEvidence,elevation:{...timedUnmeasurable,end:25}},
+    {...hiddenWallEvidence,elevation:{...timedUnmeasurable,start:4,end:3}},
+    {...hiddenWallEvidence,elevation:{...timedUnmeasurable,start:"2"}},
+    {...hiddenWallEvidence,elevation:{...timedUnmeasurable,reason:"   "}},
+  ]){
+    const unsupportedComment=parseAIDraft({measurements:wallMeasures,wallPressEvidence,notes:unmeasurableComment,findings:[]},wallPress,config);
+    assert.equal(unsupportedComment.notes,"","bare notes need a valid timed observation or contact-evidence phase");
+    assert(unsupportedComment.limitations.some(x=>x.includes("No hay observaciones con una referencia temporal")));
+  }
+  for(const change of [
+    {leftImageArm:"visible_gap"},{rightImageArm:"visible_gap"},
+    {leftImageArm:"not_visible"},{rightImageArm:"not_visible"},
+    {leftImageArm:"inferred_contact"},{backContact:false},{backContact:null},
+    {wristsNeutral:false},{wristsNeutral:null},{backContact:"true"},{wristsNeutral:1},
+    {reason:""},{reason:"   "},{start:2.01},{end:2.99},
+    {start:-1},{end:24.001},{start:4,end:3},{start:null},{end:null},
+  ]){
+    assert.deepEqual(parseWall({...wallEvidence,initial:{...wallEvidence.initial,...change}}).observationFields,{},
+      "zero requires both supported arms, valid posture and relevant evidence: "+JSON.stringify(change));
+  }
+  const gapEvidence={initial:{...visibleSupport,leftImageArm:"visible_gap",deficitAngleVisible:true},elevation:{...hiddenSupport}};
+  for(const value of [2,5,15]){
+    assert.deepEqual(parseWall(gapEvidence,{externalDeficit:{...wallMeasures.externalDeficit,value},abduction:wallMeasures.abduction}).observationFields,{externalDeficit:value},
+      "a visible positive deficit remains measurable independently and is never rounded to zero");
+  }
+  assert.deepEqual(parseWall({...gapEvidence,initial:{...gapEvidence.initial,leftImageArm:"visible_contact",rightImageArm:"visible_gap"}}).observationFields,{},"a visible gap on either arm contradicts a proposed zero");
+  assert.deepEqual(parseWall({...gapEvidence,initial:{...gapEvidence.initial,leftImageArm:"not_visible",rightImageArm:"visible_gap"}},{
+    externalDeficit:{...wallMeasures.externalDeficit,value:15},abduction:null,
+  }).observationFields,{externalDeficit:15},"one observable gap can support a positive deficit without inventing hidden contact");
+  for(const change of [
+    {leftImageArm:"not_visible"},{leftImageArm:"visible_contact"},{deficitAngleVisible:false},
+    {deficitAngleVisible:"true"},{backContact:false},{wristsNeutral:false},{start:4,end:5},
+  ]){
+    assert.deepEqual(parseWall({...gapEvidence,initial:{...gapEvidence.initial,...change}},{
+      externalDeficit:{...wallMeasures.externalDeficit,value:15},abduction:null,
+    }).observationFields,{},"a positive number needs a visible gap and angular evidence: "+JSON.stringify(change));
+  }
+  for(const change of [
+    {leftImageArm:"visible_gap"},{rightImageArm:"not_visible"},{backContact:false},
+    {wristsNeutral:null},{reason:""},{start:4,end:8},{start:8,end:8},
+    {start:2,end:7.99},{start:-1,end:8},{start:2,end:25},
+  ]){
+    assert.deepEqual(parseWall({...wallEvidence,elevation:{...wallEvidence.elevation,...change}}).observationFields,{externalDeficit:0},
+      "initial contact does not establish uninterrupted support during elevation: "+JSON.stringify(change));
+  }
+  assert.deepEqual(parseWall(wallEvidence,{externalDeficit:wallMeasures.externalDeficit,abduction:{value:160,start:1,end:2}}).observationFields,{externalDeficit:0},"elevation evidence cannot come from before the confirmed initial posture");
+  assert.deepEqual(parseWall({...wallEvidence,elevation:{...visibleSupport}},{externalDeficit:wallMeasures.externalDeficit,abduction:{value:0,start:2,end:3}}).observationFields,{externalDeficit:0,abduction:0},"confirmed initial support can evidence zero elevation without a fictional movement");
+  assert.deepEqual(parseWall({...wallEvidence,elevation:hiddenSupport},{externalDeficit:wallMeasures.externalDeficit,abduction:{value:0,start:2,end:3}}).observationFields,{externalDeficit:0},"zero elevation also requires the prescribed support evidence");
+  const wallInstruction=buildVideoInstruction(wallPress);
+  assert.match(wallInstruction,/sombras/i);
+  assert.match(wallInstruction,/redonde/i);
+  assert.match(wallInstruction,/visible_contact/);
 
   for(const t of PILOT_TESTS){
     const desc=SHOULDER_VIDEO_TESTS[t.id];assert(desc,t.name+" has analysis support");
@@ -90,7 +182,7 @@ async function main(){
       const numericFields=t.fields.filter(f=>f.type==="number");
       assert.match(instruction,/measurements/);for(const f of numericFields)assert(instruction.includes(f.key));
       const fields=Object.fromEntries(numericFields.map(f=>[f.key,{...validMeasurement,value:f.min??0}]));
-      assert.deepEqual(Object.keys(parseAIDraft({measurements:fields},input,config).observationFields).sort(),numericFields.map(f=>f.key).sort());
+      assert.deepEqual(Object.keys(parseAIDraft({measurements:fields,...(t.key==="wallPress"?{wallPressEvidence:wallEvidence}:{})},input,config).observationFields).sort(),numericFields.map(f=>f.key).sort());
     }else if(desc.kind==="load"){
       assert.match(instruction,/No infieras cargas/);
       const proposed=parseAIDraft({notes:"Ocho repeticiones visibles.",findings:[{start:1,end:4,text:"Ejecución visible."}],measurements:{affectedKg:{...validMeasurement,value:99},referenceKg:{...validMeasurement,value:99}}},input,config);
@@ -111,7 +203,7 @@ async function main(){
   for(const test of PILOT_TESTS){
     const schema=buildVideoOutputSchema(test.id) as any,kind=SHOULDER_VIDEO_TESTS[test.id].kind;
     verifySchema(schema);
-    const expected=["notes","findings","limitations",...(kind==="hold"?["hold","holdPositionVisible","lossOfPosition","stabilityVisible"]:kind==="measurement"?["measurements"]:[])];
+    const expected=["notes","findings","limitations",...(kind==="hold"?["hold","holdPositionVisible","lossOfPosition","stabilityVisible"]:kind==="measurement"?["measurements"]:[]),...(test.key==="wallPress"?["wallPressEvidence"]:[])];
     assert.deepEqual(Object.keys(schema.properties).sort(),expected.sort());
     if(kind==="hold"){
       assert(schema.properties.hold.anyOf.some((s:any)=>s.type==="null"));
@@ -122,6 +214,15 @@ async function main(){
     if(kind==="measurement"){
       const fields=test.fields.filter(f=>f.type==="number");
       assert.deepEqual(Object.keys(schema.properties.measurements.properties).sort(),fields.map(f=>f.key).sort());
+      if(test.key==="wallPress"){
+        const evidence=schema.properties.wallPressEvidence;
+        assert.deepEqual(Object.keys(evidence.properties).sort(),["elevation","initial"]);
+        for(const position of ["initial","elevation"]){
+          const props=evidence.properties[position].properties;
+          assert.deepEqual(props.leftImageArm.enum,["visible_contact","visible_gap","not_visible"]);
+          assert.deepEqual(props.rightImageArm.enum,["visible_contact","visible_gap","not_visible"]);
+        }
+      }
       for(const field of fields){
         const union=schema.properties.measurements.properties[field.key].anyOf;
         assert(union.some((s:any)=>s.type==="null"));
@@ -256,12 +357,29 @@ async function main(){
       const kind=SHOULDER_VIDEO_TESTS[test.id].kind,fps=kind==="hold"?8:3;
       expectedInput={...b,testId:test.id,duration:1,fps,sheets:[{jpeg,times:Array.from({length:fps},(_,i)=>i/fps)}]};
       const data={notes:"",findings:[],limitations:["No se puede medir con certeza."],
-        ...(kind==="hold"?{hold:null,holdPositionVisible:false,lossOfPosition:null,stabilityVisible:false}:kind==="measurement"?{measurements:Object.fromEntries(test.fields.filter(f=>f.type==="number").map(f=>[f.key,null]))}:{})};
+        ...(kind==="hold"?{hold:null,holdPositionVisible:false,lossOfPosition:null,stabilityVisible:false}:kind==="measurement"?{measurements:Object.fromEntries(test.fields.filter(f=>f.type==="number").map(f=>[f.key,null]))}:{}),
+        ...(test.key==="wallPress"?{wallPressEvidence:hiddenWallEvidence}:{})};
       mockReply={content:[{type:"text",text:JSON.stringify(data)}],stop_reason:"end_turn"};
       const draft=await analyzeFrames(expectedInput,config);
       assert.deepEqual(draft.observationFields,{},"null measures never become zero");
       assert(draft.limitations.length>0);
     }
+    // Validate the wall-press contact enum and required structure through the
+    // actual provider SDK path, not only permissive raw parser fixtures.
+    expectedInput=wallPress;
+    const wallProviderResponse={notes:"Apoyo visible.",findings:[],limitations:[],measurements:wallMeasures,wallPressEvidence:wallEvidence};
+    mockReply={content:[{type:"text",text:JSON.stringify(wallProviderResponse)}],stop_reason:"end_turn"};
+    assert.deepEqual((await analyzeFrames(expectedInput,config)).observationFields,{externalDeficit:0,abduction:160});
+    mockReply={content:[{type:"text",text:JSON.stringify({...wallProviderResponse,wallPressEvidence:hiddenWallEvidence})}],stop_reason:"end_turn"};
+    assert.deepEqual((await analyzeFrames(expectedInput,config)).observationFields,{},"schema-valid uncertain contact cannot manufacture numeric confidence");
+    for(const invalid of [
+      {...wallProviderResponse,wallPressEvidence:undefined},
+      {...wallProviderResponse,wallPressEvidence:null},
+      {...wallProviderResponse,wallPressEvidence:{...wallEvidence,initial:{...wallEvidence.initial,leftImageArm:"inferred_contact"}}},
+      {...wallProviderResponse,wallPressEvidence:{...wallEvidence,elevation:{...wallEvidence.elevation,rightImageArm:true}}},
+      {...wallProviderResponse,wallPressEvidence:{...wallEvidence,initial:{...wallEvidence.initial,deficitAngleVisible:null}}},
+      {...wallProviderResponse,wallPressEvidence:{...wallEvidence,elevation:{...wallEvidence.elevation,start:"2"}}},
+    ])await rejected({content:[{type:"text",text:JSON.stringify(invalid)}],stop_reason:"end_turn"},/campos no válidos/);
     expectedInput=b;
     const text=JSON.stringify(providerResponse),cut=Math.floor(text.length/2);
     mockReply={content:[{type:"text",text:text.slice(0,cut)},{type:"text",text:text.slice(cut)}],stop_reason:"end_turn"};
@@ -291,6 +409,6 @@ async function main(){
   }finally{if(old===undefined)delete process.env.ANTHROPIC_API_KEY;else process.env.ANTHROPIC_API_KEY=old;
     if(oldUrl===undefined)delete process.env.ANTHROPIC_BASE_URL;else process.env.ANTHROPIC_BASE_URL=oldUrl;
     if(oldModel===undefined)delete process.env.SHOULDER_VIDEO_AI_MODEL;else process.env.SHOULDER_VIDEO_AI_MODEL=oldModel;mock.close();}
-  console.log("PASS: Opus default/override, provider model provenance, thinking blocks, all 15 tests, overview/detail transport and combined budgets, static-frame and partial measures, bounded evidence, strict schemas, complete-response checks, null ≠ zero and offline SDK failures without automatic resends");
+  console.log("PASS: Opus default/override, provider model provenance, thinking blocks, all 15 tests, overview/detail transport and combined budgets, static-frame and partial measures, bilateral wall-contact and continuous-elevation evidence, positive deficits without false zeros, bounded evidence, strict schemas, complete-response checks, null ≠ zero and offline SDK failures without automatic resends");
 }
 main().catch(e=>{console.error(e.message);process.exitCode=1;});
