@@ -50,6 +50,10 @@ function incorporate(html:string){
   assert(match,"the proposal exposes an incorporation action");
   return {disabled:/\bdisabled(?:=|\s|$)/.test(match[1]),html:match[0]};
 }
+assert.match(markup(notesOnly),/0 medidas propuestas · 2 sin estimar/);
+assert.match(markup(draft("wallFlexion","",{leftProgress:50})),/1 medida propuesta · 1 sin estimar/);
+assert.match(markup(draft("wallFlexion","",{leftProgress:50,rightProgress:75})),/2 medidas propuestas/);
+assert.doesNotMatch(markup(draft("wallPress","",{externalDeficit:20})),/sin estimar|Pendientes:/,"conditional abduction is not missing when external rotation deficit is observed");
 const commentButton=incorporate(markup(notesOnly));
 assert.equal(commentButton.disabled,false,"the screenshot's text-only numerical proposal is actionable");
 assert.match(commentButton.html,/comentario/);
