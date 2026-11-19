@@ -8,6 +8,7 @@ datasource db {
 }
 
 model Patient {
+  recordings PatientRecording[]
   referralCode             String? @unique
   referralsMade            Lead[] @relation("PatientReferrals")
   assessmentVideos AssessmentVideo[]
@@ -215,6 +216,7 @@ model Patient {
 // ============================================================================
 
 model Professional {
+  recordings PatientRecording[]
   deletedAt DateTime? // Removed from team; historical relations retained
   sidebarLayout String? // Personal sidebar folders and order (JSON)
   payrollAdjustments PayrollAdjustment[]
@@ -4248,4 +4250,27 @@ model ShoulderReportShare {
   publishedAt          DateTime
   baselinePublishedAt  DateTime?
   expiresAt            DateTime
+}
+
+
+// Internal recordings, excluded from patient resources and clinical report exports.
+model PatientRecording {
+  id              String   @id @default(cuid())
+  patientId       String
+  patient         Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  createdById     String?
+  createdBy       Professional? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  title           String
+  url             String?
+  notes           String?
+  blobPath        String?  @unique
+  mime            String?
+  size            Int?
+  durationSeconds Int?
+  status          String   @default("uploading")
+  pendingUntil    DateTime?
+  shareTokenHash  String?  @unique
+  shareExpiresAt  DateTime?
+  createdAt       DateTime @default(now())
+  @@index([patientId, createdAt])
 }

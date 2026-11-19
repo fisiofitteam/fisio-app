@@ -4253,3 +4253,26 @@ model ShoulderReportShare {
   baselinePublishedAt  DateTime?
   expiresAt            DateTime
 }
+
+
+// Professional-only Cap links. Never included in patient-facing resources.
+model PatientRecording {
+  id              String   @id @default(cuid())
+  patientId       String
+  patient         Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  createdById     String?
+  createdBy       Professional? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  title           String
+  url             String?
+  notes           String?
+  blobPath        String?  @unique
+  mime            String?
+  size            Int?
+  durationSeconds Int?
+  status          String   @default("uploading")
+  pendingUntil    DateTime?
+  shareTokenHash  String?  @unique
+  shareExpiresAt  DateTime?
+  createdAt       DateTime @default(now())
+  @@index([patientId, createdAt])
+}
