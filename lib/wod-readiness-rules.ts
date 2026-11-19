@@ -55,8 +55,9 @@ export function isMoreRestrictive(a: OrderedWodRule, b: OrderedWodRule): boolean
 }
 
 /** Resolve a WOD's colour in memory. Never changes the patient's base levels
- * or materialized adaptations. Missing target rules inherit the base rule;
- * uncovered movements and patients without selections keep their old rules. */
+ * or materialized adaptations. A movement omitted from the target level is
+ * OK by default, exactly as in the category editor. Manual exceptions,
+ * unrelated legacy movements and patients without selections keep their rules. */
 export function resolveReadinessAdaptations(
   adaptations: readonly (WodAdaptationRule & { isCustomized?: boolean })[],
   selections: readonly ReadinessCategorySelection[],
@@ -72,27 +73,30 @@ export function resolveReadinessAdaptations(
     selection.categoryLevel.categoryId !== selection.categoryId)) return result;
 
   const chosen = new Map<string, OrderedWodRule>();
+  const managedMovementIds = new Set<string>();
   for (const selection of selections) {
     const base = selection.categoryLevel!;
     const levels = selection.category.levels.filter(level => level.categoryId === selection.categoryId);
     const target = resolveReadinessLevel(selection.categoryLevelId, levels, readiness, selection) ?? base;
-    const categoryRules = new Map<string, OrderedWodRule>();
 
-    // Seed with the base rules. An omitted movement in the target level does
-    // not mean it has become unrestricted; it retains its base rule and order.
-    for (const rule of base.rules) {
-      categoryRules.set(rule.movementId, { ...rule, levelOrder: base.order });
+    // Catalogues store unrestricted movements as an absent rule. Clear the
+    // materialized amber rule for movements managed by these categories even
+    // when the chosen level has no row for them. Include every defined level
+    // so an obsolete stored rule cannot leak in from a different level.
+    for (const level of [base, ...levels]) {
+      for (const rule of level.rules) managedMovementIds.add(rule.movementId);
     }
     for (const rule of target.rules) {
-      categoryRules.set(rule.movementId, { ...rule, levelOrder: target.order });
-    }
-    for (const [movementId, candidate] of categoryRules) {
-      const previous = chosen.get(movementId);
-      if (!previous || isMoreRestrictive(candidate, previous)) chosen.set(movementId, candidate);
+      const candidate = { ...rule, levelOrder: target.order };
+      const previous = chosen.get(rule.movementId);
+      if (!previous || isMoreRestrictive(candidate, previous)) chosen.set(rule.movementId, candidate);
     }
   }
 
   const customized = new Set(adaptations.filter(rule => rule.isCustomized).map(rule => rule.movementId));
+  for (const movementId of managedMovementIds) {
+    if (!customized.has(movementId)) result.delete(movementId);
+  }
   for (const [movementId, rule] of chosen) {
     if (!customized.has(movementId)) result.set(movementId, rule);
   }
