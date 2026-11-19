@@ -76,7 +76,7 @@ export function ScreenRecorder({ patientId, patientName, professionalId, enabled
         onFinish: recording => {
           controller.current = undefined;
           void remember(recording);
-          if (mounted.current) { setCameraStream(undefined); setDraft(recording); setPhase("preview"); setMessage(recording.reason || "Revisa el vídeo y guárdalo en el historial."); }
+          if (mounted.current) { setCameraStream(undefined); setDraft(recording); setPhase("preview"); setMessage(recording.reason || (patientId ? "Revisa el vídeo y guárdalo en el historial del paciente." : "Revisa el vídeo y guárdalo en Grabaciones.")); }
         },
       });
       if (!mounted.current) { controller.current.stop(); return; }
@@ -111,7 +111,7 @@ export function ScreenRecorder({ patientId, patientName, professionalId, enabled
       if (!finish.ok) throw new Error((await finish.json()).error || "El vídeo se ha subido, pero falta confirmar su guardado.");
       await writeDraft().catch(() => {});
       serverUploadId.current = undefined; setUploadedId(undefined);
-      setDraft(null); setPhase("idle"); setMessage("Grabación guardada en el historial."); if (onSaved) onSaved(); else router.refresh();
+      setDraft(null); setPhase("idle"); setMessage(patientId ? "Grabación guardada en el historial del paciente." : "Grabación guardada en Grabaciones."); if (onSaved) onSaved(); else router.refresh();
     } catch (e) {
       // Keep a completed upload if a transient finalization failure occurred.
       if (id && !uploaded) void fetch("/api/recordings/" + id, { method: "DELETE" }).catch(() => {});
