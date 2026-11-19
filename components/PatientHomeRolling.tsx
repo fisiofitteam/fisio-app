@@ -236,8 +236,6 @@ export function PatientHomeRolling({
           )}
         </header>
 
-        <PatientReferralBanner patientId={patientId} programType={programType} />
-
         {!shippingComplete && (
           <Link
             href={`/paciente/${patientId}/ajustes#direccion`}
@@ -447,6 +445,9 @@ export function PatientHomeRolling({
             </p>
           </section>
         )}
+        <div className="mt-6">
+          <PatientReferralBanner patientId={patientId} programType={programType} />
+        </div>
       </div>
       <PatientNav patientId={patientId} active="home" variant="advance" />
     </main>
