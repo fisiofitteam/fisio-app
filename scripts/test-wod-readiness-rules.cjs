@@ -140,21 +140,46 @@ test("custom adaptations always override selected-level rules across categories"
   }
 });
 
-test("target rules win per movement and a missing target rule falls back to base", () => {
+test("target rules win and omitted target movements become OK instead of inheriting amber", () => {
   const base = level("base", 5, [rule("squat", "CONDITIONAL", "50%", "base"), rule("press", "BLOCKED", null, "base-press")]);
   const high = level("high", 9, [rule("squat", "OK", "90%", "high")]);
-  const result = resolveReadinessAdaptations([rule("squat", "BLOCKED"), rule("run", "CONDITIONAL", "30%", "current-run")], [selection(base, [base, high])], "GREEN");
+  const result = resolveReadinessAdaptations([rule("squat", "BLOCKED"), rule("press", "BLOCKED", null, "stored-press"), rule("run", "CONDITIONAL", "30%", "current-run")], [selection(base, [base, high])], "GREEN");
   assert.equal(result.get("squat").substitutionText, "high");
-  assert.equal(result.get("press").substitutionText, "base-press");
-  assert.equal(result.get("run").substitutionText, "current-run", "no base or target rule preserves current adaptation");
+  assert.equal(result.has("press"), false, "a missing target rule means OK, as shown in the catalogue editor");
+  assert.equal(result.get("run").substitutionText, "current-run", "unrelated legacy adaptation is preserved");
 });
 
-test("fallback rule retains base order in cross-category comparison", () => {
+test("an omitted target rule does not cancel a restriction from another selected category", () => {
   const base = level("base", 5, [rule("squat", "BLOCKED", null, "base-five")]);
   const low = level("low", 1, []);
-  const other = level("other", 3, [rule("squat", "OK", "80%", "other-three")], "cat-b");
-  const result = resolveReadinessAdaptations([], [selection(base, [low, base]), selection(other, [other])], "RED");
-  assert.equal(result.get("squat").substitutionText, "other-three", "missing red rule must not borrow red level order");
+  const other = level("other", 3, [rule("squat", "CONDITIONAL", "40%", "other-three")], "cat-b");
+  for (const selections of [[selection(base, [low, base]), selection(other, [other])], [selection(other, [other]), selection(base, [low, base])]]) {
+    const result = resolveReadinessAdaptations([rule("squat", "BLOCKED", null, "stored")], selections, "RED");
+    assert.equal(result.get("squat").substitutionText, "other-three");
+    assert.equal(result.get("squat").state, "CONDITIONAL");
+  }
+});
+
+test("empty chosen levels clear managed stale rules but retain manual and unrelated rules", () => {
+  const low = level("low", 1, [rule("squat", "BLOCKED"), rule("press", "BLOCKED")]);
+  const base = level("base", 5, []);
+  const high = level("high", 9, []);
+  const current = [rule("squat", "BLOCKED", null, "stale-low"), { ...rule("press", "BLOCKED", null, "manual"), isCustomized: true }, rule("run", "CONDITIONAL", "30%", "legacy")];
+  for (const readiness of ["AMBER", "GREEN"]) {
+    const result = resolveReadinessAdaptations(current, [selection(base, [low, base, high])], readiness);
+    assert.equal(result.has("squat"), false, "managed movement is detected even if absent from both base and target");
+    assert.equal(result.get("press").substitutionText, "manual");
+    assert.equal(result.get("run").substitutionText, "legacy");
+  }
+});
+
+test("an explicit override to an empty level means OK and does not inherit base rules", () => {
+  const low = level("low", 1, [rule("squat", "BLOCKED", null, "low")]);
+  const base = level("base", 5, [rule("squat", "CONDITIONAL", "50%", "base")]);
+  const high = level("high", 9, []);
+  const selectionWithOverrides = selection(base, [low, base, high], { redCategoryLevelId: "high", greenCategoryLevelId: "low" });
+  assert.equal(resolveReadinessAdaptations([rule("squat", "CONDITIONAL", "50%", "stored")], [selectionWithOverrides], "RED").has("squat"), false);
+  assert.equal(resolveReadinessAdaptations([], [selectionWithOverrides], "GREEN").get("squat").substitutionText, "low");
 });
 
 test("readiness combines cross-category rules using shared comparator", () => {
@@ -218,6 +243,58 @@ test("adaptWod readiness reads selections once and applies ephemeral rules witho
   assert.equal(result[0].substitutionText, "green");
   assert.equal(JSON.stringify(state), before);
   assert.equal(effects.writes, 0);
+});
+
+test("adaptWod resolves three colours independently including an implicit green OK", async () => {
+  reset();
+  state.adaptations = [rule("squat", "CONDITIONAL", "50%", "stored-amber")];
+  const low = level("low", 1, [rule("squat", "BLOCKED", null, "red-substitute")]);
+  const base = level("base", 5, [rule("squat", "CONDITIONAL", "50%", "amber-substitute")]);
+  const high = level("high", 9, []);
+  state.selections = [selection(base, [low, base, high])];
+  const before = JSON.stringify(state);
+  const red = await adaptWod(parsed, "patient-test", "RED");
+  const amber = await adaptWod(parsed, "patient-test", "AMBER");
+  const green = await adaptWod(parsed, "patient-test", "GREEN");
+  assert.equal(red[0].state, "BLOCKED");
+  assert.equal(red[0].substitutionText, "red-substitute");
+  assert.equal(amber[0].state, "CONDITIONAL");
+  assert.equal(amber[0].adaptedLoad, "50%");
+  assert.equal(green[0].state, "OK");
+  assert.equal(green[0].substitutionText, undefined);
+  assert.equal(green[0].adaptedLoad, undefined);
+  assert.equal(green[0].physioWarning, undefined);
+  assert.equal(JSON.stringify(state), before, "no colour changes the stored amber profile");
+});
+
+test("neighbouring levels with the same substitution stay identical without skipping levels", async () => {
+  reset();
+  const shared = { movementId: "squat", state: "BLOCKED", loadConstraint: "15 kg", substitutionText: "V-ups lastrados; reps x2", physioWarning: null };
+  const red = level("five", 5, [shared]);
+  const base = level("six", 6, [{ ...shared, physioWarning: "Usa abmat" }]);
+  const green = level("seven", 7, [{ ...shared, physioWarning: "Usa abmat" }]);
+  const later = level("eight", 8, [rule("squat", "OK", null, "later")]);
+  state.adaptations = [{ ...shared, physioWarning: "Usa abmat" }];
+  state.selections = [selection(base, [red, base, green, later])];
+  for (const readiness of ["RED", "AMBER", "GREEN"]) {
+    const result = await adaptWod(parsed, "patient-test", readiness);
+    assert.equal(result[0].state, "BLOCKED");
+    assert.equal(result[0].substitutionText, shared.substitutionText);
+    assert.equal(result[0].adaptedLoad, "15 kg");
+    assert.equal(result[0].physioWarning, readiness === "RED" ? null : "Usa abmat");
+  }
+});
+
+test("a related movement omitted from its green level cannot reintroduce amber restrictions", async () => {
+  reset();
+  state.adaptations = [rule("squat", "CONDITIONAL", "50%", "stored-main"), rule("sibling", "BLOCKED", null, "stored-sibling")];
+  const base = level("base", 5, [rule("squat", "CONDITIONAL", "50%", "base"), rule("sibling", "BLOCKED", null, "base-sibling")]);
+  const high = level("high", 9, []);
+  state.selections = [selection(base, [base, high])];
+  const result = await adaptWod(parsed.map(line => ({ ...line, relatedMovementIds: ["sibling"] })), "patient-test", "GREEN");
+  assert.equal(result[0].state, "OK");
+  assert.equal(result[0].substitutionText, undefined);
+  assert.equal(result[0].adaptedLoad, undefined);
 });
 
 test("a customized blocked sibling still limits a dynamically allowed main movement", async () => {

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { Check, ChevronDown, Frown, Meh, Smile } from "lucide-react";
 import { isWodReadiness, usesWodReadiness, WOD_READINESS_OPTIONS, type WodReadiness } from "@/lib/wod-readiness";
 import { WodReadinessBadge } from "@/components/WodReadinessBadge";
 
@@ -58,11 +59,35 @@ function clearStorage(patientId: string) {
   try { localStorage.removeItem(storageKey(patientId)); } catch { /* noop */ }
 }
 
-const readinessStyles: Record<WodReadiness, { card: string; dot: string }> = {
-  RED: { card: "border-red-600 bg-red-50 text-red-950", dot: "bg-red-600" },
-  AMBER: { card: "border-amber-500 bg-amber-50 text-amber-950", dot: "bg-amber-500" },
-  GREEN: { card: "border-emerald-600 bg-emerald-50 text-emerald-950", dot: "bg-emerald-600" },
-};
+const readinessVisuals = {
+  RED: {
+    title: "Hoy estoy peor",
+    summary: "Más dolor, rigidez o cansancio. Peor descanso o más estrés.",
+    icon: Frown,
+    card: "border-red-100 bg-red-50 text-red-950 hover:border-red-300",
+    selected: "border-red-600 bg-red-50 text-red-950 ring-1 ring-red-600",
+    face: "bg-red-100 text-red-700",
+    check: "bg-red-600 text-white",
+  },
+  AMBER: {
+    title: "Estoy como siempre",
+    summary: "Dolor habitual y sensaciones estables.",
+    icon: Meh,
+    card: "border-amber-100 bg-amber-50 text-amber-950 hover:border-amber-300",
+    selected: "border-amber-600 bg-amber-50 text-amber-950 ring-1 ring-amber-600",
+    face: "bg-amber-100 text-amber-700",
+    check: "bg-amber-600 text-white",
+  },
+  GREEN: {
+    title: "Hoy me siento bien",
+    summary: "Menos dolor y rigidez. Más descansado.",
+    icon: Smile,
+    card: "border-emerald-100 bg-emerald-50 text-emerald-950 hover:border-emerald-300",
+    selected: "border-emerald-600 bg-emerald-50 text-emerald-950 ring-1 ring-emerald-600",
+    face: "bg-emerald-100 text-emerald-700",
+    check: "bg-emerald-600 text-white",
+  },
+} as const;
 
 export function WodAdapter({ patientId, programType, preamble }: { patientId: string; programType?: string | null; preamble?: ReactNode }) {
   const router = useRouter();
@@ -293,30 +318,54 @@ export function WodAdapter({ patientId, programType, preamble }: { patientId: st
       {requiresReadiness && !readinessConfirmed && (
         <fieldset className="card mb-3" disabled={saving}>
           <legend className="sr-only">¿Cómo estás hoy?</legend>
-          <h2 className="text-base font-semibold">¿Cómo estás hoy?</h2>
-          <div className="mt-1 space-y-2">
-            {WOD_READINESS_OPTIONS.map((option) => (
-              <label
-                key={option.value}
-                className={`block cursor-pointer rounded-xl border-2 p-3 transition-colors focus-within:ring-2 focus-within:ring-neutral-900 focus-within:ring-offset-2 ${readiness === option.value ? readinessStyles[option.value].card : "border-neutral-200 bg-white text-neutral-800"}`}
-              >
-                <input
-                  type="radio"
-                  name={`wod-readiness-${patientId}`}
-                  value={option.value}
-                  checked={readiness === option.value}
-                  onChange={() => changeReadiness(option.value)}
-                  className="sr-only"
-                />
-                <span className="flex items-center gap-2 text-sm font-semibold">
-                  <span className={`h-3 w-3 shrink-0 rounded-full ${readinessStyles[option.value].dot}`} aria-hidden />
-                  {option.label}
-                  {readiness === option.value && <span className="ml-auto" aria-hidden>✓</span>}
-                </span>
-                <span className="mt-1.5 block text-sm leading-relaxed">{option.description}</span>
-              </label>
-            ))}
+          <h2 className="text-xl font-bold text-neutral-900">¿Cómo estás hoy?</h2>
+          <p className="mt-1 text-sm text-neutral-600">Elige el color que mejor te representa.</p>
+          <div className="mt-4 space-y-2.5">
+            {WOD_READINESS_OPTIONS.map((option) => {
+              const visual = readinessVisuals[option.value];
+              const Face = visual.icon;
+              const selected = readiness === option.value;
+              return (
+                <label
+                  key={option.value}
+                  className={`flex cursor-pointer items-center gap-3 rounded-2xl border-2 p-3 transition-colors focus-within:ring-2 focus-within:ring-neutral-900 focus-within:ring-offset-2 ${selected ? visual.selected : visual.card}`}
+                >
+                  <input
+                    type="radio"
+                    name={`wod-readiness-${patientId}`}
+                    value={option.value}
+                    checked={selected}
+                    onChange={() => changeReadiness(option.value)}
+                    aria-label={`${option.label}: ${visual.title}`}
+                    aria-describedby={`wod-readiness-summary-${patientId}-${option.value}`}
+                    className="sr-only"
+                  />
+                  <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${visual.face}`} aria-hidden="true">
+                    <Face className="h-8 w-8" strokeWidth={1.75} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[10px] font-bold uppercase tracking-wider opacity-70">{option.label}</span>
+                    <span className="block text-sm font-bold leading-5">{visual.title}</span>
+                    <span id={`wod-readiness-summary-${patientId}-${option.value}`} className="mt-0.5 block text-xs leading-relaxed">{visual.summary}</span>
+                  </span>
+                  <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${selected ? visual.check : "border border-current opacity-25"}`} aria-hidden="true">
+                    {selected && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
+                  </span>
+                </label>
+              );
+            })}
           </div>
+          <details className="group mt-4 text-neutral-600">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded py-1 text-xs font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 [&::-webkit-details-marker]:hidden">
+              ¿Qué significa cada color?
+              <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" aria-hidden="true" />
+            </summary>
+            <div className="mt-2 space-y-3 border-t border-neutral-100 pt-3 text-xs leading-relaxed">
+              {WOD_READINESS_OPTIONS.map((option) => (
+                <p key={option.value}><strong className="text-neutral-800">{option.label}: </strong>{option.description}</p>
+              ))}
+            </div>
+          </details>
           {adaptError && <p role="alert" className="mt-3 text-sm text-red-700">{adaptError}</p>}
           <button
             type="button"
