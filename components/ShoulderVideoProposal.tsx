@@ -3,15 +3,20 @@
 import { useRef } from "react";
 import { AssessmentVideoPlayer, type AssessmentPlayback } from "@/components/AssessmentVideoPlayer";
 import { canAnalyzeShoulderTest } from "@/lib/shoulder-analysis-types";
+import { PILOT_TEST_BY_ID } from "@/lib/shoulder-pilot";
 import type { ProposalEntry, ShoulderVideoSource as Source } from "@/lib/shoulder-analysis-queue";
 
 type Props={source:Source|null;initial?:Source;entry?:ProposalEntry;disabled:boolean;conflict:boolean;batchBusy:boolean;progress?:string;
   onAnalyze:()=>void;onCancel:()=>void;onProposal:(fields:Record<string,number|string>)=>void};
-const holdLabels:Record<string,string>={holdSeconds:"Sostén",inRangeSeconds:"Por encima de las orejas",positionLossSeconds:"Pérdida de posición o recolocación"};
+const holdLabels:Record<string,string>={holdSeconds:"Sostén",positionLossSeconds:"Pérdida de posición o recolocación"};
 
 export function ShoulderVideoProposal({source,initial,entry,disabled,conflict,batchBusy,progress,onAnalyze,onCancel,onProposal}:Props) {
   const video=useRef<AssessmentPlayback>(null);
   const draft=entry?.draft;
+  const numericDraft=draft?.kind==="hold"||draft?.kind==="measurement";
+  const testFields=draft?PILOT_TEST_BY_ID[draft.testId]?.fields??[]:[];
+  const proposedFields=numericDraft?Object.fromEntries(Object.entries(draft!.observationFields).filter(([key])=>
+    draft!.kind==="hold"?Object.hasOwn(holdLabels,key):testFields.some(f=>f.key===key&&f.type==="number"))):{};
   if(!source&&!initial)return <p className="text-xs text-neutral-500">Este test todavía no tiene vídeo entregado.</p>;
   return <div className="space-y-2">
     <div className={initial?"grid sm:grid-cols-2 gap-3":""}>
@@ -23,10 +28,10 @@ export function ShoulderVideoProposal({source,initial,entry,disabled,conflict,ba
       {entry?.error&&<p role="alert" className="text-sm text-red-700">{entry.error} Puedes continuar manualmente.</p>}
       {draft&&<div className="text-sm space-y-2"><strong>Propuesta pendiente de verificación</strong>
         {draft.notes&&<p className="whitespace-pre-wrap">{draft.notes}</p>}
-        {draft.kind==="hold"&&<dl>{Object.entries(draft.observationFields).map(([key,v])=><div key={key}><dt className="inline">{holdLabels[key]??key}: </dt><dd className="inline font-semibold">{v.toLocaleString("es-ES")} s</dd></div>)}</dl>}
+        {numericDraft&&<dl>{Object.entries(proposedFields).map(([key,v])=><div key={key}><dt className="inline">{draft.kind==="hold"?holdLabels[key]:testFields.find(f=>f.key===key)?.label}: </dt><dd className="inline font-semibold">{v.toLocaleString("es-ES")}{draft.kind==="hold"?" s":""}</dd></div>)}</dl>}
         {draft.findings.map((f,i)=><div key={i} className="flex items-start gap-2"><button type="button" className="text-xs font-semibold underline whitespace-nowrap" onClick={()=>video.current?.seek(f.start)}>Ver {f.start.toFixed(1)} s</button><span>{f.text}</span></div>)}
         {draft.limitations.length>0&&<ul className="list-disc pl-5 text-xs text-neutral-600">{draft.limitations.map((v,i)=><li key={i}>{v}</li>)}</ul>}
-        <button type="button" className="btn btn-ghost" disabled={conflict || entry?.applied || (draft.kind==="hold"?!Object.keys(draft.observationFields).length:!draft.notes.trim())} onClick={()=>onProposal(draft.kind==="hold"?draft.observationFields:{comment:draft.notes})}>{entry?.applied?"Propuesta incorporada. Revisa los datos.":"Incorporar a mi borrador"}</button>
+        {draft.kind==="load"?<p className="text-xs text-neutral-600">Contrasta la ejecución con el vídeo y confirma manualmente las cargas declaradas por el atleta.</p>:<button type="button" className="btn btn-ghost" disabled={conflict || entry?.applied || (numericDraft?!Object.keys(proposedFields).length:!draft.notes.trim())} onClick={()=>onProposal(numericDraft?proposedFields:{comment:draft.notes})}>{entry?.applied?"Propuesta incorporada. Revisa los datos.":"Incorporar a mi borrador"}</button>}
       </div>}
     </div>}
   </div>;

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { PILOT_TESTS, scorePilot, type PilotConfig, type PilotObservations, type PilotPain } from "@/lib/shoulder-pilot";
+import { HOLD_SCORING_VERSION, PILOT_TESTS, scorePilot, type PilotConfig, type PilotObservations, type PilotPain } from "@/lib/shoulder-pilot";
 import { ShoulderPilotReport, pilotNumber, type PilotReportSnapshot } from "@/components/ShoulderPilotReport";
 import type { ShoulderTestFeedbackMap } from "@/lib/shoulder-test-feedback";
 import { ShoulderTestFeedbackReadout, ShoulderTestPainOverview } from "@/components/ShoulderTestFeedbackDisplay";
@@ -78,7 +78,7 @@ function ReviewSession({sessionId}:{sessionId:string}) {
         <div className="flex flex-wrap gap-2 items-center">
           <button type="button" className="btn btn-accent" disabled={!!ai.active||busy||conflict||!pending.length} onClick={()=>ai.run(pending)}>Revisar todo con IA</button>
           {ai.active&&<button type="button" className="btn btn-ghost" onClick={ai.stop}>Detener</button>}
-          <span className="text-sm text-neutral-600" role="status">{ai.active?"Analizando vídeo "+ai.active.index+" de "+ai.active.total+" · "+ai.active.message:ai.lastRun.length?(ai.stopped?"Análisis detenido. ":"")+successful+" de "+ai.lastRun.length+" con propuesta"+(failed?" · "+failed+" con error":""):pending.length?pending.length+(pending.length===1?" vídeo pendiente":" vídeos pendientes"):"Sin vídeos compatibles pendientes"}</span>
+          <span className="text-sm text-neutral-600" role="status">{ai.active?"Analizando vídeo "+ai.active.index+" de "+ai.active.total+" · "+ai.active.message:ai.lastRun.length?(ai.stopped?"Análisis detenido. ":"")+successful+" de "+ai.lastRun.length+" con propuesta"+(failed?" · "+failed+" con error":""):pending.length?pending.length+(pending.length===1?" vídeo pendiente de analizar":" vídeos pendientes de analizar"):"Sin vídeos pendientes de analizar"}</span>
         </div>
         {hasReviewedVideos&&<label className="flex gap-2 items-center text-sm"><input type="checkbox" checked={includeReviewed} disabled={!!ai.active} onChange={e=>setIncludeReviewed(e.target.checked)}/>Incluir tests ya revisados</label>}
         <p className="text-xs text-neutral-600">Las propuestas aparecen en cada test para que puedas contrastarlas e incorporarlas a tu borrador. El análisis conserva tus anotaciones.</p>
@@ -137,7 +137,7 @@ function ReviewSession({sessionId}:{sessionId:string}) {
     <ShoulderNarrativeEditor key={data.version+":"+evidenceRevision} sessionId={sessionId} version={data.version} axes={scores.axes}
       values={narrative} dirty={dirty} disabled={busy||conflict} onConflict={()=>setConflict(true)}
       onChange={next=>{setNarrative(next);setDirty(true);setNotice("");}}/>
-    <details className="card"><summary className="cursor-pointer font-semibold">Vista previa del perfil que verá el atleta</summary><div className="mt-3"><ShoulderPilotReport report={{weekNumber:data.weekNumber,publishedAt:"",rubricVersion:data.published?.rubricVersion??"",observations:measured,pain:data.pain,testFeedback:data.testFeedback,narrative,notAssessable:skip,scores}} previous={data.baseline}/></div></details>
+    <details className="card"><summary className="cursor-pointer font-semibold">Vista previa del perfil que verá el atleta</summary><div className="mt-3"><ShoulderPilotReport report={{holdScoringVersion:HOLD_SCORING_VERSION,weekNumber:data.weekNumber,publishedAt:"",rubricVersion:data.published?.rubricVersion??"",observations:measured,pain:data.pain,testFeedback:data.testFeedback,narrative,notAssessable:skip,scores}} previous={data.baseline}/></div></details>
     <section className="card space-y-3 sticky bottom-2 shadow-lg z-10">
       {error&&<p role="alert" className="text-red-700 text-sm">{error}</p>}{notice&&<p role="status" className="text-sm">{notice}</p>}
       <div className="flex flex-wrap items-center gap-2"><span className="mr-auto text-xs text-neutral-600">{done}/{PILOT_TESTS.length} revisados{dirty?" · Cambios sin guardar":""}</span>

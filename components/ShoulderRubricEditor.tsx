@@ -5,7 +5,7 @@ import { DEFAULT_PILOT_CONFIG, validatePilotConfig, type PilotConfig } from "@/l
 type Field = [keyof PilotConfig,string,string?];
 const groups: {title:string;fields:Field[]}[]=[
  {title:"Movilidad · reparto entre los tres tests",fields:[["mobilityFlexionPct","Flexión en pared (%)"],["mobilityPulloverPct","Pull over sobre wallball (%)"]]},
- {title:"Fuerza, resistencia y estabilidad",fields:[["endRangeRaisesPct","Fuerza al final del rango: elevación de bumper (%)","El resto corresponde al bumper hold en prono."],["endurancePvcPct","Resistencia: PVC lift off (%)","El resto corresponde al bumper hold en prono."],["stabilityPvcPct","Estabilidad: PVC lift off (%)","El resto corresponde al bumper hold en prono."],["holdTargetSeconds","Objetivo de sostén isométrico (s)"],["pulloverStepDegrees","Grados de recorrido por punto en el pull over"]]},
+ {title:"Fuerza, resistencia y estabilidad",fields:[["endRangeRaisesPct","Fuerza al final del rango: elevación de bumper (%)","El resto corresponde al tiempo de sostén del bumper hold en prono."],["endurancePvcPct","Resistencia: PVC lift off (%)","El resto corresponde al bumper hold en prono."],["stabilityPvcPct","Estabilidad: PVC lift off (%)","El resto corresponde al bumper hold en prono."],["holdTargetSeconds","Objetivo de sostén isométrico (s)"],["pulloverStepDegrees","Grados de recorrido por punto en el pull over"]]},
  {title:"Coordinación escapular",fields:[["coordinationFluencyPct","Coordinación: fluidez (%)","El resto corresponde a la simetría escapular."]]},
  {title:"Tolerancia inmediata a la carga",fields:[["painFinalPenalty","Descuento por punto de dolor al terminar"],["painRisePenalty","Descuento por punto de aumento del dolor"],["painTestPenalty","Descuento por test doloroso"]]}
 ];

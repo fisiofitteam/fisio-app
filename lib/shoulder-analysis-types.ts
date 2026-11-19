@@ -1,9 +1,20 @@
-// Browser/server contract. The pilot sends only sampled images, never audio or the blob URL.
+// Browser/server contract. Analysis sends sampled images, never audio or the blob URL.
 export const HOLD_PVC = "5594f37b-b392-4fab-bf49-8dace28ad43c";
 export const HOLD_BUMPER = "6ff22736-3450-42d9-8558-019a16e2fc51";
-export const SHOULDER_VIDEO_TESTS: Record<string, {kind:"hold"|"movement"; task:string}> = {
-  [HOLD_PVC]: {kind:"hold", task:"PVC lift off en prono"},
-  [HOLD_BUMPER]: {kind:"hold", task:"Sostén de disco en prono; no adivines el peso"},
+export type ShoulderVideoKind = "hold" | "movement" | "measurement" | "load";
+const scapGuidance = "Valora las tres primeras repeticiones completas: fluidez de subida y bajada, simetría de ritmo y recorrido y ausencia de encogimiento compensatorio. Cada criterio es 0 o 1 por repetición. Si una repetición o criterio no se ve con claridad, déjalo sin medir; una repetición ausente no equivale a 0. No deduzcas causas musculares.";
+export const SHOULDER_VIDEO_TESTS: Record<string, {kind:ShoulderVideoKind; task:string}> = {
+  "19ce1cc3-bcee-40cb-89d8-3329290f9780": {kind:"measurement", task:"Flexión de hombro en pared. Mide leftProgress y rightProgress de 0 a 100 por brazo: 0 = barbilla o menos; 50 = orejas; 100 = brazo completo en contacto. Interpola solo entre referencias visibles, sin despegar la lumbar ni extender la muñeca. Usa izquierda y derecha anatómicas únicamente si el plano permite identificarlas; no adivines el lado."},
+  "362b23b5-516c-4a2f-9d2c-d09548b7026b": {kind:"measurement", task:"Bumper pull over sobre wallball. Mide angle: ángulo cadera–hombro–codo, con los tres puntos y el plano visibles, tronco controlado y posición mantenida al menos 1 s; 180° es línea recta. No infieras dolor ni que una postura es indolora a partir del vídeo."},
+  "5ab05c1c-5874-4c6e-ae18-16f981357338": {kind:"measurement", task:"Wall press. externalDeficit es la rotación externa que falta para apoyar ambos brazos completos sin compensar: 0 solo si se observa ese apoyo. Con déficit no propongas abduction. Si externalDeficit es 0, mide abduction sin perder el apoyo de espalda y brazos y con muñecas neutras: 0 si solo logra la posición inicial, o de 90° a 180° si eleva desde ella. No midas ángulos fuera del plano visible."},
+  [HOLD_PVC]: {kind:"hold", task:"PVC lift off en prono. Mide el tiempo de sostén y la pérdida visible de posición o recolocación; no midas la altura respecto a las orejas."},
+  [HOLD_BUMPER]: {kind:"hold", task:"Sostén de disco en prono. Mide el tiempo de sostén y la pérdida visible de posición o recolocación; no midas la altura respecto a las orejas ni adivines el peso."},
+  "a489ef3a-0922-4319-8bb6-94f97d879bb1": {kind:"measurement", task:"Elevación de bumper en buenos días. Para cada carga de 5, 10 o 15 kg, cuenta las repeticiones completas (reps5/reps10/reps15) y cuántas alcanzan al menos las orejas con pausa de 1 s (range5/range10/range15), máximo 8 por carga. Asigna una serie a una carga solo si los kg son legibles e inequívocos; no deduzcas el peso por el tamaño o color del disco. Las cargas no grabadas o no identificables quedan sin medir, nunca como 0. La cuenta en rango no puede superar las repeticiones completas."},
+  "86d6177e-a02e-4ef9-a62c-677323e9f8b9": {kind:"load", task:"8RM face pull unilateral. Describe la ejecución, las repeticiones completas visibles y compensaciones observables con referencias temporales. No conviertas el intento en un 8RM si no se ven ocho repeticiones válidas. No propongas kg ni asignes brazo afectado o de referencia; esas cargas se contrastan con los datos declarados y las confirma el fisio."},
+  "701ef4c7-6de1-4428-b55e-fefa01ae2336": {kind:"load", task:"8RM press estricto unilateral. Describe la ejecución, las repeticiones completas visibles, el recorrido y compensaciones observables con referencias temporales. No conviertas el intento en un 8RM si no se ven ocho repeticiones válidas. No propongas kg ni asignes brazo afectado o de referencia; esas cargas se contrastan con los datos declarados y las confirma el fisio."},
+  "a85b7ca1-3ef5-4c05-a865-947d402caf37": {kind:"measurement", task:"Biomecánica escapular en elevaciones laterales. " + scapGuidance},
+  "394449d6-fb15-4751-aa2c-41f5aaa4d545": {kind:"measurement", task:"Biomecánica escapular en flexión de hombro. " + scapGuidance},
+  "484f0580-8b23-4340-a889-b42ddc1d80dd": {kind:"measurement", task:"Biomecánica escapular en press con barra. " + scapGuidance},
   "08f41761-3bfd-4172-8be8-0b860a0df414": {kind:"movement", task:"Overhead squat. Profundidad, vertical de barra/mediopié, estabilidad de hombros, simetría de hombros y nivel/desplazamiento lateral de la barra en la pausa inferior; distinguir planos."},
   "8d2338ef-dda2-42cf-b055-dc181c4c7c8d": {kind:"movement", task:"Front squat. Profundidad, barra respecto al mediopié, simetría y caída de codos en el front rack al llegar al fondo y durante la pausa; distinguir planos."},
   "17985fdb-49a7-4373-904f-8c5a6f8616dc": {kind:"movement", task:"Push jerk. Trayectoria de la barra en el impulso, vertical del mediopié, bloqueo simultáneo de codos y estabilización nivelada en la recepción."},
@@ -14,11 +25,11 @@ export type VideoInput = {sessionId:string;testId:string;videoId:string;uploaded
 export type FrameSheet = {times:number[]; jpeg:string};
 export type TimeSpan = {start:number;end:number};
 export type ShoulderAIDraft = {
-  kind:"hold"|"movement";testId:string;videoId:string;uploadedAt:string;
+  kind:ShoulderVideoKind;testId:string;videoId:string;uploadedAt:string;
   observationFields:Record<string,number>; notes:string;
   findings:Array<TimeSpan & {text:string}>; limitations:string[];
   method:string; hold:TimeSpan|null;
-  intervals:{aboveEars:TimeSpan[]|null;lossOfPosition:TimeSpan[]|null};
+  intervals:{lossOfPosition:TimeSpan[]|null};
 };
 export const MAX_CLIP_SECONDS = 60;
 export const MAX_FRAME_REQUEST_BYTES = 3_800_000;

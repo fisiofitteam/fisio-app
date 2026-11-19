@@ -1,5 +1,5 @@
 import type { PilotReportSnapshot } from "@/components/ShoulderPilotReport";
-import { PILOT_TESTS, scorePilot, type PilotObservations, type PilotPain } from "./shoulder-pilot";
+import { PILOT_TESTS, HOLD_SCORING_VERSION, scorePilot, type PilotObservations, type PilotPain } from "./shoulder-pilot";
 import { isShoulderAttemptTest, type ShoulderTestFeedbackMap } from "./shoulder-test-feedback";
 
 export type SharedShoulderReports = {report:PilotReportSnapshot;previous:PilotReportSnapshot|null};
@@ -45,7 +45,7 @@ export function publicShoulderSnapshot(value:unknown):PilotReportSnapshot {
  const keys=["general","mobility","stability","endRange","coordination","endurance","tolerance"] as const;
  const narrative:Partial<Record<typeof keys[number],string>>={};
  for(const key of keys){const line=text(object(v.narrative)[key],1200);if(line)narrative[key]=line;}
- return {weekNumber:v.weekNumber,publishedAt:new Date(v.publishedAt).toISOString(),rubricVersion:/^[A-Za-z0-9._-]{1,80}$/.test(String(v.rubricVersion))?String(v.rubricVersion):"",
+ return {...(v.holdScoringVersion===HOLD_SCORING_VERSION?{holdScoringVersion:HOLD_SCORING_VERSION}:{}),weekNumber:v.weekNumber,publishedAt:new Date(v.publishedAt).toISOString(),rubricVersion:/^[A-Za-z0-9._-]{1,80}$/.test(String(v.rubricVersion))?String(v.rubricVersion):"",
    pain,observations,notAssessable,testFeedback:feedback,...(Object.keys(narrative).length?{narrative}:{}),
    scores:{axes,symmetry,tests,missing:[],complete:sc.complete===true,hasResults:sc.hasResults===true}};
 }

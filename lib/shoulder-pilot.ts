@@ -2,6 +2,8 @@
 // Stable protocol IDs are shared by the week 1 and week 14 definitions.
 export const PILOT_PROGRAM_ID = "cmqqhvbmr02necl3znzlqbw21";
 export const RUBRIC_VERSION = "shoulder-men-v1";
+// Published snapshots retain their own scores; this marker identifies the current hold criterion.
+export const HOLD_SCORING_VERSION = "hold-duration-v2";
 
 export type PilotField = {
   key: string; label: string; type: "number" | "text";
@@ -27,7 +29,6 @@ const specific = "Movimientos específicos";
 const wallHelp = "Recorrido observado sin despegar la lumbar ni extender la muñeca: 0 = barbilla o menos; 50 = orejas; 100 = brazo completo en contacto. Interpola entre referencias.";
 const holdFields = [
   num("holdSeconds", "Tiempo de sostén (s)", 0, 60, 0.1, "Solo el intento medido, hasta el objetivo configurado."),
-  num("inRangeSeconds", "Tiempo con los brazos por encima de las orejas (s)", 0, 60, 0.1),
   num("positionLossSeconds", "Tiempo con pérdida de posición o recolocación (s)", 0, 60, 0.1, "Cuenta solo los segundos en los que pierde la postura o recoloca los hombros. Si mantuvo la postura durante todo el sostén, indica 0."),
 ];
 const raiseFields = [5, 10, 15].flatMap(kg => [
@@ -85,7 +86,7 @@ export type PilotConfig = typeof DEFAULT_PILOT_CONFIG;
 export const PILOT_CONFIG_FIELDS: PilotField[] = [
   num("mobilityFlexionPct","Movilidad · flexión en pared (%)",0,100,0.01),
   num("mobilityPulloverPct","Movilidad · pull over (%)",0,100,0.01,"El wall press recibe el porcentaje restante."),
-  num("endRangeRaisesPct","Fuerza al final del rango · elevación en buenos días (%)",0,100,0.1,"El resto corresponde al bumper hold en prono."),
+  num("endRangeRaisesPct","Fuerza al final del rango · elevación en buenos días (%)",0,100,0.1,"El resto corresponde al tiempo de sostén del bumper hold en prono."),
   num("endurancePvcPct","Resistencia · PVC lift off (%)",0,100,0.1,"El resto corresponde al bumper hold en prono."),
   num("stabilityPvcPct","Estabilidad · PVC lift off (%)",0,100,0.1,"El resto corresponde al bumper hold en prono."),
   num("coordinationFluencyPct","Coordinación · fluidez (%)",0,100,0.1,"La simetría recibe el porcentaje restante."),
@@ -139,6 +140,12 @@ export function legacyPositionLossNeedsReview(id:string, observation?:PilotObser
   const key=PILOT_TEST_BY_ID[id]?.key;
   return (key==="pvcHold"||key==="bumperHold") && typeof observation?.unstableSeconds==="number" && typeof observation.positionLossSeconds!=="number";
 }
+// A verified old hold used the retired height-duration field. Read its remaining
+// measurements, but require a new clinical check before publishing the changed score.
+export function legacyHoldRangeNeedsReview(id:string, observation?:PilotObservation):boolean {
+  const key=PILOT_TEST_BY_ID[id]?.key;
+  return (key==="pvcHold"||key==="bumperHold") && typeof observation?.inRangeSeconds==="number";
+}
 export function sanitizePilotObservations(input:unknown,config:PilotConfig=DEFAULT_PILOT_CONFIG):PilotObservations {
   if(!obj(input)) throw Error("Observaciones no válidas.");
   const out:PilotObservations={};
@@ -146,7 +153,7 @@ export function sanitizePilotObservations(input:unknown,config:PilotConfig=DEFAU
     if(!Object.hasOwn(PILOT_TEST_BY_ID,id)||!obj(fields)) throw Error("Test no válido para esta batería.");
     const test=PILOT_TEST_BY_ID[id], clean:PilotObservation={};
     for(const [key,value] of Object.entries(fields)){
-      if(key==="unstableSeconds"&&(test.key==="pvcHold"||test.key==="bumperHold")) continue;
+      if((key==="unstableSeconds"||key==="inRangeSeconds")&&(test.key==="pvcHold"||test.key==="bumperHold")) continue;
       const field=test.fields.find(f=>f.key===key); if(!field) throw Error("Campo de observación no válido.");
       if(value===null){clean[key]=null;continue;}
       if(field.type==="text"){if(typeof value!=="string"||value.length>4000) throw Error("El comentario no puede superar 4000 caracteres."); clean[key]=value.trim();}
@@ -154,10 +161,10 @@ export function sanitizePilotObservations(input:unknown,config:PilotConfig=DEFAU
     }
     if(test.key==="pvcHold"||test.key==="bumperHold"){
       const hold=clean.holdSeconds;
-      if([hold,clean.inRangeSeconds,clean.positionLossSeconds].some(v=>typeof v==="number"&&v>config.holdTargetSeconds))
+      if([hold,clean.positionLossSeconds].some(v=>typeof v==="number"&&v>config.holdTargetSeconds))
         throw Error("Registra solo el tramo de sostén hasta el objetivo configurado.");
-      if(typeof hold==="number"&&[clean.inRangeSeconds,clean.positionLossSeconds].some(v=>typeof v==="number"&&v>hold))
-        throw Error("El tiempo en rango o inestable no puede superar el sostén.");
+      if(typeof hold==="number"&&[clean.positionLossSeconds].some(v=>typeof v==="number"&&v>hold))
+        throw Error("El tiempo con pérdida de posición no puede superar el sostén.");
     }
     if(test.key==="bumperRaises") for(const kg of [5,10,15]){
       const reps=clean["reps"+kg], range=clean["range"+kg];
@@ -218,12 +225,11 @@ export function scorePilot(observations:PilotObservations={},pain:PilotPain={},c
         break;
       }
       case "pvcHold":case "bumperHold":{
-        const h=read("holdSeconds"),v=read("inRangeSeconds"),u=read("positionLossSeconds");
+        const h=read("holdSeconds"),u=read("positionLossSeconds");
         const hold=h!==null && h<=config.holdTargetSeconds?h:null;
         d.timeScore=hold===null?null:10*hold/config.holdTargetSeconds;
-        d.rangeScore=ratio(v,hold);
         d.stabilityScore=(u!==null && hold!==null && u<=hold)?ratio(hold-u,hold):null;
-        score=weighted([d.timeScore,d.rangeScore],[50,50]);break;
+        score=d.timeScore;break;
       }
       case "bumperRaises":{
         const reps=[5,10,15].map(kg=>read("reps"+kg));
@@ -260,7 +266,7 @@ export function scorePilot(observations:PilotObservations={},pain:PilotPain={},c
   const axes=[
     {key:"mobility",label:"Movilidad",score:weighted([raw.wallFlexion,raw.pullover,raw.wallPress],[m1,m2,100-m1-m2])},
     {key:"stability",label:"Estabilidad",score:compare(details.pvcHold.stabilityScore,details.bumperHold.stabilityScore,config.stabilityPvcPct)},
-    {key:"endRange",label:"Fuerza al final del rango",score:compare(details.bumperRaises.rangeScore,details.bumperHold.rangeScore,config.endRangeRaisesPct)},
+    {key:"endRange",label:"Fuerza al final del rango",score:compare(details.bumperRaises.rangeScore,details.bumperHold.timeScore,config.endRangeRaisesPct)},
     {key:"coordination",label:"Coordinación",score:coordTotal===null?null:coordTotal/3},
     {key:"endurance",label:"Resistencia",score:compare(details.pvcHold.timeScore,details.bumperHold.timeScore,config.endurancePvcPct)},
     {key:"tolerance",label:"Tolerancia a la carga",score:tolerance},
