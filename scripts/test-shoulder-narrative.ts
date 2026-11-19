@@ -10,7 +10,8 @@ import {makeNarrativeEvidence} from "../lib/shoulder-narrative-evidence";
 import {writePatientInput} from "../lib/shoulder-test-feedback";
 const test=PILOT_TESTS[0].id,ids=PILOT_TESTS.map(t=>t.id),face=PILOT_TESTS.find(t=>t.key==="facePull8rm")!.id,hold=PILOT_TESTS.find(t=>t.key==="pvcHold")!.id;
 const privateText="PERSONAL_UNSENT_MARKER",patient="SYNTHETIC_PATIENT",pro="SYNTHETIC_PHYSIO";
-const validObs={[test]:{leftProgress:50,rightProgress:50}};
+const clinicianTestComment="Observación numérica revisada por el fisio.";
+const validObs={[test]:{leftProgress:50,rightProgress:50,comment:clinicianTestComment}};
 const inputPain={before:10,after:10,painfulTestIds:ids};
 const feedback={[face]:{pain:3,reps:8,loadKg:10,comment:privateText}};
 const reasons=Object.fromEntries(ids.filter(id=>id!==test).map(id=>[id,privateText]));
@@ -60,6 +61,17 @@ async function main(){
   assert.deepEqual(evidence.intentosDeclarados[0].inicial,{dolorDurante:6,repeticionesRealizadas:2,cargaIntentadaKg:8});
   assert(!JSON.stringify(evidence).includes(privateText));
   const getPro=await get();assert.deepEqual(getPro.narrative,{});
+  // A text-only numerical proposal saves/reloads without completing or publishing the test.
+  const commentOnly={[test]:{comment:"No se distingue el apoyo; medidas pendientes."}};
+  const commentSave={action:"save",observations:commentOnly,reviewedTestIds:[],notAssessable:{},videoVersions:{}};
+  assert.equal((await patch(commentSave)).status,200);
+  const reloadedComment=await get();assert.deepEqual(reloadedComment.observations,commentOnly);
+  assert.deepEqual(reloadedComment.reviewedTestIds,[]);
+  assert.equal(scorePilot(reloadedComment.observations).tests[test].missing,true);
+  assert.equal(scorePilot(reloadedComment.observations).tests[test].score,null);
+  assert.equal((await patch({...commentSave,reviewedTestIds:[test]})).status,400,"comment-only numeric test cannot be marked reviewed");
+  assert.equal((await patch({action:"publish"})).status,409,"comment alone cannot publish an incomplete review");
+  assert.deepEqual(readReviewDraft(row.observationsJson).observations,commentOnly);
   const save={action:"save",observations:validObs,reviewedTestIds:ids,notAssessable:reasons,videoVersions:{}};
   const human={general:"Comentario revisado de la valoración.",tolerance:"Primera valoración del dolor."};
   assert.equal((await patch({...save,narrative:human})).status,200);
@@ -86,6 +98,7 @@ async function main(){
       assert.equal(payload.model,expectedModel,"video Opus configuration must not change the forced-tool narrative model");
       const measured=sent.capacidades.filter((a:any)=>a.nota!==null);
       assert(!buf.includes(privateText)&&!buf.includes(patient)&&!buf.includes(pro)&&!buf.includes(face));
+      assert(!buf.includes(clinicianTestComment),"test comments are not silently sent to the narrative provider");
       assert.deepEqual(measured.map((a:any)=>a.key),["tolerance"]);
       assert.equal(sent.intentosDeclarados[0].actual.dolorDurante,3);
       calls++;if(mode==="stale")row.version++;
@@ -108,10 +121,13 @@ async function main(){
     mode="stale";assert.equal((await generate()).status,409);assert.equal(calls,4);
     assert.equal((await patch(save)).status,200);
     assert.equal((await patch({action:"publish"})).status,200);
-    actor={kind:"patient",patient:{id:patient}};assert.deepEqual((await get()).published.narrative,human);
-    actor={kind:"professional",pro:{id:pro}};assert.equal((await patch({...save,narrative:{general:"Borrador distinto."}})).status,200);
+    actor={kind:"patient",patient:{id:patient}};const publishedView=await get();assert.deepEqual(publishedView.published.narrative,human);
+    assert.equal(publishedView.published.observations[test].comment,clinicianTestComment);
+    actor={kind:"professional",pro:{id:pro}};assert.equal((await patch({...save,observations:{[test]:{...validObs[test],comment:"Comentario todavía privado."}},narrative:{general:"Borrador distinto."}})).status,200);
     actor={kind:"patient",patient:{id:patient}};const pv=await get();assert(!pv.narrative);assert.deepEqual(pv.published.narrative,human);
     assert(!JSON.stringify(pv).includes("Borrador distinto."));
+    assert.equal(pv.published.observations[test].comment,clinicianTestComment);
+    assert(!JSON.stringify(pv).includes("Comentario todavía privado."),"unpublished numeric comments stay private");
   }finally{server.close();}
   console.log("PASS: professional-only, scoped numerical evidence, actual SDK on loopback, independent video/narrative model configuration, zero vs missing, legacy comparison, clinical edits, frozen publication and stale response.");
 }

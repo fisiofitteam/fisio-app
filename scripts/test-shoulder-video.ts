@@ -49,9 +49,10 @@ async function main(){
     const input={...b,testId:t.id,fps:desc.kind==="hold"?8:3};
     const instruction=buildVideoInstruction(input);
     if(desc.kind==="measurement"){
-      assert.match(instruction,/measurements/);for(const f of t.fields)assert(instruction.includes(f.key));
-      const fields=Object.fromEntries(t.fields.map(f=>[f.key,{...validMeasurement,value:f.min??0}]));
-      assert.deepEqual(Object.keys(parseAIDraft({measurements:fields},input,config).observationFields).sort(),t.fields.map(f=>f.key).sort());
+      const numericFields=t.fields.filter(f=>f.type==="number");
+      assert.match(instruction,/measurements/);for(const f of numericFields)assert(instruction.includes(f.key));
+      const fields=Object.fromEntries(numericFields.map(f=>[f.key,{...validMeasurement,value:f.min??0}]));
+      assert.deepEqual(Object.keys(parseAIDraft({measurements:fields},input,config).observationFields).sort(),numericFields.map(f=>f.key).sort());
     }else if(desc.kind==="load"){
       assert.match(instruction,/No infieras cargas/);
       const proposed=parseAIDraft({notes:"Ocho repeticiones visibles.",findings:[{start:1,end:4,text:"Ejecución visible."}],measurements:{affectedKg:{...validMeasurement,value:99},referenceKg:{...validMeasurement,value:99}}},input,config);

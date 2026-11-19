@@ -71,7 +71,7 @@ function TestFacts({id, report,axis}: {id:string;report:PilotReportSnapshot;axis
     return <p className="text-xs">Sostuviste el disco durante {pilotNumber(hold)} segundos.</p>;
   }
   if(test.key==="bumperRaises")return <dl className="mt-1 text-xs">{[5,10,15].map(kg=><div key={kg}><dt className="inline">{kg} kg: </dt><dd className="inline">{typeof obs["reps"+kg]!=="number"?"Sin registrar":String(obs["reps"+kg])+" repeticiones completadas · "+String(obs["range"+kg]??(obs["reps"+kg]===0?0:"?"))+" en rango"}</dd></div>)}</dl>;
-  const fields=test.fields.filter(f=>obs[f.key]!==undefined&&obs[f.key]!==null&&obs[f.key]!=="");
+  const fields=test.fields.filter(f=>f.type==="number"&&obs[f.key]!==undefined&&obs[f.key]!==null&&obs[f.key]!=="");
   if(!fields.length)return <p className="text-xs">Sin mediciones registradas.</p>;
   const binary=fields.filter(f=>/^r[123](Smooth|Symmetric|NoShrug)$/.test(f.key));
   if(binary.length) {
@@ -122,6 +122,11 @@ export function ShoulderPilotReport({report,previous}: {report:PilotReportSnapsh
       <div className="mt-2 space-y-2">{PILOT_TESTS.filter(t=>t.kind==="qualitative").map(t=><details key={t.id} className="border-b border-neutral-200 pb-2"><summary className="cursor-pointer text-sm">{t.name}</summary>
       {compare&&<p className="mt-2 whitespace-pre-wrap text-sm"><b>Inicial: </b>{String(compare.observations[t.id]?.comment||compare.notAssessable?.[t.id]||"Sin valorar")}</p>}
       <p className="mt-2 whitespace-pre-wrap text-sm">{compare&&<b>Revaloración: </b>}{String(report.observations[t.id]?.comment||report.notAssessable?.[t.id]||"Sin valorar")}</p></details>)}</div></div>
-    <details className="border-t border-neutral-200 pt-3"><summary data-pdf-heading="Puntuaciones por test" className="text-sm font-semibold cursor-pointer">Ver todas las puntuaciones por test</summary><ul className="mt-2 space-y-1 text-sm">{PILOT_TESTS.filter(t=>t.kind==="numeric").map(t=><li key={t.id}>{t.name}: <strong>{compare&&!(differentHoldCriterion&&(t.key==="pvcHold"||t.key==="bumperHold"))&&pilotNumber(compare.scores.tests[t.id]?.score)+" → "}{pilotNumber(tests[t.id]?.score)}</strong></li>)}</ul></details>
+    <details className="border-t border-neutral-200 pt-3"><summary data-pdf-heading="Puntuaciones por test" className="text-sm font-semibold cursor-pointer">Ver todas las puntuaciones por test</summary><ul className="mt-2 space-y-1 text-sm">{PILOT_TESTS.filter(t=>t.kind==="numeric").map(t=>{
+      const comment=report.observations[t.id]?.comment;
+      return <li key={t.id}>{t.name}: <strong>{compare&&!(differentHoldCriterion&&(t.key==="pvcHold"||t.key==="bumperHold"))&&pilotNumber(compare.scores.tests[t.id]?.score)+" → "}{pilotNumber(tests[t.id]?.score)}</strong>
+        {!report.notAssessable?.[t.id]&&typeof comment==="string"&&comment.trim()&&<p className="mt-1 text-xs text-neutral-600 whitespace-pre-wrap [overflow-wrap:anywhere]">{comment}</p>}
+      </li>;
+    })}</ul></details>
   </section>;
 }
