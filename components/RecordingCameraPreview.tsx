@@ -10,24 +10,25 @@ export function RecordingCameraPreview({ stream, paused }: { stream: MediaStream
 
   useEffect(() => {
     const element = video.current!;
+    let cancelled = false;
     active.current = true;
     setReady(false); setFloating(false); setError("");
     setPipSupported(!!document.pictureInPictureEnabled && typeof element.requestPictureInPicture === "function");
-    const loaded = () => { if (active.current) setReady(true); };
-    const entered = () => { if (active.current) setFloating(true); };
+    const loaded = () => { if (!cancelled) setReady(true); };
+    const entered = () => { if (!cancelled) setFloating(true); };
     const left = () => {
-      if (!active.current) return;
+      if (cancelled) return;
       setFloating(false);
       // Some browsers pause the preview when their floating window is closed.
-      void element.play().catch(() => { if (active.current) setError("Pulsa «Activar vista de cámara» para volver a verte."); });
+      void element.play().catch(() => { if (!cancelled) setError("Pulsa «Activar vista de cámara» para volver a verte."); });
     };
     element.addEventListener("loadeddata", loaded);
     element.addEventListener("enterpictureinpicture", entered);
     element.addEventListener("leavepictureinpicture", left);
     element.srcObject = stream;
-    void element.play().catch(() => { if (active.current) setError("Pulsa «Activar vista de cámara» para verte mientras grabas."); });
+    void element.play().catch(() => { if (!cancelled) setError("Pulsa «Activar vista de cámara» para verte mientras grabas."); });
     return () => {
-      active.current = false;
+      cancelled = true; active.current = false;
       element.removeEventListener("loadeddata", loaded);
       element.removeEventListener("enterpictureinpicture", entered);
       element.removeEventListener("leavepictureinpicture", left);

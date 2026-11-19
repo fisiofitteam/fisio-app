@@ -56,10 +56,11 @@ const internal=load("app/api/recordings/[recordingId]/video/route.ts");
 const publicPage=load("app/grabacion/[token]/route.ts"),publicVideo=load("app/grabacion/[token]/video/route.ts");
 const lib=load("lib/recordings.ts"), rules=load("lib/recording-rules.ts");
 const middleware=load("middleware.ts").middleware;
-const input={title:"Screen review",mime:"video/webm",size:300,durationSeconds:8,notes:"PRIVATE_NOTE"};
+const transcriptApi=load("app/api/recordings/[recordingId]/transcript/route.ts");
+const input={transcript:"PRIVATE_TRANSCRIPT",transcriptionStatus:"complete",title:"Screen review",mime:"video/webm",size:300,durationSeconds:8,notes:"PRIVATE_NOTE"};
 process.env.ASSESSMENT_BLOB_READ_WRITE_TOKEN="test-private-store";
 (async()=>{
- for(const value of [{...input,size:0},{...input,size:Infinity},{...input,mime:"text/html"},{...input,durationSeconds:NaN},{...input,title:" "},{...input,notes:"x".repeat(5001)}])assert.throws(()=>rules.recordingInput(value));
+ for(const value of [{...input,size:0},{...input,size:Infinity},{...input,mime:"text/html"},{...input,durationSeconds:NaN},{...input,title:" "},{...input,notes:"x".repeat(5001)},{...input,transcript:123},{...input,transcript:"x".repeat(150001)},{...input,transcriptionStatus:"invented"}])assert.throws(()=>rules.recordingInput(value));
  for(const url of ["https://evil.test/a","https://foo.private.blob.vercel-storage.com.evil.test/professional-recordings/a","http://foo.private.blob.vercel-storage.com/professional-recordings/a","https://foo.private.blob.vercel-storage.com/professional-recordings/b"])assert.equal(rules.recordingBlobUrl(url,"professional-recordings/a"),null);
  for(const a of [null,pro("other"),pro("pro-a","setter")]){
   actor=a;assert.equal((await create.POST(req("/api/patients/p/recordings",input),ctx)).status,403);assert.equal(rows.size,0);
@@ -79,6 +80,9 @@ process.env.ASSESSMENT_BLOB_READ_WRITE_TOKEN="test-private-store";
  meta[p].size=300;
  assert.equal((await recording.POST(req("/api/recordings/"+id,{url:"https://evil.test/ssrf"}),c)).status,200);
  assert(headCalls.every(value=>value===p));assert.equal(rows.get(id).status,"ready");
+ for(const denied of [null,pro("other"),pro("pro-a","setter")]){actor=denied;assert.equal((await transcriptApi.GET(req("/api/recordings/"+id+"/transcript",undefined,"GET"),c)).status,403)}
+ for(const allowed of [pro(),pro("pro-b"),pro("manager","ceo")]){actor=allowed;const response=await transcriptApi.GET(req("/api/recordings/"+id+"/transcript",undefined,"GET"),c);assert.equal(response.status,200);assert.match(response.headers.get("cache-control"),/no-store/);assert.equal((await response.json()).transcript,"PRIVATE_TRANSCRIPT")}
+ actor=pro();
  // Replay is idempotent.
  assert.equal((await recording.POST(req("/api/recordings/"+id),c)).status,200);
  actor=null;assert.equal((await internal.GET(req("/api/recordings/"+id+"/video",undefined,"GET"),c)).status,403);
@@ -90,7 +94,7 @@ process.env.ASSESSMENT_BLOB_READ_WRITE_TOKEN="test-private-store";
  assert.equal(token.length,43);assert(!JSON.stringify([...rows.values()]).includes(token));
  actor=null;
  let html=await (await publicPage.GET(new Request("https://app.test"),sc)).text();
- for(const secret of ["PRIVATE_NOTE",patient.id,p,"pro-a"])assert(!html.includes(secret));
+ for(const secret of ["PRIVATE_NOTE","PRIVATE_TRANSCRIPT",patient.id,p,"pro-a"])assert(!html.includes(secret));
  assert(html.includes("Screen review"));assert.equal((await publicVideo.GET(new Request("https://app.test"),sc)).status,200);
  rows.get(id).shareExpiresAt=new Date(0);assert.equal((await publicVideo.GET(new Request("https://app.test"),sc)).status,404);
  actor=pro();out=await share.POST(req("/api/recordings/"+id+"/share"),c);
@@ -107,6 +111,7 @@ process.env.ASSESSMENT_BLOB_READ_WRITE_TOKEN="test-private-store";
  assert.equal(middleware(new NextRequest("https://app.test/grabacion/"+token,{method:"POST"})).status,404);
  failDelete=true;assert.equal((await recording.DELETE(req("/api/recordings/"+id,undefined,"DELETE"),c)).status,500);
  assert.equal(rows.get(id).status,"deleting");
+ assert.equal((await transcriptApi.GET(req("/api/recordings/"+id+"/transcript",undefined,"GET"),c)).status,404);
  assert.equal((await internal.GET(req("/api/recordings/"+id+"/video",undefined,"GET"),c)).status,404);
  failDelete=false;assert.equal((await recording.DELETE(req("/api/recordings/"+id,undefined,"DELETE"),c)).status,200);
  assert(!rows.has(id));assert.deepEqual(deleted,[p]);
@@ -134,6 +139,8 @@ process.env.ASSESSMENT_BLOB_READ_WRITE_TOKEN="test-private-store";
  assert.equal(entries.get(general.id+":pro-a").folderId,fa.id);assert.equal(entries.get(general.id+":manager").folderId,fm.id);
  actor=pro("pro-a","setter");assert.equal((await folderItem.PATCH(req("/api/recordings/folders/"+fa.id,{name:"Guías"},"PATCH"),{params:{folderId:fa.id}})).status,200);
  assert.equal((await folderItem.DELETE(req("/api/recordings/folders/"+fa.id,undefined,"DELETE"),{params:{folderId:fa.id}})).status,200);
+ actor=pro("pro-a","setter");assert.equal((await transcriptApi.GET(req("/api/recordings/"+general.id+"/transcript",undefined,"GET"),gc)).status,200);
+ actor=pro("pro-b");assert.equal((await transcriptApi.GET(req("/api/recordings/"+general.id+"/transcript",undefined,"GET"),gc)).status,403);
  assert(rows.has(general.id));assert(!entries.has(general.id+":pro-a"));assert(entries.has(general.id+":manager"));
  console.log("PASS: general recording creation/ownership, nonclinical patient denial, personal folder ownership/rename/move, independent manager organization and folder deletion preserving videos.");
  console.log("PASS: upload reservations, role/assignment/derivation checks, path and metadata binding, share privacy/expiry/revocation, delete failure and retry, exact public middleware scope.");

@@ -2,7 +2,7 @@ const fs=require('fs'),path=require('path'),vm=require('vm'),ts=require('typescr
 const {NextRequest}=require('next/server');
 let actor=null,calls=[];
 const patients=[{id:'own',fullName:'Ana Uno',assignedProfessionalId:'a',derivations:[]},{id:'derived',fullName:'Bruno Dos',assignedProfessionalId:'b',derivations:[{toProfessionalId:'a'}]},{id:'hidden',fullName:'Private Other',assignedProfessionalId:'b',derivations:[]}];
-const base={createdById:'a',folderEntries:[],notes:'Internal',createdAt:new Date(),size:50,durationSeconds:3,shareTokenHash:'HASH_MUST_NOT_LEAK',shareExpiresAt:new Date(Date.now()+86400000),createdBy:{fullName:'Professional'},url:'PRIVATE_URL_MUST_NOT_LEAK',blobPath:'PRIVATE_PATH_MUST_NOT_LEAK'};
+const base={transcript:'TRANSCRIPT_BODY_MUST_NOT_LEAK',transcriptionStatus:'complete',createdById:'a',folderEntries:[],notes:'Internal',createdAt:new Date(),size:50,durationSeconds:3,shareTokenHash:'HASH_MUST_NOT_LEAK',shareExpiresAt:new Date(Date.now()+86400000),createdBy:{fullName:'Professional'},url:'PRIVATE_URL_MUST_NOT_LEAK',blobPath:'PRIVATE_PATH_MUST_NOT_LEAK'};
 const rows=[{...base,id:'general-a',title:'General A',patientId:null,patient:null,status:'ready',folderEntries:[{professionalId:'a',folderId:'folder-a',folder:{id:'folder-a',name:'Equipo'}}]},{...base,id:'general-b',title:'General B',patientId:null,patient:null,createdById:'b',status:'ready'},...Array.from({length:26},(_,i)=>({...base,id:'own-'+i,title:'Review '+i,status:'ready',patientId:'own',patient:patients[0]})),{...base,id:'derived',title:'Derived review',status:'ready',patientId:'derived',patient:patients[1]},{...base,id:'hidden',title:'Secret review',status:'ready',patientId:'hidden',patient:patients[2]},{...base,id:'pending',title:'Uploading',status:'uploading',patientId:'own',patient:patients[0]}];
 function matches(row,where){return Object.entries(where).every(([k,v])=>{
  if(k==='AND')return v.every(x=>matches(row,x));
@@ -31,7 +31,7 @@ const pro=(id='a',role='fisio',extraRoles=[])=>({id,role,extraRoles,isManager:[r
  result=await lib.getRecordingLibrary(pro('a','closer',['fisio']),{q:'Review'});assert.equal(result.total,27);
  result=await lib.getRecordingLibrary(pro('manager','ceo'));assert.equal(result.total,30);
  result=await lib.getRecordingLibrary(pro(),{patientId:'own',page:'NaN'});assert.equal(result.total,26);assert.equal(result.page,1);
- for(const secret of ['PRIVATE_URL_MUST_NOT_LEAK','PRIVATE_PATH_MUST_NOT_LEAK','HASH_MUST_NOT_LEAK'])assert.ok(!JSON.stringify(result).includes(secret));
+ for(const secret of ['PRIVATE_URL_MUST_NOT_LEAK','PRIVATE_PATH_MUST_NOT_LEAK','HASH_MUST_NOT_LEAK','TRANSCRIPT_BODY_MUST_NOT_LEAK'])assert.ok(!JSON.stringify(result).includes(secret));
  result=await lib.getRecordingLibrary(pro('a','setter'));assert.equal(result.total,1);assert.equal(result.recordings[0].id,'general-a');
  result=await lib.getRecordingLibrary(pro(),{patientId:'none'});assert.equal(result.total,1);assert.equal(result.recordings[0].patientId,null);
  result=await lib.getRecordingLibrary(pro(),{folderId:'folder-a'});assert.equal(result.total,1);

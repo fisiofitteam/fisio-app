@@ -10,7 +10,11 @@ export function recordingInput(value: unknown) {
   if (typeof b.durationSeconds !== "number" || !Number.isFinite(b.durationSeconds) || b.durationSeconds < 0 || b.durationSeconds > MAX_RECORDING_SECONDS + 10) throw new Error("Duración no válida.");
   const notes = typeof b.notes === "string" ? b.notes.trim() : "";
   if (notes.length > 5000) throw new Error("Las notas no pueden superar 5000 caracteres.");
-  return { title: b.title.trim(), mime: b.mime, size: b.size, durationSeconds: Math.ceil(b.durationSeconds), notes: notes || null };
+  const transcript = b.transcript == null ? "" : b.transcript;
+  if (typeof transcript !== "string" || transcript.length > 150000) throw new Error("La transcripción no puede superar 150000 caracteres.");
+  const transcriptionStatus = b.transcriptionStatus ?? "off";
+  if (typeof transcriptionStatus !== "string" || !["off", "complete", "partial", "unavailable", "edited"].includes(transcriptionStatus)) throw new Error("Estado de transcripción no válido.");
+  return { transcript: transcript.trim() || null, transcriptionStatus, title: b.title.trim(), mime: b.mime, size: b.size, durationSeconds: Math.ceil(b.durationSeconds), notes: notes || null };
 }
 export function recordingBlobUrl(raw: string, pathname: string): URL | null {
   try {
