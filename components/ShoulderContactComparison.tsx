@@ -15,6 +15,7 @@ export function ShoulderContactComparison({sessionId}:{sessionId:string}){
   const [source,setSource]=useState<VideoInput|null>(null);
   const [error,setError]=useState(""),[progress,setProgress]=useState("");
   const [busy,setBusy]=useState(false),[seconds,setSeconds]=useState(14);
+  const [approach,setApproach]=useState<"strict"|"spatial">("strict"),[effort,setEffort]=useState<"medium"|"high">("medium");
   const [box,setBox]=useState<Box>({x:0,y:0,width:100,height:100});
   const [prepared,setPrepared]=useState<PreparedContactComparison|null>(null);
   const [results,setResults]=useState<Partial<Record<Variant,ContactProbeResult>>>({});
@@ -47,7 +48,7 @@ export function ShoulderContactComparison({sessionId}:{sessionId:string}){
       for(const image of prepared.variants){
         if(ctrl.signal.aborted)break;
         setProgress("Analizando: "+names[image.variant]+"…");
-        try{const result=await runContactProbe(source,prepared,image,ctrl.signal);
+        try{const result=await runContactProbe(source,prepared,image,ctrl.signal,{approach,effort});
           if(!ctrl.signal.aborted)setResults(p=>({...p,[image.variant]:result}));
         }catch(e){if(!ctrl.signal.aborted)setFailures(p=>({...p,[image.variant]:e instanceof Error?e.message:"Análisis no disponible."}));}
       }
@@ -66,6 +67,10 @@ export function ShoulderContactComparison({sessionId}:{sessionId:string}){
         <label className="block max-w-xs text-sm">Instante del vídeo (segundos enteros)<input className="input mt-1" type="number" min={0} max={59} step={1} value={seconds} onChange={e=>{invalidate();setSeconds(Number(e.target.value));}}/></label>
         <p className="text-sm">Selecciona un recorte que conserve los brazos y la pared. Las posiciones y tamaños se expresan como porcentaje del encuadre.</p>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{([["x","Izquierda (%)"],["y","Arriba (%)"],["width","Anchura (%)"],["height","Altura (%)"]] as const).map(([key,label])=><label className="text-sm" key={key}>{label}<input className="input mt-1" type="number" min={key==="x"||key==="y"?0:1} max={100} step={1} value={box[key]} onChange={e=>{invalidate();setBox(p=>({...p,[key]:Number(e.target.value)}));}}/></label>)}</div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="text-sm">Forma de revisión<select className="input mt-1" value={approach} onChange={e=>{setApproach(e.target.value as "strict"|"spatial");setResults({});setFailures({});setProgress("");}}><option value="strict">Comprobación de contacto</option><option value="spatial">Descripción espacial primero</option></select></label>
+          <label className="text-sm">Esfuerzo de análisis<select className="input mt-1" value={effort} onChange={e=>{setEffort(e.target.value as "medium"|"high");setResults({});setFailures({});setProgress("");}}><option value="medium">Medio (actual)</option><option value="high">Alto</option></select></label>
+        </div>
         <div className="flex flex-wrap gap-2"><button type="button" className="btn btn-ghost" onClick={prepare}>Preparar imágenes</button><button type="button" className="btn btn-accent" disabled={!prepared} onClick={compare}>Comparar las tres imágenes con IA</button></div>
       </fieldset>
       {progress&&<p role="status" className="text-sm">{progress}</p>}{busy&&<button type="button" className="text-sm underline" onClick={()=>job.current?.abort()}>Detener comparación</button>}
@@ -78,7 +83,7 @@ export function ShoulderContactComparison({sessionId}:{sessionId:string}){
         <img src={"data:image/jpeg;base64,"+image.jpeg} alt={names[image.variant]+" del wall press en "+prepared.time+" segundos"} className="mx-auto h-auto max-h-[32rem] w-auto max-w-full rounded bg-neutral-950"/>
         <p className="text-xs text-neutral-500">{image.width} × {image.height} · calidad JPEG {Math.round(image.quality*100)}% · {Math.round(image.jpeg.length*3/4/1024)} KB</p>
         {failures[image.variant]&&<p role="alert" className="text-sm text-red-700">{failures[image.variant]}</p>}
-        {result&&<div className="space-y-3 text-sm"><p className="text-xs text-neutral-500">Modelo: {result.model}</p>{([["leftImageArm","Brazo izquierdo de la imagen"],["rightImageArm","Brazo derecho de la imagen"]] as const).map(([key,label])=><div key={key}><h3 className="font-semibold">{label}</h3><p className="font-medium">{statuses[result[key].status]}</p><p>{result[key].reason}</p></div>)}{result.limitations.length>0&&<ul className="list-disc pl-5 text-xs text-neutral-600">{result.limitations.map((v,i)=><li key={i}>{v}</li>)}</ul>}</div>}
+        {result&&<div className="space-y-3 text-sm"><p className="text-xs text-neutral-500">Modelo: {result.model} · {result.approach==="spatial"?"Descripción espacial":"Comprobación de contacto"} · esfuerzo {result.effort==="high"?"alto":"medio"}</p>{([["leftImageArm","Brazo izquierdo de la imagen"],["rightImageArm","Brazo derecho de la imagen"]] as const).map(([key,label])=><div key={key}><h3 className="font-semibold">{label}</h3><p className="font-medium">{statuses[result[key].status]}</p><p>{result[key].reason}</p></div>)}{result.limitations.length>0&&<ul className="list-disc pl-5 text-xs text-neutral-600">{result.limitations.map((v,i)=><li key={i}>{v}</li>)}</ul>}</div>}
       </section>;
     })}</div>}
   </main>;
