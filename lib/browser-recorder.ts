@@ -1,6 +1,6 @@
 import { MAX_RECORDING_BYTES, MAX_RECORDING_SECONDS } from "./recording-rules";
 export type FinishedRecording = { blob: Blob; durationSeconds: number; reason?: string };
-export type BrowserRecording = { stop(): void; pause(): void; resume(): void };
+export type BrowserRecording = { cameraStream?: MediaStream; stop(): void; pause(): void; resume(): void };
 type Options = { camera: boolean; microphone: boolean; systemAudio: boolean; onFinish(result: FinishedRecording): void; onError(message: string): void; onTick(seconds: number): void };
 export function supportedRecordingMime(isSupported: (mime: string) => boolean) {
   return ["video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4"].find(isSupported);
@@ -48,12 +48,13 @@ export async function startBrowserRecording(options: Options): Promise<BrowserRe
     }
     if (screenTrack.readyState !== "live") throw new Error("Se ha detenido el uso compartido de pantalla.");
     let videoTrack = screenTrack;
+    const cameraStream = options.camera && devices?.getVideoTracks().length ? new MediaStream(devices.getVideoTracks()) : undefined;
     if (options.camera && devices?.getVideoTracks().length) {
       const makeVideo = async (stream: MediaStream) => {
         const v = document.createElement("video"); v.muted = true; v.playsInline = true; v.srcObject = stream;
         videos.push(v); await v.play(); return v;
       };
-      const screenVideo = await makeVideo(screen), cameraVideo = await makeVideo(new MediaStream(devices.getVideoTracks()));
+      const screenVideo = await makeVideo(screen), cameraVideo = await makeVideo(cameraStream!);
       const canvas = document.createElement("canvas");
       const settings = screenTrack.getSettings(), aspect = (settings.width || 1920) / (settings.height || 1080);
       canvas.width = Math.round(Math.min(settings.width || 1280, 1280) / 2) * 2;
@@ -106,7 +107,7 @@ export async function startBrowserRecording(options: Options): Promise<BrowserRe
       if (time >= MAX_RECORDING_SECONDS) { reason = "Se ha alcanzado el límite de 30 minutos."; stop(); }
     }, 500);
     return {
-      stop,
+      cameraStream, stop,
       pause() { if (!stopped && !paused && recorder?.state === "recording") { elapsedMs += performance.now() - resumedAt; paused = true; recorder.pause(); } },
       resume() { if (!stopped && paused && recorder?.state === "paused") { resumedAt = performance.now(); paused = false; recorder.resume(); } },
     };

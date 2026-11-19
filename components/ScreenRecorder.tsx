@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { upload } from "@vercel/blob/client";
 import { startBrowserRecording, type BrowserRecording, type FinishedRecording } from "@/lib/browser-recorder";
 import { readRecordingDraft, writeRecordingDraft, type RecordingDraft } from "@/lib/recording-draft";
+import { RecordingCameraPreview } from "./RecordingCameraPreview";
 import { MAX_RECORDING_BYTES } from "@/lib/recording-rules";
 
 const clock = (time: number) => Math.floor(time / 60).toString().padStart(2, "0") + ":" + (time % 60).toString().padStart(2, "0");
@@ -14,6 +15,7 @@ export function ScreenRecorder({ patientId, patientName, professionalId, enabled
   const [title, setTitle] = useState("Revisión de ejercicios"), [notes, setNotes] = useState("");
   const [elapsed, setElapsed] = useState(0), [progress, setProgress] = useState(0), [message, setMessage] = useState("");
   const [draft, setDraft] = useState<FinishedRecording | null>(null), [preview, setPreview] = useState<string>(), [supported, setSupported] = useState(true);
+  const [cameraStream, setCameraStream] = useState<MediaStream>();
   const controller = useRef<BrowserRecording>(), mounted = useRef(true);
   const [recovering, setRecovering] = useState(true), [uploadedId, setUploadedId] = useState<string>();
   const serverUploadId = useRef<string>(), draftWrites = useRef<Promise<void>>(Promise.resolve());
@@ -60,19 +62,20 @@ export function ScreenRecorder({ patientId, patientName, professionalId, enabled
     catch { if (mounted.current) setMessage("La copia local no se ha podido guardar. Descarga el vídeo antes de cerrar esta pestaña."); }
   }
   async function start() {
-    setMessage(""); setElapsed(0); setPhase("preparing");
+    setMessage(""); setElapsed(0); setCameraStream(undefined); setPhase("preparing");
     try {
       controller.current = await startBrowserRecording({
         camera, microphone, systemAudio,
         onTick: seconds => { if (mounted.current) setElapsed(seconds); },
-        onError: error => { if (mounted.current) { setMessage(error); setPhase("idle"); } },
+        onError: error => { if (mounted.current) { setCameraStream(undefined); setMessage(error); setPhase("idle"); } },
         onFinish: recording => {
           controller.current = undefined;
           void remember(recording);
-          if (mounted.current) { setDraft(recording); setPhase("preview"); setMessage(recording.reason || "Revisa el vídeo y guárdalo en el historial."); }
+          if (mounted.current) { setCameraStream(undefined); setDraft(recording); setPhase("preview"); setMessage(recording.reason || "Revisa el vídeo y guárdalo en el historial."); }
         },
       });
       if (!mounted.current) { controller.current.stop(); return; }
+      setCameraStream(controller.current.cameraStream);
       setPhase("recording");
     } catch (e) {
       const denied = e instanceof DOMException && (e.name === "NotAllowedError" || e.name === "PermissionDeniedError");
@@ -141,6 +144,7 @@ export function ScreenRecorder({ patientId, patientName, professionalId, enabled
       <button className="btn btn-ghost" onClick={() => { if (phase === "paused") { controller.current?.resume(); setPhase("recording"); } else { controller.current?.pause(); setPhase("paused"); } }}>{phase === "paused" ? "Reanudar" : "Pausar"}</button>
       <button className="btn btn-accent" onClick={() => { setPhase("stopping"); controller.current?.stop(); }}>Terminar</button>
     </div>}
+    {recording && cameraStream && <RecordingCameraPreview stream={cameraStream} paused={phase === "paused"} />}
     {phase === "stopping" && <p role="status">Preparando la vista previa…</p>}
     {draft && <div className="space-y-3">
       {preview && <video controls playsInline preload="metadata" src={preview} className="w-full max-h-96 bg-neutral-950 rounded-xl" />}
