@@ -4,7 +4,9 @@ Grabador propio para profesionales, implementado con las API del navegador. No i
 
 ## Uso
 
-En la ficha del paciente: **Evolución e historial → Grabaciones**.
+En el menú lateral: **Grabaciones** (`/fisio/grabaciones`). Muestra las grabaciones de los pacientes accesibles al profesional, con búsqueda por título/nombre, filtro por paciente y paginación. Desde «Nueva grabación» se elige un paciente y se graba directamente. El selector se bloquea durante la captura, revisión o subida para evitar cambiar de paciente con una grabación pendiente.
+
+También se mantiene en la ficha del paciente: **Evolución e historial → Grabaciones**. Ambos accesos usan los mismos registros y permisos, sin duplicar vídeos.
 
 1. Elegir cámara, micrófono y audio compartido opcionales.
 2. Pulsar «Empezar a grabar» y seleccionar pantalla, ventana o pestaña en el selector del navegador. Puede ser WhatsApp u otra aplicación.

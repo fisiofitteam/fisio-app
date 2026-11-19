@@ -25,6 +25,7 @@ import {
   Sunrise,
   Bot,
   TrafficCone,
+  Video,
   LucideIcon,
 } from "lucide-react";
 
@@ -38,6 +39,7 @@ type Item = {
 
 const PANEL: Item = { id: "panel", label: "Panel", Icon: LayoutDashboard, href: "/fisio", match: (p) => p === "/fisio" };
 const TESTIMONIOS: Item = { id: "testimonios", label: "Testimonios", Icon: Sparkles, href: "/fisio/testimonios", match: (p) => p.startsWith("/fisio/testimonios") };
+const GRABACIONES: Item = { id: "grabaciones", label: "Grabaciones", Icon: Video, href: "/fisio/grabaciones", match: (p) => p === "/fisio/grabaciones" || p.startsWith("/fisio/grabaciones/") };
 const PACIENTES: Item = { id: "pacientes", label: "Pacientes", Icon: Users, href: "/fisio/pacientes", match: (p) => p.startsWith("/fisio/pacientes") || p.startsWith("/fisio/paciente/") };
 const LEADS: Item = { id: "leads", label: "Llamadas", Icon: Target, href: "/fisio/leads", match: (p) => p.startsWith("/fisio/leads") };
 const LLAMADAS_VENTA: Item = { id: "llamadas-venta", label: "Llamadas", Icon: PhoneCall, href: "/fisio/llamadas-venta", match: (p) => p.startsWith("/fisio/llamadas-venta") };
@@ -99,10 +101,10 @@ function itemsForRole(role: string, opts: { withResumenes: boolean }): Item[] {
     // CEO no ve el buzon de Alertas (lo gestionan head_success y fisios).
     // Lead magnets vive dentro de Contenido → Lead magnets, no en el
     // sidebar (para no ensuciar la navegación principal).
-    return [PANEL, PACIENTES, TESTIMONIOS, ...R, ADVANCE, LLAMADAS_VENTA, REFERIDOS, CONTENIDO, ANUNCIOS, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, RECURSOS, FINANZAS, EQUIPO, CHAT, FISIO_IA, SETTER_IA, AJUSTES];
+    return [PANEL, PACIENTES, GRABACIONES, TESTIMONIOS, ...R, ADVANCE, LLAMADAS_VENTA, REFERIDOS, CONTENIDO, ANUNCIOS, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, RECURSOS, FINANZAS, EQUIPO, CHAT, FISIO_IA, SETTER_IA, AJUSTES];
   }
   if (role === "head_success") {
-    return [PANEL, PACIENTES, TESTIMONIOS, ALERTAS, ...R, ADVANCE, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, CHAT, FISIO_IA, AJUSTES];
+    return [PANEL, PACIENTES, GRABACIONES, TESTIMONIOS, ALERTAS, ...R, ADVANCE, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, CHAT, FISIO_IA, AJUSTES];
   }
   if (role === "setter") {
     // Setter tiene Lead magnets DIRECTO en el sidebar — es su fuente
@@ -113,7 +115,7 @@ function itemsForRole(role: string, opts: { withResumenes: boolean }): Item[] {
     return [PANEL, LLAMADAS_VENTA, FOLLOWUP, CALENDARIO_LLAMADAS, COMUNIDAD, REUNIONES, CALENDARIO, EQUIPO, CHAT, FISIO_IA, AJUSTES];
   }
   // fisio normal
-  return [PANEL, PACIENTES, TESTIMONIOS, ALERTAS, ...R, ROLLING_LECTURA, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, CHAT, FISIO_IA, AJUSTES];
+  return [PANEL, PACIENTES, ...(role === "fisio" ? [GRABACIONES] : []), TESTIMONIOS, ALERTAS, ...R, ROLLING_LECTURA, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, CHAT, FISIO_IA, AJUSTES];
 }
 
 /**
