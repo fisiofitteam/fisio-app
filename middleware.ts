@@ -27,6 +27,7 @@ const PUBLIC_PATHS = [
   "/api/renewal",   // endpoints públicos del flujo de renovación (status, checkout)
   "/prevention",    // landing pública Prevention + páginas de gracias
   "/api/prevention",// endpoints públicos del flujo Prevention (checkout, confirm)
+  "/api/recordings/upload", // Blob callbacks verify their signature; upload tokens require a professional.
   "/api/assessments/upload", // Blob callback verifies signature; token requests require the assigned patient.
   "/api/webhooks",  // webhooks externos (Stripe) — los llama Stripe sin cookie
   "/api/cron/installment-reconcile", // autentica CRON_SECRET en el handler; Vercel no envía cookie de equipo
@@ -44,6 +45,20 @@ const STATIC_PREFIXES = ["/_next", "/api/_internal", "/favicon", "/icon-", "/box
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  // Read-only, revocable capability for one recording; no clinical fields are exposed.
+  if (pathname === "/grabacion" || pathname.startsWith("/grabacion/")) {
+    const ok = /^\/grabacion\/[A-Za-z0-9_-]{43}(?:\/video)?\/?$/.test(pathname);
+    const res = ok && (req.method === "GET" || req.method === "HEAD")
+      ? NextResponse.next() : new NextResponse("Grabación no disponible.", { status: 404 });
+    res.headers.set("Cache-Control", "private, no-store, max-age=0");
+    res.headers.set("Referrer-Policy", "no-referrer");
+    res.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive, nosnippet");
+    res.headers.set("X-Content-Type-Options", "nosniff");
+    res.headers.set("X-Frame-Options", "DENY");
+    res.headers.set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; media-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
+    return res;
+  }
 
   // A capability opens exactly one view, never a public API subtree. Do not redirect
   // malformed links to a login URL containing a copy of the bearer token.

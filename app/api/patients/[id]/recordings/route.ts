@@ -1,23 +1,17 @@
+import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getActiveProfessional } from "@/lib/session";
-import { canAccessEvidencePatient } from "@/lib/patient-evidence";
-import { validateRecording } from "@/lib/cap-recordings";
-
+import { recordingInput, RECORDING_PREFIX } from "@/lib/recording-rules";
+import { requireRecordingPatient, checkRecordingOrigin, recordingToken, RecordingError, recordingFailure } from "@/lib/recordings";
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const actor = await getActiveProfessional();
-  if (!actor || !await canAccessEvidencePatient(params.id, actor)) return NextResponse.json({ error: "Sin acceso" }, { status: 403 });
-  let data;
-  try { data = validateRecording(await req.json()); }
-  catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Datos incorrectos" }, { status: 400 }); }
-  const row = await prisma.patientRecording.create({ data: { ...data, patientId: params.id, createdById: actor.id } });
-  return NextResponse.json({ id: row.id }, { status: 201 });
-}
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  const actor = await getActiveProfessional();
-  if (!actor || !await canAccessEvidencePatient(params.id, actor)) return NextResponse.json({ error: "Sin acceso" }, { status: 403 });
-  const id = req.nextUrl.searchParams.get("id");
-  if (!id) return NextResponse.json({ error: "Falta la grabación" }, { status: 400 });
-  const result = await prisma.patientRecording.deleteMany({ where: { id, patientId: params.id } });
-  return NextResponse.json({ deleted: result.count });
+  try {
+    checkRecordingOrigin(req);
+    const actor = await requireRecordingPatient(params.id);
+    recordingToken();
+    let data;
+    try { data = recordingInput(await req.json()); } catch (e) { throw new RecordingError(400, e instanceof Error ? e.message : "Datos incorrectos."); }
+    const path = RECORDING_PREFIX + randomUUID() + "." + (data.mime === "video/mp4" ? "mp4" : "webm");
+    const row = await prisma.patientRecording.create({ data: { ...data, patientId: params.id, createdById: actor.id, blobPath: path, status: "uploading", pendingUntil: new Date(Date.now() + 3600000) } });
+    return NextResponse.json({ id: row.id, pathname: path }, { status: 201, headers: { "Cache-Control": "private, no-store" } });
+  } catch (e) { return recordingFailure(e); }
 }
