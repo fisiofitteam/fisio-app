@@ -7,6 +7,7 @@ import { PatientSessionMenu, patientLogout } from "@/components/PatientSessionMe
 import { PatientNav } from "@/components/PatientNav";
 import { PatientShirtSizePicker } from "@/components/PatientShirtSizePicker";
 import { PendingFormsBanner } from "@/components/PendingFormsBanner";
+import { PatientReferralBanner } from "@/components/PatientReferralBanner";
 import { writeCachedProgramType } from "@/lib/patient-program-type-cache";
 
 // Icono de WhatsApp en amarillo (currentColor para compat con la API de Lucide).
@@ -144,6 +145,9 @@ export function PatientHomeRolling({
           <p className="text-sm" style={{ color: "var(--p-text-dim)" }}>
             Habla con tu coach para renovar y volver a tener acceso al contenido semanal.
           </p>
+          <div className="mt-6">
+            <PatientReferralBanner patientId={patientId} programType={programType} />
+          </div>
         </div>
       </main>
     );
@@ -231,6 +235,8 @@ export function PatientHomeRolling({
             </div>
           )}
         </header>
+
+        <PatientReferralBanner patientId={patientId} programType={programType} />
 
         {!shippingComplete && (
           <Link

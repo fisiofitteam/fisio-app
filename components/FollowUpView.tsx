@@ -2,6 +2,7 @@
 
 import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
+import { LeadReferralNotice } from "@/components/LeadReferralNotice";
 import { RescheduleLinkButton } from "@/components/RescheduleLinkButton";
 import { CallSummaryBlock, type CallSummaryData } from "@/components/CallSummaryBlock";
 
@@ -15,6 +16,8 @@ type Lead = {
   phone: string | null;
   meetingUrl: string | null;
   aiSummary: string | null;
+  referredByPatient: { fullName: string } | null;
+  source: string | null;
   followUpNote: string | null;
   callScheduledAt: string;
   status: string;
@@ -184,6 +187,7 @@ export function FollowUpView({
                   </td>
                   <td className="py-3 px-2 align-top">
                     <div className="text-xs text-neutral-700 line-clamp-3">{lead.followUpNote || lead.aiSummary || "—"}</div>
+                    <LeadReferralNotice referrer={lead.referredByPatient} source={lead.source} />
                   </td>
                   <CheckCell date={lead.followUp24hDate} done={lead.followUp24hDone} onToggle={() => toggleCheck(lead.id, "followUp24hDone", !lead.followUp24hDone)} />
                   <CheckCell date={lead.followUp48hDate} done={lead.followUp48hDone} onToggle={() => toggleCheck(lead.id, "followUp48hDone", !lead.followUp48hDone)} />
@@ -264,6 +268,7 @@ function FollowUpEditModal({ lead, onClose, onSaved }: { lead: Lead; onClose: ()
         <div className="bg-neutral-50 rounded-lg p-3 mb-3 text-xs text-neutral-600 space-y-1">
           <div>{CONTACT_ICON[lead.contactType] ?? "·"} {lead.contactValue}</div>
           <div>Llamada: {formatDate(lead.callScheduledAt)}</div>
+          <LeadReferralNotice referrer={lead.referredByPatient} source={lead.source} />
           {lead.aiSummary && <div className="italic border-t border-neutral-200 pt-1 mt-1">Resumen IA: {lead.aiSummary}</div>}
         </div>
 

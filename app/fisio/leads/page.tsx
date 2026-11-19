@@ -50,6 +50,7 @@ export default async function LeadsPage({
     where,
     include: {
       closer: { select: { id: true, fullName: true, role: true } },
+      referredByPatient: { select: { fullName: true } },
       sourceTag: { select: { id: true, label: true, color: true } },
     },
     orderBy: { callScheduledAt: "asc" },
@@ -94,6 +95,7 @@ export default async function LeadsPage({
         aiSummary: l.aiSummary,
         meetingUrl: l.meetingUrl,
         source: l.source,
+        referredByPatient: l.referredByPatient,
         aiScheduled: l.aiScheduled,
         callScheduledAt: l.callScheduledAt.toISOString(),
         setterNotifiedAt: l.setterNotifiedAt?.toISOString() ?? null,

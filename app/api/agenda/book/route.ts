@@ -14,6 +14,7 @@ import { prisma } from "@/lib/prisma";
 import { createEventWithMeet, getMeetLink, listEvents } from "@/lib/googleCalendar";
 import { findConfiguredSlot } from "@/lib/agendaSlots";
 import { notifySetters } from "@/lib/notifications";
+import { resolveReferralAttribution } from "@/lib/patient-referrals-server";
 
 type BookBody = {
   fullName: string;
@@ -33,6 +34,7 @@ type BookBody = {
   utmSource?: string;
   utmMedium?: string;
   utmContent?: string;
+  referralCode?: string;
 };
 
 export async function POST(req: NextRequest) {
@@ -86,6 +88,20 @@ export async function POST(req: NextRequest) {
   // Normalizar el handle de Instagram: minúsculas, sin espacios, asegurando @ al inicio
   const igRaw = body.instagram.trim().replace(/^@+/, "").toLowerCase().replace(/\s+/g, "");
   const instagram = igRaw ? `@${igRaw}` : "";
+
+  // Un enlace de referido debe validarse antes de tocar el calendario.
+  // La identidad del recomendador se resuelve siempre en el servidor.
+  let referral: { referredByPatientId: string } | null = null;
+  if (body.referralCode !== undefined) {
+    const referralError = "El enlace de referido no es válido para esta reserva. Revisa el enlace recibido.";
+    if (typeof body.referralCode !== "string" || !body.referralCode.trim()) {
+      return NextResponse.json({ ok: false, error: referralError }, { status: 400 });
+    }
+    referral = await resolveReferralAttribution(body.referralCode.trim(), { email, phone });
+    if (!referral) {
+      return NextResponse.json({ ok: false, error: referralError }, { status: 400 });
+    }
+  }
 
   // ─── Comprobación última de disponibilidad (race condition) ───
   // En el tiempo entre que cargamos los slots y el lead pulsa "confirmar",
@@ -177,7 +193,8 @@ export async function POST(req: NextRequest) {
       impactoCrossfit: impactoIn || null,
       callScheduledAt: startDate,
       status: "scheduled",
-      source: "landing",
+      source: referral ? "referral" : "landing",
+      ...(referral ? { referredByPatientId: referral.referredByPatientId } : {}),
       bookedAt: new Date(),
       meetingUrl,
       googleEventId: calendarEvent.id,

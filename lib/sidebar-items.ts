@@ -49,6 +49,7 @@ const LLAMADAS_VENTA: Item = { id: "llamadas-venta", label: "Llamadas", Icon: Ph
 // propia, así que no competimos por el active state.
 const CALENDARIO_LLAMADAS: Item = { id: "calendario-llamadas", label: "Calendario llamadas", Icon: CalendarDays, href: "/fisio/equipo?tab=llamadas", match: () => false };
 const FOLLOWUP: Item = { id: "followup", label: "Follow-up", Icon: Repeat, href: "/fisio/followup", match: (p) => p.startsWith("/fisio/followup") };
+const REFERIDOS: Item = { id: "referidos", label: "Referidos", Icon: Gift, href: "/fisio/referidos", match: (p) => p.startsWith("/fisio/referidos") };
 const REGALOS: Item = { id: "regalos", label: "Regalos", Icon: Gift, href: "/fisio/regalos", match: (p) => p.startsWith("/fisio/regalos") || p.startsWith("/fisio/parches") };
 const CONTENIDO: Item = { id: "contenido", label: "Contenido", Icon: Sparkles, href: "/fisio/contenido/calendario", match: (p) => p.startsWith("/fisio/contenido") };
 const ANUNCIOS: Item = { id: "anuncios", label: "Anuncios", Icon: Megaphone, href: "/fisio/anuncios", match: (p) => p.startsWith("/fisio/anuncios") };
@@ -98,7 +99,7 @@ function itemsForRole(role: string, opts: { withResumenes: boolean }): Item[] {
     // CEO no ve el buzon de Alertas (lo gestionan head_success y fisios).
     // Lead magnets vive dentro de Contenido → Lead magnets, no en el
     // sidebar (para no ensuciar la navegación principal).
-    return [PANEL, PACIENTES, TESTIMONIOS, ...R, ADVANCE, LLAMADAS_VENTA, CONTENIDO, ANUNCIOS, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, RECURSOS, FINANZAS, EQUIPO, CHAT, FISIO_IA, SETTER_IA, AJUSTES];
+    return [PANEL, PACIENTES, TESTIMONIOS, ...R, ADVANCE, LLAMADAS_VENTA, REFERIDOS, CONTENIDO, ANUNCIOS, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, RECURSOS, FINANZAS, EQUIPO, CHAT, FISIO_IA, SETTER_IA, AJUSTES];
   }
   if (role === "head_success") {
     return [PANEL, PACIENTES, TESTIMONIOS, ALERTAS, ...R, ADVANCE, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, CHAT, FISIO_IA, AJUSTES];

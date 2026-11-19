@@ -13,7 +13,8 @@ class FixedDate extends RealDate {
 }
 const standardShift = { dayOfWeek: 3, startTime: '17:00', endTime: '19:00', closerId: 'current-closer', slotDurationMinutes: 60 };
 const state = { defaults: [standardShift], overrides: [], shifts: [], blocks: [], events: [] };
-const effects = { calendarReads: 0, creates: [], deletes: [], leadWrites: [] };
+const effects = { calendarReads: 0, creates: [], deletes: [], leadWrites: [], referralResolutions: [] };
+let referralAttribution = null;
 const oldLead = { id: 'mock-lead', fullName: 'Mock', email: 'lead@example.test', status: 'scheduled', googleEventId: 'old-event', googleCalendarEmail: 'old@example.test', closerId: 'previous-closer' };
 const inRange = (value, range) => value >= range.gte && value <= range.lte;
 const prisma = {
@@ -51,6 +52,12 @@ const routeStubs = {
   'next/server': { NextResponse: { json: (body, options) => ({ status: options?.status || 200, body }) } },
   '@/lib/prisma': { prisma }, '@/lib/googleCalendar': calendar, '@/lib/agendaSlots': slots,
   '@/lib/notifications': { notifySetters: async () => {}, notifyProfessional: async () => {} },
+  '@/lib/patient-referrals-server': {
+    resolveReferralAttribution: async (code, contact) => {
+      effects.referralResolutions.push({ code, contact });
+      return referralAttribution;
+    },
+  },
 };
 const book = load('app/api/agenda/book/route.ts', routeStubs);
 const reschedule = load('app/api/agenda/reschedule/route.ts', routeStubs);
@@ -60,7 +67,7 @@ const body = { token: 'mock-token', fullName: 'Mock', email: 'lead@example.test'
 const post = (route, data = body) => route.POST({ json: async () => data });
 function resetEffects() {
   effects.calendarReads = 0;
-  effects.creates.length = effects.deletes.length = effects.leadWrites.length = 0;
+  effects.creates.length = effects.deletes.length = effects.leadWrites.length = effects.referralResolutions.length = 0;
 }
 function assertNoWrites() {
   assert.equal(effects.creates.length, 0);
@@ -151,6 +158,58 @@ async function rejectBoth(data = body, status = 409) {
   assert.equal(effects.creates.length, 1);
   assert.equal(effects.leadWrites[0].closerId, 'current-closer');
   assert.equal(effects.leadWrites[0].googleCalendarEmail, 'new@example.test');
+  assert.equal(effects.leadWrites[0].source, 'landing', 'ordinary bookings keep their existing source');
+  assert.equal(effects.leadWrites[0].referredByPatientId ?? null, null, 'ordinary bookings have no referrer');
+  assert.equal(effects.referralResolutions.length, 0, 'ordinary bookings do not resolve a referral');
+
+  // Malformed referral input is rejected before any dependency can create a booking.
+  referralAttribution = { referredByPatientId: 'referrer-patient' };
+  for (const referralCode of [123, null, '', '   ']) {
+    resetEffects();
+    assert.equal((await post(book, { ...body, referralCode })).status, 400);
+    assertNoWrites();
+    assert.equal(effects.calendarReads, 0, 'malformed referral rejected before Calendar access');
+    assert.equal(effects.referralResolutions.length, 0, 'malformed referral is not resolved');
+  }
+
+  // The resolver returns null for an unknown, ineligible or self-referral code.
+  referralAttribution = null;
+  for (const referralCode of ['unknown-referral', 'ineligible-referral', 'self-referral']) {
+    resetEffects();
+    assert.equal((await post(book, { ...body, referralCode })).status, 400);
+    assertNoWrites();
+    assert.equal(effects.calendarReads, 0, 'invalid referral rejected before Calendar access');
+    assert.equal(effects.referralResolutions.length, 1);
+    assert.equal(effects.referralResolutions[0].code, referralCode);
+  }
+
+  // Only the validated server-side patient identity is stored; marketing data survives.
+  referralAttribution = { referredByPatientId: 'referrer-patient' };
+  resetEffects();
+  assert.equal((await post(book, {
+    ...body,
+    referralCode: '  valid-referral  ',
+    referredByPatientId: 'untrusted-client-patient',
+    email: '  LEAD@Example.Test  ',
+    phone: '  +34 600 123 456  ',
+    utmCampaign: 'referrals-launch',
+    utmSource: 'whatsapp',
+    utmMedium: 'share',
+    utmContent: 'patient-banner',
+  })).status, 200);
+  assert.equal(effects.creates.length, 1);
+  assert.equal(effects.leadWrites.length, 1);
+  assert.equal(effects.referralResolutions.length, 1);
+  assert.equal(effects.referralResolutions[0].code, 'valid-referral');
+  assert.equal(effects.referralResolutions[0].contact.email, 'lead@example.test');
+  assert.equal(effects.referralResolutions[0].contact.phone, '+34 600 123 456');
+  assert.equal(effects.leadWrites[0].source, 'referral');
+  assert.equal(effects.leadWrites[0].referredByPatientId, 'referrer-patient');
+  assert.equal(effects.leadWrites[0].adUtmCampaign, 'referrals-launch');
+  assert.equal(effects.leadWrites[0].adUtmSource, 'whatsapp');
+  assert.equal(effects.leadWrites[0].adUtmMedium, 'share');
+  assert.equal(effects.leadWrites[0].adUtmContent, 'patient-banner');
+  referralAttribution = null;
 
   // Rescheduling ignores its own old event/copy and deletes from the original account.
   state.events = ['old@example.test', 'new@example.test'].map(googleCalendarEmail => ({ id: 'old-event', googleCalendarEmail, status: 'confirmed', start: { dateTime: start }, end: { dateTime: end } }));
@@ -161,5 +220,5 @@ async function rejectBoth(data = body, status = 409) {
   assert.equal(effects.deletes[0][1], 'old@example.test');
   assert.equal(effects.leadWrites[0].closerId, 'current-closer');
   assert.equal(effects.leadWrites[0].googleCalendarEmail, 'new@example.test');
-  console.log('PASS: shared slot eligibility, full/partial blocks, stale/empty/custom shifts, grid/duration/date validation, 24h/20d bounds, final partial week, DST, Calendar conflicts, and no writes on rejected booking/rescheduling');
+  console.log('PASS: shared slot eligibility, full/partial blocks, stale/empty/custom shifts, grid/duration/date validation, 24h/20d bounds, final partial week, DST, Calendar conflicts, referral attribution/validation, and no writes on rejected booking/rescheduling');
 })().catch(error => { console.error(error); process.exitCode = 1; });

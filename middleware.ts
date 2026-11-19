@@ -60,6 +60,15 @@ export function middleware(req: NextRequest) {
     return res;
   }
 
+  // A recommendation is public information, never a patient-access capability.
+  if(pathname === "/recomienda" || pathname.startsWith("/recomienda/")){
+    const res = (req.method === "GET" || req.method === "HEAD") ? NextResponse.next() : new NextResponse("Método no permitido.", {status:405});
+    res.headers.set("Cache-Control","private, no-store");
+    res.headers.set("Referrer-Policy","no-referrer");
+    res.headers.set("X-Robots-Tag","noindex, nofollow");
+    return res;
+  }
+
   // Estáticos: pasan
   if (STATIC_PREFIXES.some((p) => pathname.startsWith(p))) {
     return NextResponse.next();

@@ -196,13 +196,12 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
     setSubmitting(true);
     setError("");
     try {
-      // Capturamos los UTMs del query string para atribución de marketing.
-      // La landing puede recibir tráfico desde anuncios y ahí guardamos en
-      // qué campaña/anuncio se generó el lead.
-      const utms = (() => {
+      // Conservamos la atribución del enlace hasta confirmar la reserva.
+      const attribution = (() => {
         if (typeof window === "undefined") return {};
         const p = new URLSearchParams(window.location.search);
         return {
+          referralCode: p.has("ref") ? p.get("ref") : undefined,
           utmCampaign: p.get("utm_campaign") || undefined,
           utmSource: p.get("utm_source") || undefined,
           utmMedium: p.get("utm_medium") || undefined,
@@ -238,7 +237,7 @@ export function AgendaLanding({ copy }: { copy: AgendaLandingCopy }) {
           impactoCrossfit: askCaseQuestions ? impactoCrossfit.trim() : "",
           startISO: selectedSlot.startISO,
           endISO: selectedSlot.endISO,
-          ...utms,
+          ...attribution,
         }),
       });
       const data = await res.json();

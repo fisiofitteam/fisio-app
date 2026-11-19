@@ -51,7 +51,10 @@ export default async function LlamadasVentaPage({
   if (view === "followup") {
     const fuLeads = await prisma.lead.findMany({
       where: { closerId: activeCloserId, inFollowUp: true },
-      include: { closer: { select: { id: true, fullName: true, role: true } } },
+      include: {
+        closer: { select: { id: true, fullName: true, role: true } },
+        referredByPatient: { select: { fullName: true } },
+      },
       orderBy: [{ followUpStartedAt: "desc" }, { decidedAt: "desc" }],
     });
     // Resumen comercial IA de cada lead (mismo prompt que en Ganadas/Perdidas)
@@ -101,6 +104,8 @@ export default async function LlamadasVentaPage({
           phone: l.phone,
           meetingUrl: l.meetingUrl,
           aiSummary: l.aiSummary,
+          source: l.source,
+          referredByPatient: l.referredByPatient,
           followUpNote: l.followUpNote,
           callScheduledAt: l.callScheduledAt.toISOString(),
           status: l.status,
@@ -135,6 +140,7 @@ export default async function LlamadasVentaPage({
     include: {
       setter: { select: { id: true, fullName: true, role: true } },
       closer: { select: { id: true, fullName: true, role: true } },
+      referredByPatient: { select: { fullName: true } },
       convertedPatient: { select: { id: true, fullName: true } },
     },
     orderBy: status === "scheduled" ? { callScheduledAt: "asc" } : status === "reserved" ? { callScheduledAt: "desc" } : { decidedAt: "desc" },
@@ -242,6 +248,7 @@ export default async function LlamadasVentaPage({
         impactoCrossfit: l.impactoCrossfit,
         meetingUrl: l.meetingUrl,
         source: l.source,
+        referredByPatient: l.referredByPatient,
         country: l.country ?? null,
         setterNotifiedAt: l.setterNotifiedAt?.toISOString() ?? null,
         closerContactedAt: l.closerContactedAt?.toISOString() ?? null,

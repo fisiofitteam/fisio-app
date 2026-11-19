@@ -8,6 +8,8 @@ datasource db {
 }
 
 model Patient {
+  referralCode             String? @unique
+  referralsMade            Lead[] @relation("PatientReferrals")
   assessmentVideos AssessmentVideo[]
   evidence PatientEvidence[]
   id              String   @id @default(cuid())
@@ -334,6 +336,11 @@ model Transaction {
 // ============================================================================
 
 model Lead {
+  referredByPatientId      String?
+  referredByPatient        Patient? @relation("PatientReferrals", fields: [referredByPatientId], references: [id], onDelete: SetNull)
+  referralRewardPaidAt     DateTime?
+  referralRewardPaidById   String?
+  @@index([referredByPatientId])
   googleCalendarEmail String? // Calendar that owns this lead event
   id              String    @id @default(cuid())
   fullName        String
