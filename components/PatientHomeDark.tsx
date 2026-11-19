@@ -352,8 +352,6 @@ export function PatientHomeDark({
           </p>
         </header>
 
-        <PatientReferralBanner patientId={patient.id} programType={patient.programType} />
-
         {/* 🎯 Sesión de hoy — banner prominente arriba, mismo patrón que
              el header morado de "Trabajo específico" en ADVANCE. Solo si
              hay sesión hoy; si no, la "Próxima sesión" sigue apareciendo
@@ -638,6 +636,9 @@ export function PatientHomeDark({
             </div>
           </div>
         )}
+        <div className="mt-6">
+          <PatientReferralBanner patientId={patient.id} programType={patient.programType} />
+        </div>
       </div>
 
       <PatientNav patientId={patient.id} active="home" />
