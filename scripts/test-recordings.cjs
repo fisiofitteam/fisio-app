@@ -4,14 +4,26 @@ let actor=null, counter=0, rows=new Map(), meta={}, deleted=[], headCalls=[], fa
 const patient={id:"patient-fixture",assignedProfessionalId:"pro-a",derivations:["pro-b"]};
 const clinical=(pro)=>!!pro && [pro.role,...pro.extraRoles].some(r=>["ceo","head_success","fisio"].includes(r));
 const match=(r,w)=>Object.entries(w).every(([k,v])=> v && typeof v==="object" && "gt" in v ? r[k]>v.gt : r[k]===v);
+const folders=new Map(), entries=new Map(); let folderCounter=0;
 const prisma={
+ recordingFolder:{
+  findMany:async({where})=>[...folders.values()].filter(r=>match(r,where)),
+  findFirst:async({where})=>[...folders.values()].find(r=>match(r,where))||null,
+  create:async({data})=>{if([...folders.values()].some(r=>r.professionalId===data.professionalId&&r.name===data.name))throw Object.assign(new Error("duplicate"),{code:"P2002"});const row={id:"folder"+(++folderCounter),...data};folders.set(row.id,row);return row},
+  update:async({where,data})=>{const row=folders.get(where.id);assert(row&&row.professionalId===where.professionalId);Object.assign(row,data);return row},
+  delete:async({where})=>{const row=folders.get(where.id);assert(row&&row.professionalId===where.professionalId);folders.delete(row.id);for(const [key,e] of entries)if(e.folderId===row.id)entries.delete(key);return row},
+ },
+ recordingFolderEntry:{
+  upsert:async({create})=>{entries.set(create.recordingId+":"+create.professionalId,create);return create},
+  deleteMany:async({where})=>{for(const [key,e] of entries)if(match(e,where))entries.delete(key);return{}},
+ },
  patient:{findUnique:async({where})=>{
    if(where.id!==patient.id)return null;
    if(where.OR && !where.OR.some(f=>f.assignedProfessionalId===patient.assignedProfessionalId || f.derivations && patient.derivations.includes(f.derivations.some.toProfessionalId)))return null;
    return patient;
  }},
  patientRecording:{
-   create:async({data})=>{const row={id:"rec"+ ++counter,createdAt:new Date(),shareTokenHash:null,shareExpiresAt:null,url:null,...data};rows.set(row.id,row);return {...row}},
+   create:async({data})=>{const row={id:"rec"+ ++counter,createdAt:new Date(),shareTokenHash:null,shareExpiresAt:null,url:null,...data};rows.set(row.id,row);if(data.folderEntries){const e=data.folderEntries.create;entries.set(row.id+":"+e.professionalId,{recordingId:row.id,...e})}return {...row}},
    findUnique:async({where})=>rows.has(where.id)?{...rows.get(where.id)}:null,
    findFirst:async({where,select})=>{const row=[...rows.values()].find(r=>match(r,where));return !row?null:select?Object.fromEntries(Object.keys(select).map(k=>[k,row[k]])):{...row}},
    update:async({where,data})=>{const row=rows.get(where.id);if(!row)throw Error("not found");Object.assign(row,data);return {...row}},
@@ -98,5 +110,31 @@ process.env.ASSESSMENT_BLOB_READ_WRITE_TOKEN="test-private-store";
  assert.equal((await internal.GET(req("/api/recordings/"+id+"/video",undefined,"GET"),c)).status,404);
  failDelete=false;assert.equal((await recording.DELETE(req("/api/recordings/"+id,undefined,"DELETE"),c)).status,200);
  assert(!rows.has(id));assert.deepEqual(deleted,[p]);
+ const collection=load("app/api/recordings/route.ts"), folderApi=load("app/api/recordings/folders/route.ts"), folderItem=load("app/api/recordings/folders/[folderId]/route.ts"), move=load("app/api/recordings/[recordingId]/folder/route.ts");
+ actor=null;assert.equal((await folderApi.GET()).status,403);assert.equal((await collection.POST(req("/api/recordings",input))).status,403);
+ actor=pro("pro-a","setter");assert.equal((await folderApi.POST(req("/api/recordings/folders",{name:" "}))).status,400);
+ assert.equal((await folderApi.POST(req("/api/recordings/folders",{name:"Equipo"},"POST","https://evil.test"))).status,403);
+ out=await folderApi.POST(req("/api/recordings/folders",{name:"Equipo"}));assert.equal(out.status,201);const fa=await out.json();
+ assert.equal((await folderApi.POST(req("/api/recordings/folders",{name:"Equipo"}))).status,409);
+ actor=pro("pro-b");out=await folderApi.POST(req("/api/recordings/folders",{name:"Presentaciones"}));const fb=await out.json();
+ assert.equal((await folderItem.PATCH(req("/api/recordings/folders/"+fa.id,{name:"Changed"},"PATCH"),{params:{folderId:fa.id}})).status,404);
+ assert.equal((await collection.POST(req("/api/recordings",{...input,folderId:fa.id}))).status,404);
+ const ownFolders=await (await folderApi.GET()).json();assert.equal(ownFolders.length,1);assert.equal(ownFolders[0].id,fb.id);
+ actor=pro("pro-a","setter");assert.equal((await collection.POST(req("/api/recordings",{...input,patientId:patient.id}))).status,403);
+ out=await collection.POST(req("/api/recordings",{...input,patientId:null,folderId:fa.id}));assert.equal(out.status,201);const general=await out.json(),gc={params:{recordingId:general.id}};
+ assert.equal(rows.get(general.id).patientId,null);assert.equal(entries.get(general.id+":pro-a").folderId,fa.id);
+ Object.assign(rows.get(general.id),{status:"ready",url:"https://fixture.private.blob.vercel-storage.com/"+general.pathname});
+ assert.equal((await internal.GET(req("/api/recordings/"+general.id+"/video",undefined,"GET"),gc)).status,200);
+ actor=pro("pro-b");assert.equal((await internal.GET(req("/api/recordings/"+general.id+"/video",undefined,"GET"),gc)).status,403);
+ assert.equal((await move.PATCH(req("/api/recordings/"+general.id+"/folder",{folderId:fb.id},"PATCH"),gc)).status,403);
+ actor=pro("manager","ceo");assert.equal((await internal.GET(req("/api/recordings/"+general.id+"/video",undefined,"GET"),gc)).status,200);
+ assert.equal((await move.PATCH(req("/api/recordings/"+general.id+"/folder",{folderId:fa.id},"PATCH"),gc)).status,404);
+ out=await folderApi.POST(req("/api/recordings/folders",{name:"Dirección"}));const fm=await out.json();
+ assert.equal((await move.PATCH(req("/api/recordings/"+general.id+"/folder",{folderId:fm.id},"PATCH"),gc)).status,200);
+ assert.equal(entries.get(general.id+":pro-a").folderId,fa.id);assert.equal(entries.get(general.id+":manager").folderId,fm.id);
+ actor=pro("pro-a","setter");assert.equal((await folderItem.PATCH(req("/api/recordings/folders/"+fa.id,{name:"Guías"},"PATCH"),{params:{folderId:fa.id}})).status,200);
+ assert.equal((await folderItem.DELETE(req("/api/recordings/folders/"+fa.id,undefined,"DELETE"),{params:{folderId:fa.id}})).status,200);
+ assert(rows.has(general.id));assert(!entries.has(general.id+":pro-a"));assert(entries.has(general.id+":manager"));
+ console.log("PASS: general recording creation/ownership, nonclinical patient denial, personal folder ownership/rename/move, independent manager organization and folder deletion preserving videos.");
  console.log("PASS: upload reservations, role/assignment/derivation checks, path and metadata binding, share privacy/expiry/revocation, delete failure and retry, exact public middleware scope.");
 })().catch(e=>{console.error(e);process.exitCode=1});

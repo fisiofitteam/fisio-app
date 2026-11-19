@@ -200,6 +200,8 @@ model Patient {
 // ============================================================================
 
 model Professional {
+  recordingFolders RecordingFolder[]
+  recordingFolderEntries RecordingFolderEntry[]
   recordings PatientRecording[]
   deletedAt DateTime? // Removed from team; historical relations retained
   sidebarLayout String? // Personal sidebar folders and order (JSON)
@@ -3550,9 +3552,10 @@ model ShoulderReportShare {
 
 // Internal recordings, excluded from patient resources and clinical report exports.
 model PatientRecording {
+  folderEntries RecordingFolderEntry[]
   id              String   @id @default(cuid())
-  patientId       String
-  patient         Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patientId       String?
+  patient         Patient?  @relation(fields: [patientId], references: [id], onDelete: Cascade)
   createdById     String?
   createdBy       Professional? @relation(fields: [createdById], references: [id], onDelete: SetNull)
   title           String
@@ -3568,4 +3571,27 @@ model PatientRecording {
   shareExpiresAt  DateTime?
   createdAt       DateTime @default(now())
   @@index([patientId, createdAt])
+  @@index([createdById, patientId])
+}
+
+model RecordingFolder {
+  id String @id @default(cuid())
+  professionalId String
+  professional Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  name String
+  createdAt DateTime @default(now())
+  entries RecordingFolderEntry[]
+  @@unique([professionalId, name])
+}
+
+model RecordingFolderEntry {
+  recordingId String
+  recording PatientRecording @relation(fields: [recordingId], references: [id], onDelete: Cascade)
+  professionalId String
+  professional Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  folderId String
+  folder RecordingFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  @@id([recordingId, professionalId])
+  @@index([folderId])
+  @@index([professionalId])
 }

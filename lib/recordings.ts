@@ -1,3 +1,4 @@
+import { canAccessRecordingRow } from "@/lib/recording-access";
 import { randomBytes, createHash } from "crypto";
 import { head, del } from "@vercel/blob";
 import { NextResponse } from "next/server";
@@ -22,6 +23,11 @@ export function recordingFailure(e: unknown) {
   return NextResponse.json({ error: e instanceof RecordingError ? e.message : "No se pudo completar la operación. Inténtalo de nuevo." },
     { status: e instanceof RecordingError ? e.status : 500, headers: { "Cache-Control": "private, no-store" } });
 }
+export async function requireRecordingProfessional() {
+  const actor = await getActiveProfessional();
+  if (!actor) throw new RecordingError(403, "Solo el equipo puede acceder a las grabaciones.");
+  return actor;
+}
 export async function requireRecordingPatient(patientId: string) {
   const actor = await getActiveProfessional();
   if (!actor || !await canAccessEvidencePatient(patientId, actor)) throw new RecordingError(403, "No tienes acceso a estas grabaciones.");
@@ -30,7 +36,8 @@ export async function requireRecordingPatient(patientId: string) {
 export async function requireRecording(id: string) {
   const row = await prisma.patientRecording.findUnique({ where: { id } });
   if (!row) throw new RecordingError(404, "Grabación no disponible.");
-  const actor = await requireRecordingPatient(row.patientId);
+  const actor = await requireRecordingProfessional();
+  if (!await canAccessRecordingRow(row, actor)) throw new RecordingError(403, "No tienes acceso a esta grabación.");
   return { row, actor };
 }
 export async function finishRecording(id: string, pathname: string) {

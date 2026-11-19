@@ -4,23 +4,27 @@ import { useRouter } from "next/navigation";
 import { upload } from "@vercel/blob/client";
 import { startBrowserRecording, type BrowserRecording, type FinishedRecording } from "@/lib/browser-recorder";
 import { readRecordingDraft, writeRecordingDraft, type RecordingDraft } from "@/lib/recording-draft";
+import type { RecordingFolderOption } from "./RecordingList";
 import { RecordingCameraPreview } from "./RecordingCameraPreview";
 import { MAX_RECORDING_BYTES } from "@/lib/recording-rules";
 
 const clock = (time: number) => Math.floor(time / 60).toString().padStart(2, "0") + ":" + (time % 60).toString().padStart(2, "0");
-export function ScreenRecorder({ patientId, patientName, professionalId, enabled, onBusyChange, onSaved }: { patientId: string; patientName: string; professionalId: string; enabled: boolean; onBusyChange?: (busy: boolean) => void; onSaved?: () => void }) {
+export function ScreenRecorder({ patientId, patientName, professionalId, enabled, onBusyChange, onSaved, folders, defaultFolderId }: { defaultFolderId?: string; folders?: RecordingFolderOption[]; patientId?: string; patientName?: string; professionalId: string; enabled: boolean; onBusyChange?: (busy: boolean) => void; onSaved?: () => void }) {
   const router = useRouter();
   const [phase, setPhase] = useState<"idle" | "preparing" | "recording" | "paused" | "stopping" | "preview" | "uploading">("idle");
   const [camera, setCamera] = useState(true), [microphone, setMicrophone] = useState(true), [systemAudio, setSystemAudio] = useState(false);
-  const [title, setTitle] = useState("Revisión de ejercicios"), [notes, setNotes] = useState("");
+  const [title, setTitle] = useState(patientId ? "Revisión de ejercicios" : "Nueva grabación"), [notes, setNotes] = useState("");
+  const [folderId, setFolderId] = useState("");
   const [elapsed, setElapsed] = useState(0), [progress, setProgress] = useState(0), [message, setMessage] = useState("");
   const [draft, setDraft] = useState<FinishedRecording | null>(null), [preview, setPreview] = useState<string>(), [supported, setSupported] = useState(true);
   const [cameraStream, setCameraStream] = useState<MediaStream>();
   const controller = useRef<BrowserRecording>(), mounted = useRef(true);
   const [recovering, setRecovering] = useState(true), [uploadedId, setUploadedId] = useState<string>();
   const serverUploadId = useRef<string>(), draftWrites = useRef<Promise<void>>(Promise.resolve());
-  const currentText = useRef({ title, notes }); currentText.current = { title, notes };
-  const key = professionalId + ":" + patientId;
+  const currentText = useRef({ title, notes, folderId }); currentText.current = { title, notes, folderId };
+  const key = professionalId + ":" + (patientId || "general");
+  useEffect(() => { if (phase === "idle" && !draft) setFolderId(defaultFolderId || ""); }, [defaultFolderId, phase, draft]);
+  useEffect(() => { if (folders && folderId && !folders.some(f => f.id === folderId)) setFolderId(""); }, [folders, folderId]);
   useEffect(() => { onBusyChange?.(recovering || phase !== "idle"); }, [recovering, phase, onBusyChange]);
   useEffect(() => {
     mounted.current = true;
@@ -30,7 +34,7 @@ export function ScreenRecorder({ patientId, patientName, professionalId, enabled
     readRecordingDraft(key).then(d => {
       if (cancelled || !d) return;
       serverUploadId.current = d.uploadedId; setUploadedId(d.uploadedId);
-      setDraft(d); setTitle(d.title); setNotes(d.notes); setPhase("preview"); setMessage("Hemos recuperado una grabación pendiente de guardar.");
+      setDraft(d); setFolderId(d.folderId || ""); setTitle(d.title); setNotes(d.notes); setPhase("preview"); setMessage("Hemos recuperado una grabación pendiente de guardar.");
     }).catch(() => {}).finally(() => { if (!cancelled) setRecovering(false); });
     return () => { cancelled = true; mounted.current = false; controller.current?.stop(); };
   }, [key]);
@@ -92,9 +96,9 @@ export function ScreenRecorder({ patientId, patientName, professionalId, enabled
     try {
       await remember(draft);
       if (!id) {
-      const response = await fetch("/api/patients/" + encodeURIComponent(patientId) + "/recordings", {
+      const response = await fetch("/api/recordings", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, notes, mime: draft.blob.type, size: draft.blob.size, durationSeconds: draft.durationSeconds }),
+        body: JSON.stringify({ title, notes, patientId: patientId || null, folderId: folderId || null, mime: draft.blob.type, size: draft.blob.size, durationSeconds: draft.durationSeconds }),
       });
       const data = await response.json(); if (!response.ok) throw new Error(data.error || "No se pudo preparar la subida.");
       id = data.id;
@@ -127,7 +131,7 @@ export function ScreenRecorder({ patientId, patientName, professionalId, enabled
   }
   const recording = phase === "recording" || phase === "paused";
   return <div className="rounded-2xl border border-neutral-200 bg-white p-4 sm:p-5 space-y-4">
-    <div><h3 className="font-semibold text-lg">Grabar explicación</h3><p className="text-sm text-neutral-500">Para {patientName}. Pantalla o ventana, con tu voz y cámara opcionales.</p></div>
+    <div><h3 className="font-semibold text-lg">Grabar explicación</h3><p className="text-sm text-neutral-500">{patientId ? "Para " + patientName + ". " : "Grabación general, sin paciente. "}Pantalla o ventana, con tu voz y cámara opcionales.</p></div>
     {!enabled && <p className="text-sm text-amber-700">El almacenamiento privado todavía no está conectado.</p>}
     {!supported && <p className="text-sm text-amber-700">Para grabar, abre esta página en Chrome o Edge desde un ordenador.</p>}
     {phase === "idle" && <>
@@ -150,6 +154,7 @@ export function ScreenRecorder({ patientId, patientName, professionalId, enabled
     {draft && <div className="space-y-3">
       {preview && <video controls playsInline preload="metadata" src={preview} className="w-full max-h-96 bg-neutral-950 rounded-xl" />}
       <label className="block text-sm">Título<input value={title} maxLength={160} disabled={phase === "uploading" || !!uploadedId} onChange={e => setTitle(e.target.value)} className="mt-1 w-full border rounded-lg p-2" /></label>
+      {folders && <label className="block text-sm">Carpeta<select value={folderId} disabled={phase === "uploading" || !!uploadedId} onChange={e => setFolderId(e.target.value)} className="mt-1 w-full border rounded-lg bg-white p-2"><option value="">Sin carpeta</option>{folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>}
       <label className="block text-sm">Notas internas<textarea value={notes} maxLength={5000} disabled={phase === "uploading" || !!uploadedId} onChange={e => setNotes(e.target.value)} className="mt-1 w-full border rounded-lg p-2" /></label>
       {phase === "uploading" ? <div role="status"><p className="text-sm">Guardando vídeo… {progress}%</p><progress aria-label="Progreso de subida" value={progress} max={100} className="w-full" /></div> : <div className="flex gap-3 items-center flex-wrap">
         <button className="btn btn-accent" disabled={!title.trim()} onClick={save}>{uploadedId ? "Confirmar guardado" : "Guardar en Grabaciones"}</button>
