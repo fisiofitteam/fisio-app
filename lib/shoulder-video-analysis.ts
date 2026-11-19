@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { intervalDuration,PILOT_TEST_BY_ID,DEFAULT_PILOT_CONFIG,type PilotConfig } from "@/lib/shoulder-pilot";
-import { SHOULDER_VIDEO_TESTS,canAnalyzeShoulderTest,MAX_CLIP_SECONDS,MAX_FRAME_REQUEST_BYTES,type ShoulderAIDraft,type VideoInput,type FrameSheet,type TimeSpan } from "./shoulder-analysis-types";
+import { SHOULDER_VIDEO_TESTS,canAnalyzeShoulderTest,MAX_CLIP_SECONDS,MAX_FRAME_REQUEST_BYTES,type ShoulderAIDraft,type VideoInput,type FrameSheet,type TimeSpan,type WallPressEvidence,type WallPressPositionEvidence,type WallPressContactStatus } from "./shoulder-analysis-types";
 
 export type FrameRequest = Omit<VideoInput,"sessionId"> & {duration:number;fps:number;sheets:FrameSheet[];detailSheets?:FrameSheet[]};
 export const configuredProvider = () => !!process.env.ANTHROPIC_API_KEY;
@@ -67,9 +67,58 @@ function spans(v:unknown,duration:number):TimeSpan[]|null {
 function inside(list:TimeSpan[]|null,hold:TimeSpan):TimeSpan[]|null {
   return list?.map(i=>({start:Math.max(0,i.start-hold.start),end:Math.min(hold.end-hold.start,i.end-hold.start)})).filter(i=>i.end>i.start)??null;
 }
+// Wall press has a discontinuous rubric: zero means directly confirmed support,
+// not an angle rounded to zero. Keep this evidence separate from narrative notes.
+function wallPressEvidence(raw:any,duration:number):WallPressEvidence {
+  const position=(value:any):WallPressPositionEvidence=>{
+    const contact=(v:unknown):WallPressContactStatus=>v==="visible_contact"||v==="visible_gap"?v:"not_visible";
+    const time=wallPressTime(value,duration);
+    return {leftImageArm:contact(value?.leftImageArm),rightImageArm:contact(value?.rightImageArm),
+      backContact:typeof value?.backContact==="boolean"?value.backContact:null,
+      wristsNeutral:typeof value?.wristsNeutral==="boolean"?value.wristsNeutral:null,
+      start:time?.start??null,end:time?.end??null,reason:short(value?.reason,500)};
+  };
+  return {initial:{...position(raw?.initial),deficitAngleVisible:raw?.initial?.deficitAngleVisible===true},elevation:position(raw?.elevation)};
+}
+function wallPressTime(value:any,duration:number):TimeSpan|null {
+  return value&&validTime(value.start)&&validTime(value.end)&&value.start>=0&&value.start<=value.end&&value.end<=duration
+    ?{start:value.start,end:value.end}:null;
+}
+function coversWallPressTime(evidence:WallPressPositionEvidence,measurement:any,duration:number):boolean {
+  const observed=wallPressTime(evidence,duration),measured=wallPressTime(measurement,duration);
+  return !!observed&&!!measured&&!!evidence.reason&&observed.start<=measured.start&&observed.end>=measured.end;
+}
+function confirmedWallPressSupport(evidence:WallPressPositionEvidence):boolean {
+  return evidence.leftImageArm==="visible_contact"&&evidence.rightImageArm==="visible_contact"&&
+    evidence.backContact===true&&evidence.wristsNeutral===true;
+}
+function validateWallPressMeasurements(out:Record<string,number>,raw:any,evidence:WallPressEvidence,duration:number,limitations:string[]) {
+  const initial=evidence.initial,deficit=out.externalDeficit;
+  if(deficit!==undefined){
+    const posture=initial.backContact===true&&initial.wristsNeutral===true;
+    const supported=deficit===0?confirmedWallPressSupport(initial):
+      posture&&initial.deficitAngleVisible&&(initial.leftImageArm==="visible_gap"||initial.rightImageArm==="visible_gap");
+    if(!supported||!coversWallPressTime(initial,raw.externalDeficit,duration)){
+      delete out.externalDeficit;
+      limitations.push(deficit===0?"No se confirma visualmente el apoyo completo de ambos brazos, espalda y muñecas neutras en el instante medido: no se acepta un déficit de 0°.":"El déficit necesita separación visible y referencias angulares observables con postura y tiempo verificables; queda pendiente.");
+    }
+  }
+  if(out.abduction!==undefined){
+    const initialTime=wallPressTime(initial,duration),measured=wallPressTime(raw.abduction,duration);
+    // The elevation evidence must cover the supported starting posture and the
+    // complete measured movement; an unrelated later contact frame is insufficient.
+    const path=initialTime&&measured&&measured.start>=initialTime.start&&measured.end>=initialTime.end
+      ?{start:initialTime.end,end:measured.end}:null;
+    if(out.externalDeficit!==0||!confirmedWallPressSupport(evidence.elevation)||!path||
+      !coversWallPressTime(evidence.elevation,raw.abduction,duration)||!coversWallPressTime(evidence.elevation,path,duration)){
+      delete out.abduction;
+      limitations.push("La abducción queda pendiente: requiere apoyo inicial confirmado y conservar ambos brazos y espalda apoyados, con muñecas neutras, hasta el ángulo medido.");
+    }
+  }
+}
 // Numeric suggestions need both an allowed rubric field and a visible time span.
 // Missing/ambiguous evidence stays missing; provider output never supplies loads or pain.
-function measurements(answer:any,b:FrameRequest,limitations:string[],findings:ShoulderAIDraft["findings"]){
+function measurements(answer:any,b:FrameRequest,limitations:string[],findings:ShoulderAIDraft["findings"],wallEvidence?:WallPressEvidence){
   const out:Record<string,number>={};
   const raw=answer.measurements;
   if(!raw||typeof raw!=="object"||Array.isArray(raw))return out;
@@ -89,6 +138,7 @@ function measurements(answer:any,b:FrameRequest,limitations:string[],findings:Sh
       limitations.push("Revisa las repeticiones válidas de la serie de "+kg+" kg.");
     }
   }
+  if(wallEvidence)validateWallPressMeasurements(out,raw,wallEvidence,b.duration,limitations);
   if(out.abduction!==undefined&&(out.externalDeficit!==0||(out.abduction>0&&out.abduction<90))){
     delete out.abduction;
     limitations.push("La abducción no coincide con las referencias del wall press: revisar.");
@@ -108,7 +158,9 @@ export function parseAIDraft(raw:unknown,b:FrameRequest,config:PilotConfig):Shou
   const limitations:string[]=(Array.isArray(answer.limitations)?answer.limitations:[]).map((x:unknown)=>short(x,220)).filter(Boolean).slice(0,7);
   const hold=kind==="hold"&&answer.holdPositionVisible===true?span(answer.hold,b.duration):null;
   const lossOfPosition=hold?spans(answer.lossOfPosition,b.duration):null;
-  const out:Record<string,number>=kind==="measurement"?measurements(answer,b,limitations,findings):{};
+  const wallEvidence=PILOT_TEST_BY_ID[b.testId].key==="wallPress"?wallPressEvidence(answer.wallPressEvidence,b.duration):undefined;
+  const hasTimedWallEvidence=!!wallEvidence&&[wallEvidence.initial,wallEvidence.elevation].some(evidence=>!!evidence.reason&&!!wallPressTime(evidence,b.duration));
+  const out:Record<string,number>=kind==="measurement"?measurements(answer,b,limitations,findings,wallEvidence):{};
   if(hold){
     const seconds=Math.min(config.holdTargetSeconds,hold.end-hold.start);
     out.holdSeconds=seconds;
@@ -116,14 +168,14 @@ export function parseAIDraft(raw:unknown,b:FrameRequest,config:PilotConfig):Shou
     if(l!==null&&answer.stabilityVisible===true)out.positionLossSeconds=intervalDuration(seconds,l,config);
     if(!("positionLossSeconds" in out))limitations.push("No se distingue si el atleta mantiene la postura: revisar el vídeo original.");
   }else if(kind==="hold")limitations.push(answer.holdPositionVisible===true?"No se ha delimitado un sostén completo ni un tramo visible que alcance el objetivo.":"No se confirma un sostén elevado sin apoyo en el suelo u otra superficie; el tiempo queda pendiente de revisión.");
-  if(kind!=="hold"&&!findings.length)limitations.push("No hay observaciones con una referencia temporal verificable.");
+  if(kind!=="hold"&&!findings.length&&!hasTimedWallEvidence)limitations.push("No hay observaciones con una referencia temporal verificable.");
   if(kind==="measurement"&&!Object.keys(out).length)limitations.push("No hay medidas suficientemente visibles para completar este test. Puedes contrastarlo manualmente.");
   if(kind==="load")limitations.push("El vídeo permite revisar la ejecución. Los kg de ambos brazos se registran y verifican aparte; no se deducen de las imágenes.");
   if(!notes&&!findings.length&&!Object.keys(out).length&&!limitations.length)throw new VideoError(502,"No se han obtenido observaciones utilizables.");
-  const usableNotes=kind!=="hold"&&!findings.length?"":notes;
+  const usableNotes=kind!=="hold"&&!findings.length&&!hasTimedWallEvidence?"":notes;
   return {kind,testId:b.testId,videoId:b.videoId,uploadedAt:b.uploadedAt,observationFields:out,
     notes:usableNotes,findings,limitations,method:"Estimaciones visuales sobre fotogramas muestreados; requieren confirmación en el vídeo original.",
-    hold,intervals:{lossOfPosition}};
+    hold,intervals:{lossOfPosition},...(wallEvidence?{wallPressEvidence:wallEvidence}:{})};
 }
 // The API constrains JSON syntax and field types; parseAIDraft still checks
 // visible evidence, rubric limits and clinical cross-field relationships.
@@ -160,6 +212,18 @@ export function buildVideoOutputSchema(testId:string):Record<string,unknown>{
       }])),required:fields.map(f=>f.key),additionalProperties:false,
     };
   }
+  if(PILOT_TEST_BY_ID[testId].key==="wallPress"){
+    const contact={type:"string",enum:["visible_contact","visible_gap","not_visible"],description:"visible_contact solo si se ve directamente el apoyo completo del brazo, antebrazo y mano contra la pared; visible_gap si se ve separación; not_visible si el contacto está oculto o solo se infiere por sombras, proximidad o perspectiva. Lados de la imagen, no anatómicos."};
+    const nullableBoolean={anyOf:[{type:"boolean"},{type:"null"}]};
+    const nullableTime={anyOf:[time,{type:"null"}]};
+    const positionProperties={leftImageArm:contact,rightImageArm:contact,backContact:nullableBoolean,wristsNeutral:nullableBoolean,start:nullableTime,end:nullableTime,reason:{type:"string",description:"Referencia visual directa por brazo y postura; explica también si hay separación o qué queda oculto. No deduzcas contacto."}};
+    const position=(initial:boolean)=>{
+      const fields={...positionProperties,...(initial?{deficitAngleVisible:{type:"boolean",description:"true solo si el plano y las referencias visibles permiten estimar los grados de separación respecto al apoyo; ver un hueco por sí solo no permite medir un ángulo."}}:{})};
+      return {type:"object",properties:fields,required:Object.keys(fields),additionalProperties:false};
+    };
+    properties.wallPressEvidence={type:"object",properties:{initial:position(true),elevation:position(false)},required:["initial","elevation"],additionalProperties:false,
+      description:"Evidencia directa independiente por brazo: initial en la posición del déficit; elevation durante TODO el recorrido desde el apoyo inicial hasta la abducción propuesta. Postura true solo si se ve; null si es incierta. Tiempos null si no se puede delimitar la evidencia."};
+  }
   // No min/max/maxItems constraints: those are enforced locally because the
   // provider's constrained JSON grammar does not support these schema keywords.
   return {type:"object",properties,required:Object.keys(properties),additionalProperties:false};
@@ -167,6 +231,7 @@ export function buildVideoOutputSchema(testId:string):Record<string,unknown>{
 // Validate the small schema subset used above locally as well. Completion of
 // the API call is not enough to accept an empty or structurally invalid draft.
 function matchesVideoOutputSchema(value:unknown,schema:any):boolean{
+  if(Array.isArray(schema.enum)&&!schema.enum.includes(value))return false;
   if(Array.isArray(schema.anyOf))return schema.anyOf.some((option:unknown)=>matchesVideoOutputSchema(value,option));
   switch(schema.type){
     case "null":return value===null;
@@ -199,6 +264,7 @@ export function buildVideoInstruction(b:FrameRequest,config:PilotConfig=DEFAULT_
     "Describe la ejecución, las repeticiones realmente visibles y las compensaciones observables, con evidencias temporales. No determines si se alcanzó el 8RM solo por las imágenes. No infieras cargas, kg, dolor, cuál es el brazo afectado ni valores del brazo que no se grabó. No devuelvas measurements: los kg declarados se verifican aparte. Sin puntuaciones.";
   else instruction=
     "Describe el movimiento específico por planos y repeticiones realmente observados. Prioriza la fase inferior o de recepción según el gesto. Si no ves un plano o una compensación fiable, indícalo en limitations. Sin puntuaciones, sin atribuir causas; notas editables. No inventes repeticiones.";
+  if(PILOT_TEST_BY_ID[b.testId].key==="wallPress")instruction+=" Completa wallPressEvidence ANTES de decidir las cifras. En initial y elevation, clasifica por separado leftImageArm y rightImageArm como visible_contact, visible_gap o not_visible. Son lados de la imagen: visible_contact exige apoyo completo directamente visible, incluidos antebrazo y mano; no basta contacto del codo o la mano, orientación aparente, longitudes, sombras ni proximidad. Una vista frontal/oblicua que oculta la separación da not_visible, nunca contacto inferido. backContact y wristsNeutral son true solo con comprobación directa, false si se observa incumplimiento y null si no se puede comprobar. Da start/end y reason que describa las referencias por brazo y postura. initial debe cubrir el instante o intervalo de externalDeficit; deficitAngleVisible solo es true si puede estimarse ese ángulo en el plano visible. externalDeficit 0 requiere ambos visible_contact, espalda apoyada y muñecas neutras; un hueco visible o apoyo no visible impide 0. Para un déficit positivo exige un hueco visible y referencias angulares medibles; nunca conviertas una duda en 0 ni un déficit pequeño redondeado en 0. Si no puedes estimar los grados, usa null, sin sustituirlo por una cifra arbitraria. elevation debe comprobar apoyo completo de ambos brazos y espalda y muñecas neutras durante TODO el recorrido desde la posición initial hasta la medida abduction, incluidos ambos tiempos. Si se pierde u oculta algún apoyo necesario, abduction es null aunque el brazo llegue alto. El ángulo de abducción no demuestra el contacto de los antebrazos. Estas condiciones prevalecen sobre el redondeo genérico y la independencia de campos.";
   return intro+instruction+" Incluye notes (comentario de hasta 4 frases cortas), findings:[{start,end,text}] con un máximo de 8 observaciones breves y verificables, y limitations:[string] con un máximo de 5 limitaciones breves. Resume los momentos relevantes sin enumerar todos los fotogramas. Antes de responder, revisa cada campo null: si las referencias necesarias sí se ven, aporta la estimación; si no, conserva null y explica qué falta. Una limitación general del vídeo no debe descartar medidas independientes que sí sean observables.";
 }
 export async function analyzeFrames(b:FrameRequest,config:PilotConfig):Promise<ShoulderAIDraft>{
