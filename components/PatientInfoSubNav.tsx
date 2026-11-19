@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 const tabs = [
   ["", "Ficha clínica", "🩺"], ["valoraciones", "Valoraciones", "📋"],
-  ["evolucion", "Evolución", "📈"], ["historial", "Historial", "🗒️"],
+  ["evolucion", "Evolución", "📈"], ["historial", "Historial", "🗒️"], ["grabaciones", "Grabaciones", "🎥"],
   ["formularios", "Resúmenes y formularios", "📝"], ["wods", "Readaptación y WODs", "🏋️"], ["exitos", "Éxitos", "🎉"],
 ];
 export function PatientInfoSubNav({ patientId }: { patientId: string }) {

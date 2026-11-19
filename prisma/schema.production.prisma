@@ -4249,3 +4249,16 @@ model ShoulderReportShare {
   baselinePublishedAt  DateTime?
   expiresAt            DateTime
 }
+
+
+// Professional-only Cap links. Never included in patient-facing resources.
+model PatientRecording {
+  id          String   @id @default(cuid())
+  patientId   String
+  createdById String
+  title       String
+  url         String
+  notes       String?
+  createdAt   DateTime @default(now())
+  @@index([patientId, createdAt])
+}
