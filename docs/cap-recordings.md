@@ -4,7 +4,7 @@ Grabador propio para profesionales, implementado con las API del navegador. No i
 
 ## Uso
 
-En el menú lateral: **Grabaciones** (`/fisio/grabaciones`). Muestra las grabaciones de los pacientes accesibles al profesional, con búsqueda por título/nombre, filtro por paciente y paginación. Desde «Nueva grabación» se elige un paciente y se graba directamente. El selector se bloquea durante la captura, revisión o subida para evitar cambiar de paciente con una grabación pendiente.
+En el menú lateral: **Grabaciones** (`/fisio/grabaciones`). Muestra las grabaciones generales y de pacientes a las que el profesional tiene acceso, con búsqueda por título/nombre, filtro por paciente y paginación. Desde «Nueva grabación» se puede grabar directamente sin paciente (opción inicial) o vincular uno de los pacientes accesibles. El selector se bloquea durante la captura, revisión o subida para evitar cambiar de paciente con una grabación pendiente.
 
 También se mantiene en la ficha del paciente: **Evolución e historial → Grabaciones**. Ambos accesos usan los mismos registros y permisos, sin duplicar vídeos.
 
@@ -21,7 +21,7 @@ La grabación terminada queda temporalmente en IndexedDB, por profesional y paci
 
 ## Permisos y almacenamiento
 
-- Acceso clínico: CEO, head success y fisios, incluidos roles adicionales. Los fisios solo acceden a pacientes asignados o derivados, usando el mismo control del resto de evidencias.
+- Cualquier profesional con sesión activa puede crear grabaciones generales. Son privadas para su autor y dirección (CEO/head success); el enlace compartido sigue siendo explícito. Las grabaciones con paciente conservan el acceso clínico: CEO/head success y fisios asignados o derivados, incluidos roles adicionales.
 - No aparece en el panel del paciente, recursos ni resúmenes. El paciente no puede listar ni abrir las rutas internas, aunque conozca el identificador.
 - Vídeos en Vercel Blob **privado**; metadatos y relación con paciente/profesional en Neon/PostgreSQL.
 - Se reutiliza `ASSESSMENT_BLOB_READ_WRITE_TOKEN`. Opcionalmente, `RECORDINGS_BLOB_READ_WRITE_TOKEN` permite un almacén privado separado. No usar un almacén público.
@@ -31,9 +31,15 @@ La grabación terminada queda temporalmente en IndexedDB, por profesional y paci
 - Compartidos sin caché ni indexación ni referer. Se comprueban de nuevo al solicitar el vídeo.
 - Borrar revoca primero el acceso, elimina el objeto y después el registro. Si Blob falla, el historial permite reintentar. La caducidad/revocación no elimina copias que alguien ya haya descargado.
 
+## Carpetas personales
+
+«Mis carpetas» permite crear, renombrar, filtrar y eliminar carpetas. Cada vídeo puede estar en una carpeta distinta para cada profesional, sin alterar su ubicación para el resto. Se elige una carpeta al guardar o desde el selector de cada vídeo. La carpeta activa se propone al iniciar una nueva grabación. Borrar una carpeta elimina solo esa clasificación: conserva los vídeos y los devuelve a «Sin carpeta» para su propietario.
+
+La tabla `RecordingFolder` pertenece a un profesional; `RecordingFolderEntry` contiene una única asignación por vídeo/profesional. Todas las escrituras comprueban que la carpeta pertenece al actor y que mantiene acceso al vídeo. Una carpeta nunca concede acceso a una grabación.
+
 ## Despliegue
 
-Aplicar **solo** `scripts/migrations/20261119-patient-recordings.sql` a PostgreSQL antes de publicar. Es una migración aditiva: crea la tabla `PatientRecording` y sus índices sin modificar datos existentes. Después desplegar mediante el flujo habitual de Git/Vercel. El build genera Prisma con `schema.production.prisma`; `schema.prisma` conserva la versión de desarrollo en Git.
+La instalación inicial usa `scripts/migrations/20261119-patient-recordings.sql`. Para grabaciones generales y carpetas, aplicar `scripts/migrations/20261119-general-recording-folders.sql` antes del despliegue: permite paciente nulo y añade las tablas de organización personal. No modifica las grabaciones existentes. Es una migración aditiva: crea la tabla `PatientRecording` y sus índices sin modificar datos existentes. Después desplegar mediante el flujo habitual de Git/Vercel. El build genera Prisma con `schema.production.prisma`; `schema.prisma` conserva la versión de desarrollo en Git.
 
 No se necesitan nuevas variables cuando ya está configurado el almacén privado de valoraciones. No sustituir el token existente: otros vídeos dependen de él. Una reversión de aplicación puede dejar la tabla sin usar, conservando sus archivos; no borrar datos al revertir.
 

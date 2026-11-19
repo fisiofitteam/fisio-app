@@ -192,9 +192,9 @@ test("combined FisioFit roles retain all permitted pages without duplicates", ()
   assert.throws(() => validateSidebarLayout(wrap([folder("folder-ceo", ["finanzas"])]), combined));
 });
 
-test("recordings is available only to clinical roles, including additional roles", () => {
+test("recordings is available to every professional role, including additional roles", () => {
   for (const role of ["ceo", "head_success", "fisio"]) assert.ok(sidebarIdsForRole(role).includes("grabaciones"));
-  for (const role of ["setter", "closer", "custom-role"]) assert.ok(!sidebarIdsForRole(role).includes("grabaciones"));
+  for (const role of ["setter", "closer", "custom-role"]) assert.ok(sidebarIdsForRole(role).includes("grabaciones"));
   assert.ok(sidebarIdsForRole("closer", ["fisio"]).includes("grabaciones"));
   const previous = wrap([folder("folder-clinica", ["pacientes", "testimonios"])]);
   assert.ok(flattenSidebarLayout(normalizeSidebarLayout(previous, sidebarIdsForRole("fisio"))).includes("grabaciones"));

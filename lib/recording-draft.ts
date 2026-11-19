@@ -1,4 +1,4 @@
-export type RecordingDraft = { blob: Blob; durationSeconds: number; title: string; notes: string; updatedAt: number; uploadedId?: string };
+export type RecordingDraft = { blob: Blob; durationSeconds: number; title: string; notes: string; updatedAt: number; folderId?: string; uploadedId?: string };
 function openDrafts(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open("fisiofit-recording-drafts", 1);
