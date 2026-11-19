@@ -292,7 +292,8 @@ export function WodAdapter({ patientId, programType, preamble }: { patientId: st
     <>
       {requiresReadiness && !readinessConfirmed && (
         <fieldset className="card mb-3" disabled={saving}>
-          <legend className="px-1 text-base font-semibold">¿Cómo estás hoy?</legend>
+          <legend className="sr-only">¿Cómo estás hoy?</legend>
+          <h2 className="text-base font-semibold">¿Cómo estás hoy?</h2>
           <div className="mt-1 space-y-2">
             {WOD_READINESS_OPTIONS.map((option) => (
               <label
@@ -321,7 +322,7 @@ export function WodAdapter({ patientId, programType, preamble }: { patientId: st
             type="button"
             disabled={!isWodReadiness(readiness)}
             onClick={() => { if (!resetExpiredReadiness() && isWodReadiness(readiness)) setReadinessConfirmed(true); }}
-            className="btn btn-accent mt-4 w-full"
+            className="btn btn-accent mt-4 w-full disabled:opacity-50"
           >
             Continuar
           </button>
@@ -330,7 +331,7 @@ export function WodAdapter({ patientId, programType, preamble }: { patientId: st
       {(!requiresReadiness || readinessConfirmed) && (
         <>
           {requiresReadiness && (
-            <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-neutral-200 bg-white p-3">
+            <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-neutral-200 bg-white p-3 text-neutral-900">
               <WodReadinessBadge readiness={readiness} />
               <button
                 type="button"
