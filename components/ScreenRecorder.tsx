@@ -8,7 +8,7 @@ import { RecordingCameraPreview } from "./RecordingCameraPreview";
 import { MAX_RECORDING_BYTES } from "@/lib/recording-rules";
 
 const clock = (time: number) => Math.floor(time / 60).toString().padStart(2, "0") + ":" + (time % 60).toString().padStart(2, "0");
-export function ScreenRecorder({ patientId, patientName, professionalId, enabled }: { patientId: string; patientName: string; professionalId: string; enabled: boolean }) {
+export function ScreenRecorder({ patientId, patientName, professionalId, enabled, onBusyChange, onSaved }: { patientId: string; patientName: string; professionalId: string; enabled: boolean; onBusyChange?: (busy: boolean) => void; onSaved?: () => void }) {
   const router = useRouter();
   const [phase, setPhase] = useState<"idle" | "preparing" | "recording" | "paused" | "stopping" | "preview" | "uploading">("idle");
   const [camera, setCamera] = useState(true), [microphone, setMicrophone] = useState(true), [systemAudio, setSystemAudio] = useState(false);
@@ -21,6 +21,7 @@ export function ScreenRecorder({ patientId, patientName, professionalId, enabled
   const serverUploadId = useRef<string>(), draftWrites = useRef<Promise<void>>(Promise.resolve());
   const currentText = useRef({ title, notes }); currentText.current = { title, notes };
   const key = professionalId + ":" + patientId;
+  useEffect(() => { onBusyChange?.(recovering || phase !== "idle"); }, [recovering, phase, onBusyChange]);
   useEffect(() => {
     mounted.current = true;
     let cancelled = false;
@@ -106,7 +107,7 @@ export function ScreenRecorder({ patientId, patientName, professionalId, enabled
       if (!finish.ok) throw new Error((await finish.json()).error || "El vídeo se ha subido, pero falta confirmar su guardado.");
       await writeDraft().catch(() => {});
       serverUploadId.current = undefined; setUploadedId(undefined);
-      setDraft(null); setPhase("idle"); setMessage("Grabación guardada en el historial."); router.refresh();
+      setDraft(null); setPhase("idle"); setMessage("Grabación guardada en el historial."); if (onSaved) onSaved(); else router.refresh();
     } catch (e) {
       // Keep a completed upload if a transient finalization failure occurred.
       if (id && !uploaded) void fetch("/api/recordings/" + id, { method: "DELETE" }).catch(() => {});
