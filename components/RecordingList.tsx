@@ -2,8 +2,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { RecordingTranscript } from "./RecordingTranscript";
 export type RecordingFolderOption = { id: string; name: string };
-export type RecordingSummary = { folderId?: string | null; folderName?: string | null; patientId?: string | null; patientName?: string | null; createdByName?: string | null; id: string; title: string; notes: string | null; createdAt: string; durationSeconds: number | null; size: number | null; status: string; shared: boolean };
+export type RecordingSummary = { hasTranscript?: boolean; transcriptionStatus?: string; folderId?: string | null; folderName?: string | null; patientId?: string | null; patientName?: string | null; createdByName?: string | null; id: string; title: string; notes: string | null; createdAt: string; durationSeconds: number | null; size: number | null; status: string; shared: boolean };
 export function RecordingList({ recordings, onChanged, folders, total = recordings.length, emptyMessage = "Las explicaciones que guardes aparecerán aquí." }: { recordings: RecordingSummary[]; folders?: RecordingFolderOption[]; onChanged?: () => void; total?: number; emptyMessage?: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null), [message, setMessage] = useState("");
@@ -35,6 +36,7 @@ export function RecordingList({ recordings, onChanged, folders, total = recordin
       {r.createdByName && <p className="text-xs text-neutral-500">Grabado por {r.createdByName}</p>}
       {r.status === "ready" && <video controls playsInline preload="none" src={"/api/recordings/" + r.id + "/video"} className="w-full aspect-video rounded-lg bg-neutral-950" />}
       {r.status === "deleting" && <p className="text-sm text-amber-700">La eliminación está pendiente. Pulsa Eliminar para reintentar.</p>}
+      {r.status === "ready" && (r.hasTranscript || (r.transcriptionStatus && r.transcriptionStatus !== "off")) && <RecordingTranscript recordingId={r.id} status={r.transcriptionStatus} />}
       {r.notes && <p className="text-sm whitespace-pre-wrap break-words">{r.notes}</p>}
       {folders && r.status === "ready" && <label className="block text-xs text-neutral-500">Carpeta<select aria-label={"Carpeta de " + r.title} value={r.folderId || ""} disabled={busy === r.id} onChange={e => action(r, "move", e.target.value)} className="mt-1 block w-full rounded-lg border border-neutral-200 bg-white p-2 text-sm"><option value="">Sin carpeta</option>{folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>}
       <p className="text-xs text-neutral-500">{r.shared ? "Enlace compartido activo" : r.patientId === null ? "Autor y dirección · sin enlace compartido" : "Solo equipo · sin enlace compartido"}</p>

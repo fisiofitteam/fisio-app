@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { RecordingLibraryResult } from "@/lib/recording-library";
 import { ScreenRecorder } from "./ScreenRecorder";
 import { RecordingFolderManager } from "./RecordingFolderManager";
@@ -15,12 +15,11 @@ export function RecordingsLibrary({ initialData, patients, professionalId, enabl
   const [q, setQ] = useState(""), [patientFilter, setPatientFilter] = useState("");
   const [page, setPage] = useState(1), [revision, setRevision] = useState(0);
   const [data, setData] = useState(initialData), [loading, setLoading] = useState(false), [error, setError] = useState("");
-  const firstLoad = useRef(true);
   const reload = useCallback(() => setRevision(value => value + 1), []);
   const selectedPatient = patients.find(patient => patient.id === selectedPatientId);
+  useEffect(() => { window.addEventListener("recordings:changed", reload); return () => window.removeEventListener("recordings:changed", reload); }, [reload]);
 
   useEffect(() => {
-    if (firstLoad.current) { firstLoad.current = false; return; }
     const controller = new AbortController();
     setLoading(true); setError("");
     const timer = setTimeout(async () => {

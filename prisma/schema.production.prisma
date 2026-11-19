@@ -4265,6 +4265,8 @@ model PatientRecording {
   createdBy       Professional? @relation(fields: [createdById], references: [id], onDelete: SetNull)
   title           String
   url             String?
+  transcript      String?
+  transcriptionStatus String @default("off")
   notes           String?
   blobPath        String?  @unique
   mime            String?

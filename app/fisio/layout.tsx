@@ -7,6 +7,7 @@ import { CommunityTodayBanner } from "@/components/CommunityTodayBanner";
 import { MonthlyReportBanner } from "@/components/MonthlyReportBanner";
 import { ActivityHeartbeat } from "@/components/ActivityHeartbeat";
 import { getActiveProfessional } from "@/lib/session";
+import { RecordingWorkspace } from "@/components/RecordingWorkspace";
 import { getThemeFromCookie } from "@/lib/theme";
 
 export default async function FisioLayout({ children }: { children: React.ReactNode }) {
@@ -16,6 +17,7 @@ export default async function FisioLayout({ children }: { children: React.ReactN
   }
   const theme = getThemeFromCookie();
   return (
+    <RecordingWorkspace key={user.id} professionalId={user.id}>
     <div className={`fisio-shell min-h-screen ${theme === "dark" ? "dark" : ""}`}>
       {/* Latido de actividad para el panel del equipo. No renderiza nada;
           hace ping/minuto si la pestaña esta visible y hay interaccion. */}
@@ -48,5 +50,6 @@ export default async function FisioLayout({ children }: { children: React.ReactN
         </div>
       </div>
     </div>
+    </RecordingWorkspace>
   );
 }

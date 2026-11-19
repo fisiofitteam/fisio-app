@@ -16,6 +16,7 @@ export function RecordingFolderManager({ folders, selected, onSelect, onChanged 
       });
       const data = await response.json(); if (!response.ok) throw new Error(data.error || "No se ha podido guardar la carpeta.");
       onChanged([...folders.filter(f => f.id !== data.id), data].sort((a, b) => a.name.localeCompare(b.name, "es")));
+      window.dispatchEvent(new Event("recording-folders:changed"));
       setEditing(null); setName("");
     } catch (e) { setError(e instanceof Error ? e.message : "No se ha podido guardar."); }
     finally { setBusy(false); }
@@ -27,6 +28,7 @@ export function RecordingFolderManager({ folders, selected, onSelect, onChanged 
       const response = await fetch("/api/recordings/folders/" + folder.id, { method: "DELETE" });
       const data = await response.json(); if (!response.ok) throw new Error(data.error || "No se ha podido eliminar.");
       onChanged(folders.filter(f => f.id !== folder.id));
+      window.dispatchEvent(new Event("recording-folders:changed"));
       if (selected === folder.id) onSelect("");
       if (editing === folder.id) setEditing(null);
     } catch (e) { setError(e instanceof Error ? e.message : "No se ha podido eliminar."); }

@@ -27,14 +27,14 @@ export async function getRecordingLibrary(actor: ActiveProfessional | null, filt
   const page = Math.min(Math.max(1, Number.isFinite(requestedPage) ? Math.floor(requestedPage) : 1), Math.max(1, Math.ceil(total / pageSize)));
   const rows = await prisma.patientRecording.findMany({ where, take: pageSize, skip: (page - 1) * pageSize,
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    select: { id: true, title: true, notes: true, status: true, createdAt: true, durationSeconds: true, size: true,
+    select: { id: true, title: true, notes: true, status: true, transcript: true, transcriptionStatus: true, createdAt: true, durationSeconds: true, size: true,
       shareTokenHash: true, shareExpiresAt: true,
       folderEntries: { where: { professionalId: actor.id }, select: { folder: { select: { id: true, name: true } } } },
       patient: { select: { id: true, fullName: true } }, createdBy: { select: { fullName: true } },
     },
   });
   return { total, page, pageSize, recordings: rows.map(r => ({
-    id: r.id, title: r.title, notes: r.notes, status: r.status, createdAt: r.createdAt.toISOString(),
+    id: r.id, title: r.title, notes: r.notes, status: r.status, hasTranscript: !!r.transcript, transcriptionStatus: r.transcriptionStatus, createdAt: r.createdAt.toISOString(),
     durationSeconds: r.durationSeconds, size: r.size,
     shared: !!r.shareTokenHash && !!r.shareExpiresAt && r.shareExpiresAt > new Date(),
     folderId: r.folderEntries[0]?.folder.id || null, folderName: r.folderEntries[0]?.folder.name || null,

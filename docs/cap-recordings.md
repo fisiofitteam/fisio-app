@@ -53,3 +53,14 @@ No se necesitan nuevas variables cuando ya está configurado el almacén privado
 ## Alcance
 
 Incluye captura, pausa, cámara superpuesta, voz/audio compartido, vista previa, descarga y archivo clínico privado. No incluye edición de vídeo, zooms automáticos, transcripción, aplicación nativa ni grabación con el navegador cerrado. Los archivos de vídeo y su transferencia consumen la capacidad del plan Blob/Vercel actual.
+
+
+## Navegación y transcripción (19-11-2026)
+
+El estado de captura, la cámara, la subida y el borrador pertenecen a `RecordingWorkspace`, montado una sola vez en el layout profesional y aislado por ID de profesional. Los grabadores de la biblioteca y de la ficha son lanzadores. La navegación interna, incluidos enlaces simples hacia `/fisio`, usa el router y mantiene la captura. Una barra flotante permite pausar, reanudar, terminar, minimizar y guardar desde otra sección. Recargar o cerrar la pestaña sigue interrumpiendo una captura; se mantiene la protección `beforeunload`. Los borradores terminados se recuperan desde IndexedDB, también los antiguos asociados a pacientes.
+
+«Transcribir mi voz» usa Web Speech en `es-ES` y recoge el micrófono. El servicio lo proporciona el navegador y puede procesar audio remotamente; requiere conexión y permiso. No transcribe el sonido compartido de otra pestaña. Los resultados finales se conservan sin duplicarse, los resultados provisionales se muestran aparte, la pausa detiene el reconocimiento y una interrupción marca el texto como parcial sin detener el vídeo. La vista previa permite corregir el texto antes de guardarlo.
+
+La migración `scripts/migrations/20261119-recording-transcripts.sql` añade `transcript` y `transcriptionStatus`. Los listados exponen únicamente presencia y estado; el texto se solicita al abrir «Ver transcripción», con los mismos permisos que el vídeo, sin caché compartida. No se expone en el enlace público ni en el panel del paciente. Se puede copiar y descargar como texto.
+
+Validación: `node scripts/test-browser-transcription.cjs`, `node scripts/test-recordings.cjs`, `node scripts/test-recording-library.cjs`, revisión de tipos de los archivos modificados y compilación de producción. La prueba de navegador usa captura de canvas y voz sintéticas, sin pantalla, cámara o micrófono reales; verifica navegación, pausa/reanudación, continuidad de pistas y guardado del texto. La precisión del reconocimiento real depende del servicio de voz y del dispositivo del profesional.

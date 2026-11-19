@@ -14,5 +14,5 @@ export default async function RecordingsPage({ params }: { params: { id: string 
     getRecordingFolders(actor.id),
   ]);
   return <PatientRecordings folders={folders} professionalId={actor.id} patientId={params.id} patientName={patient?.fullName || ""} enabled={!!(process.env.RECORDINGS_BLOB_READ_WRITE_TOKEN || process.env.ASSESSMENT_BLOB_READ_WRITE_TOKEN)}
-    recordings={recordings.map(r => ({ folderId: r.folderEntries[0]?.folder.id || null, folderName: r.folderEntries[0]?.folder.name || null, id: r.id, title: r.title, notes: r.notes, status: r.status, createdAt: r.createdAt.toISOString(), durationSeconds: r.durationSeconds, size: r.size, shared: !!r.shareTokenHash && !!r.shareExpiresAt && r.shareExpiresAt > new Date() }))} />;
+    recordings={recordings.map(r => ({ folderId: r.folderEntries[0]?.folder.id || null, folderName: r.folderEntries[0]?.folder.name || null, id: r.id, hasTranscript: !!r.transcript, transcriptionStatus: r.transcriptionStatus, title: r.title, notes: r.notes, status: r.status, createdAt: r.createdAt.toISOString(), durationSeconds: r.durationSeconds, size: r.size, shared: !!r.shareTokenHash && !!r.shareExpiresAt && r.shareExpiresAt > new Date() }))} />;
 }
