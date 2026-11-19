@@ -112,11 +112,11 @@ export async function prepareContactComparison(input:VideoInput,time:number,crop
   }
 }
 
-export async function runContactProbe(input:VideoInput,prepared:PreparedContactComparison,variant:ContactVariant,signal?:AbortSignal):Promise<ContactProbeResult>{
+export async function runContactProbe(input:VideoInput,prepared:PreparedContactComparison,variant:ContactVariant,signal?:AbortSignal,options?:{approach:"strict"|"spatial";effort:"medium"|"high"}):Promise<ContactProbeResult>{
   checkAbort(signal);
   if(prepared.sourceKey!==sourceKey(input)||!prepared.variants.includes(variant))throw new Error("Las imágenes no corresponden a esta entrega. Prepáralas de nuevo.");
   const body:ContactProbeInput={mode:"contact-probe",videoId:input.videoId,testId:input.testId,uploadedAt:input.uploadedAt,
-    duration:prepared.duration,time:prepared.time,variant:variant.variant,times:variant.times,jpeg:variant.jpeg};
+    duration:prepared.duration,time:prepared.time,variant:variant.variant,times:variant.times,jpeg:variant.jpeg,...(options?{approach:options.approach,effort:options.effort}:{})};
   const response=await fetch(endpoint(input),{method:"POST",credentials:"same-origin",cache:"no-store",headers:{"Content-Type":"application/json"},signal,body:JSON.stringify(body)});
   const result=await response.json().catch(()=>null);
   if(!response.ok||!result?.probe)throw new Error(result?.error||"No se ha podido comparar el contacto en este fotograma.");
