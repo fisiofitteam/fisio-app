@@ -27,6 +27,7 @@ export function ShoulderVideoProposal({source,initial,entry,disabled,conflict,ba
       {progress?<div className="flex gap-3 items-center"><span role="status" className="text-xs">{progress}</span><button type="button" className="text-xs underline" onClick={onCancel}>Detener análisis</button></div>:<button type="button" className="btn btn-ghost" onClick={onAnalyze} disabled={batchBusy}>{entry?.error?"Reintentar análisis con IA":draft?"Volver a analizar el vídeo":"Proponer revisión con IA"}</button>}
       {entry?.error&&<p role="alert" className="text-sm text-red-700">{entry.error}</p>}
       {draft&&<div className="text-sm space-y-2"><strong>Propuesta pendiente de verificación</strong>
+        {draft.model&&<p className="text-xs text-neutral-500">Modelo: {draft.model==="claude-opus-5-5"?"Claude Opus 5.5":draft.model}</p>}
         {draft.notes&&<p className="whitespace-pre-wrap">{draft.notes}</p>}
         {numericDraft&&<dl>{Object.entries(proposedFields).map(([key,v])=><div key={key}><dt className="inline">{draft.kind==="hold"?holdLabels[key]:testFields.find(f=>f.key===key)?.label}: </dt><dd className="inline font-semibold">{v.toLocaleString("es-ES")}{draft.kind==="hold"?" s":""}</dd></div>)}</dl>}
         {draft.findings.map((f,i)=><div key={i} className="flex items-start gap-2"><button type="button" className="text-xs font-semibold underline whitespace-nowrap" onClick={()=>video.current?.seek(f.start)}>Ver {f.start.toFixed(1)} s</button><span>{f.text}</span></div>)}

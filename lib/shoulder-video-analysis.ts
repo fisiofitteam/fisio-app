@@ -200,7 +200,7 @@ export async function analyzeFrames(b:FrameRequest,config:PilotConfig):Promise<S
   for(const sheet of b.sheets){content.push({type:"text",text:"Lámina "+sheet.times[0].toFixed(3)+"–"+sheet.times[sheet.times.length-1].toFixed(3)+" s ("+sheet.times.length+" celdas)."});
     content.push({type:"image",source:{type:"base64",media_type:"image/jpeg",data:sheet.jpeg}});}
   let reply;
-  try{reply=await sdk.messages.create({model:process.env.SHOULDER_VIDEO_AI_MODEL||"claude-sonnet-4-6",max_tokens:8000,output_config:{format:{type:"json_schema",schema:buildVideoOutputSchema(b.testId)}},system:context,messages:[{role:"user",content}]});}
+  try{reply=await sdk.messages.create({model:process.env.SHOULDER_VIDEO_AI_MODEL||"claude-opus-5-5",max_tokens:16000,output_config:{effort:"medium",format:{type:"json_schema",schema:buildVideoOutputSchema(b.testId)}},system:context,messages:[{role:"user",content}]});}
   catch{throw new VideoError(502,"El proveedor no ha completado el análisis. No se ha guardado ninguna nota.");}
   // Never accept partial observations, even if a truncated response happens to
   // end on syntactically valid JSON. A failed call does not produce a draft.
@@ -210,5 +210,6 @@ export async function analyzeFrames(b:FrameRequest,config:PilotConfig):Promise<S
   const txt=reply.content.filter(block=>block.type==="text").map(block=>block.type==="text"?block.text:"").join("").trim();
   let obj;try{obj=JSON.parse(txt);}catch{throw new VideoError(502,"La IA devolvió una respuesta con formato incorrecto. Vuelve a intentarlo.");}
   if(!matchesVideoOutputSchema(obj,buildVideoOutputSchema(b.testId)))throw new VideoError(502,"La IA devolvió un borrador incompleto o con campos no válidos. Vuelve a intentarlo.");
-  return parseAIDraft(obj,b,config);
+  // Attribute the proposal to the provider response, including any configured override.
+  return {...parseAIDraft(obj,b,config),model:reply.model};
 }
