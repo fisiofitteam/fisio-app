@@ -33,7 +33,8 @@ const original=(Module as any)._load;
 const base="https://fixture.test/api/shoulder-pilot/ss",ctx={params:{sessionId:"ss"}};
 const request=(url:string,method:string,body?:unknown,origin="https://fixture.test")=>new NextRequest(url,{method,headers:{"content-type":"application/json",origin,host:"fixture.test"},...(body===undefined?{}:{body:JSON.stringify(body)})});
 const fixtureKey=process.env.ANTHROPIC_API_KEY,fixtureUrl=process.env.ANTHROPIC_BASE_URL;
-let calls=0,mode:"valid"|"wrong"|"stale"="valid";
+const fixtureVideoModel=process.env.SHOULDER_VIDEO_AI_MODEL,fixtureNarrativeModel=process.env.SHOULDER_NARRATIVE_AI_MODEL;
+let calls=0,mode:"valid"|"wrong"|"stale"="valid",expectedModel="claude-sonnet-4-6";
 async function main(){
   const api=await import("../app/api/shoulder-pilot/[sessionId]/route");
   const gen=await import("../app/api/shoulder-pilot/[sessionId]/narrative/route");
@@ -82,6 +83,7 @@ async function main(){
   const server=createServer((req,res)=>{
     let buf="";req.on("data",x=>buf+=x);req.on("end",()=>{
       const payload=JSON.parse(buf),sent=JSON.parse(payload.messages[0].content);
+      assert.equal(payload.model,expectedModel,"video Opus configuration must not change the forced-tool narrative model");
       const measured=sent.capacidades.filter((a:any)=>a.nota!==null);
       assert(!buf.includes(privateText)&&!buf.includes(patient)&&!buf.includes(pro)&&!buf.includes(face));
       assert.deepEqual(measured.map((a:any)=>a.key),["tolerance"]);
@@ -93,12 +95,17 @@ async function main(){
   });
   server.listen(0,"127.0.0.1");await once(server,"listening");const addr=server.address();assert(addr&&typeof addr!=="string");
   process.env.ANTHROPIC_API_KEY="synthetic-only";process.env.ANTHROPIC_BASE_URL="http://127.0.0.1:"+addr.port;
+  process.env.SHOULDER_VIDEO_AI_MODEL="claude-opus-5-5";delete process.env.SHOULDER_NARRATIVE_AI_MODEL;
   try{
     const res=await generate();assert.equal(res.status,200);const {proposal,version}=await res.json();assert.equal(version,row.version);
     assert.equal(Object.keys(proposal).length,7);assert.equal(proposal.mobility,"Aún no hay datos suficientes para valorar esta capacidad.");assert.match(proposal.tolerance,/dolor/);
     assert.deepEqual((await get()).narrative,human,"generation never writes");
+    expectedModel="claude-sonnet-4-5";process.env.SHOULDER_NARRATIVE_AI_MODEL=expectedModel;
+    assert.equal((await generate()).status,200,"an explicit narrative model override remains supported");
+    assert.deepEqual((await get()).narrative,human,"model selection never writes generated comments");
+    expectedModel="claude-sonnet-4-6";delete process.env.SHOULDER_NARRATIVE_AI_MODEL;
     mode="wrong";assert.equal((await generate()).status,502);
-    mode="stale";assert.equal((await generate()).status,409);assert.equal(calls,3);
+    mode="stale";assert.equal((await generate()).status,409);assert.equal(calls,4);
     assert.equal((await patch(save)).status,200);
     assert.equal((await patch({action:"publish"})).status,200);
     actor={kind:"patient",patient:{id:patient}};assert.deepEqual((await get()).published.narrative,human);
@@ -106,9 +113,11 @@ async function main(){
     actor={kind:"patient",patient:{id:patient}};const pv=await get();assert(!pv.narrative);assert.deepEqual(pv.published.narrative,human);
     assert(!JSON.stringify(pv).includes("Borrador distinto."));
   }finally{server.close();}
-  console.log("PASS: professional-only, scoped numerical evidence, actual SDK on loopback, zero vs missing, legacy comparison, clinical edits, frozen publication and stale response.");
+  console.log("PASS: professional-only, scoped numerical evidence, actual SDK on loopback, independent video/narrative model configuration, zero vs missing, legacy comparison, clinical edits, frozen publication and stale response.");
 }
 main().catch(e=>{console.error(e);process.exitCode=1;}).finally(()=>{(Module as any)._load=original;
   if(fixtureKey===undefined)delete process.env.ANTHROPIC_API_KEY;else process.env.ANTHROPIC_API_KEY=fixtureKey;
   if(fixtureUrl===undefined)delete process.env.ANTHROPIC_BASE_URL;else process.env.ANTHROPIC_BASE_URL=fixtureUrl;
+  if(fixtureVideoModel===undefined)delete process.env.SHOULDER_VIDEO_AI_MODEL;else process.env.SHOULDER_VIDEO_AI_MODEL=fixtureVideoModel;
+  if(fixtureNarrativeModel===undefined)delete process.env.SHOULDER_NARRATIVE_AI_MODEL;else process.env.SHOULDER_NARRATIVE_AI_MODEL=fixtureNarrativeModel;
 });

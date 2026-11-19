@@ -15,7 +15,8 @@ export async function proposeShoulderNarrative(evidence:NarrativeEvidence):Promi
   let reply;
   try{
     reply=await client.messages.create({
-      model:process.env.SHOULDER_NARRATIVE_AI_MODEL||process.env.SHOULDER_VIDEO_AI_MODEL||"claude-sonnet-4-6",
+      // The report uses forced tool output; keep its model independent of the video trial.
+      model:process.env.SHOULDER_NARRATIVE_AI_MODEL||"claude-sonnet-4-6",
       max_tokens:2000,
       system:"Redacta en español de España un borrador que un fisioterapeuta revisará. Háblale de tú al atleta. En general, resume el patrón de las capacidades que tienen nota en 2–3 frases, sin inventar una nota global. Para cada capacidad puntuada explica en 1–2 frases qué representa en este caso, con un ejemplo del test si hay medidas. No repitas solo la cifra; recuerda que son resultados de estas pruebas. Usa únicamente los datos facilitados. Si comparacion es null no hables de cambios respecto a otra semana. No atribuyas diagnósticos, aptitud deportiva, causas anatómicas, pronósticos ni tratamiento. No juzgues contra población, edad o normas externas. En el resumen general o al explicar la tolerancia, puedes ilustrar un cambio con un mismo intento registrado en ambas valoraciones: muestra juntos repeticiones, kg y dolor si constan. No extrapoles un cambio en un test al conjunto. Los intentos son declarados por el atleta, no son mediciones oficiales de 8RM ni se convierten en nota. Distingue dolor declarado de ejecución observada, y cero de un dato ausente. Todas las cifras han de constar explícitamente en la evidencia. Escribe texto natural sin títulos, listas ni Markdown. Devuelve cada comentario en la clave indicada mediante la herramienta.",
       tools:[{name:toolName,description:"Propuestas de comentarios para revisar y editar antes de publicar.",input_schema:{

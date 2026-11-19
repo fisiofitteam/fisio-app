@@ -108,7 +108,7 @@ async function main(){
   }
   assert.throws(()=>validateFrames({...b,sheets:[{...b.sheets[0],times:b.sheets[0].times.map(()=>0)},...b.sheets.slice(1)]}));
   const providerResponse={hold:response.hold,stabilityVisible:response.stabilityVisible,lossOfPosition:response.lossOfPosition,notes:response.notes,findings:response.findings,limitations:response.limitations};
-  let requests=0,expectedInput=b;
+  let requests=0,expectedInput=b,expectedModel="claude-opus-5-5";
   let mockReply:any={content:[{type:"text",text:JSON.stringify(providerResponse)}],stop_reason:"end_turn"};
   const mock=createServer((req,res)=>{
     const chunks:Buffer[]=[];req.on("data",x=>chunks.push(Buffer.from(x)));req.on("end",()=>{
@@ -120,8 +120,11 @@ async function main(){
       assert.equal(parts.find((x:any)=>x.type==="image").source.media_type,"image/jpeg");
       assert(!JSON.stringify(body).includes("synthetic-upload"));
       assert(!JSON.stringify(body).includes("2026-01-01T00:00:00.000Z"));
-      assert.equal(body.max_tokens,8000);
-      assert.deepEqual(body.output_config,{format:{type:"json_schema",schema:buildVideoOutputSchema(expectedInput.testId)}});
+      assert.equal(body.model,expectedModel);
+      assert.equal(body.max_tokens,16000);
+      assert.deepEqual(body.output_config,{effort:"medium",format:{type:"json_schema",schema:buildVideoOutputSchema(expectedInput.testId)}});
+      assert.equal(body.thinking,undefined,"Opus adaptive thinking must not be disabled or given a manual budget");
+      assert.equal(body.tool_choice,undefined,"video output uses structured JSON, not an unsupported forced tool");
       assert.match(parts[0].text,/máximo de 8 observaciones/);
       assert.match(parts[0].text,/máximo de 5 limitaciones/);
       requests++;res.writeHead(200,{"Content-Type":"application/json"});res.end(JSON.stringify({
@@ -129,13 +132,26 @@ async function main(){
       }));
     });
   });mock.listen(0,"127.0.0.1");await once(mock,"listening");const addr=mock.address();assert(addr&&typeof addr==="object");
-  const old=process.env.ANTHROPIC_API_KEY,oldUrl=process.env.ANTHROPIC_BASE_URL;
+  const old=process.env.ANTHROPIC_API_KEY,oldUrl=process.env.ANTHROPIC_BASE_URL,oldModel=process.env.SHOULDER_VIDEO_AI_MODEL;
   async function rejected(reply:any,message:RegExp){
     mockReply=reply;const before=requests;
     await assert.rejects(()=>analyzeFrames(expectedInput,config),message);
     assert.equal(requests,before+1,"failed analysis does not automatically resend patient images");
   }
   try{process.env.ANTHROPIC_API_KEY="synthetic-only";process.env.ANTHROPIC_BASE_URL="http://127.0.0.1:"+addr.port;
+    delete process.env.SHOULDER_VIDEO_AI_MODEL;
+    const opusDraft=await analyzeFrames(b,config);
+    assert.deepEqual(opusDraft.observationFields,d.observationFields);
+    assert.equal(opusDraft.model,"synthetic","show the model returned by the provider, not the configured alias");
+    // Model overrides are intentional; they must not silently fall back to Opus.
+    expectedModel="claude-sonnet-4-6";process.env.SHOULDER_VIDEO_AI_MODEL=expectedModel;
+    mockReply={content:[{type:"thinking",thinking:"",signature:"synthetic-signature"},{type:"text",text:JSON.stringify(providerResponse)}],stop_reason:"end_turn",model:"provider-resolved-test-model"};
+    const overrideDraft=await analyzeFrames(b,config);
+    assert.deepEqual(overrideDraft.observationFields,d.observationFields);
+    assert.equal(overrideDraft.model,"provider-resolved-test-model");
+    delete process.env.SHOULDER_VIDEO_AI_MODEL;expectedModel="claude-opus-5-5";
+    // Opus may put empty/redacted thinking blocks before its JSON text.
+    mockReply={content:[{type:"thinking",thinking:"",signature:"synthetic-signature"},{type:"redacted_thinking",data:"synthetic-redaction"},{type:"text",text:JSON.stringify(providerResponse)}],stop_reason:"end_turn"};
     assert.deepEqual((await analyzeFrames(b,config)).observationFields,d.observationFields);
     // Every analysis kind uses its own precise schema through the actual SDK.
     for(const test of PILOT_TESTS){
@@ -175,7 +191,8 @@ async function main(){
       await rejected({content:[{type:"text",text}],stop_reason:reason},/no ha completado la respuesta/);
     }
   }finally{if(old===undefined)delete process.env.ANTHROPIC_API_KEY;else process.env.ANTHROPIC_API_KEY=old;
-    if(oldUrl===undefined)delete process.env.ANTHROPIC_BASE_URL;else process.env.ANTHROPIC_BASE_URL=oldUrl;mock.close();}
-  console.log("PASS: all 15 tests, bounded evidence, strict per-test schemas, complete-response checks, null ≠ zero and offline SDK transport failures without automatic resends");
+    if(oldUrl===undefined)delete process.env.ANTHROPIC_BASE_URL;else process.env.ANTHROPIC_BASE_URL=oldUrl;
+    if(oldModel===undefined)delete process.env.SHOULDER_VIDEO_AI_MODEL;else process.env.SHOULDER_VIDEO_AI_MODEL=oldModel;mock.close();}
+  console.log("PASS: Opus default/override, provider model provenance, thinking blocks, all 15 tests, bounded evidence, strict schemas, complete-response checks, null ≠ zero and offline SDK failures without automatic resends");
 }
 main().catch(e=>{console.error(e.message);process.exitCode=1;});

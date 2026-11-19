@@ -26,6 +26,7 @@ export type FrameSheet = {times:number[]; jpeg:string};
 export type TimeSpan = {start:number;end:number};
 export type ShoulderAIDraft = {
   kind:ShoulderVideoKind;testId:string;videoId:string;uploadedAt:string;
+  model?:string;
   observationFields:Record<string,number>; notes:string;
   findings:Array<TimeSpan & {text:string}>; limitations:string[];
   method:string; hold:TimeSpan|null;
