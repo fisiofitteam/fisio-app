@@ -44,7 +44,7 @@ const scapFields = [1, 2, 3].flatMap(rep => [
   num("r" + rep + "Symmetric", "Rep. " + rep + " · simetría de ritmo y recorrido", 0, 1, 1, "1 = cumple; 0 = no cumple."),
   num("r" + rep + "NoShrug", "Rep. " + rep + " · sin encogimiento compensatorio", 0, 1, 1, "1 = sin encogimiento; 0 = encogimiento visible."),
 ]);
-export const PILOT_TESTS: PilotTest[] = [
+const PILOT_TEST_DEFINITIONS: PilotTest[] = [
   { id:"19ce1cc3-bcee-40cb-89d8-3329290f9780", key:"wallFlexion", name:"Flexión de hombro en pared", group:mobility, kind:"numeric", fields:[
     num("leftProgress","Recorrido sin compensación · izquierdo (0–100)",0,100,0.1,wallHelp),
     num("rightProgress","Recorrido sin compensación · derecho (0–100)",0,100,0.1,wallHelp),
@@ -69,6 +69,11 @@ export const PILOT_TESTS: PilotTest[] = [
   { id:"17985fdb-49a7-4373-904f-8c5a6f8616dc", key:"pushJerk", name:"Push jerk", group:specific, kind:"qualitative", fields:[note("Trayectoria en el impulso; en la recepción: barra sobre mediopié, bloqueo simultáneo y estabilización nivelada.")] },
   { id:"79462a8e-83b8-46af-89c3-f9a9eb786c4d", key:"scapPullUps", name:"Dominadas escapulares", group:specific, kind:"qualitative", fields:[note("Simetría y coordinación, sostén de 4–5 s, flexión de codos y balanceo.")] },
 ];
+// Numeric notes are optional context: only the measured fields determine completion and score.
+export const PILOT_TESTS: PilotTest[] = PILOT_TEST_DEFINITIONS.map((test): PilotTest => test.kind === "numeric" ? {
+  ...test, fields:[...test.fields, {key:"comment",label:"Observaciones del test (opcional)",type:"text",
+    help:"Puedes guardar este comentario aunque falten medidas. No completa el test ni cambia su puntuación. Aparecerá en el informe cuando lo publiques."}],
+} : test);
 export const PILOT_TEST_BY_ID: Record<string,PilotTest> = Object.fromEntries(PILOT_TESTS.map(t => [t.id,t]));
 export const AXIS_TEST_KEYS: Record<string,string[]> = {
   mobility:["wallFlexion","pullover","wallPress"], endRange:["bumperRaises","bumperHold"],

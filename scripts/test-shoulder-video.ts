@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { once } from "node:events";
 import { spawnSync } from "node:child_process";
-import { parseAIDraft,readLimitedBody,validateFrames,analyzeFrames,buildVideoInstruction,buildVideoOutputSchema } from "../lib/shoulder-video-analysis";
+import { parseAIDraft,readLimitedBody,validateFrames,analyzeFrames,buildVideoInstruction,buildVideoOutputSchema, type FrameRequest } from "../lib/shoulder-video-analysis";
 import { HOLD_PVC,SHOULDER_VIDEO_TESTS } from "../lib/shoulder-analysis-types";
 import { DEFAULT_PILOT_CONFIG as config,PILOT_TESTS } from "../lib/shoulder-pilot";
 
@@ -24,6 +24,16 @@ async function main(){
   assert.deepEqual(parseAIDraft({...response,lossOfPosition:[{start:-3,end:4}]},b,config).observationFields,{holdSeconds:20});
   assert.deepEqual(parseAIDraft({...response,aboveEars:null,rangeVisible:false,inRangeSeconds:2},b,config),d);
   assert.doesNotMatch(buildVideoInstruction(b),/aboveEars|rangeVisible|inRangeSeconds/);
+  // A continuous visible target-length segment remains measurable if recording
+  // begins after the athlete has already lifted. Stability remains independent.
+  const clipped=parseAIDraft({...response,hold:{start:0,end:20},stabilityVisible:false},b,config);
+  assert.deepEqual(clipped.observationFields,{holdSeconds:20});
+  assert.equal(parseAIDraft({...response,hold:{start:0,end:0}},b,config).hold,null);
+  assert.equal(parseAIDraft({...response,hold:{start:24.005,end:24.009}},b,config).hold,null);
+  assert.deepEqual(parseAIDraft({...response,hold:{start:24.005,end:24.009}},b,config).observationFields,{});
+  assert.match(buildVideoInstruction(b,{...config,holdTargetSeconds:15}),/objetivo puntuable es 15 s/i);
+  assert.match(buildVideoInstruction(b),/tramo continuo OBSERVADO/i);
+
   const numeric=PILOT_TESTS.find(t=>t.key==="wallFlexion")!;
   const measurement={...b,testId:numeric.id,fps:3};
   const validMeasurement={value:75,start:2,end:3};
@@ -33,25 +43,44 @@ async function main(){
   assert.deepEqual(parseAIDraft({measurements:{leftProgress:{value:80},rightProgress:{...validMeasurement,end:50}}},measurement,config).observationFields,{});
   assert.deepEqual(parseAIDraft({measurements:{leftProgress:{...validMeasurement,value:101},rightProgress:{...validMeasurement,value:"80"}}},measurement,config).observationFields,{});
   assert.deepEqual(parseAIDraft({measurements:{leftProgress:{...validMeasurement,value:0},rightProgress:null}},measurement,config).observationFields,{leftProgress:0});
+  // One static frame can evidence a visible angle/progress; it must not force a
+  // fictional duration or suppress an independent visible side.
+  const pointDraft=parseAIDraft({measurements:{leftProgress:{value:65,start:5,end:5},rightProgress:null}},measurement,config);
+  assert.deepEqual(pointDraft.observationFields,{leftProgress:65});
+  assert.equal(pointDraft.findings[0].start,5);
+  assert.equal(pointDraft.findings[0].end,5);
+  assert.deepEqual(parseAIDraft({measurements:{leftProgress:{value:65,start:5,end:4},rightProgress:{value:55,start:6,end:6}}},measurement,config).observationFields,{rightProgress:55});
+  assert.deepEqual(parseAIDraft({measurements:{leftProgress:{value:65,start:-1,end:-1},rightProgress:{value:55,start:50,end:50}}},measurement,config).observationFields,{});
+  assert.deepEqual(parseAIDraft({measurements:{leftProgress:{value:65,start:24.005,end:24.009},rightProgress:null}},measurement,config).observationFields,{});
+
   const pullover={...b,testId:PILOT_TESTS.find(t=>t.key==="pullover")!.id,fps:3};
   assert.deepEqual(parseAIDraft({measurements:{angle:{value:170,start:2,end:2.1}}},pullover,config).observationFields,{});
+  assert.deepEqual(parseAIDraft({measurements:{angle:{value:170,start:2,end:2}}},pullover,config).observationFields,{});
+
   assert.deepEqual(parseAIDraft({measurements:{angle:{value:170,start:2,end:3}}},pullover,config).observationFields,{angle:170});
   const scap={...b,testId:PILOT_TESTS.find(t=>t.key==="scapLateral")!.id,fps:3};
   assert.deepEqual(parseAIDraft({measurements:{r1Smooth:{...validMeasurement,value:.5},r2Smooth:{...validMeasurement,value:1}}},scap,config).observationFields,{r2Smooth:1});
+  assert.deepEqual(parseAIDraft({measurements:{r1Smooth:{value:1,start:2,end:2},r1Symmetric:null,r2Smooth:{value:0,start:3,end:4}}},scap,config).observationFields,{r2Smooth:0});
+
   const raises={...b,testId:PILOT_TESTS.find(t=>t.key==="bumperRaises")!.id,fps:3};
   assert.deepEqual(parseAIDraft({measurements:{reps5:{...validMeasurement,value:4},range5:{...validMeasurement,value:6},range10:{...validMeasurement,value:2}}},raises,config).observationFields,{reps5:4});
+  assert.deepEqual(parseAIDraft({measurements:{reps5:{value:4,start:2,end:2},range5:{value:2,start:2,end:2}}},raises,config).observationFields,{});
+
   const wallPress={...b,testId:PILOT_TESTS.find(t=>t.key==="wallPress")!.id,fps:3};
   assert.deepEqual(parseAIDraft({measurements:{externalDeficit:{...validMeasurement,value:0},abduction:{...validMeasurement,value:45}}},wallPress,config).observationFields,{externalDeficit:0});
   assert.deepEqual(parseAIDraft({measurements:{externalDeficit:{...validMeasurement,value:15},abduction:{...validMeasurement,value:120}}},wallPress,config).observationFields,{externalDeficit:15});
   assert.deepEqual(parseAIDraft({measurements:{abduction:{...validMeasurement,value:120}}},wallPress,config).observationFields,{});
+  assert.deepEqual(parseAIDraft({measurements:{externalDeficit:{value:0,start:2,end:2},abduction:{value:125,start:4,end:4}}},wallPress,config).observationFields,{externalDeficit:0,abduction:125});
+
   for(const t of PILOT_TESTS){
     const desc=SHOULDER_VIDEO_TESTS[t.id];assert(desc,t.name+" has analysis support");
     const input={...b,testId:t.id,fps:desc.kind==="hold"?8:3};
     const instruction=buildVideoInstruction(input);
     if(desc.kind==="measurement"){
-      assert.match(instruction,/measurements/);for(const f of t.fields)assert(instruction.includes(f.key));
-      const fields=Object.fromEntries(t.fields.map(f=>[f.key,{...validMeasurement,value:f.min??0}]));
-      assert.deepEqual(Object.keys(parseAIDraft({measurements:fields},input,config).observationFields).sort(),t.fields.map(f=>f.key).sort());
+      const numericFields=t.fields.filter(f=>f.type==="number");
+      assert.match(instruction,/measurements/);for(const f of numericFields)assert(instruction.includes(f.key));
+      const fields=Object.fromEntries(numericFields.map(f=>[f.key,{...validMeasurement,value:f.min??0}]));
+      assert.deepEqual(Object.keys(parseAIDraft({measurements:fields},input,config).observationFields).sort(),numericFields.map(f=>f.key).sort());
     }else if(desc.kind==="load"){
       assert.match(instruction,/No infieras cargas/);
       const proposed=parseAIDraft({notes:"Ocho repeticiones visibles.",findings:[{start:1,end:4,text:"Ejecución visible."}],measurements:{affectedKg:{...validMeasurement,value:99},referenceKg:{...validMeasurement,value:99}}},input,config);
@@ -96,11 +125,56 @@ async function main(){
   assert.deepEqual(parseAIDraft(response,q,config).observationFields,{});
   await assert.rejects(()=>readLimitedBody(new Request("https://local.invalid",{method:"POST",body:"[]",headers:{"Content-Type":"application/json","Content-Length":"9000000"}})),/grande/);
   assert.throws(()=>validateFrames({...b,sheets:[{times:[0],jpeg:"https://example.invalid/image.jpg"}]}));
-  const f=spawnSync("ffmpeg",["-hide_banner","-loglevel","error","-f","lavfi","-i","color=gray:s=1024x728","-frames:v","1","-f","image2pipe","-c:v","mjpeg","pipe:1"],{maxBuffer:1024*1024});
-  if(f.status!==0)throw Error("This offline SDK transport test needs ffmpeg for its synthetic JPEG fixture.");
-  const jpeg=f.stdout.toString("base64");
+  function fixtureJPEG(dimensions:string) {
+    const f=spawnSync("ffmpeg",["-hide_banner","-loglevel","error","-f","lavfi","-i","color=gray:s="+dimensions,"-frames:v","1","-f","image2pipe","-c:v","mjpeg","pipe:1"],{maxBuffer:1024*1024});
+    if(f.status!==0)throw Error("This offline SDK transport test needs ffmpeg for its synthetic JPEG fixture.");
+    return f.stdout.toString("base64");
+  }
+  const jpeg=fixtureJPEG("1024x728");
+  const detailJPEG=fixtureJPEG("1536x928"),portraitDetailJPEG=fixtureJPEG("864x1600");
+  const detailSheets=Array.from({length:Math.ceil(b.duration/4)},(_,sheet)=>({
+    jpeg:detailJPEG,times:Array.from({length:Math.min(4,Math.ceil(b.duration)-sheet*4)},(_,j)=>Math.min(sheet*4+j,b.duration-.01)),
+  }));
+
   for(let i=0;i<b.duration*b.fps;i+=16)b.sheets.push({jpeg,times:Array.from({length:16},(_,j)=>(i+j)/b.fps)});
   validateFrames(b);
+  const detailed:FrameRequest={...b,detailSheets};
+  validateFrames(detailed);
+  validateFrames({...detailed,detailSheets:detailSheets.map(s=>({...s,jpeg:portraitDetailJPEG}))});
+  assert.match(buildVideoInstruction(detailed),/dos columnas|2.columns|2×2|2x2/i);
+  assert.match(buildVideoInstruction(detailed),/1.*segundo|segundo.*1|un fotograma por segundo/i);
+  assert.throws(()=>validateFrames({...detailed,detailSheets:[]}));
+  assert.throws(()=>validateFrames({...detailed,detailSheets:null}));
+  assert.throws(()=>validateFrames({...detailed,detailSheets:detailSheets.slice(1)}));
+  assert.throws(()=>validateFrames({...detailed,detailSheets:[...detailSheets,detailSheets[0]]}));
+  assert.throws(()=>validateFrames({...detailed,detailSheets:detailSheets.map(s=>({...s,jpeg}))}),"overview dimensions are not accepted as detail images");
+  assert.throws(()=>validateFrames({...detailed,sheets:b.sheets.map(s=>({...s,jpeg:detailJPEG}))}),"detail images cannot masquerade as temporal overviews");
+  assert.throws(()=>validateFrames({...detailed,detailSheets:detailSheets.map(s=>({...s,times:s.times.map(()=>0)}))}));
+  assert.throws(()=>validateFrames({...detailed,detailSheets:[{...detailSheets[0],times:[0,1,2]},...detailSheets.slice(1)]}));
+  assert.throws(()=>validateFrames({...detailed,detailSheets:[{...detailSheets[0],jpeg:detailJPEG.slice(0,-4)},...detailSheets.slice(1)]}));
+  assert.throws(()=>validateFrames({...detailed,detailSheets:[{...detailSheets[0],jpeg:"https://example.invalid/private-frame"},...detailSheets.slice(1)]}));
+  // Both streams use the same final-frame clamp, including near-integer clips.
+  for(const duration of [.5,1.005,4.001,60]){
+    const fps=3,frameCount=Math.ceil(duration*fps);
+    const overview=Array.from({length:Math.ceil(frameCount/16)},(_,sheet)=>({jpeg,times:Array.from({length:Math.min(16,frameCount-sheet*16)},(_,j)=>Math.round(Math.min((sheet*16+j)/fps,duration-.01)*1000)/1000)}));
+    const detail=Array.from({length:Math.ceil(Math.ceil(duration)/4)},(_,sheet)=>({jpeg:detailJPEG,times:Array.from({length:Math.min(4,Math.ceil(duration)-sheet*4)},(_,j)=>Math.round(Math.min(sheet*4+j,duration-.01)*1000)/1000)}));
+    validateFrames({...detailed,testId:numeric.id,duration,fps,sheets:overview,detailSheets:detail});
+  }
+  // Insert valid JPEG comment segments to exercise byte budgets without real
+  // footage. Each stream fits alone but the combined payload must be rejected.
+  function paddedJPEG(base64:string,bytes:number){
+    const source=Buffer.from(base64,"base64"),comments:Buffer[]=[];
+    let remaining=Math.max(0,bytes-source.length);
+    while(remaining>=4){const size=Math.min(remaining,65000),segment=Buffer.alloc(size,32);segment[0]=255;segment[1]=254;segment.writeUInt16BE(size-2,2);comments.push(segment);remaining-=size;}
+    return Buffer.concat([source.subarray(0,2),...comments,source.subarray(2)]).toString("base64");
+  }
+  const paddedOverview=b.sheets.map(s=>({...s,jpeg:paddedJPEG(s.jpeg,190000)}));
+  const paddedDetails=detailSheets.map(s=>({...s,jpeg:paddedJPEG(s.jpeg,130000)}));
+  validateFrames({...b,sheets:paddedOverview});
+  validateFrames({...detailed,detailSheets:paddedDetails});
+  assert.throws(()=>validateFrames({...detailed,sheets:paddedOverview,detailSheets:paddedDetails}),"the total budget includes both image streams");
+  assert.throws(()=>validateFrames({...detailed,detailSheets:[{...detailSheets[0],jpeg:paddedJPEG(detailJPEG,340000)},...detailSheets.slice(1)]}),"single detail-sheet byte limit");
+
   for(const t of PILOT_TESTS){
     const fps=SHOULDER_VIDEO_TESTS[t.id].kind==="hold"?8:3;
     const duration=1,times=Array.from({length:fps},(_,i)=>Math.round(i/fps*1000)/1000);
@@ -108,7 +182,7 @@ async function main(){
   }
   assert.throws(()=>validateFrames({...b,sheets:[{...b.sheets[0],times:b.sheets[0].times.map(()=>0)},...b.sheets.slice(1)]}));
   const providerResponse={hold:response.hold,stabilityVisible:response.stabilityVisible,lossOfPosition:response.lossOfPosition,notes:response.notes,findings:response.findings,limitations:response.limitations};
-  let requests=0,expectedInput=b,expectedModel="claude-opus-5-5";
+  let requests=0,expectedInput:FrameRequest=b,expectedModel="claude-opus-5-5";
   let mockReply:any={content:[{type:"text",text:JSON.stringify(providerResponse)}],stop_reason:"end_turn"};
   const mock=createServer((req,res)=>{
     const chunks:Buffer[]=[];req.on("data",x=>chunks.push(Buffer.from(x)));req.on("end",()=>{
@@ -116,7 +190,8 @@ async function main(){
       const parts=body.messages[0].content;
       assert.doesNotMatch(parts[0].text,/temblor|tremor|aboveEars|rangeVisible|inRangeSeconds/i);
       if(SHOULDER_VIDEO_TESTS[expectedInput.testId].kind==="hold")assert.match(parts[0].text,/lossOfPosition/);
-      assert.equal(parts.filter((x:any)=>x.type==="image").length,expectedInput.sheets.length);
+      assert.equal(parts.filter((x:any)=>x.type==="image").length,expectedInput.sheets.length+(expectedInput.detailSheets?.length??0));
+      assert.deepEqual(parts.filter((x:any)=>x.type==="image").map((x:any)=>x.source.data),[...expectedInput.sheets,...(expectedInput.detailSheets??[])].map(s=>s.jpeg));
       assert.equal(parts.find((x:any)=>x.type==="image").source.media_type,"image/jpeg");
       assert(!JSON.stringify(body).includes("synthetic-upload"));
       assert(!JSON.stringify(body).includes("2026-01-01T00:00:00.000Z"));
@@ -143,6 +218,11 @@ async function main(){
     const opusDraft=await analyzeFrames(b,config);
     assert.deepEqual(opusDraft.observationFields,d.observationFields);
     assert.equal(opusDraft.model,"synthetic","show the model returned by the provider, not the configured alias");
+    expectedInput=detailed;
+    const detailedDraft=await analyzeFrames(detailed,config);
+    assert.deepEqual(detailedDraft.observationFields,d.observationFields);
+    expectedInput=b;
+
     // Model overrides are intentional; they must not silently fall back to Opus.
     expectedModel="claude-sonnet-4-6";process.env.SHOULDER_VIDEO_AI_MODEL=expectedModel;
     mockReply={content:[{type:"thinking",thinking:"",signature:"synthetic-signature"},{type:"text",text:JSON.stringify(providerResponse)}],stop_reason:"end_turn",model:"provider-resolved-test-model"};
@@ -193,6 +273,6 @@ async function main(){
   }finally{if(old===undefined)delete process.env.ANTHROPIC_API_KEY;else process.env.ANTHROPIC_API_KEY=old;
     if(oldUrl===undefined)delete process.env.ANTHROPIC_BASE_URL;else process.env.ANTHROPIC_BASE_URL=oldUrl;
     if(oldModel===undefined)delete process.env.SHOULDER_VIDEO_AI_MODEL;else process.env.SHOULDER_VIDEO_AI_MODEL=oldModel;mock.close();}
-  console.log("PASS: Opus default/override, provider model provenance, thinking blocks, all 15 tests, bounded evidence, strict schemas, complete-response checks, null ≠ zero and offline SDK failures without automatic resends");
+  console.log("PASS: Opus default/override, provider model provenance, thinking blocks, all 15 tests, overview/detail transport and combined budgets, static-frame and partial measures, bounded evidence, strict schemas, complete-response checks, null ≠ zero and offline SDK failures without automatic resends");
 }
 main().catch(e=>{console.error(e.message);process.exitCode=1;});

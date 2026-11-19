@@ -1,4 +1,5 @@
 import { canAnalyzeShoulderTest, type ShoulderAIDraft } from "./shoulder-analysis-types";
+import { PILOT_TEST_BY_ID } from "./shoulder-pilot";
 
 export type ShoulderVideoSource = {id:string;testId:string;url:string;uploadedAt:string;sessionId:string;aiReviewBlocked?:boolean};
 export type ProposalEntry = {draft?:ShoulderAIDraft;applied?:boolean;error?:string};
@@ -38,4 +39,21 @@ export async function runShoulderQueue(sources:readonly ShoulderVideoSource[], s
 // Proposed values and manual edits stay separate until the clinician explicitly incorporates them.
 export function proposalConflicts(existing:Record<string,unknown>|undefined, proposed:Record<string,string|number>) {
   return Object.keys(proposed).some(k=>existing?.[k]!=null && existing[k]!=="" && existing[k]!==proposed[k]);
+}
+
+// Incorporating a proposal may preserve observations even when the model could not
+// measure the test. Missing numbers remain absent and never become a zero/score.
+export function proposalFields(draft:ShoulderAIDraft):Record<string,string|number> {
+  const test=PILOT_TEST_BY_ID[draft.testId];
+  if(!test)return {};
+  const fields:Record<string,string|number>={};
+  if(draft.kind==="hold"||draft.kind==="measurement"){
+    for(const field of test.fields){
+      const value=draft.observationFields[field.key];
+      if(field.type==="number"&&typeof value==="number"&&Number.isFinite(value))fields[field.key]=value;
+    }
+  }
+  const comment=draft.notes.trim();
+  if(comment)fields.comment=comment;
+  return fields;
 }
