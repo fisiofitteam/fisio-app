@@ -1,4 +1,6 @@
 import { prisma } from "./prisma";
+import type { WodReadiness } from "./wod-readiness";
+import { resolveReadinessAdaptations, type WodAdaptationRule } from "./wod-readiness-rules";
 
 export type ParsedLine = {
   raw: string;
@@ -161,14 +163,25 @@ function strictest(a: AdaptedLine, b: AdaptedLine): AdaptedLine {
 
 export async function adaptWod(
   parsed: ParsedLine[],
-  patientId: string
+  patientId: string,
+  readiness?: WodReadiness | null
 ): Promise<AdaptedLine[]> {
   const adaptations = await prisma.patientAdaptation.findMany({
     where: { patientId },
     include: { movement: true },
   });
 
-  const adaptationMap = new Map(adaptations.map((a) => [a.movementId, a]));
+  let adaptationMap = new Map<string, WodAdaptationRule>(adaptations.map((a) => [a.movementId, a]));
+  if (readiness) {
+    const selections = await prisma.patientCategoryLevel.findMany({
+      where: { patientId },
+      include: {
+        categoryLevel: { include: { rules: true } },
+        category: { include: { levels: { include: { rules: true } } } },
+      },
+    });
+    adaptationMap = resolveReadinessAdaptations(adaptations, selections, readiness);
+  }
 
   return parsed.map((line) => {
     if (!line.matchedMovementId) {
@@ -176,7 +189,7 @@ export async function adaptWod(
     }
     // Movimiento principal + hermanos
     const ids = [line.matchedMovementId, ...(line.relatedMovementIds ?? [])];
-    const adapts = ids.map((id) => adaptationMap.get(id)).filter(Boolean) as typeof adaptations;
+    const adapts = ids.map((id) => adaptationMap.get(id)).filter((rule): rule is WodAdaptationRule => !!rule);
     if (adapts.length === 0) {
       return { ...line, state: "OK" as const };
     }

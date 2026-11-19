@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
+import { canAccessEvidencePatient } from "@/lib/patient-evidence";
 import { PatientNav } from "@/components/PatientNav";
 import { PatientWodHistory } from "@/components/PatientWodHistory";
 
@@ -19,7 +20,7 @@ export default async function WodHistoryPage({ params, searchParams }: {
     select: { id: true, assignedProfessionalId: true },
   });
   if (!patient) notFound();
-  if (user.kind === "professional" && !user.pro.isManager && patient.assignedProfessionalId !== user.pro.id) notFound();
+  if (user.kind === "professional" && !await canAccessEvidencePatient(patient.id, user.pro)) notFound();
 
   return (
     <main className="max-w-md mx-auto px-4 py-6 pb-24">

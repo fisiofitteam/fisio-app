@@ -2,8 +2,13 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { AdaptationEditor } from "@/components/AdaptationEditor";
 import { PatientCategoryLevelsPanel } from "@/components/PatientCategoryLevelsPanel";
+import { getActiveProfessional } from "@/lib/session";
+import { canAccessEvidencePatient } from "@/lib/patient-evidence";
+import { usesWodReadiness } from "@/lib/wod-readiness";
 
 export default async function PatientCargasTab({ params }: { params: { id: string } }) {
+  const actor = await getActiveProfessional();
+  if (!await canAccessEvidencePatient(params.id, actor)) notFound();
   const patient = await prisma.patient.findUnique({
     where: { id: params.id },
     include: {
@@ -34,6 +39,8 @@ export default async function PatientCargasTab({ params }: { params: { id: strin
   const initialSelections = catalog.map((c) => ({
     categoryId: c.categoryId,
     categoryLevelId: patient.categoryLevels.find((s) => s.categoryId === c.categoryId)?.categoryLevelId ?? null,
+    redCategoryLevelId: patient.categoryLevels.find((s) => s.categoryId === c.categoryId)?.redCategoryLevelId ?? null,
+    greenCategoryLevelId: patient.categoryLevels.find((s) => s.categoryId === c.categoryId)?.greenCategoryLevelId ?? null,
   }));
 
   // Sistema antiguo de Profile/Level lo mantenemos por compat pero ya NO lo
@@ -44,9 +51,15 @@ export default async function PatientCargasTab({ params }: { params: { id: strin
     <div className="space-y-4">
       <PatientCategoryLevelsPanel
         patientId={patient.id}
+        programType={patient.programType}
         catalog={catalog}
         initialSelections={initialSelections}
       />
+
+      {usesWodReadiness(patient.programType) && <section className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+        <h2 className="text-sm font-medium">Excepciones por movimiento</h2>
+        <p className="mt-1 text-xs text-neutral-600">Las adaptaciones que edites manualmente abajo se aplican a rojo, ámbar y verde. Tienen prioridad sobre los niveles de cada color. Usa «Restablecer al nivel» para retirar una excepción.</p>
+      </section>}
 
       <AdaptationEditor
         patientId={patient.id}

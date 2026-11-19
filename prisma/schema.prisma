@@ -622,7 +622,9 @@ model CategoryLevel {
   createdAt       DateTime @default(now())
 
   rules           CategoryLevelRule[]
-  patientSelections PatientCategoryLevel[]
+  patientSelections PatientCategoryLevel[] @relation("PatientAmberLevel")
+  redPatientSelections PatientCategoryLevel[] @relation("PatientRedLevel")
+  greenPatientSelections PatientCategoryLevel[] @relation("PatientGreenLevel")
 
   @@unique([categoryId, order])
 }
@@ -653,7 +655,11 @@ model PatientCategoryLevel {
   categoryId      String
   category        MovementCategory @relation(fields: [categoryId], references: [id])
   categoryLevelId String
-  categoryLevel   CategoryLevel @relation(fields: [categoryLevelId], references: [id])
+  categoryLevel   CategoryLevel @relation("PatientAmberLevel", fields: [categoryLevelId], references: [id])
+  redCategoryLevelId String?
+  redCategoryLevel CategoryLevel? @relation("PatientRedLevel", fields: [redCategoryLevelId], references: [id], onDelete: SetNull)
+  greenCategoryLevelId String?
+  greenCategoryLevel CategoryLevel? @relation("PatientGreenLevel", fields: [greenCategoryLevelId], references: [id], onDelete: SetNull)
   updatedAt       DateTime @updatedAt
 
   @@unique([patientId, categoryId])
@@ -703,6 +709,7 @@ model PatientAdaptation {
 }
 
 model WodLog {
+  readiness       String? // RED / AMBER / GREEN at adaptation; null for legacy or other programmes.
   id              String   @id @default(cuid())
   patientId       String
   patient         Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
