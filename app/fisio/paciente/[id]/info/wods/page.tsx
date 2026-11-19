@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { WeeklyReportCard } from "@/components/WeeklyReportsFeed";
+import { WodReadinessBadge } from "@/components/WodReadinessBadge";
 
 export const dynamic = "force-dynamic";
 
@@ -242,6 +243,7 @@ export default async function PatientWodsTab({ params }: { params: { id: string 
               <summary className="flex justify-between items-center gap-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
                 <div className="min-w-0">
                   <div className="font-medium text-sm">{fDateTime(log.submittedAt)}</div>
+                    {log.readiness && <div className="mt-1.5"><WodReadinessBadge readiness={log.readiness} /></div>}
                   <div className="text-xs text-neutral-500 truncate mt-0.5">
                     {(log.rawText || "").replace(/\s*\n\s*/g, " / ").slice(0, 100)}
                   </div>

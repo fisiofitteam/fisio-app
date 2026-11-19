@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { WodReadinessBadge } from "@/components/WodReadinessBadge";
 
 const PAGE_SIZE = 10;
 
@@ -34,6 +35,7 @@ export async function PatientWodHistory({ patientId, pageParam }: { patientId: s
                     <div className="font-semibold text-sm">{(log.completedAt ?? log.submittedAt).toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Madrid" })}</div>
                     <p className="text-sm text-neutral-500 truncate mt-1">{log.rawText.split("\n").find((line) => line.trim()) || "WOD registrado"}</p>
                     <div className="flex flex-wrap gap-2 mt-2 text-xs">
+                      <WodReadinessBadge readiness={log.readiness} />
                       {log.rpe !== null && <span className="rounded bg-neutral-100 px-2 py-1">Esfuerzo: {log.rpe}/10</span>}
                       {log.painScore !== null && <span className="rounded bg-neutral-100 px-2 py-1">Dolor: {log.painScore}/10</span>}
                     </div>

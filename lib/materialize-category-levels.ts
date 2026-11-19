@@ -12,52 +12,7 @@
  */
 import { prisma } from "@/lib/prisma";
 
-type MinimalRule = {
-  movementId: string;
-  state: string;                   // "OK" | "CONDITIONAL" | "BLOCKED"
-  loadConstraint: string | null;
-  substitutionText: string | null;
-  physioWarning: string | null;
-  levelOrder: number;              // orden del nivel dentro de su categoría (menor = más restrictivo)
-};
-
-// Cuanto MAYOR el número, más restrictivo.
-function stateWeight(state: string): number {
-  if (state === "BLOCKED") return 3;
-  if (state === "CONDITIONAL") return 2;
-  return 1; // OK o desconocido
-}
-
-// Extrae un porcentaje de un texto tipo "50%", "al 60 %", "hasta 40%".
-function extractPct(s: string | null | undefined): number | null {
-  if (!s) return null;
-  const m = s.match(/(\d{1,3})\s*%/);
-  if (!m) return null;
-  const n = Number(m[1]);
-  return isFinite(n) ? n : null;
-}
-
-/**
- * Devuelve true si `a` es más restrictiva que `b`.
- *
- * Criterio en cascada:
- *   1. Menor `levelOrder` (nivel 2 gana sobre nivel 7 aunque sean de distintas categorías).
- *      Es la regla explícita pedida por el CEO: "si uno tiene nivel 2 y otro
- *      nivel 7, gana el 2".
- *   2. Mayor peso de state (BLOCKED > CONDITIONAL > OK) como desempate.
- *   3. Menor % en loadConstraint como último desempate.
- */
-function isMoreRestrictive(a: MinimalRule, b: MinimalRule): boolean {
-  if (a.levelOrder !== b.levelOrder) return a.levelOrder < b.levelOrder;
-  const wa = stateWeight(a.state);
-  const wb = stateWeight(b.state);
-  if (wa !== wb) return wa > wb;
-  const pa = extractPct(a.loadConstraint);
-  const pb = extractPct(b.loadConstraint);
-  if (pa != null && pb != null) return pa < pb;
-  if (pa != null && pb == null) return true;
-  return false;
-}
+import { isMoreRestrictive, type OrderedWodRule } from "./wod-readiness-rules";
 
 export async function materializePatientCategoryLevels(patientId: string) {
   const selections = await prisma.patientCategoryLevel.findMany({
@@ -70,11 +25,11 @@ export async function materializePatientCategoryLevels(patientId: string) {
   if (selections.length === 0) return;
 
   // Recolectamos todas las reglas, quedándonos con la más restrictiva por movimiento.
-  const chosen = new Map<string, MinimalRule>();
+  const chosen = new Map<string, OrderedWodRule>();
   for (const sel of selections) {
     const levelOrder = sel.categoryLevel.order;
     for (const rule of sel.categoryLevel.rules) {
-      const candidate: MinimalRule = {
+      const candidate: OrderedWodRule = {
         movementId: rule.movementId,
         state: rule.state,
         loadConstraint: rule.loadConstraint,
