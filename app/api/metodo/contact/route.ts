@@ -10,9 +10,12 @@ async function contact(req:NextRequest,track:boolean){
     try{await rateLimit(req,"contact",15);const v=await visitor(req);if(v){
       const raw=req.nextUrl.searchParams.get("placement");const placement=["header","hero","final","sticky"].includes(raw||"")?raw!:"other";
       // Repeated navigation within 30 seconds reuses the reference (double-tap / browser retry).
-      const previous=await prisma.metodoContact.findFirst({where:{visitorId:v.id,createdAt:{gte:new Date(Date.now()-30000)}},orderBy:{createdAt:"desc"}});
-      if(previous)reference=previous.reference;
-      else{reference="MF-"+randomBytes(6).toString("hex").toUpperCase();await prisma.metodoContact.create({data:{reference,visitorId:v.id,sourceJson:v.sourceJson,placement}});}
+      reference=await prisma.$transaction(async tx=>{
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${v.id}),20261128)`;
+        const previous=await tx.metodoContact.findFirst({where:{visitorId:v.id,createdAt:{gte:new Date(Date.now()-30000)}},orderBy:{createdAt:"desc"}});
+        if(previous)return previous.reference;
+        const next="MF-"+randomBytes(6).toString("hex").toUpperCase();await tx.metodoContact.create({data:{reference:next,visitorId:v.id,sourceJson:v.sourceJson,placement}});return next;
+      });
     }}catch{reference="";/* Analytics must never prevent contacting the team. */}
   }
   const url=whatsappUrl(wa.number,wa.message,reference);
