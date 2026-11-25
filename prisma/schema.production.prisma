@@ -4314,3 +4314,60 @@ model SkalexCallInsight {
   leaseUntil  DateTime?
   updatedAt   DateTime @updatedAt
 }
+
+// Public shoulder WOD tool. These profiles never confer patient access.
+model PublicWodProfile {
+  id                    String   @id @default(cuid())
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  lastUsedAt            DateTime @default(now())
+  tokenHash             String   @unique
+  expiresAt             DateTime
+  name                  String
+  phone                 String
+  profileJson           String
+  selfTestJson          String?
+  healthConsentAt       DateTime @default(now())
+  consentVersion        String
+  marketingConsentAt    DateTime?
+  sourceJson            String   @default("{}")
+  helpRequestedAt       DateTime?
+  adaptationQuestionAt  DateTime?
+  whatsappClickedAt     DateTime?
+  followUpStatus        String   @default("NEW")
+  managedById           String?
+  entries               PublicWodEntry[]
+
+  @@index([createdAt])
+  @@index([lastUsedAt])
+  @@index([followUpStatus])
+}
+
+model PublicWodEntry {
+  id               String   @id @default(cuid())
+  profileId        String
+  profile          PublicWodProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  requestId        String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  rawText          String
+  readiness        String
+  inputJson        String
+  profileSnapshot  String
+  resultJson       String
+  feedbackJson     String?
+  completedAt      DateTime?
+  engineVersion    String
+
+  @@unique([profileId, requestId])
+  @@index([profileId, createdAt])
+}
+
+// Durable, atomic request counters shared by serverless instances.
+model PublicWodRateLimit {
+  key       String   @id
+  count     Int      @default(1)
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}

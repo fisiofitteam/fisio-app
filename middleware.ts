@@ -46,6 +46,19 @@ const STATIC_PREFIXES = ["/_next", "/api/_internal", "/favicon", "/icon-", "/box
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  // Exact public surface for external WOD users. Staff/setup endpoints stay protected.
+  if (pathname === "/adaptador-wod" || pathname === "/adaptador-wod/privacidad" ||
+      /^\/api\/public-wod\/(profile|session|adapt|from-image|feedback|contact)\/?$/.test(pathname) ||
+      pathname === "/api/cron/public-wod-retention") {
+    const res = NextResponse.next();
+    res.headers.set("Cache-Control", "private, no-store, max-age=0");
+    res.headers.set("Referrer-Policy", "no-referrer");
+    res.headers.set("X-Content-Type-Options", "nosniff");
+    res.headers.set("X-Frame-Options", "DENY");
+    res.headers.set("X-Robots-Tag", "noindex, nofollow");
+    return res;
+  }
+
   // Public shell preserves the extension fragment through login. The page only
   // reads folders/patients after getActiveProfessional; uploads retain all guards.
   if (pathname === "/grabador-extension") {
