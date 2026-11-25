@@ -42,8 +42,17 @@ No se crea identificador analítico hasta aceptar la medición. Aceptar y rechaz
 - `node scripts/test-skalex-insights.cjs`: regresión del contexto comercial existente.
 - `npm run build:prod`: build completo. El proyecto ya omite lint/tipos durante build; se ejecuta `npx tsc --noEmit` por separado y se documentan los errores previos fuera de esta funcionalidad.
 - Revisión visual con componentes reales a ancho de escritorio y viewport de iframe de 390 px. No equivale a probar el navegador nativo de Instagram en iPhone/Android; conviene comprobar el enlace final desde ambos dispositivos antes de cambiar la bio.
-- Material pendiente de selección: foto/vídeo principal, dos fotos de Ales, presentación y testimonios/casos autorizados. Hasta entonces se muestra una composición tipográfica de marca, no fotos ajenas ni resultados ficticios.
+- Las dos fotografías de Ales ya publicadas se integran directamente en el diseño. Presentación y testimonios/casos se muestran cuando existen contenidos seleccionados y autorizados; no se añaden sustitutos ni resultados ficticios.
 
 ## Reversión
 
 Despublicar desde el editor detiene el acceso público y la medición nueva. Se puede revertir el commit sin borrar datos existentes; las cinco tablas aditivas pueden quedarse para conservar el historial. No eliminar tablas como parte de una reversión rutinaria.
+
+## Rediseño editorial · 25/11/2026
+
+- Portada clara, tipografía de mayor contraste, énfasis amarillo y fotografía deportiva completa. Si no hay un medio específico para portada, se reutiliza la foto deportiva pública ya configurada; no hace falta subirla de nuevo. Un hero explícito tiene prioridad.
+- El retrato profesional conserva sus proporciones. La fotografía deportiva se mantiene también en fundador cuando no se está utilizando en la portada (hero propio u oculto). Se añaden textos alternativos de respaldo para los campos vacíos.
+- Composición diferenciada para identificación, fundador, educación, cualificación, FAQ y contacto. Las cuatro fases son botones accesibles con panel descriptivo, numeración y símbolos conceptuales; no representan mediciones clínicas.
+- El aviso de consentimiento es más compacto; aceptar y rechazar conservan la misma prominencia. No se altera la instrumentación, atribución, configuración comercial ni selección/autorización de testimonios.
+- Cambio de presentación únicamente: sin migraciones, escrituras de configuración ni modificación de material privado. Todo el texto y los medios configurados se preservan.
+- Validación: build de producción completo, pruebas de privacidad/atribución existentes y revisión visual con componentes reales a 1348 px y viewports móviles de 390/320 px. Fases, FAQ y navegación comprobadas. TypeScript global mantiene errores ajenos a `components/metodo`; el build del proyecto omite esos errores por configuración previa.
