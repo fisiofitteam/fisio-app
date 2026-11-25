@@ -69,6 +69,13 @@ export default async function LeadMagnetsIndexPage() {
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <Link href="/fisio/contenido/lead-magnets/adaptador-wod" className="block rounded-xl p-5 transition-colors border border-amber-300 bg-amber-50">
+          <div className="text-sm text-neutral-600 mb-1">Herramienta gratuita · Uso recurrente</div>
+          <h2 className="text-lg font-semibold">Adaptador de WODs · Hombro</h2>
+          <p className="text-sm text-neutral-600 mt-2">Perfiles, WODs, registros de dolor y solicitudes de ayuda. Seguimiento de uso y conversiones.</p>
+          <div className="text-sm text-neutral-600 mt-4">URL pública: <code>/adaptador-wod</code></div>
+        </Link>
+
         {cardsData.map(({ tipo: t, total30d, completadas30d, alarmas30d }) => (
           <Link
             key={t.slug}
