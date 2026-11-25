@@ -46,6 +46,17 @@ const STATIC_PREFIXES = ["/_next", "/api/_internal", "/favicon", "/icon-", "/box
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  // Public shell preserves the extension fragment through login. The page only
+  // reads folders/patients after getActiveProfessional; uploads retain all guards.
+  if (pathname === "/grabador-extension") {
+    const res = req.method === "GET" || req.method === "HEAD" ? NextResponse.next() : new NextResponse("Método no permitido.", { status: 405 });
+    res.headers.set("Cache-Control", "private, no-store");
+    res.headers.set("Referrer-Policy", "no-referrer");
+    res.headers.set("X-Robots-Tag", "noindex, nofollow");
+    res.headers.set("X-Frame-Options", "DENY");
+    return res;
+  }
+
   // Read-only, revocable capability for one recording; no clinical fields are exposed.
   if (pathname === "/grabacion" || pathname.startsWith("/grabacion/")) {
     const ok = /^\/grabacion\/[A-Za-z0-9_-]{43}(?:\/video)?\/?$/.test(pathname);

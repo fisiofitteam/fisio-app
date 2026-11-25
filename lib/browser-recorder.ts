@@ -2,11 +2,11 @@ import { MAX_RECORDING_BYTES, MAX_RECORDING_SECONDS } from "./recording-rules";
 import { mixRecordingAudio, type RecordingAudioState } from "./recording-audio";
 export type FinishedRecording = { blob: Blob; durationSeconds: number; reason?: string };
 export type BrowserRecording = { cameraStream?: MediaStream; audioTrack?: MediaStreamTrack; stop(): void; pause(): void; resume(): void };
-type Options = { camera: boolean; microphone: boolean; systemAudio: boolean; onFinish(result: FinishedRecording): void; onError(message: string): void; onTick(seconds: number): void; onAudioState?(state: RecordingAudioState): void };
+type Options = { camera: boolean; microphone: boolean; systemAudio: boolean; frameWorkerUrl?: string; onFinish(result: FinishedRecording): void; onError(message: string): void; onTick(seconds: number): void; onAudioState?(state: RecordingAudioState): void };
 export function supportedRecordingMime(isSupported: (mime: string) => boolean) {
   return ["video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4"].find(isSupported);
 }
-export async function startBrowserRecording(options: Options): Promise<BrowserRecording> {
+export async function startBrowserRecording(options: Options, captureDisplay?: (constraints: DisplayMediaStreamOptions) => Promise<MediaStream>): Promise<BrowserRecording> {
   if (!navigator.mediaDevices?.getDisplayMedia || typeof MediaRecorder === "undefined") throw new Error("Abre el grabador en Chrome o Edge desde un ordenador.");
   const streams: MediaStream[] = [];
   const videos: HTMLVideoElement[] = [];
@@ -44,7 +44,7 @@ export async function startBrowserRecording(options: Options): Promise<BrowserRe
       // Keep the chosen call as the audio source when navigating around the app.
       surfaceSwitching: options.systemAudio ? "exclude" : "include",
     } as DisplayMediaStreamOptions;
-    const screen = await navigator.mediaDevices.getDisplayMedia(displayOptions);
+    const screen = await (captureDisplay ? captureDisplay(displayOptions) : navigator.mediaDevices.getDisplayMedia(displayOptions));
     streams.push(screen);
     const screenTrack = screen.getVideoTracks()[0];
     if (!screenTrack) throw new Error("No se ha seleccionado ninguna pantalla.");
@@ -86,8 +86,12 @@ export async function startBrowserRecording(options: Options): Promise<BrowserRe
       };
       draw();
       // Worker ticks continue when the professional switches to WhatsApp or another tab.
-      workerUrl = URL.createObjectURL(new Blob(["setInterval(() => postMessage(0), 42)"], { type: "text/javascript" }));
-      worker = new Worker(workerUrl); worker.onmessage = draw;
+      if (options.frameWorkerUrl) worker = new Worker(options.frameWorkerUrl);
+      else {
+        workerUrl = URL.createObjectURL(new Blob(["setInterval(() => postMessage(0), 42)"], { type: "text/javascript" }));
+        worker = new Worker(workerUrl);
+      }
+      worker.onmessage = draw;
       const composite = canvas.captureStream(24); streams.push(composite); videoTrack = composite.getVideoTracks()[0];
     }
     const tracks: MediaStreamTrack[] = [videoTrack];

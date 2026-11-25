@@ -36,7 +36,7 @@ export async function readLatestRecordingDraft(professionalId: string): Promise<
       const key = String(cursor.key), draft = cursor.value as RecordingDraft;
       if (key.startsWith(professionalId + ":") && draft?.blob instanceof Blob && (!latest || draft.updatedAt > latest.draft.updatedAt)) {
         const suffix = key.slice(professionalId.length + 1);
-        latest = { key, draft: { ...draft, patientId: draft.patientId || (!["general", "workspace"].includes(suffix) ? suffix : undefined) } };
+        latest = { key, draft: { ...draft, patientId: draft.patientId || (!["general", "workspace"].includes(suffix) && !suffix.startsWith("extension:") ? suffix : undefined) } };
       }
       cursor.continue();
     };
