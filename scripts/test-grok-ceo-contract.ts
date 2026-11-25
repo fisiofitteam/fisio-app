@@ -1,0 +1,14 @@
+import assert from "node:assert/strict";
+import { authorizeGrok, completeWindow, numericFields, madridDay, reportId } from "../lib/grok-ceo-contract";
+const secret = "a".repeat(40);
+assert.equal(authorizeGrok("Bearer " + secret, secret), true);
+assert.equal(authorizeGrok("Bearer " + secret, undefined), false);
+assert.equal(authorizeGrok("Bearer " + secret, "b".repeat(40)), false);
+assert.equal(authorizeGrok(null, secret), false);
+assert.deepEqual(numericFields({ count: 4, name: "private", missing: undefined, invalid: Infinity }, ["count","missing","invalid"]), { count: 4, missing: null, invalid: null });
+assert.equal(madridDay(new Date("2026-11-24T23:30:00Z")), "2026-11-25");
+assert.equal(completeWindow(1, 0, new Date("2026-11-25T07:00:00Z")).start.toISOString(), "2026-11-23T23:00:00.000Z");
+assert.equal(completeWindow(1, 0, new Date("2026-03-30T07:00:00Z")).start.toISOString(), "2026-03-28T23:00:00.000Z");
+assert.equal(completeWindow(1, 0, new Date("2026-03-30T07:00:00Z")).end.toISOString(), "2026-03-29T21:59:59.999Z");
+assert.equal(reportId("2026-11-25"), "grok-ceo-2026-11-25");
+console.log("Grok CEO contract tests passed");

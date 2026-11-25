@@ -30,6 +30,7 @@ function timeAgo(iso: string): string {
 }
 
 const TYPE_BADGE: Record<string, { label: string; bg: string; color: string }> = {
+  grok_ceo_daily: { label: "CEO IA", bg: "#FEF3C7", color: "#92400E" },
   lead_new: { label: "NUEVO", bg: "#FEE2E2", color: "#991B1B" },
   lead_assigned: { label: "ASIGNADO", bg: "#DBEAFE", color: "#1E40AF" },
   call_reminder: { label: "RECORDATORIO", bg: "#FEF3C7", color: "#78350F" },
