@@ -19,8 +19,8 @@ const section = (eyebrow: string, title: string, body = "", items: Section["item
 export const DEFAULT_METODO: MetodoConfig = {
   published: true,
   sections: {
-    hero: section("FISIOTERAPIA PARA ATLETAS DE CROSSTRAINING", "Vuelve a disfrutar del crosstraining sin que el dolor decida cómo entrenas.", "Ayudamos a atletas que llevan meses entrenando con dolor a recuperar sus movimientos mediante un proceso de fisioterapia y entrenamiento adaptado a sus necesidades."),
-    empathy: section("SABEMOS QUE NO ES SOLO EL DOLOR", "Quieres volver a entrenar con confianza.", "Y sentir que avanzas, en lugar de negociar con las mismas molestias cada semana.", [
+    hero: section("FISIOTERAPIA PARA ATLETAS DE CROSSTRAINING", "Que el dolor no decida cómo entrenas.", "Fisioterapia, ejercicio y entrenamiento adaptado a ti. Un equipo que conoce tu deporte y te acompaña en tu recuperación."),
+    empathy: section("SABEMOS QUE NO ES SOLO EL DOLOR", "Quieres entrenar. Pero el dolor te frena.", "Llevas tiempo haciendo ajustes. Lo que buscas es saber cómo avanzar.", [
       { title: "Llevas meses adaptando entrenamientos.", body: "Cambias un ejercicio, bajas el peso… pero sigues sin saber cómo volver." },
       { title: "Hay movimientos que ya evitas.", body: "A veces por dolor. Otras, por miedo a que vuelva a aparecer." },
       { title: "Has probado tratamientos.", body: "Quizá has sentido alivio, pero no el cambio duradero que buscabas." },
@@ -33,14 +33,14 @@ export const DEFAULT_METODO: MetodoConfig = {
       { title: "Adaptar el entrenamiento", body: "Ajustar ejercicios, cargas y volumen para encontrar opciones que puedas tolerar." },
       { title: "Recuperar capacidades", body: "Trabajar de forma progresiva para acercarte a los movimientos y cargas que quieres recuperar." },
     ]),
-    method: section("ASÍ TRABAJAMOS", "Un proceso con dirección. Y alguien a tu lado.", "Acompañamiento profesional, seguimiento de tu evolución y ajustes individualizados durante el proceso.", [
-      { title: "Entendemos tu caso", body: "Valoramos tu situación, historial, síntomas, objetivos y limitaciones deportivas." },
-      { title: "Adaptamos tu entrenamiento", body: "Buscamos que puedas seguir entrenando dentro de tus posibilidades mientras trabajamos en tu recuperación." },
-      { title: "Recuperamos capacidades", body: "Diseñamos un proceso individualizado de ejercicio terapéutico, fuerza y exposición progresiva a los movimientos que necesitas recuperar." },
-      { title: "Volvemos a tus objetivos deportivos", body: "Trabajamos para que recuperes capacidad, confianza y autonomía en tu entrenamiento." },
+    method: section("ASÍ TRABAJAMOS", "Así te acompañamos de vuelta al box.", "Valoración, trabajo individualizado y seguimiento desde nuestra app. Con un fisioterapeuta que revisa tu evolución.", [
+      { title: "Entendemos tu caso", body: "Nos cuentas qué te limita y qué quieres recuperar. Revisamos tu historial y los vídeos de valoración para decidir por dónde empezar." },
+      { title: "Adaptamos tu entrenamiento", body: "Tienes tu trabajo organizado en la app y adaptaciones para tus entrenamientos. Ajustamos ejercicios y cargas según tu situación." },
+      { title: "Recuperamos capacidades", body: "Trabajas fuerza y ejercicio terapéutico de forma progresiva. Registras tus sensaciones para que el fisioterapeuta revise cómo estás respondiendo." },
+      { title: "Volvemos a tus objetivos deportivos", body: "Revisamos contigo los movimientos que quieres recuperar. Ajustamos el trabajo para avanzar con más capacidad, confianza y autonomía." },
     ]),
     results: section("HISTORIAS REALES", "Detrás de cada movimiento, hay una persona.", "Experiencias compartidas con autorización por atletas que han trabajado con nosotros. Cada caso y cada evolución son diferentes."),
-    fit: section("¿ES FISIOFITTEAM PARA TI?", "No buscas otro parche. Buscas un proceso.", "No ofrecemos soluciones milagrosas ni protocolos universales. Nuestro enfoque requiere tu participación activa y se adapta a tu situación.", [
+    fit: section("¿ES FISIOFITTEAM PARA TI?", "Un trabajo en equipo. También contigo.", "No ofrecemos soluciones milagrosas ni protocolos universales. Nuestro enfoque requiere tu participación activa y se adapta a tu situación.", [
       { title: "Llevas tiempo conviviendo con dolor.", body: "" }, { title: "Quieres seguir practicando crosstraining.", body: "" },
       { title: "Buscas una estrategia individualizada.", body: "" }, { title: "Estás dispuesto a implicarte en tu recuperación.", body: "" },
       { title: "Valoras el acompañamiento especializado.", body: "" },
@@ -53,7 +53,7 @@ export const DEFAULT_METODO: MetodoConfig = {
       { title: "¿Tendré un fisioterapeuta que supervise mi evolución?", body: "Sí. El acompañamiento profesional y la revisión de tu evolución forman parte del proceso. Al hablar contigo te explicaremos cómo se organiza el seguimiento del programa que encaje con tu caso." },
       { title: "¿Cómo puedo saber si podéis ayudarme?", body: "Cuéntanos tu situación por WhatsApp. El equipo te hará algunas preguntas para entenderla y valorar contigo el siguiente paso. Si no somos la opción adecuada, te lo diremos." },
     ]),
-    cta: section("EMPECEMOS POR ESCUCHARTE", "¿Y si el siguiente paso no fuera dejar de entrenar, sino aprender a recuperarte mientras entrenas?", "Cuéntanos tu situación. Nuestro equipo valorará contigo si nuestro enfoque puede ayudarte a recuperar los movimientos y objetivos deportivos que ahora tienes limitados."),
+    cta: section("EMPECEMOS POR ESCUCHARTE", "Cuéntanos qué te está frenando.", "Cuéntanos tu situación. Nuestro equipo valorará contigo si nuestro enfoque puede ayudarte a recuperar los movimientos y objetivos deportivos que ahora tienes limitados."),
     tools: { ...section("RECURSOS PARA TI", "Conoce mejor tu entrenamiento."), visible: false },
   },
   media: { hero: {url:"",alt:"Atleta entrenando crosstraining",poster:""}, team: {url:"",alt:"El equipo de FisioFitTeam",poster:""}, athlete: {url:"",alt:"Ales practicando crosstraining",poster:""}, clinician: {url:"",alt:"Ales trabajando como fisioterapeuta",poster:""}, introduction: {url:"",alt:"Ales presenta la metodología de FisioFitTeam",poster:""} },
@@ -71,6 +71,37 @@ const LEGACY_FOUNDER = {
   title: "Conocemos el box. Y lo que cuesta volver.",
   body: "Soy Ales, fisioterapeuta y fundador de FisioFitCross. Nuestra especialización nace de unir la experiencia clínica con la práctica del crosstraining. Entendemos lo que te exige una sesión y lo que significa para ti poder disfrutarla. Por eso trabajamos contigo: para construir un proceso que tenga sentido en tu vida y en tu deporte.",
 };
+// Earlier presentation copy may still be saved in LandingConfig. Compare the raw
+// field, not the normalized text: edited whitespace/copy is not an untouched default.
+const LEGACY_PRESENTATION_COPY: Partial<Record<SectionId, { title: string; body?: string }>> = {
+  hero: {
+    title: "Vuelve a disfrutar del crosstraining sin que el dolor decida cómo entrenas.",
+    body: "Ayudamos a atletas que llevan meses entrenando con dolor a recuperar sus movimientos mediante un proceso de fisioterapia y entrenamiento adaptado a sus necesidades.",
+  },
+  empathy: { title: "Quieres volver a entrenar con confianza.", body: "Y sentir que avanzas, en lugar de negociar con las mismas molestias cada semana." },
+  method: {
+    title: "Un proceso con dirección. Y alguien a tu lado.",
+    body: "Acompañamiento profesional, seguimiento de tu evolución y ajustes individualizados durante el proceso.",
+  },
+  fit: { title: "No buscas otro parche. Buscas un proceso." },
+  cta: { title: "¿Y si el siguiente paso no fuera dejar de entrenar, sino aprender a recuperarte mientras entrenas?" },
+};
+const LEGACY_METHOD_ITEMS: Section["items"] = [
+  { title: "Entendemos tu caso", body: "Valoramos tu situación, historial, síntomas, objetivos y limitaciones deportivas." },
+  { title: "Adaptamos tu entrenamiento", body: "Buscamos que puedas seguir entrenando dentro de tus posibilidades mientras trabajamos en tu recuperación." },
+  { title: "Recuperamos capacidades", body: "Diseñamos un proceso individualizado de ejercicio terapéutico, fuerza y exposición progresiva a los movimientos que necesitas recuperar." },
+  { title: "Volvemos a tus objetivos deportivos", body: "Trabajamos para que recuperes capacidad, confianza y autonomía en tu entrenamiento." },
+];
+function normalizeSectionItem(value: unknown, id: SectionId) {
+  const item = object(value);
+  if (id === "method") {
+    // Match the whole original item, preserving custom titles, bodies, deletions
+    // and editorial ordering rather than assuming the stored array has four rows.
+    const legacyIndex = LEGACY_METHOD_ITEMS.findIndex(old => item.title === old.title && item.body === old.body);
+    if (legacyIndex >= 0) return { ...DEFAULT_METODO.sections.method.items[legacyIndex] };
+  }
+  return { title: text(item.title, "", 300), body: text(item.body) };
+}
 export function youtubeId(value: string) {
   try { const u = new URL(value); if (!["youtube.com","www.youtube.com","youtu.be","www.youtube-nocookie.com"].includes(u.hostname)) return null; const id = u.hostname === "youtu.be" ? u.pathname.slice(1) : u.searchParams.get("v") || u.pathname.match(/^\/(?:embed|shorts)\/([\w-]+)/)?.[1]; return id && /^[\w-]{11}$/.test(id) ? id : null; } catch { return null; }
 }
@@ -93,13 +124,19 @@ export function normalizeMetodo(input: unknown): MetodoConfig {
   result.published = typeof raw.published === "boolean" ? raw.published : true;
   for (const id of SECTION_IDS) {
     const v = object(sections[id]), d = result.sections[id];
-    result.sections[id] = { visible: typeof v.visible === "boolean" ? v.visible : d.visible, eyebrow: text(v.eyebrow,d.eyebrow,120), title:text(v.title,d.title,300),body:text(v.body,d.body),items:Array.isArray(v.items) ? v.items.slice(0,20).map((i: unknown)=>{const x=object(i);return {title:text(x.title,"",300),body:text(x.body)};}).filter((i: {title:string})=>i.title) : d.items };
+    result.sections[id] = { visible: typeof v.visible === "boolean" ? v.visible : d.visible, eyebrow: text(v.eyebrow,d.eyebrow,120), title:text(v.title,d.title,300),body:text(v.body,d.body),items:Array.isArray(v.items) ? v.items.slice(0,20).map((i: unknown)=>normalizeSectionItem(i,id)).filter((i: {title:string})=>i.title) : d.items };
   }
   for (const key of Object.keys(result.media) as (keyof MetodoConfig["media"])[]) {const v=object(media[key]);result.media[key]={url:mediaUrl(v.url,key==="introduction"||key==="hero"),alt:text(v.alt,result.media[key].alt,200),poster:mediaUrl(v.poster,false)};}
   const b=object(raw.buttons), w=object(raw.whatsapp), seo=object(raw.seo);
   for (const key of Object.keys(result.buttons) as (keyof MetodoConfig["buttons"])[]) result.buttons[key]=text(b[key],result.buttons[key],100);
   const digits=text(w.number).replace(/\D/g,""); result.whatsapp={number:/^\d{7,15}$/.test(digits)?digits:"",message:text(w.message,result.whatsapp.message,1200)};
   result.seo={title:text(seo.title,result.seo.title,100),description:text(seo.description,result.seo.description,300),image:mediaUrl(seo.image,false)};
+  for (const id of Object.keys(LEGACY_PRESENTATION_COPY) as SectionId[]) {
+    const old = LEGACY_PRESENTATION_COPY[id]!, saved = object(sections[id]);
+    for (const key of ["title", "body"] as const) {
+      if (old[key] !== undefined && saved[key] === old[key]) result.sections[id][key] = DEFAULT_METODO.sections[id][key];
+    }
+  }
   const founder=object(sections.founder);
   for(const key of ["eyebrow","title","body"] as const)if(founder[key]===LEGACY_FOUNDER[key])result.sections.founder[key]=DEFAULT_METODO.sections.founder[key];
   if(object(sections.fit).eyebrow==="¿ES FISIOFITCROSS PARA TI?")result.sections.fit.eyebrow=DEFAULT_METODO.sections.fit.eyebrow;
