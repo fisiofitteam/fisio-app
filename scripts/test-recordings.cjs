@@ -109,6 +109,17 @@ process.env.ASSESSMENT_BLOB_READ_WRITE_TOKEN="test-private-store";
   assert.equal(middleware(new NextRequest("https://app.test/grabacion/"+suffix)).status,404);
  }
  assert.equal(middleware(new NextRequest("https://app.test/grabacion/"+token,{method:"POST"})).status,404);
+ for (const method of ["GET", "HEAD"]) {
+  const response = middleware(new NextRequest("https://app.test/grabador-extension", { method }));
+  assert.equal(response.status, 200); assert.equal(response.headers.get("referrer-policy"), "no-referrer");
+  assert.match(response.headers.get("cache-control"), /no-store/); assert.equal(response.headers.get("x-frame-options"), "DENY");
+ }
+ assert.equal(middleware(new NextRequest("https://app.test/grabador-extension", { method: "POST" })).status, 405);
+ for (const pathname of ["/grabador-extension/extra", "/api/recordings/extension"]) assert.equal(middleware(new NextRequest("https://app.test"+pathname)).status, 307);
+ actor = null; const extensionDownload = load("app/api/recordings/extension/route.ts");
+ assert.equal((await extensionDownload.GET()).status, 403);
+ actor = pro(); const packageResponse = await extensionDownload.GET(); assert.equal(packageResponse.status, 200);
+ assert.equal(packageResponse.headers.get("content-type"), "application/zip"); assert((await packageResponse.arrayBuffer()).byteLength > 1000);
  failDelete=true;assert.equal((await recording.DELETE(req("/api/recordings/"+id,undefined,"DELETE"),c)).status,500);
  assert.equal(rows.get(id).status,"deleting");
  assert.equal((await transcriptApi.GET(req("/api/recordings/"+id+"/transcript",undefined,"GET"),c)).status,404);

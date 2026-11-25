@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "FisioFit Recorder",
+  "version": "0.1.0",
+  "description": "Graba pantalla, cámara y audio y guarda tus vídeos en FisioFit.",
+  "minimum_chrome_version": "135",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqluxJplDE7grOlf5aRwlbA38rEU1C6i5j5QhHpCuvNm+cyB78oBoJ0UeWmnELt3IVcfw99l+xjSujyVrh4J51I/gKR8H7gsc6Q7OvuFW8TYeGKvOyaE/YiBiIHXwNOTrichW29KhnGTLE/fXyjX+BkcObaQeiP0+k2Z4+nsL+JFKF/0yvxXCyW9rpWOyyFKjlpsJlem1wuLuDkUTDnT20hCeCNSnwvWrkas7e6a6F+H7IZhbKGz8FQprrigPUmPgxYR4XuYu11398f+yP+HGtuEEy1Ak1CAieFn4j2wZudq5iPSFeD3WLTd8JPUfn8/X7qI5mUESlv8xYgh7+kSamQIDAQAB",
+  "permissions": [
+    "desktopCapture",
+    "offscreen",
+    "storage"
+  ],
+  "action": {
+    "default_title": "Abrir FisioFit Recorder",
+    "default_icon": {
+      "16": "icons/16.png",
+      "32": "icons/32.png",
+      "48": "icons/48.png",
+      "128": "icons/128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/16.png",
+    "32": "icons/32.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "background": {
+    "service_worker": "worker.js",
+    "type": "module"
+  },
+  "externally_connectable": {
+    "matches": [
+      "https://app.fisiofitteam.com/*"
+    ]
+  },
+  "commands": {
+    "open-recorder": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+9",
+        "mac": "Command+Shift+9"
+      },
+      "description": "Abrir FisioFit Recorder"
+    }
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; worker-src 'self'"
+  }
+}

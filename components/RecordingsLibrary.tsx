@@ -38,6 +38,11 @@ export function RecordingsLibrary({ initialData, patients, professionalId, enabl
 
   return <main className="space-y-6">
     <header><h1 className="text-2xl font-semibold">Grabaciones</h1><p className="mt-1 text-sm text-neutral-500">Graba explicaciones, presentaciones o vídeos para el equipo. Vincularlos a un paciente es opcional.</p></header>
+    <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:p-5 space-y-3">
+      <div><h2 className="font-semibold">FisioFit Recorder para Chrome</h2><p className="text-sm text-neutral-600 mt-1">Empieza desde el icono del navegador y sigue grabando aunque cierres el panel de controles.</p></div>
+      <a href="/api/recordings/extension" className="btn btn-accent" download>Descargar extensión · versión de prueba</a>
+      <details className="text-sm"><summary className="cursor-pointer font-medium">Cómo instalarla</summary><ol className="list-decimal pl-5 mt-3 space-y-2"><li>Descarga y descomprime el ZIP.</li><li>Abre <code>chrome://extensions</code> y activa «Modo de desarrollador».</li><li>Pulsa «Cargar descomprimida» y selecciona la carpeta <strong>FisioFit-Recorder</strong>.</li><li>Fija FisioFit Recorder desde el icono de extensiones de Chrome. Pulsa su icono para grabar.</li></ol><p className="mt-3 text-neutral-500">Mantén esa carpeta en tu ordenador. Para actualizar, guarda los vídeos pendientes, sustituye el contenido de esa carpeta por el nuevo paquete y pulsa «Recargar» en chrome://extensions. Cerrar Chrome interrumpe una grabación en curso; los vídeos ya terminados se conservan localmente.</p></details>
+    </section>
     <section className="rounded-2xl border border-neutral-200 bg-white p-4 sm:p-5 space-y-4" aria-label="Nueva grabación">
       <div><h2 className="text-lg font-semibold">Nueva grabación</h2><p className="text-sm text-neutral-500">Puedes grabar sin paciente. Si seleccionas uno, el vídeo se guardará también en su ficha, dentro de Evolución e historial → Grabaciones.</p></div>
       <label className="block text-sm font-medium">Paciente (opcional)

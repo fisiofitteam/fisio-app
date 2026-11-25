@@ -20,7 +20,8 @@
     "cap:assets": "node scripts/generate-assets.mjs && npx @capacitor/assets generate --iconBackgroundColor \"#FBBF24\" --iconBackgroundColorDark \"#FBBF24\" --splashBackgroundColor \"#0A0A0A\" --splashBackgroundColorDark \"#0A0A0A\"",
     "cap:sync": "npx cap sync",
     "cap:ios": "npx cap open ios",
-    "cap:android": "npx cap open android"
+    "cap:android": "npx cap open android",
+    "extension:build": "node scripts/build-recorder-extension.cjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.102.0",
@@ -60,6 +61,7 @@
     "prisma": "^5.22.0",
     "tailwindcss": "^3.4.13",
     "tsx": "^4.19.1",
-    "typescript": "^5"
+    "typescript": "^5",
+    "esbuild": "^0.28.0"
   }
 }

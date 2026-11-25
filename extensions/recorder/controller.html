@@ -1,0 +1,15 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FisioFit Recorder</title><link rel="stylesheet" href="controller.css"></head>
+<body><header><img src="icons/128.png" alt="" width="40" height="40"><div><h1>FisioFit Recorder</h1><p>Tu pantalla. Tu equipo. Tu app.</p></div><span id="badge">LISTO</span></header>
+<main>
+<section id="setup"><div class="modes"><button id="explanation" aria-pressed="true">🎙️ Explicación<small>Tu pantalla y tu voz</small></button><button id="call" aria-pressed="false">💬 Videollamada<small>Tu voz y la del cliente</small></button></div>
+<div class="options"><label><input id="camera" type="checkbox" checked>Cámara</label><label><input id="microphone" type="checkbox" checked>Micrófono</label><label><input id="system" type="checkbox">Audio del cliente / ordenador</label><label><input id="transcribe" type="checkbox" checked>Transcribir audio</label></div>
+<p id="audio-help" class="notice" hidden>Elige la pestaña de la llamada y activa «Compartir audio». Para ventanas o pantalla completa, el sonido depende de tu navegador y sistema. Usa auriculares para evitar ecos.</p>
+<p class="muted">La transcripción en español utiliza el servicio de voz del navegador y puede procesar el audio remotamente. Requiere conexión; revisa el texto antes de guardarlo.</p>
+<button id="start" class="primary full">● Empezar a grabar</button></section>
+<section id="live" hidden><div class="time" id="clock">00:00</div><video id="camera-preview" muted autoplay playsinline hidden></video><button id="camera-float" class="quiet" hidden>Cámara flotante</button>
+<div id="meters"></div><div class="actions"><button id="pause">Pausar</button><button id="stop" class="primary">■ Terminar</button></div>
+<p class="muted">Puedes cerrar este panel y abrirlo de nuevo desde el icono. La grabación continúa mientras Chrome siga abierto.</p><details><summary>Transcripción en directo</summary><p id="transcript"></p></details></section>
+<p id="message" role="status" hidden></p><p id="warning" class="notice" role="status" hidden></p>
+<section id="pending" hidden><h2>Pendientes de guardar</h2><div id="drafts"></div></section>
+<footer>Máximo 30 minutos · 500 MB por vídeo<br><a href="https://app.fisiofitteam.com/fisio/grabaciones" target="_blank" rel="noopener">Abrir mis grabaciones ↗</a></footer>
+</main><script type="module" src="controller.js"></script></body></html>
