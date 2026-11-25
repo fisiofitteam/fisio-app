@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { Check, Dumbbell, MessageCircle, Pause, SlidersHorizontal } from "lucide-react";
-import { Logo } from "@/components/Logo";
+import teamLogo from "@/public/brand/fisiofitteam.png";
+import { ArrowDown, ArrowUpRight, Check, MessageCircle } from "lucide-react";
 import { ZONES, youtubeId, type PublicMetodo, type Section } from "@/lib/metodo/content";
 import { MetodoJourney } from "./MetodoJourney";
 import { MetodoVideo } from "./MetodoVideo";
@@ -20,15 +20,8 @@ function Intro({ section }: { section: Section }) {
   </div>;
 }
 
-/** Emphasis only, without replacing or shortening the text saved by the team. */
-function HeroTitle({ title }: { title: string }) {
-  const emphasis = "sin que el dolor decida";
-  const index = title.indexOf(emphasis);
-  return <h1>{index < 0 ? title : <>{title.slice(0, index)}<mark>{emphasis}</mark>{title.slice(index + emphasis.length)}</>}</h1>;
-}
-
 function Brand() {
-  return <span className="mf-brand"><span className="mf-logo-icon"><Logo size={30} /></span><span className="mf-brand-name">FISIO<span>FIT</span><small>CROSS</small></span></span>;
+  return <span className="mf-brand"><Image src={teamLogo} alt="FisioFitTeam" width={500} height={500} sizes="140px" priority /></span>;
 }
 
 export function MetodoLanding({ content, preview = false }: { content: PublicMetodo; preview?: boolean }) {
@@ -37,82 +30,70 @@ export function MetodoLanding({ content, preview = false }: { content: PublicMet
   const [zone, setZone] = useState("Todos");
   const stories = content.stories.filter(story => zone === "Todos" || story.zone === zone);
   const hasStories = s.results.visible && content.stories.length > 0;
-  // Use the already published athlete photograph when no dedicated hero is set.
+  // Prefer the shared public team photograph when no dedicated hero is set.
   // This is the public DTO: private/hidden source media never enter this component.
-  const hero = m.hero.url ? m.hero : m.athlete;
-  const heroIsAthlete = !m.hero.url && !!m.athlete.url;
-  const educationIcons = [Pause, SlidersHorizontal, Dumbbell];
+  const hero = m.hero.url ? m.hero : m.team.url ? m.team : m.athlete;
+  const heroIsTeam = !m.hero.url && !!m.team.url;
   const contact = (placement: string) => preview ? "#contacto" : `/api/metodo/contact?placement=${placement}`;
   const contactButton = (placement: string, quiet = false) => <a className={quiet ? "mf-text-link" : "mf-button"} href={contact(placement)}>
-    {!quiet && <MessageCircle size={20} aria-hidden="true" />}{quiet ? buttons.secondary : buttons.contact}
+    {quiet ? buttons.secondary : buttons.contact}{!quiet && <ArrowUpRight size={20} aria-hidden="true" />}
   </a>;
 
   return <div className="mf-page">
     <a className="mf-skip" href="#contenido">Saltar al contenido</a>
     <header className="mf-header">
-      <a href="/metodo" aria-label="FisioFitCross, inicio"><Brand /></a>
+      <a href="/metodo" aria-label="FisioFitTeam, inicio"><Brand /></a>
       <nav aria-label="Navegación de la metodología">
         {s.method.visible && <a href="#metodologia">El método</a>}
-        {s.founder.visible && <a href="#equipo">Quiénes somos</a>}
+        {s.founder.visible && <a href="#equipo">El equipo</a>}
         {hasStories && <a href="#historias">Historias reales</a>}
         <a className="mf-nav-contact" href={contact("header")}>Hablemos <MessageCircle size={17} aria-hidden="true" /></a>
       </nav>
     </header>
     <main id="contenido">
-      {s.hero.visible && <section className={`mf-hero${!hero.url ? " mf-hero-no-media" : ""}`}>
-        <div className="mf-hero-head">
-          <p className="mf-eyebrow"><span aria-hidden="true" />{s.hero.eyebrow}</p>
-          <HeroTitle title={s.hero.title} />
-        </div>
+      {s.hero.visible && <section className={`mf-hero${!hero.url ? " mf-hero-no-media" : ""}${isVideo(hero.url) ? " mf-hero-with-video" : ""}`}>
         {hero.url && <figure className="mf-hero-visual">
-          <div className="mf-photo-heading"><span>DE ATLETAS.</span><span>PARA ATLETAS.</span></div>
-          <div className="mf-hero-image">
-            {isVideo(hero.url) ? <MetodoVideo url={hero.url} poster={hero.poster} title={hero.alt || "Entrenar forma parte del proceso"} target="hero" track={analytics.track} /> :
-              <Image src={hero.url} sizes="(max-width: 700px) calc(100vw - 64px), (max-width: 1100px) 40vw, 460px" priority alt={hero.alt || (heroIsAthlete ? "Ales realizando una sentadilla con la barra sobre la cabeza en el box" : "Un atleta entrenando")} width={600} height={600} />}
-          </div>
-          <figcaption><span>{heroIsAthlete ? "Ales · Fisioterapeuta y atleta" : "Tu deporte forma parte del proceso."}</span><span className="mf-photo-cross" aria-hidden="true">+</span></figcaption>
+          {isVideo(hero.url) ? <MetodoVideo url={hero.url} poster={hero.poster} title={hero.alt || "Conoce a FisioFitTeam"} target="hero" track={analytics.track} /> :
+            <Image src={hero.url} sizes="100vw" priority alt={hero.alt || (heroIsTeam ? "El equipo de fisioterapeutas de FisioFitTeam en el box" : "Un atleta entrenando crosstraining")} width={heroIsTeam ? 1672 : 1080} height={heroIsTeam ? 941 : 1080} />}
         </figure>}
-        <p className="mf-hero-description">{s.hero.body}</p>
-        <div className="mf-hero-actions">
-          <a className="mf-button" href={s.method.visible ? "#metodologia" : "#contacto"}>{buttons.discover}</a>
-          {contactButton("hero", true)}
+        <div className="mf-hero-content">
+          <p className="mf-eyebrow">{s.hero.eyebrow}</p>
+          <h1>{s.hero.title}</h1>
+          <div className="mf-hero-actions">
+            <a className="mf-button mf-button-outline" href={s.method.visible ? "#metodologia" : "#contacto"}>{buttons.discover}<ArrowDown size={18} aria-hidden="true" /></a>
+            {contactButton("hero", true)}
+          </div>
         </div>
-        <div className="mf-hero-caption"><span>Fisioterapia</span><span>Entrenamiento</span><span>Acompañamiento</span></div>
       </section>}
+      {s.hero.visible && <div className="mf-hero-intro"><p>{s.hero.body}</p><span>Fisioterapia.<br />Entrenamiento.<br />Acompañamiento.</span></div>}
 
       {s.empathy.visible && <section className="mf-empathy"><div className="mf-section">
         <Intro section={s.empathy} />
         <div className="mf-empathy-list">{s.empathy.items.map((item, i) => <article key={i}>
-          <span className="mf-line-mark" aria-hidden="true" />
           <h3>{item.title}</h3><p>{item.body}</p>
         </article>)}</div>
       </div></section>}
 
-      {s.founder.visible && <section id="equipo" className="mf-section mf-founder">
-        <div className="mf-founder-visual">
-          <div className="mf-founder-label" aria-hidden="true"><span>ATLETA.</span><span>FISIO.</span></div>
-          {m.clinician.url ? <figure className="mf-founder-portrait">
-            <Image src={m.clinician.url} sizes="(max-width: 700px) calc(100vw - 48px), 430px" alt={m.clinician.alt || "Ales Faus, fisioterapeuta y fundador de FisioFitCross"} loading="lazy" width={600} height={554} />
-            <figcaption><strong>Ales Faus</strong><span>Fisioterapeuta y fundador</span></figcaption>
-          </figure> : m.athlete.url ? <figure className="mf-founder-portrait"><Image src={m.athlete.url} alt={m.athlete.alt || "Ales entrenando en el box"} loading="lazy" width={600} height={600} sizes="(max-width: 700px) calc(100vw - 48px), 430px" /><figcaption><strong>Ales Faus</strong><span>Fisioterapeuta y fundador</span></figcaption></figure> : <div className="mf-founder-principle"><Dumbbell aria-hidden="true" size={64} /><p>La experiencia deportiva.<br />La mirada clínica.</p></div>}
-          {m.clinician.url && m.athlete.url && !(s.hero.visible && heroIsAthlete) && <figure className="mf-founder-secondary">
-            <Image src={m.athlete.url} alt={m.athlete.alt || "Ales entrenando en el box"} width={240} height={240} sizes="120px" loading="lazy" />
-            <figcaption>También lo vivimos desde dentro del box.</figcaption>
-          </figure>}
-        </div>
-        <div className="mf-founder-copy">
+      {s.founder.visible && <section id="equipo" className="mf-section mf-team">
+        {m.team.url && !(s.hero.visible && heroIsTeam) && <figure className="mf-team-group"><Image src={m.team.url} alt={m.team.alt || "El equipo de FisioFitTeam"} width={1672} height={941} sizes="(max-width: 700px) calc(100vw - 48px), 90vw" loading="lazy" /></figure>}
+        <div className="mf-team-copy">
           <Intro section={s.founder} />
-          <div className="mf-founder-note"><span aria-hidden="true">+</span><p>Tu vida dentro del box.<br /><strong>Nuestro punto de partida.</strong></p></div>
-          {m.introduction.url && <MetodoVideo url={m.introduction.url} poster={m.introduction.poster} title={m.introduction.alt || "Ales te cuenta cómo trabajamos"} target="introduction" track={analytics.track} />}
+          {m.introduction.url && <MetodoVideo url={m.introduction.url} poster={m.introduction.poster} title={m.introduction.alt || "Ales te cuenta cómo trabaja nuestro equipo"} target="introduction" track={analytics.track} />}
         </div>
+        {(m.athlete.url || m.clinician.url) && <div className="mf-team-origin">
+          <div className={`mf-team-diptych${!m.athlete.url || !m.clinician.url ? " mf-team-single" : ""}`}>
+            {m.athlete.url && <figure className="mf-athlete-photo"><Image src={m.athlete.url} alt={m.athlete.alt || "Ales entrenando crosstraining"} width={1080} height={1080} sizes="(max-width: 700px) 65vw, 32vw" loading="lazy" /></figure>}
+            {m.clinician.url && <figure className="mf-clinician-photo"><Image src={m.clinician.url} alt={m.clinician.alt || "Ales Faus, fisioterapeuta y fundador de FisioFitTeam"} width={1080} height={999} sizes="(max-width: 700px) 40vw, 20vw" loading="lazy" /></figure>}
+          </div>
+          <p className="mf-origin-caption">Ales Faus · Fisioterapeuta y fundador de FisioFitTeam</p>
+        </div>}
       </section>}
 
       {s.education.visible && <section className="mf-education"><div className="mf-section">
         <Intro section={s.education} />
-        <div className="mf-education-steps">{s.education.items.map((item, i) => {
-          const Icon = educationIcons[Math.min(i, 2)];
-          return <article key={i}><span className="mf-education-symbol"><Icon size={30} strokeWidth={1.5} aria-hidden="true" /></span><h3>{item.title}</h3><p>{item.body}</p></article>;
-        })}</div>
+        <div className="mf-education-steps">{s.education.items.map((item, i) => <article key={i}>
+          <span className="mf-step-index" aria-hidden="true">{String(i + 1).padStart(2,"0")}</span><h3>{item.title}</h3><p>{item.body}</p>
+        </article>)}</div>
       </div></section>}
 
       {s.method.visible && <MetodoJourney section={s.method} />}
@@ -129,7 +110,7 @@ export function MetodoLanding({ content, preview = false }: { content: PublicMet
       </section>}
 
       {s.fit.visible && <section className="mf-section mf-fit">
-        <div className="mf-fit-intro"><Intro section={s.fit} /><div className="mf-fit-emblem" aria-hidden="true"><Dumbbell size={44} strokeWidth={1.5} /><span>TÚ + NOSOTROS</span></div></div>
+        <div className="mf-fit-intro"><Intro section={s.fit} /></div>
         <ul>{s.fit.items.map((item, i) => <li key={i}><Check size={20} strokeWidth={2} aria-hidden="true" /><div>{item.title}{item.body && <p>{item.body}</p>}</div></li>)}</ul>
       </section>}
 
