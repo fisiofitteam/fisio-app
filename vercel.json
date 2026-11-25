@@ -93,6 +93,10 @@
     {
       "path": "/api/cron/public-wod-retention",
       "schedule": "15 3 * * *"
+    },
+    {
+      "path": "/api/cron/metodo-retention",
+      "schedule": "40 3 * * *"
     }
   ]
 }

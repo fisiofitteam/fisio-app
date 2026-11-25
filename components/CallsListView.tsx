@@ -9,6 +9,7 @@ import { SendCaseFlow, type SendCaseTemplate, type SuccessCaseOption } from "@/c
 import { SendDirectButton } from "@/components/SendDirectButton";
 import { SendAppLinkButton } from "@/components/SendAppLinkButton";
 import { ManualSaleButton } from "@/components/ManualSaleButton";
+import { MetodoAttributionControl } from "@/components/metodo/MetodoAttributionControl";
 import { SkalexCallContextBlock } from "@/components/SkalexCallContextBlock";
 import type { SkalexCallContext } from "@/lib/skalex/insights";
 import { LeadAiSummaryBlock } from "@/components/LeadAiSummaryBlock";
@@ -549,6 +550,7 @@ function CallRow({
           </div>
         </div>
       </div>
+      <MetodoAttributionControl leadId={lead.id} />
       {(lead.status === "scheduled" || skalexContext) && <SkalexCallContextBlock leadId={lead.id} initial={skalexContext} autoLoad={lead.status === "scheduled"} />}
       {aiSummary && aiSummary.analysis && <details className="mt-2" onClick={e => e.stopPropagation()}><summary className="text-xs text-neutral-500">Estado del setter</summary><LeadAiSummaryBlock summary={aiSummary} /></details>}
       {callSummary && (
