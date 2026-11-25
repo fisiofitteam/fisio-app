@@ -46,6 +46,18 @@ const STATIC_PREFIXES = ["/_next", "/api/_internal", "/favicon", "/icon-", "/box
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  // Exact public surface for the methodology. Admin endpoints never share this allowlist.
+  if (["/metodo", "/metodo/privacidad", "/metodo/og", "/api/metodo/visit", "/api/metodo/event", "/api/metodo/contact", "/api/cron/metodo-retention"].includes(pathname.replace(/\/$/, ""))) {
+    const page = pathname === "/metodo" || pathname.startsWith("/metodo/");
+    if (page && req.method !== "GET" && req.method !== "HEAD") return new NextResponse("Método no permitido.", { status: 405 });
+    const res = NextResponse.next();
+    res.headers.set("Cache-Control", "private, no-store, max-age=0");
+    res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.headers.set("X-Content-Type-Options", "nosniff");
+    res.headers.set("X-Frame-Options", "DENY");
+    return res;
+  }
+
   // Exact public surface for external WOD users. Staff/setup endpoints stay protected.
   if (pathname === "/adaptador-wod" || pathname === "/adaptador-wod/privacidad" ||
       /^\/api\/public-wod\/(profile|session|adapt|from-image|feedback|contact)\/?$/.test(pathname) ||

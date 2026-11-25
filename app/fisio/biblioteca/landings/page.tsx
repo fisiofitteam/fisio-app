@@ -17,5 +17,5 @@ export default async function LandingsConfigPage() {
     getAgendaGraciasCopy(),
   ]);
 
-  return <LandingConfigEditor initialRenewal={renewal} initialContract={contract} initialAgenda={agenda} initialGracias={gracias} />;
+  return <><a href="/fisio/contenido/metodo?tab=editor" className="card block mb-5"><strong>Metodología FisioFitCross · /metodo</strong><span className="block text-sm text-neutral-600 mt-1">Editar la landing de Instagram, sus historias autorizadas y consultar la atribución comercial.</span></a><LandingConfigEditor initialRenewal={renewal} initialContract={contract} initialAgenda={agenda} initialGracias={gracias} /></>;
 }

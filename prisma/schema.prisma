@@ -426,6 +426,7 @@ model Transaction {
 // ============================================================================
 
 model Lead {
+  metodoContact MetodoContact?
   skalexCallInsight SkalexCallInsight?
   referredByPatientId      String?
   referredByPatient        Patient? @relation("PatientReferrals", fields: [referredByPatientId], references: [id], onDelete: SetNull)
@@ -4371,5 +4372,57 @@ model PublicWodRateLimit {
   count     Int      @default(1)
   expiresAt DateTime
 
+  @@index([expiresAt])
+}
+
+// Public /metodo analytics. Consent-based pseudonymous visitors; no clinical payloads.
+model MetodoVisitor {
+  id String @id
+  tokenHash String @unique
+  createdAt DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  sourceJson String
+  consentVersion String
+  events MetodoEvent[]
+  contacts MetodoContact[]
+}
+model MetodoEvent {
+  id String @id
+  visitorId String
+  visitor MetodoVisitor @relation(fields:[visitorId],references:[id],onDelete:Cascade)
+  createdAt DateTime @default(now())
+  type String
+  target String
+  value Int @default(0)
+  @@index([createdAt,type])
+  @@index([visitorId])
+}
+model MetodoContact {
+  reference String @id
+  visitorId String?
+  visitor MetodoVisitor? @relation(fields:[visitorId],references:[id],onDelete:SetNull)
+  createdAt DateTime @default(now())
+  sourceJson String
+  placement String
+  confirmedAt DateTime?
+  confirmedById String?
+  evidence String?
+  leadId String? @unique
+  lead Lead? @relation(fields:[leadId],references:[id],onDelete:SetNull)
+  @@index([createdAt])
+  @@index([visitorId])
+}
+model MetodoAudit {
+  id String @id
+  createdAt DateTime @default(now())
+  actorId String
+  action String
+  reference String
+  detail String
+}
+model MetodoRateLimit {
+  key String @id
+  count Int @default(1)
+  expiresAt DateTime
   @@index([expiresAt])
 }
