@@ -82,8 +82,8 @@ export function MetodoLanding({ content, preview = false }: { content: PublicMet
         </div>
         {(m.athlete.url || m.clinician.url) && <div className="mf-team-origin">
           <div className={`mf-team-diptych${!m.athlete.url || !m.clinician.url ? " mf-team-single" : ""}`}>
-            {m.athlete.url && <figure className="mf-athlete-photo"><Image src={m.athlete.url} alt={m.athlete.alt || "Ales entrenando crosstraining"} width={1080} height={1080} sizes="(max-width: 700px) 65vw, 32vw" loading="lazy" /></figure>}
-            {m.clinician.url && <figure className="mf-clinician-photo"><Image src={m.clinician.url} alt={m.clinician.alt || "Ales Faus, fisioterapeuta y fundador de FisioFitTeam"} width={1080} height={999} sizes="(max-width: 700px) 40vw, 20vw" loading="lazy" /></figure>}
+            {m.athlete.url && <figure className="mf-athlete-photo"><div className="mf-team-photo"><Image src={m.athlete.url} alt={m.athlete.alt || "Ales entrenando crosstraining"} width={1080} height={1080} sizes="(max-width: 700px) 44vw, (max-width: 1100px) 23vw, 280px" loading="lazy" /></div><figcaption>Atleta</figcaption></figure>}
+            {m.clinician.url && <figure className="mf-clinician-photo"><div className="mf-team-photo"><Image src={m.clinician.url} alt={m.clinician.alt || "Ales Faus, fisioterapeuta y fundador de FisioFitTeam"} width={1080} height={999} sizes="(max-width: 700px) 44vw, (max-width: 1100px) 23vw, 280px" loading="lazy" /></div><figcaption>Fisioterapeuta</figcaption></figure>}
           </div>
           <p className="mf-origin-caption">Ales Faus · Fisioterapeuta y fundador de FisioFitTeam</p>
         </div>}
