@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Barlow_Condensed, Archivo } from "next/font/google";
+import { display, body } from "@/lib/landing-fonts";
 import {
   COLOR_NAME,
   getQuestionsForTipo,
@@ -15,8 +15,6 @@ import { IG_PARAM_NAME, CAMPAIGN_PARAM_NAME, sanitizeInstagram, sanitizeCampaign
 import { COUNTRIES, DEFAULT_COUNTRY, countryFlag, findCountry } from "@/lib/countries";
 import { youtubeEmbedUrl } from "@/lib/youtube";
 
-const display = Barlow_Condensed({ subsets: ["latin"], weight: ["600", "700", "800"], variable: "--font-display" });
-const body = Archivo({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-body" });
 
 /**
  * Landing pública del test del Semáforo. Portada 1:1 del prototipo

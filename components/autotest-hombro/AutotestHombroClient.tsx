@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Barlow_Condensed, Archivo } from "next/font/google";
+import { display, body } from "@/lib/landing-fonts";
 import { AREAS, levelFromScore, type AreaId } from "@/lib/autotest-hombro/areas";
 import { Q, type Question } from "@/lib/autotest-hombro/preguntas";
 import { evaluate, type Respuestas } from "@/lib/autotest-hombro/evaluate";
@@ -9,8 +9,6 @@ import { arquetipoById } from "@/lib/autotest-hombro/arquetipos";
 import { youtubeEmbedUrl } from "@/lib/youtube";
 import { COUNTRIES, DEFAULT_COUNTRY, countryFlag, findCountry } from "@/lib/countries";
 
-const display = Barlow_Condensed({ subsets: ["latin"], weight: ["600", "700", "800"], variable: "--font-display" });
-const body = Archivo({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-body" });
 
 /**
  * Landing pública del Autotest Funcional del Hombro para CrossFit.
