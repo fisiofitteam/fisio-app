@@ -3,12 +3,14 @@
 import { useState } from "react";
 import Image from "next/image";
 import teamLogo from "@/public/brand/fisiofitteam.png";
-import { ArrowDown, ArrowUpRight, Check, MessageCircle } from "lucide-react";
+import { Check, MessageCircle, Play } from "lucide-react";
 import { ZONES, youtubeId, type PublicMetodo, type Section } from "@/lib/metodo/content";
 import { MetodoJourney } from "./MetodoJourney";
 import { MetodoVideo } from "./MetodoVideo";
 import { useMetodoAnalytics } from "./useMetodoAnalytics";
+import { useMetodoMotion } from "./useMetodoMotion";
 import "./metodo.css";
+import "./metodo-experience.css";
 
 const isVideo = (url: string) => !!youtubeId(url) || /\.(mp4|webm|mov)(?:\?|$)/i.test(url);
 
@@ -27,6 +29,7 @@ function Brand() {
 export function MetodoLanding({ content, preview = false }: { content: PublicMetodo; preview?: boolean }) {
   const { sections: s, media: m, buttons } = content;
   const analytics = useMetodoAnalytics(preview);
+  const pageRef = useMetodoMotion();
   const [zone, setZone] = useState("Todos");
   const stories = content.stories.filter(story => zone === "Todos" || story.zone === zone);
   const hasStories = s.results.visible && content.stories.length > 0;
@@ -36,12 +39,13 @@ export function MetodoLanding({ content, preview = false }: { content: PublicMet
   const heroIsTeam = !m.hero.url && !!m.team.url;
   const contact = (placement: string) => preview ? "#contacto" : `/api/metodo/contact?placement=${placement}`;
   const contactButton = (placement: string, quiet = false) => <a className={quiet ? "mf-text-link" : "mf-button"} href={contact(placement)}>
-    {quiet ? buttons.secondary : buttons.contact}{!quiet && <ArrowUpRight size={20} aria-hidden="true" />}
+    {!quiet && <MessageCircle size={18} aria-hidden="true" />}{quiet ? buttons.secondary : buttons.contact}
   </a>;
 
-  return <div className="mf-page">
+  return <div className="mf-page" ref={pageRef}>
     <a className="mf-skip" href="#contenido">Saltar al contenido</a>
     <header className="mf-header">
+      <div className="mf-reading-progress" aria-hidden="true" />
       <a href="/metodo" aria-label="FisioFitTeam, inicio"><Brand /></a>
       <nav aria-label="Navegación de la metodología">
         {s.method.visible && <a href="#metodologia">El método</a>}
@@ -52,53 +56,38 @@ export function MetodoLanding({ content, preview = false }: { content: PublicMet
     </header>
     <main id="contenido">
       {s.hero.visible && <section className={`mf-hero${!hero.url ? " mf-hero-no-media" : ""}${isVideo(hero.url) ? " mf-hero-with-video" : ""}`}>
-        {hero.url && <figure className="mf-hero-visual">
-          {isVideo(hero.url) ? <MetodoVideo url={hero.url} poster={hero.poster} title={hero.alt || "Conoce a FisioFitTeam"} target="hero" track={analytics.track} /> :
-            <Image src={hero.url} sizes="100vw" priority alt={hero.alt || (heroIsTeam ? "El equipo de fisioterapeutas de FisioFitTeam en el box" : "Un atleta entrenando crosstraining")} width={heroIsTeam ? 1672 : 1080} height={heroIsTeam ? 941 : 1080} />}
-        </figure>}
         <div className="mf-hero-content">
           <p className="mf-eyebrow">{s.hero.eyebrow}</p>
           <h1>{s.hero.title}</h1>
+          <p className="mf-hero-description">{s.hero.body}</p>
           <div className="mf-hero-actions">
-            <a className="mf-button mf-button-outline" href={s.method.visible ? "#metodologia" : "#contacto"}>{buttons.discover}<ArrowDown size={18} aria-hidden="true" /></a>
+            <a className="mf-button mf-button-yellow" href={s.method.visible ? "#metodologia" : "#contacto"}>{buttons.discover}</a>
             {contactButton("hero", true)}
           </div>
+          {s.founder.visible && m.introduction.url && <a className="mf-watch-intro" href="#presentacion"><Play size={16} aria-hidden="true" />Conoce al equipo en vídeo</a>}
         </div>
+        {hero.url && <figure className="mf-hero-visual">
+          {isVideo(hero.url) ? <MetodoVideo url={hero.url} poster={hero.poster} title={hero.alt || "Conoce a FisioFitTeam"} target="hero" track={analytics.track} /> :
+            <Image src={hero.url} sizes="(max-width: 760px) 100vw, 53vw" priority alt={hero.alt || (heroIsTeam ? "El equipo de fisioterapeutas de FisioFitTeam en el box" : "Un atleta entrenando crosstraining")} width={heroIsTeam ? 1672 : 1080} height={heroIsTeam ? 941 : 1080} />}
+          {heroIsTeam && <figcaption>FisioFitTeam <span>Fisioterapia y crosstraining</span></figcaption>}
+        </figure>}
       </section>}
-      {s.hero.visible && <div className="mf-hero-intro"><p>{s.hero.body}</p><span>Fisioterapia.<br />Entrenamiento.<br />Acompañamiento.</span></div>}
 
-      {s.empathy.visible && <section className="mf-empathy"><div className="mf-section">
+      {s.founder.visible && m.introduction.url && <section id="presentacion" className="mf-section mf-presentation" data-mf-reveal>
+        <div><p className="mf-eyebrow">CONOCE A FISIOFITTEAM</p><h2>{m.introduction.alt || "Te contamos cómo trabajamos."}</h2></div>
+        <MetodoVideo url={m.introduction.url} poster={m.introduction.poster} title={m.introduction.alt || "Ales te cuenta cómo trabaja nuestro equipo"} target="introduction" track={analytics.track} />
+      </section>}
+
+      {s.empathy.visible && <section className="mf-empathy" data-mf-reveal><div className="mf-section">
         <Intro section={s.empathy} />
-        <div className="mf-empathy-list">{s.empathy.items.map((item, i) => <article key={i}>
-          <h3>{item.title}</h3><p>{item.body}</p>
-        </article>)}</div>
-      </div></section>}
-
-      {s.founder.visible && <section id="equipo" className="mf-section mf-team">
-        {m.team.url && !(s.hero.visible && heroIsTeam) && <figure className="mf-team-group"><Image src={m.team.url} alt={m.team.alt || "El equipo de FisioFitTeam"} width={1672} height={941} sizes="(max-width: 700px) calc(100vw - 48px), 90vw" loading="lazy" /></figure>}
-        <div className="mf-team-copy">
-          <Intro section={s.founder} />
-          {m.introduction.url && <MetodoVideo url={m.introduction.url} poster={m.introduction.poster} title={m.introduction.alt || "Ales te cuenta cómo trabaja nuestro equipo"} target="introduction" track={analytics.track} />}
-        </div>
-        {(m.athlete.url || m.clinician.url) && <div className="mf-team-origin">
-          <div className={`mf-team-diptych${!m.athlete.url || !m.clinician.url ? " mf-team-single" : ""}`}>
-            {m.athlete.url && <figure className="mf-athlete-photo"><div className="mf-team-photo"><Image src={m.athlete.url} alt={m.athlete.alt || "Ales entrenando crosstraining"} width={1080} height={1080} sizes="(max-width: 700px) 44vw, (max-width: 1100px) 23vw, 280px" loading="lazy" /></div><figcaption>Atleta</figcaption></figure>}
-            {m.clinician.url && <figure className="mf-clinician-photo"><div className="mf-team-photo"><Image src={m.clinician.url} alt={m.clinician.alt || "Ales Faus, fisioterapeuta y fundador de FisioFitTeam"} width={1080} height={999} sizes="(max-width: 700px) 44vw, (max-width: 1100px) 23vw, 280px" loading="lazy" /></div><figcaption>Fisioterapeuta</figcaption></figure>}
-          </div>
-          <p className="mf-origin-caption">Ales Faus · Fisioterapeuta y fundador de FisioFitTeam</p>
-        </div>}
-      </section>}
-
-      {s.education.visible && <section className="mf-education"><div className="mf-section">
-        <Intro section={s.education} />
-        <div className="mf-education-steps">{s.education.items.map((item, i) => <article key={i}>
-          <span className="mf-step-index" aria-hidden="true">{String(i + 1).padStart(2,"0")}</span><h3>{item.title}</h3><p>{item.body}</p>
-        </article>)}</div>
+        <div className="mf-empathy-list">{s.empathy.items.map((item, i) => <details key={i}>
+          <summary>{item.title}<span aria-hidden="true">+</span></summary><p>{item.body}</p>
+        </details>)}</div>
       </div></section>}
 
       {s.method.visible && <MetodoJourney section={s.method} />}
 
-      {hasStories && <section id="historias" className="mf-section mf-results">
+      {hasStories && <section id="historias" className="mf-section mf-results" data-mf-reveal>
         <Intro section={s.results} />
         <div className="mf-filters" role="group" aria-label="Filtrar historias por zona corporal">{["Todos", ...ZONES].map(z => <button type="button" key={z} aria-pressed={zone === z} onClick={() => { setZone(z); analytics.track("case_filter", z); }}>{z}</button>)}</div>
         <div className="mf-stories" aria-live="polite">{stories.length ? stories.map(story => <article className="mf-story" key={story.id}>
@@ -109,19 +98,40 @@ export function MetodoLanding({ content, preview = false }: { content: PublicMet
         </article>) : <p>No hay historias publicadas de esta zona por ahora.</p>}</div>
       </section>}
 
-      {s.fit.visible && <section className="mf-section mf-fit">
+      {s.founder.visible && <section id="equipo" className="mf-section mf-team" data-mf-reveal>
+        {m.team.url && !(s.hero.visible && heroIsTeam) && <figure className="mf-team-group"><Image src={m.team.url} alt={m.team.alt || "El equipo de FisioFitTeam"} width={1672} height={941} sizes="(max-width: 700px) calc(100vw - 48px), 90vw" loading="lazy" /></figure>}
+        <div className="mf-team-copy">
+          <Intro section={s.founder} />
+        </div>
+        {(m.athlete.url || m.clinician.url) && <div className="mf-team-origin">
+          <div className={`mf-team-diptych${!m.athlete.url || !m.clinician.url ? " mf-team-single" : ""}`}>
+            {m.athlete.url && <figure className="mf-athlete-photo"><div className="mf-team-photo"><Image src={m.athlete.url} alt={m.athlete.alt || "Ales entrenando crosstraining"} width={1080} height={1080} sizes="(max-width: 700px) 44vw, (max-width: 1100px) 23vw, 280px" loading="lazy" /></div><figcaption>Atleta</figcaption></figure>}
+            {m.clinician.url && <figure className="mf-clinician-photo"><div className="mf-team-photo"><Image src={m.clinician.url} alt={m.clinician.alt || "Ales Faus, fisioterapeuta y fundador de FisioFitTeam"} width={1080} height={999} sizes="(max-width: 700px) 44vw, (max-width: 1100px) 23vw, 280px" loading="lazy" /></div><figcaption>Fisioterapeuta</figcaption></figure>}
+          </div>
+          <p className="mf-origin-caption">Ales Faus · Fisioterapeuta y fundador de FisioFitTeam</p>
+        </div>}
+      </section>}
+
+      {s.education.visible && <section className="mf-education" data-mf-reveal><div className="mf-section">
+        <Intro section={s.education} />
+        <div className="mf-education-steps">{s.education.items.map((item, i) => <article key={i}>
+          <span className="mf-step-index" aria-hidden="true">{String(i + 1).padStart(2,"0")}</span><h3>{item.title}</h3><p>{item.body}</p>
+        </article>)}</div>
+      </div></section>}
+
+      {s.fit.visible && <section className="mf-section mf-fit" data-mf-reveal>
         <div className="mf-fit-intro"><Intro section={s.fit} /></div>
         <ul>{s.fit.items.map((item, i) => <li key={i}><Check size={20} strokeWidth={2} aria-hidden="true" /><div>{item.title}{item.body && <p>{item.body}</p>}</div></li>)}</ul>
       </section>}
 
-      {s.faq.visible && <section className="mf-faq"><div className="mf-section">
+      {s.faq.visible && <section className="mf-faq" data-mf-reveal><div className="mf-section">
         <Intro section={s.faq} />
         <div className="mf-faq-list">{s.faq.items.map((item, i) => <details key={i}><summary>{item.title}<span aria-hidden="true">+</span></summary><p>{item.body}</p></details>)}</div>
       </div></section>}
 
       {s.tools.visible && content.tools.some(t => t.visible && t.url) && <section className="mf-section mf-tools"><Intro section={s.tools} /><div>{content.tools.map((tool, i) => tool.visible && tool.url ? <a key={i} href={tool.url} onClick={() => analytics.track("tool_open", `tool-${i}`)}><h3>{tool.title}</h3><p>{tool.body}</p></a> : null)}</div></section>}
 
-      {s.cta.visible && <section id="contacto" className="mf-final"><div className="mf-section">
+      {s.cta.visible && <section id="contacto" className="mf-final" data-mf-reveal><div className="mf-section">
         <p className="mf-eyebrow">{s.cta.eyebrow}</p><h2>{s.cta.title}</h2>
         <div className="mf-final-bottom"><p>{s.cta.body}</p><div>{contactButton("final")}<small>Una conversación para entender tu situación.</small></div></div>
       </div></section>}

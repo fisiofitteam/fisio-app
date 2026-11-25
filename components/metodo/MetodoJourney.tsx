@@ -1,7 +1,8 @@
 "use client";
 
-import { useId, useState } from "react";
-import type { Section } from "@/lib/metodo/content";
+import { useEffect, useId, useRef, useState } from "react";
+import { DEFAULT_METODO, type Section } from "@/lib/metodo/content";
+import { MetodoAppPreview } from "./MetodoAppPreview";
 import "./metodo-journey.css";
 
 /** Abstract marks describe the process; they do not represent clinical measurements. */
@@ -47,6 +48,29 @@ export function MetodoJourney({ section }: { section: Section }) {
   const [selected, setSelected] = useState(0);
   const componentId = useId();
   const active = Math.min(selected, Math.max(section.items.length - 1, 0));
+  // Only associate known methodology titles with product illustrations. Reordered
+  // or removed CMS items retain their meaning; custom titles get their own copy.
+  const demoPhases = section.items.map(({ title }) => DEFAULT_METODO.sections.method.items.findIndex(item => item.title === title));
+  const panels = useRef<HTMLDivElement>(null);
+  const focusNextPanel = useRef(false);
+
+  useEffect(() => {
+    if (!focusNextPanel.current) return;
+    focusNextPanel.current = false;
+    if (!section.visible || !section.items.length || !panels.current) return;
+    panels.current.focus({ preventScroll: true });
+    panels.current.scrollIntoView({
+      block: "start",
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    });
+  }, [active, section.visible, section.items.length]);
+
+  const movePhase = (direction: -1 | 1) => {
+    const next = active + direction;
+    if (!section.visible || next < 0 || next >= section.items.length) return;
+    focusNextPanel.current = true;
+    setSelected(next);
+  };
 
   if (!section.visible) return null;
 
@@ -72,7 +96,7 @@ export function MetodoJourney({ section }: { section: Section }) {
                   className={`mj-selector${active === index ? " mj-selector-active" : ""}`}
                   aria-pressed={active === index}
                   aria-controls={`${componentId}-phase-${index}`}
-                  onClick={() => setSelected(index)}
+                  onClick={() => { focusNextPanel.current = false; setSelected(index); }}
                 >
                   <span className="mj-selector-number" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
                   <span className="mj-selector-title">{item.title}</span>
@@ -80,26 +104,33 @@ export function MetodoJourney({ section }: { section: Section }) {
               ))}
             </div>
 
-            <div className="mj-panels" aria-live="polite" aria-atomic="true">
+            <div ref={panels} tabIndex={-1} className="mj-panels" aria-labelledby={`${componentId}-phase-title-${active}`} aria-live="polite" aria-atomic="true">
               {section.items.map((item, index) => (
                 <div
                   key={index}
                   id={`${componentId}-phase-${index}`}
-                  className="mj-panel"
+                  className={`mj-panel${demoPhases[index] < 0 ? " mj-panel-copy-only" : ""}`}
                   role="region"
                   aria-labelledby={`${componentId}-phase-title-${index}`}
                   hidden={active !== index}
                 >
-                  <div className="mj-phase-number" aria-hidden="true">{String(index + 1).padStart(2, "0")}</div>
                   <div className="mj-phase-copy">
+                    <div className="mj-phase-symbol"><div className="mj-phase-number" aria-hidden="true">{String(index + 1).padStart(2, "0")}</div><JourneyMark phase={demoPhases[index] < 0 ? index : demoPhases[index]} /></div>
                     <span className="mj-phase-caption">Fase {String(index + 1).padStart(2, "0")}</span>
                     <h3 id={`${componentId}-phase-title-${index}`}>{item.title}</h3>
                     <p>{item.body}</p>
                   </div>
-                  <JourneyMark phase={index} />
+                  {demoPhases[index] >= 0 && <MetodoAppPreview key={demoPhases[index]} phase={demoPhases[index]} />}
                 </div>
               ))}
             </div>
+            <nav className="mj-pagination" aria-label="Navegar entre fases">
+              <p>Fase {active + 1} de {section.items.length}</p>
+              <div>
+                <button type="button" disabled={active === 0} onClick={() => movePhase(-1)}>Anterior</button>
+                <button type="button" className="mj-next-phase" disabled={active === section.items.length - 1} onClick={() => movePhase(1)}>Siguiente fase</button>
+              </div>
+            </nav>
           </div>
         )}
       </div>

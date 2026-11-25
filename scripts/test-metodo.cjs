@@ -22,6 +22,46 @@ const req=(pathname,data,origin='https://app.test',cookie='')=>new NextRequest('
  const custom=structuredClone(legacy);custom.sections.founder={...custom.sections.founder,eyebrow:'Nuestro equipo',title:'Un equipo contigo',body:'Nuestro texto propio de FisioFitCross.'};custom.sections.fit.eyebrow='¿Hablamos?';custom.seo.title='Método propio | FisioFitCross';custom.whatsapp.message='Hola, FisioFitCross, este es mi mensaje.';custom.media.introduction.alt='Nuestro vídeo propio';
  const preserved=content.normalizeMetodo(custom);for(const key of ['eyebrow','title','body'])assert.equal(preserved.sections.founder[key],custom.sections.founder[key]);assert.equal(preserved.sections.fit.eyebrow,custom.sections.fit.eyebrow);assert.equal(preserved.seo.title,custom.seo.title);assert.equal(preserved.whatsapp.message,custom.whatsapp.message);assert.equal(preserved.media.introduction.alt,custom.media.introduction.alt);
  custom.sections.founder.title='';custom.whatsapp.message='';assert.equal(content.normalizeMetodo(custom).sections.founder.title,'');assert.equal(content.normalizeMetodo(custom).whatsapp.message,'','intentional empty copy is retained');
+ // Existing published presentation copy migrates field by field without changing editorial state.
+ const presentation={published:false,sections:{
+  hero:{visible:false,title:'Vuelve a disfrutar del crosstraining sin que el dolor decida cómo entrenas.',body:'Ayudamos a atletas que llevan meses entrenando con dolor a recuperar sus movimientos mediante un proceso de fisioterapia y entrenamiento adaptado a sus necesidades.'},
+  empathy:{title:'Quieres volver a entrenar con confianza.',body:'Y sentir que avanzas, en lugar de negociar con las mismas molestias cada semana.'},
+  method:{visible:false,title:'Un proceso con dirección. Y alguien a tu lado.',body:'Acompañamiento profesional, seguimiento de tu evolución y ajustes individualizados durante el proceso.',items:[
+   {title:'Entendemos tu caso',body:'Valoramos tu situación, historial, síntomas, objetivos y limitaciones deportivas.'},
+   {title:'Adaptamos tu entrenamiento',body:'Buscamos que puedas seguir entrenando dentro de tus posibilidades mientras trabajamos en tu recuperación.'},
+   {title:'Recuperamos capacidades',body:'Diseñamos un proceso individualizado de ejercicio terapéutico, fuerza y exposición progresiva a los movimientos que necesitas recuperar.'},
+   {title:'Volvemos a tus objetivos deportivos',body:'Trabajamos para que recuperes capacidad, confianza y autonomía en tu entrenamiento.'},
+  ]},
+  fit:{title:'No buscas otro parche. Buscas un proceso.'},
+  cta:{title:'¿Y si el siguiente paso no fuera dejar de entrenar, sino aprender a recuperarte mientras entrenas?'},
+ }};
+ const presentationSnapshot=JSON.stringify(presentation),updatedPresentation=content.normalizeMetodo(presentation);
+ assert.equal(JSON.stringify(presentation),presentationSnapshot,'copy migration does not mutate the saved JSON');
+ assert.equal(updatedPresentation.sections.hero.title,'Que el dolor no decida cómo entrenas.');
+ assert.equal(updatedPresentation.sections.method.title,'Así te acompañamos de vuelta al box.');
+ assert.equal(updatedPresentation.sections.cta.title,'Cuéntanos qué te está frenando.');
+ assert.equal(updatedPresentation.sections.fit.title,'Un trabajo en equipo. También contigo.');
+ for(const [id,old] of Object.entries(presentation.sections))for(const key of ['title','body'])if(key in old)assert.equal(updatedPresentation.sections[id][key],content.DEFAULT_METODO.sections[id][key],`${id}.${key} untouched copy migrates`);
+ assert.equal(updatedPresentation.published,false);assert.equal(updatedPresentation.sections.hero.visible,false);assert.equal(updatedPresentation.sections.method.visible,false);
+ assert.equal(JSON.stringify(updatedPresentation.sections.method.items),JSON.stringify(content.DEFAULT_METODO.sections.method.items));
+ assert.equal(JSON.stringify(content.normalizeMetodo(updatedPresentation)),JSON.stringify(updatedPresentation),'copy migration is idempotent');
+ const editedPresentation=structuredClone(presentation);
+ editedPresentation.sections.hero.title='Mi titular propio';editedPresentation.sections.hero.body='';
+ editedPresentation.sections.empathy.title='Un título elegido por el equipo';editedPresentation.sections.empathy.body='Nuestra explicación';editedPresentation.sections.method.title='';editedPresentation.sections.method.body='Mi explicación';
+ editedPresentation.sections.fit.title='';editedPresentation.sections.cta.title='Mi invitación';
+ const oldItems=presentation.sections.method.items;
+ editedPresentation.sections.method.items=[oldItems[3],{...oldItems[0],body:''},{...oldItems[1],title:'Mi fase de adaptación'},oldItems[2]];
+ const keptPresentation=content.normalizeMetodo(editedPresentation);
+ for(const [id,old] of Object.entries(editedPresentation.sections))for(const key of ['title','body'])if(key in old)assert.equal(keptPresentation.sections[id][key],old[key],`${id}.${key} customized or empty copy is retained`);
+ assert.equal(keptPresentation.sections.method.items[0].title,oldItems[3].title,'reordering is retained');
+ assert.equal(keptPresentation.sections.method.items[0].body,content.DEFAULT_METODO.sections.method.items[3].body,'an unchanged item migrates after reordering');
+ assert.equal(keptPresentation.sections.method.items[1].body,'','an intentionally empty item body is not repopulated');
+ assert.equal(keptPresentation.sections.method.items[2].title,'Mi fase de adaptación');
+ assert.equal(keptPresentation.sections.method.items[2].body,oldItems[1].body,'a custom item title keeps its original paired body');
+ assert.equal(keptPresentation.sections.method.items[3].body,content.DEFAULT_METODO.sections.method.items[2].body);
+ assert.equal(content.normalizeMetodo({sections:{method:{items:[]}}}).sections.method.items.length,0,'removed phases are not recreated');
+ assert.equal(content.normalizeMetodo({sections:{hero:{title:presentation.sections.hero.title+' '}}}).sections.hero.title,presentation.sections.hero.title,'near matches do not receive new marketing copy');
+ assert.equal(config.sections.empathy.items.length,5,'all five identification situations remain available');
  // Inherit only a validated public team URL, with an explicit method image taking precedence.
  let teamPublic=await server.getPublicMetodo();assert.equal(teamPublic.media.team.url,agenda.groupImageUrl);assert(!JSON.stringify(teamPublic).includes('PRIVATE'));assert.equal(config.media.team.url,'','public fallback never writes into the method config');
  const agendaUrl=agenda.groupImageUrl;
@@ -72,5 +112,5 @@ const req=(pathname,data,origin='https://app.test',cookie='')=>new NextRequest('
  financeDb.$transaction=async fn=>typeof fn==='function'?fn(financeDb):Promise.all(fn);
  const finance=loader({'@/lib/prisma':{prisma:financeDb},'@/lib/session':{},'@/lib/landing-config':{}})('lib/metodo/metrics.ts');
  const financialReport=await finance.metodoMetrics('2026-11-25','2026-11-25');assert.equal(financialReport.totals.invoicedEur,150);assert.equal(financialReport.totals.documentedCashEur,null,'invoice or missing transaction is not proof of cash');
- console.log('PASS: exact legacy-default migration/custom copy preservation, validated team-photo inheritance/precedence/visibility, public DTO/privacy, source revocation, hidden sections, media/tool allowlists, WhatsApp encoding, consent/origin/auth/scope, no click-to-conversation inference, seeking/replay, Madrid DST, consented flow, deduplication, click references and withdrawal. Synthetic fixtures only.');
+ console.log('PASS: exact legacy/presentation-copy migration, reordered phases and custom/empty copy preservation, validated team-photo inheritance/precedence/visibility, public DTO/privacy, source revocation, hidden sections, media/tool allowlists, WhatsApp encoding, consent/origin/auth/scope, no click-to-conversation inference, seeking/replay, Madrid DST, consented flow, deduplication, click references and withdrawal. Synthetic fixtures only.');
 })().catch(e=>{console.error(e);process.exitCode=1;});
