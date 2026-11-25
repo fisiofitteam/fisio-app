@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 import { hasAnyRole } from "@/lib/auth";
+import { cachedCallContexts } from "@/lib/skalex/call-context";
 import { CallsListView } from "@/components/CallsListView";
 import { FollowUpView } from "@/components/FollowUpView";
 import { parseTargetRoles, templateVisibleFor, type ResourceRole } from "@/lib/resource-roles";
@@ -177,7 +178,7 @@ export default async function LlamadasVentaPage({
 
   // Análisis IA de Skalex (Zapp) por lead, para pintarlo en cada card.
   const { getSkalexAiForLeads } = await import("@/lib/skalex/summaries");
-  const skalexAiByLeadId = await getSkalexAiForLeads(leads.map((l) => l.id));
+  const [skalexAiByLeadId, skalexContextByLeadId] = await Promise.all([getSkalexAiForLeads(leads.map((l) => l.id)), cachedCallContexts(leads)]);
 
   // Resumen COMERCIAL + COACHING (para won/lost) IA de la videollamada.
   // El clínico va en la ficha, no aquí.
@@ -269,6 +270,7 @@ export default async function LlamadasVentaPage({
       successCases={successCases}
       currentUserCloserIntro={currentUserFull?.closerIntro ?? null}
       skalexAiByLeadId={skalexAiByLeadId}
+      skalexContextByLeadId={skalexContextByLeadId}
       callSummaryByLeadId={callSummaryByLeadId}
     />
   );

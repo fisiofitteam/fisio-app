@@ -426,6 +426,7 @@ model Transaction {
 // ============================================================================
 
 model Lead {
+  skalexCallInsight SkalexCallInsight?
   referredByPatientId      String?
   referredByPatient        Patient? @relation("PatientReferrals", fields: [referredByPatientId], references: [id], onDelete: SetNull)
   referralRewardPaidAt     DateTime?
@@ -4303,4 +4304,15 @@ model RecordingFolderEntry {
   @@id([recordingId, professionalId])
   @@index([folderId])
   @@index([professionalId])
+}
+
+// Cached full Skalex conversation context, generated only after a call is booked.
+model SkalexCallInsight {
+  leadId      String   @id
+  lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  identityKey String
+  payload     String?
+  leaseToken  String?
+  leaseUntil  DateTime?
+  updatedAt   DateTime @updatedAt
 }

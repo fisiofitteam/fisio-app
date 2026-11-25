@@ -19,6 +19,7 @@ import {
   findByIgUserId,
   findByPhone,
   findStartedOnDate,
+  findActiveBetween,
   type SkalexConversationDto,
 } from "./client";
 
@@ -56,7 +57,7 @@ async function upsertConversation(
   const data = {
     platform: dto.platform,
     customerName: dto.customerName ?? null,
-    customerPhone: dto.customerPhone ?? null,
+    customerPhone: normPhone(dto.customerPhone || dto.customerContactPhone),
     igUsername: normIg(dto.igUsername),
     igUserId: dto.igUserId ?? null,
     aiPhase: dto.ai?.phase ?? null,
@@ -66,8 +67,8 @@ async function upsertConversation(
     aiUpdatedAt: dto.ai?.updatedAt ? new Date(dto.ai.updatedAt) : null,
     externalCreatedAt: new Date(dto.createdAt),
     lastMessageAt: new Date(dto.lastMessageAt),
-    leadId: match.leadId ?? null,
-    patientId: match.patientId ?? null,
+    ...(match.leadId ? { leadId: match.leadId } : {}),
+    ...(match.patientId ? { patientId: match.patientId } : {}),
     syncedAt: now,
   };
 
@@ -281,7 +282,7 @@ export async function runForwardSync(
       for (const dto of dtos) {
         // Intentamos enlazar con un Lead/Patient existente por teléfono
         // (más fiable) o igUsername.
-        const phoneKey = normPhone(dto.customerPhone);
+        const phoneKey = normPhone(dto.customerPhone || dto.customerContactPhone);
         const igKey = normIg(dto.igUsername);
         const leadId = (phoneKey && leadsByPhone.get(phoneKey)) ??
                        (igKey && leadsByIgUsername.get(igKey)) ??
@@ -310,5 +311,24 @@ export async function runForwardSync(
     }
   }
 
+  return stats;
+}
+
+/** Keep funnel state fresh without triggering full AI summaries for unbooked leads. */
+export async function runActivitySync() {
+  const now = new Date();
+  const previous = await prisma.skalexSyncState.findUnique({ where: { id: "singleton" } });
+  const savedCursor = previous?.cursor ? Date.parse(previous.cursor) : NaN;
+  const from = new Date((Number.isFinite(savedCursor) && savedCursor < now.getTime() ? savedCursor : now.getTime() - 86400000) - 5 * 60000);
+  const stats = { processed: 0, created: 0, updated: 0, errors: 0 };
+  await prisma.skalexSyncState.upsert({ where: { id: "singleton" }, create: { id: "singleton", lastRunAt: now }, update: { lastRunAt: now } });
+  try {
+    const dtos = await findActiveBetween(from.toISOString(), now.toISOString());
+    for (const dto of dtos) { stats[await upsertConversation(dto, {})]++; stats.processed++; }
+    await prisma.skalexSyncState.update({ where: { id: "singleton" }, data: { cursor: now.toISOString(), lastSuccessAt: new Date(), lastError: null, lastProcessed: stats.processed, lastCreated: stats.created, lastUpdated: stats.updated } });
+  } catch {
+    stats.errors++;
+    await prisma.skalexSyncState.update({ where: { id: "singleton" }, data: { lastError: "No se pudo actualizar la actividad de Skalex. Se reintentará sin avanzar el cursor." } });
+  }
   return stats;
 }
