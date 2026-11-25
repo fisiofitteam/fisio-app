@@ -34,16 +34,20 @@ export type SkalexConversationDto = {
   platform: string;
   customerName?: string | null;
   customerPhone?: string | null;
+  customerContactPhone?: string | null;
+  customerEmail?: string | null;
   igUsername?: string | null;
   igUserId?: string | null;
   labels?: SkalexLabelDto[];
   ai?: SkalexAiDto | null;
+  aiInsights?: unknown;
   createdAt: string;
   lastMessageAt: string;
 };
 
 export type SkalexListResponse = {
   conversations: SkalexConversationDto[];
+  nextCursor?: string | null;
   requestId?: string;
 };
 
@@ -85,6 +89,8 @@ async function skalexFetch<T>(path: string, query: Record<string, string>): Prom
 
   for (let attempt = 0; attempt < 2; attempt++) {
     const res = await fetch(url, {
+      signal: AbortSignal.timeout(35000),
+      cache: "no-store",
       headers: {
         Authorization: `Bearer ${creds.apiKey}`,
         Accept: "application/json",
@@ -166,6 +172,23 @@ export async function findStartedOnDate(
   date: string,
   tzOffset: string = "+02:00",
 ): Promise<SkalexConversationDto[]> {
-  const data = await skalexFetch<SkalexListResponse>("/conversations/started", { date, tzOffset });
-  return data.conversations ?? [];
+  return paginatedConversations("/conversations/started", { date, tzOffset });
+}
+
+async function paginatedConversations(path: string, query: Record<string, string>) {
+  const conversations = new Map<string, SkalexConversationDto>();
+  const seen = new Set<string>(); let cursor: string | null | undefined;
+  do {
+    const data = await skalexFetch<SkalexListResponse>(path, { ...query, limit: "500", ...(cursor ? { cursor } : {}) });
+    for (const dto of data.conversations ?? []) conversations.set(dto.conversationId, dto);
+    cursor = data.nextCursor;
+    if (cursor && seen.has(cursor)) throw new Error("Skalex devolvió un cursor repetido.");
+    if (cursor) seen.add(cursor);
+  } while (cursor);
+  return [...conversations.values()];
+}
+
+/** Bulk activity never generates an aiInsights summary. */
+export function findActiveBetween(from: string, to: string) {
+  return paginatedConversations("/conversations/active", { from, to });
 }

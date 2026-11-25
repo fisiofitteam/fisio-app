@@ -2,7 +2,7 @@
  * GET/POST /api/cron/skalex-sync
  *
  * Sincroniza las conversaciones de Skalex (setter IA de Zapp) con nuestra BD
- * vía reverse-lookup por Lead/Patient con instagram o phone.
+ * mediante listados de actividad; consulta el contexto completo solo para llamadas agendadas.
  *
  * Protección: Vercel Cron envía Authorization: Bearer $CRON_SECRET.
  * Modo manual (CEO): se puede llamar con ?manual=1 y sesión.
@@ -10,12 +10,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getActiveProfessional } from "@/lib/session";
 import { skalexCredentials } from "@/lib/skalex/client";
-import { runFullSync, runForwardSync } from "@/lib/skalex/sync";
+import { runActivitySync, runForwardSync } from "@/lib/skalex/sync";
+import { syncScheduledCallContexts } from "@/lib/skalex/call-context";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-// El sync tarda ~250ms por identidad + latencia Skalex. Con ~500 identidades
-// serían 2-4 min. Vercel cron plan Pro admite hasta 300s (5 min).
+// Hasta cuatro primeras consultas de contexto, dos a la vez, además del listado de actividad.
 export const maxDuration = 300;
 
 async function isAuthorized(req: NextRequest): Promise<boolean> {
@@ -48,17 +48,23 @@ async function handler(req: NextRequest) {
   try {
     // 1) Forward sync: baja TODO lo que ha entrado los últimos 3 días
     //    (incluidos leads que aún no existen en nuestra BD). Esto pobla el
-    //    embudo del setter antes que el reverse-lookup por identidad.
-    // 2) Reverse sync: recorre nuestros Lead/Patient y actualiza sus
-    //    conversaciones (más granular; captura cambios en leads viejos).
+    //    embudo del setter sin generar resúmenes antes de la reserva.
+    // 2) Actividad: captura conversaciones antiguas que se han retomado.
     const forwardStats = await runForwardSync(3);
-    const reverseStats = await runFullSync();
+    // Detail lookups now generate a permanent first summary. Keep general sync
+    // on bulk endpoints and only request aiInsights for already-booked calls.
+    const activityStats = await runActivitySync();
+    const insightsStats = await syncScheduledCallContexts();
     const ms = Date.now() - t0;
-    console.log("[skalex-sync] OK", { forward: forwardStats, reverse: reverseStats, ms });
+    console.log("[skalex-sync] OK", { forward: forwardStats, activity: activityStats, insights: insightsStats, ms });
     return NextResponse.json({
       ok: true,
       forward: forwardStats,
-      reverse: reverseStats,
+      activity: activityStats,
+      insights: insightsStats,
+      processed: activityStats.processed,
+      created: forwardStats.created + activityStats.created,
+      updated: forwardStats.updated + activityStats.updated,
       durationMs: ms,
     });
   } catch (err: any) {
