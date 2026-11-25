@@ -1,5 +1,5 @@
 import type { TranscriptStatus } from "./browser-transcription";
-export type RecordingDraft = { blob: Blob; durationSeconds: number; title: string; notes: string; updatedAt: number; patientId?: string; patientName?: string; transcript?: string; transcriptionStatus?: TranscriptStatus; transcriptionWarning?: string; folderId?: string; uploadedId?: string };
+export type RecordingDraft = { blob: Blob; durationSeconds: number; reason?: string; title: string; notes: string; updatedAt: number; patientId?: string; patientName?: string; transcript?: string; transcriptionStatus?: TranscriptStatus; transcriptionWarning?: string; folderId?: string; uploadedId?: string };
 function openDrafts(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open("fisiofit-recording-drafts", 1);
