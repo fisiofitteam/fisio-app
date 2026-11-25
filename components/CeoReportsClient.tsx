@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 type ReportRow = {
   id: string;
@@ -18,6 +18,8 @@ type Narrative = {
   accionesRecomendadas: string[];
   alertas: string[];
   tendencias: string[];
+  seguimiento?: string[];
+  decisionesFounder?: string[];
 };
 
 type ReportDetail = {
@@ -32,6 +34,7 @@ type ReportDetail = {
 };
 
 const PERIOD_LABELS: Record<string, string> = {
+  grok_daily: "CEO IA · Diario",
   week: "Semanal",
   month: "Mensual",
   quarter: "Trimestral",
@@ -39,6 +42,7 @@ const PERIOD_LABELS: Record<string, string> = {
 };
 
 const PERIOD_COLORS: Record<string, string> = {
+  grok_daily: "bg-amber-100 text-amber-900",
   week: "bg-blue-100 text-blue-800",
   month: "bg-emerald-100 text-emerald-800",
   quarter: "bg-purple-100 text-purple-800",
@@ -55,6 +59,11 @@ export function CeoReportsClient({ initial }: { initial: ReportRow[] }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ReportDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("report");
+    if (id && /^grok-ceo-\d{4}-\d{2}-\d{2}$/.test(id)) void openReport(id);
+  }, []);
 
   async function generate() {
     setError(null);
@@ -97,7 +106,8 @@ export function CeoReportsClient({ initial }: { initial: ReportRow[] }) {
     try {
       const res = await fetch(`/api/ai/ceo-report/${id}`);
       const j = await res.json();
-      setDetail(j);
+      if (res.ok) setDetail(j);
+      else setError("No se pudo abrir el informe.");
     } finally {
       setLoadingDetail(false);
     }
@@ -268,6 +278,8 @@ function ReportDetailView({ detail, onClose }: { detail: ReportDetail; onClose: 
         <Section title="🎯 Acciones recomendadas" items={n.accionesRecomendadas} tone="amber" empty="Sin acciones sugeridas." />
         <Section title="📈 Tendencias" items={n.tendencias} tone="blue" empty="Aún no hay histórico suficiente para detectar tendencias." />
       </div>
+      {n.seguimiento && <div className="mt-4"><Section title="Seguimiento de decisiones" items={n.seguimiento} tone="blue" empty="Sin histórico suficiente." /></div>}
+      {n.decisionesFounder && <div className="mt-4"><Section title="Decisiones del fundador" items={n.decisionesFounder} tone="amber" empty="No necesitas tomar decisiones hoy." /></div>}
       {n.alertas.length > 0 && (
         <div className="mt-4">
           <Section title="🚨 Alertas críticas" items={n.alertas} tone="red-bold" empty="" />

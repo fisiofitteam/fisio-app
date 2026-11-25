@@ -9,6 +9,7 @@ export type NotificationTypeDef = {
 };
 
 export const NOTIFICATION_TYPES: NotificationTypeDef[] = [
+  { value: "grok_ceo_daily", label: "Informe diario CEO IA", description: "Diagnóstico y prioridades del día.", roles: ["ceo"] },
   { value: "lead_new", label: "Lead nuevo sin contactar", description: "Cuando entra un lead por la agenda o la landing.", roles: ["setter"] },
   { value: "lead_assigned", label: "Lead asignado para llamar", description: "Cuando un setter te asigna un lead para contactar.", roles: ["closer", "ceo"] },
   { value: "lead_rescheduled", label: "Lead re-agendado", description: "Cuando un lead cambia su cita desde el enlace público de re-agenda.", roles: ["setter", "closer", "ceo"] },

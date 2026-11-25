@@ -120,6 +120,14 @@ export function middleware(req: NextRequest) {
     return res;
   }
 
+  // Exact machine-to-machine routes; authentication is mandatory in each handler.
+  if ((pathname === "/api/integrations/grok-ceo/metrics" && req.method === "GET") ||
+      (pathname === "/api/integrations/grok-ceo/report" && req.method === "POST")) {
+    const res = NextResponse.next();
+    res.headers.set("Cache-Control", "private, no-store");
+    return res;
+  }
+
   // Estáticos: pasan
   if (STATIC_PREFIXES.some((p) => pathname.startsWith(p))) {
     return NextResponse.next();
