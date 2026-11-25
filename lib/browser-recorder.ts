@@ -1,7 +1,8 @@
 import { MAX_RECORDING_BYTES, MAX_RECORDING_SECONDS } from "./recording-rules";
+import { mixRecordingAudio, type RecordingAudioState } from "./recording-audio";
 export type FinishedRecording = { blob: Blob; durationSeconds: number; reason?: string };
-export type BrowserRecording = { cameraStream?: MediaStream; stop(): void; pause(): void; resume(): void };
-type Options = { camera: boolean; microphone: boolean; systemAudio: boolean; onFinish(result: FinishedRecording): void; onError(message: string): void; onTick(seconds: number): void };
+export type BrowserRecording = { cameraStream?: MediaStream; audioTrack?: MediaStreamTrack; stop(): void; pause(): void; resume(): void };
+type Options = { camera: boolean; microphone: boolean; systemAudio: boolean; onFinish(result: FinishedRecording): void; onError(message: string): void; onTick(seconds: number): void; onAudioState?(state: RecordingAudioState): void };
 export function supportedRecordingMime(isSupported: (mime: string) => boolean) {
   return ["video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4"].find(isSupported);
 }
@@ -9,17 +10,18 @@ export async function startBrowserRecording(options: Options): Promise<BrowserRe
   if (!navigator.mediaDevices?.getDisplayMedia || typeof MediaRecorder === "undefined") throw new Error("Abre el grabador en Chrome o Edge desde un ordenador.");
   const streams: MediaStream[] = [];
   const videos: HTMLVideoElement[] = [];
-  let context: AudioContext | undefined, worker: Worker | undefined, workerUrl: string | undefined;
+  let audio: Awaited<ReturnType<typeof mixRecordingAudio>> | undefined, worker: Worker | undefined, workerUrl: string | undefined;
   let timer: ReturnType<typeof setInterval> | undefined, stopTimer: ReturnType<typeof setTimeout> | undefined;
   let stopped = false, recorder: MediaRecorder | undefined;
   let chunks: Blob[] = [], bytes = 0, elapsedMs = 0, resumedAt = performance.now(), paused = false, reason: string | undefined;
+  let audioInterrupted = false;
   function clean() {
     if (timer) clearInterval(timer);
     if (stopTimer) clearTimeout(stopTimer);
     worker?.terminate(); if (workerUrl) URL.revokeObjectURL(workerUrl);
     streams.forEach(s => s.getTracks().forEach(t => { t.onended = null; t.stop(); }));
     videos.forEach(v => { v.pause(); v.srcObject = null; v.remove(); });
-    void context?.close().catch(() => {});
+    audio?.close();
   }
   function seconds() { return (elapsedMs + (paused || stopped ? 0 : performance.now() - resumedAt)) / 1000; }
   function stop() {
@@ -34,10 +36,21 @@ export async function startBrowserRecording(options: Options): Promise<BrowserRe
   }
   try {
     // Called before any unrelated await so the browser retains the user's gesture.
-    const screen = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 24, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: options.systemAudio });
+    const displayOptions = {
+      video: { frameRate: 24, width: { ideal: 1920 }, height: { ideal: 1080 }, ...(options.systemAudio ? { displaySurface: "browser" } : {}) },
+      audio: options.systemAudio ? { suppressLocalAudioPlayback: false } : false,
+      systemAudio: options.systemAudio ? "include" : "exclude",
+      windowAudio: options.systemAudio ? "system" : "exclude",
+      // Keep the chosen call as the audio source when navigating around the app.
+      surfaceSwitching: options.systemAudio ? "exclude" : "include",
+    } as DisplayMediaStreamOptions;
+    const screen = await navigator.mediaDevices.getDisplayMedia(displayOptions);
     streams.push(screen);
     const screenTrack = screen.getVideoTracks()[0];
     if (!screenTrack) throw new Error("No se ha seleccionado ninguna pantalla.");
+    if (options.systemAudio && !screen.getAudioTracks().some(track => track.readyState === "live")) {
+      throw new Error("No se ha recibido el audio del cliente. Vuelve a empezar, elige la pestaña de la videollamada y activa «Compartir audio». Si no aparece esa opción, abre la llamada en una pestaña de Chrome o Edge actualizado. Para grabar solo tu voz, desactiva «Incluir audio del cliente / ordenador».");
+    }
     let devices: MediaStream | undefined;
     if (options.camera || options.microphone) {
       devices = await navigator.mediaDevices.getUserMedia({
@@ -45,6 +58,7 @@ export async function startBrowserRecording(options: Options): Promise<BrowserRe
         audio: options.microphone ? { echoCancellation: true, noiseSuppression: true } : false,
       });
       streams.push(devices);
+      if (options.microphone && !devices.getAudioTracks().some(track => track.readyState === "live")) throw new Error("No se ha recibido el micrófono. Revisa el permiso antes de grabar.");
     }
     if (screenTrack.readyState !== "live") throw new Error("Se ha detenido el uso compartido de pantalla.");
     let videoTrack = screenTrack;
@@ -77,15 +91,17 @@ export async function startBrowserRecording(options: Options): Promise<BrowserRe
       const composite = canvas.captureStream(24); streams.push(composite); videoTrack = composite.getVideoTracks()[0];
     }
     const tracks: MediaStreamTrack[] = [videoTrack];
-    const audioTracks = [...screen.getAudioTracks(), ...(devices?.getAudioTracks() || [])];
-    if (audioTracks.length) {
-      context = new AudioContext(); await context.resume();
-      const dest = context.createMediaStreamDestination();
-      audioTracks.forEach(t => context!.createMediaStreamSource(new MediaStream([t])).connect(dest));
-      streams.push(dest.stream); tracks.push(...dest.stream.getAudioTracks());
+    const microphoneTracks = options.microphone ? devices?.getAudioTracks() || [] : [];
+    const sharedTracks = options.systemAudio ? screen.getAudioTracks() : [];
+    if (microphoneTracks.length || sharedTracks.length) {
+      audio = await mixRecordingAudio(microphoneTracks, sharedTracks);
+      tracks.push(...audio.stream.getAudioTracks());
+      options.onAudioState?.(audio.snapshot());
     }
     const mime = supportedRecordingMime(m => MediaRecorder.isTypeSupported(m));
     if (!mime) throw new Error("Este navegador no ofrece un formato de grabación compatible.");
+    if (screenTrack.readyState !== "live") throw new Error("Se ha detenido el uso compartido de pantalla.");
+    if (options.systemAudio && !sharedTracks.some(track => track.readyState === "live")) throw new Error("El audio compartido se ha desconectado. Vuelve a seleccionar la llamada con «Compartir audio».");
     recorder = new MediaRecorder(new MediaStream(tracks), { mimeType: mime, videoBitsPerSecond: 2000000, audioBitsPerSecond: 128000 });
     recorder.ondataavailable = event => {
       if (event.data.size) { chunks.push(event.data); bytes += event.data.size; }
@@ -98,16 +114,21 @@ export async function startBrowserRecording(options: Options): Promise<BrowserRe
       const blob = new Blob(chunks, { type: recorder!.mimeType.split(";")[0] });
       chunks = []; clean();
       if (!blob.size) options.onError("La grabación está vacía. Vuelve a intentarlo.");
-      else options.onFinish({ blob, durationSeconds, reason });
+      else options.onFinish({ blob, durationSeconds, reason: [reason, audioInterrupted ? "Se perdió una fuente de audio durante la grabación. Revisa el sonido y la transcripción antes de guardar." : ""].filter(Boolean).join(" ") || undefined });
     };
     screenTrack.onended = () => { reason = "Has dejado de compartir la pantalla."; stop(); };
     recorder.start(1000); resumedAt = performance.now();
     timer = setInterval(() => {
       const time = seconds(); options.onTick(Math.floor(time));
+      if (audio) {
+        const state = audio.snapshot();
+        if (state.microphone.state === "ended" || state.shared.state === "ended") audioInterrupted = true;
+        options.onAudioState?.(state);
+      }
       if (time >= MAX_RECORDING_SECONDS) { reason = "Se ha alcanzado el límite de 30 minutos."; stop(); }
     }, 500);
     return {
-      cameraStream, stop,
+      cameraStream, audioTrack: audio?.stream.getAudioTracks()[0], stop,
       pause() { if (!stopped && !paused && recorder?.state === "recording") { elapsedMs += performance.now() - resumedAt; paused = true; recorder.pause(); } },
       resume() { if (!stopped && paused && recorder?.state === "paused") { resumedAt = performance.now(); paused = false; recorder.resume(); } },
     };

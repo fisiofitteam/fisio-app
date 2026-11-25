@@ -4,7 +4,9 @@ import { useRouter } from "next/navigation";
 import { upload } from "@vercel/blob/client";
 import { startBrowserRecording, type BrowserRecording, type FinishedRecording } from "@/lib/browser-recorder";
 import { readLatestRecordingDraft, writeRecordingDraft, type RecordingDraft } from "@/lib/recording-draft";
-import { startBrowserTranscription, speechRecognitionConstructor, type BrowserTranscription, type TranscriptSnapshot, type TranscriptStatus } from "@/lib/browser-transcription";
+import { startBrowserTranscription, speechRecognitionConstructor, supportsAudioTrackTranscription, type BrowserTranscription, type TranscriptSnapshot, type TranscriptStatus } from "@/lib/browser-transcription";
+import type { RecordingAudioState } from "@/lib/recording-audio";
+import { RecordingAudioMeter } from "./RecordingAudioMeter";
 import { MAX_RECORDING_BYTES } from "@/lib/recording-rules";
 import { RecordingCameraPreview } from "./RecordingCameraPreview";
 import type { RecordingFolderOption } from "./RecordingList";
@@ -12,7 +14,7 @@ import type { RecordingFolderOption } from "./RecordingList";
 type Phase = "idle" | "preparing" | "recording" | "paused" | "stopping" | "preview" | "uploading";
 type Target = { patientId?: string; patientName?: string; defaultFolderId?: string };
 type Start = Target & { camera: boolean; microphone: boolean; systemAudio: boolean; transcribe: boolean };
-type Workspace = { busy: boolean; recovering: boolean; supported: boolean; speechSupported: boolean; message: string; start(options: Start): void; show(): void };
+type Workspace = { busy: boolean; recovering: boolean; supported: boolean; speechSupported: boolean; mixedSpeechSupported: boolean; message: string; start(options: Start): void; show(): void };
 const Context = createContext<Workspace | null>(null);
 export function useRecordingWorkspace() { const value = useContext(Context); if (!value) throw new Error("Recording workspace missing"); return value; }
 const clock = (n: number) => Math.floor(n / 60).toString().padStart(2, "0") + ":" + (n % 60).toString().padStart(2, "0");
@@ -20,6 +22,8 @@ export function RecordingWorkspace({ children, professionalId }: { children: Rea
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("idle"), [recovering, setRecovering] = useState(true);
   const [supported, setSupported] = useState(true), [speechSupported, setSpeechSupported] = useState(false);
+  const [mixedSpeechSupported, setMixedSpeechSupported] = useState(false), [audioState, setAudioState] = useState<RecordingAudioState>();
+  const audioLost = useRef(false);
   const [target, setTarget] = useState<Target>({}), [expanded, setExpanded] = useState(false);
   const [title, setTitle] = useState(""), [notes, setNotes] = useState(""), [folderId, setFolderId] = useState("");
   const [folders, setFolders] = useState<RecordingFolderOption[]>([]);
@@ -53,6 +57,7 @@ export function RecordingWorkspace({ children, professionalId }: { children: Rea
     mounted.current = true; let cancelled = false;
     setSupported(!!navigator.mediaDevices?.getDisplayMedia && typeof MediaRecorder !== "undefined");
     setSpeechSupported(!!speechRecognitionConstructor());
+    setMixedSpeechSupported(!!speechRecognitionConstructor() && supportsAudioTrackTranscription());
     readLatestRecordingDraft(professionalId).then(result => {
       if (cancelled || !result) return;
       const d = result.draft; draftKey.current = result.key; finished.current = d;
@@ -60,7 +65,7 @@ export function RecordingWorkspace({ children, professionalId }: { children: Rea
       setTitle(d.title); setNotes(d.notes); setFolderId(d.folderId || "");
       setTarget({ patientId: d.patientId, patientName: d.patientName });
       setTranscript(d.transcript || ""); setTranscriptionStatus(d.transcriptionStatus || "off"); setSpeechWarning(d.transcriptionWarning || "");
-      setPhase("preview"); setExpanded(true); setMessage("Hemos recuperado una grabación pendiente de guardar.");
+      setPhase("preview"); setExpanded(true); setMessage("Hemos recuperado una grabación pendiente de guardar." + (d.reason ? " " + d.reason : ""));
     }).catch(() => {}).finally(() => { if (!cancelled) { setRecovering(false); locked.current = !!finished.current; } });
     return () => { cancelled = true; mounted.current = false; controller.current?.stop(); void speech.current?.finish(); };
   }, [professionalId]);
@@ -109,11 +114,19 @@ export function RecordingWorkspace({ children, professionalId }: { children: Rea
     setTarget(nextTarget); setTitle(nextTitle); setNotes(""); setFolderId(options.defaultFolderId || "");
     setTranscript(""); setInterim(""); setSpeechWarning(""); setTranscriptionStatus(options.transcribe ? "complete" : "off");
     setElapsed(0); setMessage(""); setCameraStream(undefined); setPhase("preparing"); setExpanded(false);
+    setAudioState(undefined); audioLost.current = false;
     try {
       // Invoked directly from the launcher's click, before any unrelated await.
       controller.current = await startBrowserRecording({
         camera: options.camera, microphone: options.microphone, systemAudio: options.systemAudio,
         onTick: seconds => { if (mounted.current) setElapsed(seconds); },
+        onAudioState: state => {
+          if (mounted.current) setAudioState(state);
+          if (!audioLost.current && (state.shared.state === "ended" || state.microphone.state === "ended")) {
+            audioLost.current = true;
+            speech.current?.markIncomplete("Se perdió una fuente de audio. La transcripción puede estar incompleta; revisa el vídeo antes de guardarla.");
+          }
+        },
         onError: error => { void speech.current?.finish(); speech.current = undefined; locked.current = false;
           if (mounted.current) { setCameraStream(undefined); setMessage(error); setPhase("idle"); } },
         onFinish: recording => {
@@ -128,7 +141,14 @@ export function RecordingWorkspace({ children, professionalId }: { children: Rea
       });
       if (!mounted.current) { controller.current.stop(); return; }
       setCameraStream(controller.current.cameraStream); setPhase("recording");
-      if (options.transcribe) speech.current = startBrowserTranscription(speechChanged);
+      if (options.transcribe) {
+        if (options.systemAudio && !controller.current.audioTrack) {
+          speechChanged({ text: "", interim: "", status: "unavailable", listening: false, warning: "No hay una fuente de audio compartido para transcribir." });
+        } else {
+          speech.current = startBrowserTranscription(speechChanged, speechRecognitionConstructor(), options.systemAudio
+            ? { audioTrack: controller.current.audioTrack!, supported: supportsAudioTrackTranscription() } : undefined);
+        }
+      }
     } catch (e) {
       locked.current = false; setPhase("idle");
       setMessage(e instanceof Error ? e.message : "No se pudo iniciar la grabación.");
@@ -168,7 +188,7 @@ export function RecordingWorkspace({ children, professionalId }: { children: Rea
     finished.current = null; await writeDraft().catch(() => {}); serverUploadId.current = undefined; setUploadedId(undefined);
     setDraft(null); setPhase("idle"); locked.current = false; setMessage(""); setExpanded(false);
   }
-  return <Context.Provider value={{ busy, recovering, supported, speechSupported, message, start, show: () => setExpanded(true) }}>
+  return <Context.Provider value={{ busy, recovering, supported, speechSupported, mixedSpeechSupported, message, start, show: () => setExpanded(true) }}>
     {children}
     {phase !== "idle" && <aside aria-label="Grabación en curso" className={"fixed z-[60] left-3 bottom-3 sm:left-6 sm:bottom-6 rounded-2xl border border-neutral-200 bg-white text-neutral-900 shadow-2xl print:hidden " + (expanded ? "w-[calc(100vw-1.5rem)] sm:w-[34rem] max-h-[80dvh] overflow-y-auto p-4 space-y-4" : "max-w-[calc(100vw-1.5rem)] p-3")}>
       <div className="flex flex-wrap items-center gap-3">
@@ -179,20 +199,21 @@ export function RecordingWorkspace({ children, professionalId }: { children: Rea
         }}>{phase === "paused" ? "Reanudar" : "Pausar"}</button><button type="button" className="btn btn-accent" onClick={() => { setPhase("stopping"); void speech.current?.finish(); controller.current?.stop(); }}>Terminar</button></>}
         <button type="button" className="text-sm underline ml-auto" onClick={() => setExpanded(v => !v)}>{expanded ? "Minimizar" : phase === "preview" ? "Revisar y guardar" : "Detalles"}</button>
       </div>
+      {recording && audioState && <RecordingAudioMeter state={audioState} paused={phase === "paused"} />}
       {recording && cameraStream && <RecordingCameraPreview stream={cameraStream} paused={phase === "paused"} />}
       {expanded && <>
         <p className="text-sm text-neutral-500">{target.patientId ? "Paciente: " + (target.patientName || "seleccionado al iniciar") : "Grabación general · sin paciente"}</p>
         {recording && <p className="text-sm">Puedes seguir navegando por la app. Estos controles permanecen disponibles.</p>}
         {(recording || phase === "stopping") && transcriptionStatus !== "off" && <section className="rounded-lg bg-neutral-50 p-3 space-y-2">
           <h3 className="text-sm font-semibold">Transcripción {listening ? "en directo" : phase === "paused" ? "en pausa" : ""}</h3>
-          <p className="text-sm max-h-36 overflow-y-auto whitespace-pre-wrap">{transcript || (!interim ? "El texto aparecerá cuando hables…" : "")} <span className="text-neutral-400">{interim}</span></p>
+          <p className="text-sm max-h-36 overflow-y-auto whitespace-pre-wrap">{transcript || (!interim ? "El texto aparecerá cuando se detecte voz…" : "")} <span className="text-neutral-400">{interim}</span></p>
         </section>}
         {draft && <>
           {preview && <video controls playsInline preload="metadata" src={preview} className="w-full max-h-60 bg-neutral-950 rounded-xl" />}
           <label className="block text-sm">Título<input value={title} maxLength={160} disabled={phase === "uploading" || !!uploadedId} onChange={e => setTitle(e.target.value)} className="mt-1 w-full border rounded-lg p-2" /></label>
           <label className="block text-sm">Carpeta<select value={folderId} disabled={phase === "uploading" || !!uploadedId} onChange={e => setFolderId(e.target.value)} className="mt-1 w-full border rounded-lg bg-white p-2"><option value="">Sin carpeta</option>{folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
           <label className="block text-sm">Notas internas<textarea value={notes} maxLength={5000} disabled={phase === "uploading" || !!uploadedId} onChange={e => setNotes(e.target.value)} className="mt-1 w-full border rounded-lg p-2" /></label>
-          {transcriptionStatus !== "off" && <label className="block text-sm">Transcripción del micrófono<textarea rows={5} value={transcript} maxLength={150000} disabled={phase === "uploading" || !!uploadedId} onChange={e => { setTranscript(e.target.value); setTranscriptionStatus("edited"); }} className="mt-1 w-full border rounded-lg p-2" /><span className="text-xs text-neutral-500">Puedes corregir el texto. Se guarda para el equipo junto al vídeo.</span></label>}
+          {transcriptionStatus !== "off" && <label className="block text-sm">Transcripción de la grabación<textarea rows={5} value={transcript} maxLength={150000} disabled={phase === "uploading" || !!uploadedId} onChange={e => { setTranscript(e.target.value); setTranscriptionStatus("edited"); }} className="mt-1 w-full border rounded-lg p-2" /><span className="text-xs text-neutral-500">Puedes corregir el texto. Se guarda para el equipo junto al vídeo.</span></label>}
           {phase === "uploading" ? <progress aria-label="Progreso de subida" value={progress} max={100} className="w-full" /> : <div className="flex gap-3 items-center flex-wrap">
             <button type="button" className="btn btn-accent" disabled={!title.trim()} onClick={save}>{uploadedId ? "Confirmar guardado" : "Guardar en Grabaciones"}</button>
             <a className="text-sm underline" href={preview} download={"grabacion." + (draft.blob.type === "video/mp4" ? "mp4" : "webm")}>Descargar copia</a>
