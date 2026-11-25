@@ -8,7 +8,7 @@ export type Story = { id: string; sourceType: "evidence" | "success"; sourceId: 
 export type PublicStory = Pick<Story, "id" | "name" | "title" | "quote" | "before" | "after" | "zone"> & { mediaUrl: string; kind: "image" | "video" | "text" };
 export type MetodoConfig = {
   published: boolean; sections: Record<SectionId, Section>;
-  media: { hero: Media; athlete: Media; clinician: Media; introduction: Media };
+  media: { hero: Media; team: Media; athlete: Media; clinician: Media; introduction: Media };
   buttons: { discover: string; contact: string; secondary: string };
   whatsapp: { number: string; message: string };
   seo: { title: string; description: string; image: string };
@@ -27,7 +27,7 @@ export const DEFAULT_METODO: MetodoConfig = {
       { title: "Sientes que pierdes capacidad física.", body: "Te cuesta reconocerte en lo que ahora puedes hacer." },
       { title: "No quieres dejar el deporte que te gusta.", body: "Quieres encontrar una forma de seguir y recuperar tus objetivos." },
     ]),
-    founder: section("DE ATLETAS PARA ATLETAS", "Conocemos el box. Y lo que cuesta volver.", "Soy Ales, fisioterapeuta y fundador de FisioFitCross. Nuestra especialización nace de unir la experiencia clínica con la práctica del crosstraining. Entendemos lo que te exige una sesión y lo que significa para ti poder disfrutarla. Por eso trabajamos contigo: para construir un proceso que tenga sentido en tu vida y en tu deporte."),
+    founder: section("EL EQUIPO DETRÁS DE TU PROCESO", "Tu recuperación tiene un equipo detrás.", "Somos un equipo de fisioterapeutas especializado en crosstraining. Unimos valoración, ejercicio y entrenamiento adaptado para construir contigo un proceso que encaje en tu vida y en tu deporte. Tu fisioterapeuta sigue tu evolución y ajusta el trabajo contigo."),
     education: section("ADAPTAR ES PARTE DEL CAMINO", "Seguir entrenando. Recuperar lo que te falta.", "Adaptar puede ayudarte a entrenar dentro de tus posibilidades. Para volver a un movimiento, a menudo también necesitamos trabajar las capacidades que ese movimiento exige.", [
       { title: "Evitar temporalmente", body: "Apartar un movimiento puede ser útil en un momento concreto. Necesitamos entender cuándo y cómo retomarlo." },
       { title: "Adaptar el entrenamiento", body: "Ajustar ejercicios, cargas y volumen para encontrar opciones que puedas tolerar." },
@@ -40,7 +40,7 @@ export const DEFAULT_METODO: MetodoConfig = {
       { title: "Volvemos a tus objetivos deportivos", body: "Trabajamos para que recuperes capacidad, confianza y autonomía en tu entrenamiento." },
     ]),
     results: section("HISTORIAS REALES", "Detrás de cada movimiento, hay una persona.", "Experiencias compartidas con autorización por atletas que han trabajado con nosotros. Cada caso y cada evolución son diferentes."),
-    fit: section("¿ES FISIOFITCROSS PARA TI?", "No buscas otro parche. Buscas un proceso.", "No ofrecemos soluciones milagrosas ni protocolos universales. Nuestro enfoque requiere tu participación activa y se adapta a tu situación.", [
+    fit: section("¿ES FISIOFITTEAM PARA TI?", "No buscas otro parche. Buscas un proceso.", "No ofrecemos soluciones milagrosas ni protocolos universales. Nuestro enfoque requiere tu participación activa y se adapta a tu situación.", [
       { title: "Llevas tiempo conviviendo con dolor.", body: "" }, { title: "Quieres seguir practicando crosstraining.", body: "" },
       { title: "Buscas una estrategia individualizada.", body: "" }, { title: "Estás dispuesto a implicarte en tu recuperación.", body: "" },
       { title: "Valoras el acompañamiento especializado.", body: "" },
@@ -56,14 +56,21 @@ export const DEFAULT_METODO: MetodoConfig = {
     cta: section("EMPECEMOS POR ESCUCHARTE", "¿Y si el siguiente paso no fuera dejar de entrenar, sino aprender a recuperarte mientras entrenas?", "Cuéntanos tu situación. Nuestro equipo valorará contigo si nuestro enfoque puede ayudarte a recuperar los movimientos y objetivos deportivos que ahora tienes limitados."),
     tools: { ...section("RECURSOS PARA TI", "Conoce mejor tu entrenamiento."), visible: false },
   },
-  media: { hero: {url:"",alt:"Atleta entrenando crosstraining",poster:""}, athlete: {url:"",alt:"Ales practicando crosstraining",poster:""}, clinician: {url:"",alt:"Ales trabajando como fisioterapeuta",poster:""}, introduction: {url:"",alt:"Ales explica la metodología de FisioFitCross",poster:""} },
+  media: { hero: {url:"",alt:"Atleta entrenando crosstraining",poster:""}, team: {url:"",alt:"El equipo de FisioFitTeam",poster:""}, athlete: {url:"",alt:"Ales practicando crosstraining",poster:""}, clinician: {url:"",alt:"Ales trabajando como fisioterapeuta",poster:""}, introduction: {url:"",alt:"Ales presenta la metodología de FisioFitTeam",poster:""} },
   buttons: { discover: "Descubre cómo trabajamos", contact: "Quiero contaros mi caso", secondary: "Prefiero hablar con el equipo" },
-  whatsapp: { number: "", message: "Hola, equipo de FisioFitCross. He estado viendo vuestra metodología y me gustaría contaros mi caso para saber si podéis ayudarme." },
-  seo: { title: "Nuestro método | FisioFitCross", description: "Fisioterapia y entrenamiento adaptado para atletas de crosstraining con dolor persistente. Conoce cómo trabajamos y cuéntanos tu caso.", image: "" },
+  whatsapp: { number: "", message: "Hola, equipo de FisioFitTeam. He estado viendo vuestra metodología y me gustaría contaros mi caso para saber si podéis ayudarme." },
+  seo: { title: "Nuestro método | FisioFitTeam", description: "Fisioterapia y entrenamiento adaptado para atletas de crosstraining con dolor persistente. Conoce cómo trabajamos y cuéntanos tu caso.", image: "" },
   stories: [], tools: [ {title:"Adaptador de WODs",body:"Explora opciones para tu entrenamiento.",url:"/adaptador-wod",visible:false}, {title:"Autotest de hombro",body:"Conoce mejor tus movimientos.",url:"/autotest-hombro",visible:false}, {title:"Semáforo del dolor",body:"Reflexiona sobre cómo te encuentras.",url:"/semaforo",visible:false}, {title:"Comunidad Hombro Antifrágil",body:"",url:"",visible:false} ],
 };
 const object = (v: unknown): Record<string, any> => v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, any> : {};
 const text = (v: unknown, fallback = "", max = 4000) => typeof v === "string" ? v.trim().slice(0, max) : fallback;
+// Migrate only untouched historical defaults. Custom copy, including the old brand,
+// remains exactly under editorial control; there is no blanket string replacement.
+const LEGACY_FOUNDER = {
+  eyebrow: "DE ATLETAS PARA ATLETAS",
+  title: "Conocemos el box. Y lo que cuesta volver.",
+  body: "Soy Ales, fisioterapeuta y fundador de FisioFitCross. Nuestra especialización nace de unir la experiencia clínica con la práctica del crosstraining. Entendemos lo que te exige una sesión y lo que significa para ti poder disfrutarla. Por eso trabajamos contigo: para construir un proceso que tenga sentido en tu vida y en tu deporte.",
+};
 export function youtubeId(value: string) {
   try { const u = new URL(value); if (!["youtube.com","www.youtube.com","youtu.be","www.youtube-nocookie.com"].includes(u.hostname)) return null; const id = u.hostname === "youtu.be" ? u.pathname.slice(1) : u.searchParams.get("v") || u.pathname.match(/^\/(?:embed|shorts)\/([\w-]+)/)?.[1]; return id && /^[\w-]{11}$/.test(id) ? id : null; } catch { return null; }
 }
@@ -93,6 +100,12 @@ export function normalizeMetodo(input: unknown): MetodoConfig {
   for (const key of Object.keys(result.buttons) as (keyof MetodoConfig["buttons"])[]) result.buttons[key]=text(b[key],result.buttons[key],100);
   const digits=text(w.number).replace(/\D/g,""); result.whatsapp={number:/^\d{7,15}$/.test(digits)?digits:"",message:text(w.message,result.whatsapp.message,1200)};
   result.seo={title:text(seo.title,result.seo.title,100),description:text(seo.description,result.seo.description,300),image:mediaUrl(seo.image,false)};
+  const founder=object(sections.founder);
+  for(const key of ["eyebrow","title","body"] as const)if(founder[key]===LEGACY_FOUNDER[key])result.sections.founder[key]=DEFAULT_METODO.sections.founder[key];
+  if(object(sections.fit).eyebrow==="¿ES FISIOFITCROSS PARA TI?")result.sections.fit.eyebrow=DEFAULT_METODO.sections.fit.eyebrow;
+  if(object(media.introduction).alt==="Ales explica la metodología de FisioFitCross")result.media.introduction.alt=DEFAULT_METODO.media.introduction.alt;
+  if(w.message==="Hola, equipo de FisioFitCross. He estado viendo vuestra metodología y me gustaría contaros mi caso para saber si podéis ayudarme.")result.whatsapp.message=DEFAULT_METODO.whatsapp.message;
+  if(seo.title==="Nuestro método | FisioFitCross")result.seo.title=DEFAULT_METODO.seo.title;
   if(Array.isArray(raw.tools))result.tools=raw.tools.slice(0,12).map((v:unknown)=>{const x=object(v);return{title:text(x.title,"",100),body:text(x.body,"",500),url:toolUrl(x.url),visible:x.visible===true};});
   if(Array.isArray(raw.stories))result.stories=raw.stories.slice(0,24).map((v:unknown)=>{const x=object(v);return{id:text(x.id,"",64),sourceType:x.sourceType==="success"?"success" as const:"evidence" as const,sourceId:text(x.sourceId,"",80),sourceVersion:text(x.sourceVersion,"",40),name:text(x.name,"",100),title:text(x.title,"",250),quote:text(x.quote,"",1600),before:text(x.before,"",600),after:text(x.after,"",600),zone:ZONES.includes(x.zone)?x.zone:"Otros",visible:x.visible===true,authorized:x.authorized===true,authorizationNote:text(x.authorizationNote,"",500),authorizedAt:text(x.authorizedAt,"",40),authorizedBy:text(x.authorizedBy,"",80)};});
   return result;
