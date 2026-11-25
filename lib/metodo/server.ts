@@ -3,7 +3,7 @@ import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
-import { getAgendaGraciasCopy } from "@/lib/landing-config";
+import { getAgendaGraciasCopy, getAgendaLandingCopy } from "@/lib/landing-config";
 import { mediaUrl, normalizeMetodo, publicStory, type MetodoConfig, type PublicMetodo, type Story } from "./content";
 import { METODO_MIGRATION } from "./migration";
 export const COOKIE = "ff-metodo-analytics";
@@ -64,6 +64,11 @@ export async function getPublicMetodo():Promise<PublicMetodo>{
   const stories=config.stories.flatMap(s=>{const source=records.get(`${s.sourceType}:${s.sourceId}`);return s.visible&&s.authorized&&s.authorizedAt&&s.authorizedBy&&s.authorizationNote&&source&&source.version===s.sourceVersion?[publicStory(s,source)]:[];});
   // Explicitly omit authorization evidence and all private source identifiers.
   const sections=structuredClone(config.sections),media=structuredClone(config.media);
+  // Agenda already publishes this team photograph. Inherit only its validated
+  // media URL, never the rest of its configuration, copy or unverified figures.
+  if(config.sections.hero.visible||config.sections.founder.visible){
+    if(!media.team.url){const agenda=await getAgendaLandingCopy();media.team.url=mediaUrl(agenda.groupImageUrl,false);}
+  }else media.team={url:"",alt:"",poster:""};
   for(const key of Object.keys(sections) as (keyof typeof sections)[])if(!sections[key].visible)sections[key]={visible:false,eyebrow:"",title:"",body:"",items:[]};
   if(!config.sections.hero.visible)media.hero={url:"",alt:"",poster:""};
   if(!config.sections.founder.visible)for(const key of ["athlete","clinician","introduction"] as const)media[key]={url:"",alt:"",poster:""};
