@@ -47,7 +47,7 @@ export function sourceData(raw:unknown){
 }
 export async function visitor(req:NextRequest){const token=req.cookies.get(COOKIE)?.value;if(!token||!/^[A-Za-z0-9_-]{32}$/.test(token))return null;const v=await prisma.metodoVisitor.findUnique({where:{tokenHash:hash(token)}});return v&&Date.now()-v.createdAt.getTime()<180*86400000?v:null;}
 export function setVisitorCookie(res:NextResponse,token:string){res.cookies.set(COOKIE,token,{httpOnly:true,secure:process.env.NODE_ENV==="production",sameSite:"lax",path:"/",maxAge:180*86400});}
-export const CONTACT_PLACEMENTS=["header","hero","final","sticky","form","direct"] as const;
+export const CONTACT_PLACEMENTS=["header","hero","final","sticky","form","direct","presentation","empathy","compare","method","stories","team","fit"] as const;
 /** Consented visitors only: a random MF reference ties this contact to the visit. Never throws. */
 export async function contactReference(req:NextRequest,rawPlacement:string|null){
   if(req.cookies.get("ff-metodo-consent")?.value!=="v1.accepted"||req.headers.get("sec-fetch-site")!=="same-origin")return "";

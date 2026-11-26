@@ -25,16 +25,25 @@ function Intro({ section }: { section: Section }) {
   </div>;
 }
 
+/** Repeated call to action after each section: same label, one short reassurance. */
+function InlineCta({ href, label, note, dark = false }: { href: string; label: string; note: string; dark?: boolean }) {
+  return <div className={`mf-inline-cta${dark ? " mf-inline-cta-dark" : ""}`}>
+    <a className="mf-button mf-button-yellow" href={href}>{label}<ArrowRight size={18} aria-hidden="true" /></a>
+    <span>{note}</span>
+  </div>;
+}
+
 function Brand() {
   return <span className="mf-brand"><Image src={teamLogo} alt="FisioFitTeam" width={500} height={500} sizes="140px" priority /></span>;
 }
 
-/** Mobile call to action: appears once the hero is behind, hides over the form, footer and privacy banner. */
+/** Mobile call to action: appears once the hero is behind; hides over the form, other buttons, footer and privacy banner. */
 function useStickyCta(enabled: boolean) {
   const heroRef = useRef<HTMLElement>(null), [visible, setVisible] = useState(false);
   useEffect(() => {
     if (!enabled || typeof IntersectionObserver === "undefined") return;
-    const targets = [heroRef.current, document.getElementById("valoracion"), document.querySelector<HTMLElement>(".mf-footer")].filter((el): el is HTMLElement => !!el);
+    // Also hide while another call to action is on screen, so two yellow buttons never stack.
+    const targets = [heroRef.current, document.getElementById("valoracion"), document.querySelector<HTMLElement>(".mf-footer"), ...Array.from(document.querySelectorAll<HTMLElement>(".mf-inline-cta, .mf-final"))].filter((el): el is HTMLElement => !!el);
     const inView = new Map<Element, boolean>();
     const observer = new IntersectionObserver(entries => {
       for (const entry of entries) inView.set(entry.target, entry.isIntersecting);
@@ -67,6 +76,8 @@ export function MetodoLanding({ content, preview = false, origin = null }: { con
   // With the form visible every call to action leads to it; otherwise straight to WhatsApp as before.
   const whatsapp = (placement: string) => preview ? "#contacto" : `/api/metodo/contact?placement=${placement}`;
   const contact = (placement: string) => hasForm ? "#valoracion" : whatsapp(placement);
+  const ctaNote = hasForm ? "4 preguntas · menos de 1 minuto" : "Te respondemos por WhatsApp";
+  const cta = (placement: string, dark = false) => <InlineCta href={contact(placement)} label={buttons.contact} note={ctaNote} dark={dark} />;
   const contactButton = (placement: string, quiet = false) => <a className={quiet ? "mf-text-link" : "mf-button"} href={contact(placement)}>
     {!quiet && <MessageCircle size={18} aria-hidden="true" />}{quiet ? buttons.secondary : buttons.contact}
   </a>;
@@ -114,7 +125,7 @@ export function MetodoLanding({ content, preview = false, origin = null }: { con
       {hasForm && <MetodoRequestForm section={s.request} origin={variant ? origin : null} initialZone={variant?.zone} preview={preview} track={analytics.track} directHref={whatsapp("direct")} directLabel={buttons.secondary} />}
 
       {s.founder.visible && m.introduction.url && <section id="presentacion" className="mf-section mf-presentation" data-mf-reveal>
-        <div><p className="mf-eyebrow">CONOCE A FISIOFITTEAM</p><h2>{m.introduction.alt || "Te contamos cómo trabajamos."}</h2></div>
+        <div><p className="mf-eyebrow">CONOCE A FISIOFITTEAM</p><h2>{m.introduction.alt || "Te contamos cómo trabajamos."}</h2>{cta("presentation")}</div>
         <MetodoVideo url={m.introduction.url} poster={m.introduction.poster} title={m.introduction.alt || "Ales te cuenta cómo trabaja nuestro equipo"} target="introduction" track={analytics.track} />
       </section>}
 
@@ -123,6 +134,7 @@ export function MetodoLanding({ content, preview = false, origin = null }: { con
         <div className="mf-empathy-list">{s.empathy.items.map((item, i) => <details key={i}>
           <summary>{item.title}<span aria-hidden="true">+</span></summary><p>{item.body}</p>
         </details>)}</div>
+        {cta("empathy")}
       </div></section>}
 
       {s.compare.visible && s.compare.items.length > 0 && <section className="mf-section mf-compare" data-mf-reveal>
@@ -134,10 +146,10 @@ export function MetodoLanding({ content, preview = false, origin = null }: { con
             {item.body && <p className="mf-compare-new"><Check size={20} strokeWidth={2.5} aria-hidden="true" /><span><span className="mf-sr">Con FisioFitTeam: </span>{item.body}</span></p>}
           </div>)}
         </div>
-        {hasForm && <a className="mf-button mf-compare-cta" href="#valoracion">{buttons.contact}<ArrowRight size={18} aria-hidden="true" /></a>}
+        {cta("compare")}
       </section>}
 
-      {s.method.visible && <MetodoJourney section={s.method} />}
+      {s.method.visible && <MetodoJourney section={s.method} cta={cta("method", true)} />}
 
       {hasStories && <section id="historias" className="mf-section mf-results" data-mf-reveal>
         <Intro section={s.results} />
@@ -148,12 +160,14 @@ export function MetodoLanding({ content, preview = false, origin = null }: { con
             {(story.before || story.after) && <details onToggle={e => { if (e.currentTarget.open) analytics.track("case_open", story.id); }}><summary>Conoce su historia</summary>{story.before && <div><h4>Su punto de partida</h4><p>{story.before}</p></div>}{story.after && <div><h4>Lo que comparte ahora</h4><p>{story.after}</p></div>}</details>}
           </div>
         </article>) : <p>No hay historias publicadas de esta zona por ahora.</p>}</div>
+        {cta("stories")}
       </section>}
 
       {s.founder.visible && <section id="equipo" className="mf-section mf-team" data-mf-reveal>
         {m.team.url && !(s.hero.visible && heroIsTeam) && <figure className="mf-team-group"><Image src={m.team.url} alt={m.team.alt || "El equipo de FisioFitTeam"} width={1672} height={941} sizes="(max-width: 700px) calc(100vw - 48px), 90vw" loading="lazy" /></figure>}
         <div className="mf-team-copy">
           <Intro section={s.founder} />
+          {cta("team")}
         </div>
         {(m.athlete.url || m.clinician.url) && <div className="mf-team-origin">
           <div className={`mf-team-diptych${!m.athlete.url || !m.clinician.url ? " mf-team-single" : ""}`}>
@@ -174,6 +188,7 @@ export function MetodoLanding({ content, preview = false, origin = null }: { con
       {s.fit.visible && <section className="mf-section mf-fit" data-mf-reveal>
         <div className="mf-fit-intro"><Intro section={s.fit} /></div>
         <ul>{s.fit.items.map((item, i) => <li key={i}><Check size={20} strokeWidth={2} aria-hidden="true" /><div>{item.title}{item.body && <p>{item.body}</p>}</div></li>)}</ul>
+        {cta("fit")}
       </section>}
 
       {s.faq.visible && <section className="mf-faq" data-mf-reveal><div className="mf-section">
