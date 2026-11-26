@@ -26,4 +26,16 @@ CREATE TABLE IF NOT EXISTS "SupportTicketEvent" (
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS "SupportTicketEvent_ticketId_createdAt_idx" ON "SupportTicketEvent"("ticketId", "createdAt");
+ALTER TABLE "SupportTicket" ADD COLUMN IF NOT EXISTS "linksJson" TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE "SupportTicketEvent" ADD COLUMN IF NOT EXISTS "linksJson" TEXT NOT NULL DEFAULT '[]';
+CREATE TABLE IF NOT EXISTS "SupportAttachment" (
+  "id" TEXT PRIMARY KEY, "createdById" TEXT NOT NULL,
+  "ticketId" TEXT REFERENCES "SupportTicket"("id") ON DELETE CASCADE,
+  "eventId" TEXT REFERENCES "SupportTicketEvent"("id") ON DELETE CASCADE,
+  "name" TEXT NOT NULL, "mime" TEXT NOT NULL, "size" INTEGER NOT NULL,
+  "blobPath" TEXT NOT NULL UNIQUE, "url" TEXT, "status" TEXT NOT NULL DEFAULT 'pending',
+  "pendingUntil" TIMESTAMP(3), "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS "SupportAttachment_createdById_createdAt_idx" ON "SupportAttachment"("createdById", "createdAt");
+CREATE INDEX IF NOT EXISTS "SupportAttachment_ticketId_eventId_idx" ON "SupportAttachment"("ticketId", "eventId");
 COMMIT;

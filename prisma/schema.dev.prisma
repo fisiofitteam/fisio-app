@@ -3783,6 +3783,8 @@ model SupportMessage {
 }
 
 model SupportTicket {
+  linksJson   String @default("[]")
+  attachments SupportAttachment[]
   id               String   @id @default(cuid())
   requestId        String   @unique
   reporterId       String
@@ -3803,6 +3805,8 @@ model SupportTicket {
 }
 
 model SupportTicketEvent {
+  linksJson   String @default("[]")
+  attachments SupportAttachment[]
   id         String   @id @default(cuid())
   requestId  String   @unique
   ticketId   String
@@ -3813,4 +3817,23 @@ model SupportTicketEvent {
   priority   String?
   createdAt  DateTime @default(now())
   @@index([ticketId, createdAt])
+}
+
+model SupportAttachment {
+  id          String @id
+  createdById String
+  ticketId    String?
+  ticket      SupportTicket? @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  eventId     String?
+  event       SupportTicketEvent? @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name        String
+  mime        String
+  size        Int
+  blobPath    String @unique
+  url         String?
+  status      String @default("pending")
+  pendingUntil DateTime?
+  createdAt   DateTime @default(now())
+  @@index([createdById, createdAt])
+  @@index([ticketId, eventId])
 }

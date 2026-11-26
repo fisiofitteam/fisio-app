@@ -17,9 +17,12 @@ const dual = actor("dual", "fisio", ["ceo"]);
 let current: ActiveProfessional | null = fisio;
 let patientAccess = true, videoReads = 0, providerInput: any, providerMode = "valid";
 let releaseProvider: (() => void) | undefined;
-let dbFailure = false;
+let dbFailure = false, blobMode = "valid";
+const deletedBlobs: string[] = [];
+let streamedFiles = 0;
+let uploadPolicy: any;
 const now = () => new Date();
-let state: Record<string, any[]> = { conversations: [], messages: [], tickets: [], events: [], notifications: [] };
+let state: Record<string, any[]> = { conversations: [], messages: [], tickets: [], events: [], notifications: [], attachments: [] };
 let seq = 0;
 const people = [fisio, other, ceo, setter, dual].map(p => ({ ...p, active: true, notificationPrefs: {} }));
 function match(row: any, where: any = {}): boolean {
@@ -29,6 +32,7 @@ function match(row: any, where: any = {}): boolean {
       if ("in" in value && !value.in.includes(row[key])) return false;
       if ("notIn" in value && value.notIn.includes(row[key])) return false;
       if ("has" in value && !row[key]?.includes(value.has)) return false;
+      if ("gt" in value && !(row[key] > value.gt)) return false;
       if ("gte" in value && !(row[key] >= value.gte)) return false;
       if ("lt" in value && !(row[key] < value.lt)) return false;
       return true;
@@ -49,7 +53,7 @@ function table(name: string, defaults: Record<string, unknown> = {}) {
     findUnique: async ({ where }: any) => state[name].find(r => match(r, where)) ?? null,
     findFirst: async (args: any) => {
       const row = rows(name, args)[0]; if (!row) return null;
-      return args.include ? { ...row, events: rows("events", { ...args.include.events, where: { ticketId: row.id } }), _count: { events: state.events.filter(e => e.ticketId === row.id).length } } : row;
+      return args.include ? { ...row, attachments: rows("attachments", { where: { ticketId: row.id, eventId: null, status: "ready" } }), events: rows("events", { ...args.include.events, where: { ticketId: row.id } }).map(e => ({ ...e, attachments: rows("attachments", { where: { eventId: e.id, status: "ready" } }) })), _count: { events: state.events.filter(e => e.ticketId === row.id).length } } : row;
     },
     findMany: async (args: any) => rows(name, args).map(r => ({ ...r })),
     count: async (args: any) => rows(name, args).length,
@@ -58,6 +62,7 @@ function table(name: string, defaults: Record<string, unknown> = {}) {
       const row = { id: `${name}-${String(++seq).padStart(5, "0")}`, createdAt: now(), updatedAt: now(), ...defaults, ...data };
       state[name].push(row); return row;
     },
+    deleteMany: async ({ where }: any) => { const selected = rows(name, { where }); state[name] = state[name].filter(r => !selected.includes(r)); return { count: selected.length }; },
     createMany: async ({ data }: any) => { state[name].push(...data.map((d: any) => ({ id: String(++seq), readAt: null, ...d }))); return { count: data.length }; },
     updateMany: async ({ where, data }: any) => {
       const selected = rows(name, { where });
@@ -69,6 +74,7 @@ function table(name: string, defaults: Record<string, unknown> = {}) {
 const db: any = {
   supportConversation: table("conversations", { version: 0, busyUntil: null }), supportMessage: table("messages", { answerJson: null }),
   supportTicket: table("tickets", { version: 0, status: "new" }), supportTicketEvent: table("events"), teamNotification: table("notifications"),
+  supportAttachment: table("attachments", { ticketId: null, eventId: null, status: "pending", url: null }),
   professional: { findMany: async ({ where }: any) => people.filter(p => match(p, where)), findUnique: async ({ where }: any) => people.find(p => match(p, where)) },
 };
 db.supportConversation.upsert = async ({ where, create }: any) => {
@@ -93,6 +99,17 @@ db.shoulderPilotReview = { findUnique: async (args: any) => {
 const oldLoad = (Module as any)._load;
 (Module as any)._load = function(id: string, ...args: any[]) {
   if (id.endsWith("/lib/prisma")) return { prisma: db };
+  if (id.endsWith("/lib/recordings")) return { recordingToken: () => "fixture-private-token" };
+  if (id === "@vercel/blob") return {
+    head: async (pathname: string) => { const row = state.attachments.find(f => f.blobPath === pathname); assert(row); return { pathname, size: blobMode === "wrong-size" ? row.size + 1 : row.size, contentType: row.mime, url: "https://fixture." + (blobMode === "public" ? "public" : "private") + ".blob.vercel-storage.com/" + pathname }; },
+    del: async (pathname: string) => { deletedBlobs.push(pathname); },
+  };
+  if (id === "@vercel/blob/client") return { handleUpload: async (options: any) => {
+    assert.equal(options.onUploadCompleted, undefined, "No public callback needed");
+    uploadPolicy = await options.onBeforeGenerateToken(options.body.payload.pathname, options.body.payload.clientPayload);
+    return { type: "blob.generate-client-token", clientToken: "fixture-scoped-token" };
+  } };
+  if (id.endsWith("/lib/assessment-media")) return { serveAssessmentMedia: async () => { streamedFiles++; return new Response(new Uint8Array([1, 2, 3]), { headers: { "cache-control": "private, no-store", "x-content-type-options": "nosniff" } }); } };
   if (id.endsWith("/lib/session")) return { getActiveProfessional: async () => current };
   if (id.endsWith("shoulder-battery-server")) return { batterySessionSelect: {}, resolveShoulderBattery: async () => ({ session, sessions: [session], refs: new Map(videos.map(v => [v.testId, v.taskId])), sources: new Map(videos.map(v => [v.testId, { sessionId: v.sessionId, taskId: v.taskId }])) }) };
   if (id === "@anthropic-ai/sdk") return { __esModule: true, default: class {
@@ -110,12 +127,22 @@ async function main() {
   const { chatSchema, ticketSchema } = await import("../lib/support/contracts");
   const { SUPPORT_GUIDE, allowedGuide, managesSupport, supportNavigation } = await import("../lib/support/guide");
   const { buildSupportContext } = await import("../lib/support/context");
-  const service = await import("../lib/support/service");
+  const realService = await import("../lib/support/service");
+  const service = { ...realService,
+    createSupportTicket: (a: ActiveProfessional, v: any) => realService.createSupportTicket(a, { attachmentIds: [], links: [], ...v }),
+    updateSupportTicket: (a: ActiveProfessional, id: string, v: any) => realService.updateSupportTicket(a, id, { attachmentIds: [], links: [], ...v }),
+  };
   const chat = await import("../app/api/support/chat/route");
   const tickets = await import("../app/api/support/tickets/route");
   const detail = await import("../app/api/support/tickets/[id]/route");
   const { getUnreadNotificationsForUser } = await import("../lib/notifications");
   const { answerSupport } = await import("../lib/support/answer");
+  const materials = await import("../lib/support/materials");
+  const fileRules = await import("../lib/support/materials-contract");
+  const reservation = await import("../app/api/support/attachments/route");
+  const attachment = await import("../app/api/support/attachments/[id]/route");
+  const media = await import("../app/api/support/attachments/[id]/file/route");
+  const uploads = await import("../app/api/support/upload/route");
   const req = (body: unknown, method = "POST", origin = "https://app.example.test") => new Request("https://app.example.test/api/support", { method, headers: { "content-type": "application/json", origin }, body: JSON.stringify(body) });
   const chatInput = (text = "¿Dónde están los informes?", version = 0) => ({ requestId: randomUUID(), text, path: "/fisio", version });
   const ticketInput = (includeConversation = false) => ({ requestId: randomUUID(), kind: "problem" as const, title: "No encuentro el informe", description: "Descripción revisada por el profesional.", path: "/fisio", priority: "normal" as const, includeConversation });
@@ -133,7 +160,7 @@ async function main() {
   current = fisio;
   assert.equal((await chat.POST(req(chatInput(), "POST", "https://evil.test"))).status, 403);
   assert.equal((await chat.POST(req({ ...chatInput(), role: "ceo" }))).status, 400);
-  assert.equal((await chat.POST(req({ ...chatInput(), text: "a".repeat(17000) }))).status, 413);
+  assert.equal((await chat.POST(req({ ...chatInput(), text: "a".repeat(49000) }))).status, 413);
   assert.equal((await tickets.GET(new Request("https://app.example.test/api/support/tickets?status=__proto__"))).status, 400);
 
   // Server-only diagnostics: denied patient access cannot leak even counts.
@@ -214,9 +241,69 @@ async function main() {
   state.notifications.push({ id: "setter-direct", targetProfessionalId: setter.id, readAt: null, type: "support_update" }, { id: "someone-else", targetProfessionalId: other.id, readAt: null, type: "support_update" });
   const visible = await getUnreadNotificationsForUser(setter);
   assert(visible.some(n => n.id === "setter-direct")); assert(!visible.some(n => n.id === "someone-else"));
+
+  // Manual proposals with private uploads and external links. No AI or chat needed.
+  const fileInput = { name: "captura de menú.png", mime: "image/png" as const, size: 1200 };
+  for (const url of ["javascript:alert(1)", "data:text/html,unsafe", "file:///etc/passwd", "https://user:pass@example.test"]) {
+    assert(!fileRules.supportLinkSchema.safeParse({ url }).success);
+  }
+  assert(fileRules.supportLinkSchema.safeParse({ url: "https://www.loom.com/share/example" }).success);
+  assert(!fileRules.reserveSupportFileSchema.safeParse({ ...fileInput, mime: "image/svg+xml" }).success);
+  assert(!fileRules.reserveSupportFileSchema.safeParse({ ...fileInput, size: 101 * 1024 * 1024 }).success);
+  const repeated = randomUUID(); assert(!ticketSchema.safeParse({ ...ticketInput(), attachmentIds: [repeated, repeated] }).success);
+  assert.equal(fileRules.supportFileMime({ name: "notes.pdf", type: "" }), "application/pdf");
+  assert.equal(fileRules.supportFileMime({ name: "file.html", type: "text/html" }), null);
+  current = null;
+  assert.equal((await reservation.POST(req(fileInput))).status, 401);
+  assert.equal((await uploads.POST(req({}))).status, 401);
+  current = fisio;
+  const reservedResponse = await reservation.POST(req(fileInput)); assert.equal(reservedResponse.status, 200);
+  const reserved = await reservedResponse.json();
+  assert(reserved.pathname.startsWith("team-support/")); assert(!reserved.pathname.includes("menú"));
+  const tokenInput = { type: "blob.generate-client-token", payload: { pathname: reserved.pathname, clientPayload: JSON.stringify({ id: reserved.id }), multipart: false } };
+  current = other; assert.equal((await uploads.POST(req(tokenInput))).status, 409);
+  assert.equal((await attachment.POST(req({}), { params: { id: reserved.id } })).status, 409);
+  current = fisio;
+  assert.equal((await uploads.POST(req({ ...tokenInput, payload: { ...tokenInput.payload, pathname: "someone-else/file.png" } }))).status, 409);
+  assert.equal((await uploads.POST(req(tokenInput))).status, 200);
+  assert.equal(uploadPolicy.allowOverwrite, false); assert.equal(uploadPolicy.maximumSizeInBytes, 1200); assert.deepEqual(uploadPolicy.allowedContentTypes, ["image/png"]);
+  const totalBefore = state.tickets.length, notifyBefore = state.notifications.length;
+  await assert.rejects(service.createSupportTicket(fisio, { ...ticketInput(), attachmentIds: [reserved.id] }), (e: any) => e.status === 409);
+  assert.equal(state.tickets.length, totalBefore); assert.equal(state.notifications.length, notifyBefore);
+  for (const mode of ["public", "wrong-size"]) { blobMode = mode; assert.equal((await attachment.POST(req({}), { params: { id: reserved.id } })).status, 409); }
+  blobMode = "valid";
+  assert.equal((await attachment.POST(req({}), { params: { id: reserved.id } })).status, 200);
+  assert.equal((await attachment.POST(req({}), { params: { id: reserved.id } })).status, 200, "Finalization is idempotent");
+  await assert.rejects(materials.readableSupportFile(ceo, reserved.id), (e: any) => e.status === 404, "Unsubmitted material remains private even from CEO");
+  await assert.rejects(service.createSupportTicket(other, { ...ticketInput(), attachmentIds: [reserved.id] }), (e: any) => e.status === 409);
+  const proposalInput = { ...ticketInput(), kind: "improvement", attachmentIds: [reserved.id], links: [{ title: "Vídeo explicativo", url: "https://www.loom.com/share/example" }] };
+  const proposal = await service.createSupportTicket(fisio, proposalInput);
+  assert.equal(proposal.attachments.length, 1); assert.equal(proposal.links[0].title, "Vídeo explicativo");
+  assert(!JSON.stringify(proposal.attachments).includes("blob.vercel")); assert(!JSON.stringify(proposal.attachments).includes("blobPath"));
+  assert.equal((await service.createSupportTicket(fisio, proposalInput)).id, proposal.id);
+  await assert.rejects(materials.discardSupportFile(fisio, reserved.id), (e: any) => e.status === 404);
+  await assert.rejects(service.createSupportTicket(fisio, { ...ticketInput(), attachmentIds: [reserved.id] }), (e: any) => e.status === 409);
+  const streamBefore = streamedFiles;
+  current = other; assert.equal((await media.GET(req(null), { params: { id: reserved.id } })).status, 404); assert.equal(streamedFiles, streamBefore);
+  current = ceo;
+  const picture = await media.GET(req(null), { params: { id: reserved.id } }); assert.equal(picture.status, 200); assert.equal(picture.headers.get("content-type"), "image/png"); assert.equal(picture.headers.get("cache-control"), "private, no-store");
+  const pdf = await materials.reserveSupportFile(ceo, { name: "propuesta.pdf", mime: "application/pdf", size: 200 });
+  await materials.finishSupportFile(ceo, pdf.id);
+  const withReply = await service.updateSupportTicket(ceo, proposal.id, { requestId: randomUUID(), version: 0, body: "", attachmentIds: [pdf.id], links: [] });
+  assert.equal(withReply.attachments.length, 1); assert.equal(withReply.events[0].attachments[0].id, pdf.id);
+  current = fisio;
+  const document = await media.GET(req(null), { params: { id: pdf.id } }); assert.equal(document.status, 200); assert(document.headers.get("content-disposition")?.startsWith("attachment;"));
+  const linkReply = await detail.PATCH(req({ requestId: randomUUID(), version: 1, body: "", links: [{ url: "https://app.example.test/grabacion/example", title: "Grabación interna" }] }, "PATCH"), { params: { id: proposal.id } });
+  assert.equal(linkReply.status, 200); assert.equal((await linkReply.json()).events[1].links[0].title, "Grabación interna");
+  const abandoned = await materials.reserveSupportFile(fisio, fileInput);
+  await materials.finishSupportFile(fisio, abandoned.id);
+  await materials.discardSupportFile(fisio, abandoned.id);
+  assert(deletedBlobs.includes(abandoned.pathname)); assert(!state.attachments.some(f => f.id === abandoned.id));
+  assert(!deletedBlobs.includes(reserved.pathname), "Published attachments are retained");
+  current = fisio;
   dbFailure = true;
   const failed = await chat.GET(); assert.equal(failed.status, 503); assert(!(await failed.text()).includes("secret"));
   if (savedKey === undefined) delete process.env.ANTHROPIC_API_KEY; else process.env.ANTHROPIC_API_KEY = savedKey;
-  console.log("PASS: support authorization, private history, scoped diagnostics, AI fallback, link allowlist, concurrency, idempotency, opt-in reports, CEO workflow and targeted notifications");
+  console.log("PASS: support authorization, private history, diagnostics, AI fallback, concurrency, idempotency, opt-in reports, manual proposals, private attachments, upload scope, links, replies and notifications");
 }
 main().catch(e => { console.error(e); process.exitCode = 1; }).finally(() => { (Module as any)._load = oldLoad; });
