@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import Module from "node:module";
 import { NextRequest } from "next/server";
 import { PontoClient, PontoError, pontoConfiguration } from "../lib/ponto-client";
-import { classifyMovement, detectSubscriptions, matchStripePayout, cents } from "../lib/bank-finance-contract";
+import { bankExpenseDate, classifyMovement, detectSubscriptions, matchStripePayout, cents } from "../lib/bank-finance-contract";
 
 async function main(){
   let scope="ai",externalNext=false,invalidDate=false,calls:{url:string;method:string}[]=[];
@@ -23,6 +23,10 @@ async function main(){
   delete process.env.PONTO_CLIENT_ID;delete process.env.PONTO_CLIENT_SECRET;delete process.env.PONTO_ACCOUNT_IDS;
   assert.equal(pontoConfiguration().ready,false);
   assert.equal(cents(10.29),1029);assert.throws(()=>cents(Infinity));
+  assert.equal(bankExpenseDate(new Date("2026-11-25T23:00:00Z")),"2026-11-26");
+  assert.equal(bankExpenseDate(new Date("2026-08-31T22:00:00Z")),"2026-09-01");
+  assert.equal(bankExpenseDate(new Date("2026-11-25T22:59:59Z")),"2026-11-25");
+  assert.equal(bankExpenseDate(new Date("2026-10-25T22:00:00Z")),"2026-10-25");
   assert.equal(classifyMovement("CaixaBank","CUOTA HIPOTECA",-20300,[]).personal,true);
   assert.equal(classifyMovement("Vercel","Servicio",-20300,[]).personal,false);
   assert.equal(classifyMovement("CaixaBank","CUOTA HIPOTECA",-20299,[]).personal,false);
@@ -72,9 +76,12 @@ async function main(){
   const bankRoute=await import("../app/api/ceo/bank/route");
   const cron=await import("../app/api/cron/ponto-sync/route");
   const tx=(id:string,amount:number,description:string,date="2026-10-01T12:00:00Z")=>({id,type:"transaction" as const,attributes:{amount,currency:"EUR",executionDate:date,description}});
-  const fixtures=[tx("t1",-20,"OpenAI"),tx("t2",-203,"Cuota hipoteca"),tx("t3",1000,"Stripe"),tx("t4",-5,"Compra")];
+  const fixtures=[tx("t1",-20,"OpenAI","2026-11-25T23:00:00Z"),tx("t2",-203,"Cuota hipoteca"),tx("t3",1000,"Stripe"),tx("t4",-5,"Compra")];
   await db.$transaction((t:any)=>service.importBankRows(t,"a",fixtures,[]));
+  assert.equal(state.businessExpenseCandidate[0].occurredAt.toISOString(),"2026-11-26T12:00:00.000Z","Bank midnight uses the local calendar day");
+  state.businessExpenseCandidate[0].occurredAt=new Date("2026-11-25T12:00:00Z");
   await db.$transaction((t:any)=>service.importBankRows(t,"a",fixtures,[]));
+  assert.equal(state.businessExpenseCandidate[0].occurredAt.toISOString(),"2026-11-26T12:00:00.000Z","Repeat import repairs legacy pending dates");
   assert.equal(state.bankMovement.length,4);assert.equal(state.businessExpenseCandidate.length,2);assert.equal(state.transaction.length,0);
   const candidate=state.businessExpenseCandidate[0];
   const patch=(id:string,extra:any={})=>new NextRequest("https://app.fisiofitteam.com/api/ceo/expense-candidates",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,action:"approve",category:"software",...extra})});
@@ -82,6 +89,10 @@ async function main(){
   current={id:"founder",role:"fisio"};assert.equal((await bankRoute.GET()).status,403);
   current={id:"founder",role:"ceo"};
   const approvals=await Promise.all([review.PATCH(patch(candidate.id)),review.PATCH(patch(candidate.id))]);assert(approvals.every(r=>r.status===200));assert.equal(state.transaction.length,1);
+  candidate.occurredAt=new Date("2026-11-25T12:00:00Z");
+  await db.$transaction((t:any)=>service.importBankRows(t,"a",fixtures,[]));
+  assert.equal(candidate.occurredAt.toISOString(),"2026-11-25T12:00:00.000Z","Previously approved expenses are never repaired automatically");
+  assert.equal(state.transaction.length,1);
   await assert.rejects(service.classifyBankMovement({id:state.bankMovement[0].id,category:"otros",personal:true,remember:false,exactAmount:true},"founder"),/contabilizado/);
   const other=state.bankMovement.find(r=>r.externalId==="t4");
   await service.classifyBankMovement({id:other.id,category:"otros",personal:true,remember:true,exactAmount:true},"founder");assert.equal(state.businessExpenseCandidate[1].status,"rejected");assert.equal(state.bankClassificationRule.length,1);assert.equal(state.transaction.length,1);
