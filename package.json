@@ -22,7 +22,7 @@
     "cap:ios": "npx cap open ios",
     "cap:android": "npx cap open android",
     "extension:build": "node scripts/build-recorder-extension.cjs",
-    "test:ceo": "tsx scripts/test-grok-ceo-contract.ts && tsx scripts/test-grok-ceo-exchange.ts && tsx scripts/test-business-expense-candidates.ts && tsx scripts/test-grok-ceo-weekly.ts",
+    "test:ceo": "tsx scripts/test-grok-ceo-contract.ts && tsx scripts/test-grok-ceo-exchange.ts && tsx scripts/test-business-expense-candidates.ts && tsx scripts/test-grok-ceo-weekly.ts && tsx scripts/test-ceo-integrations-middleware.ts && tsx scripts/test-stripe-expense-candidates.ts",
     "db:migrate:ceo": "node scripts/migrate-ceo-production.cjs"
   },
   "dependencies": {

@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+import { groupStripeChargeFees } from "../lib/stripe-expense-candidates-contract";
+const start=new Date("2026-11-19T23:00:00Z"),end=new Date("2026-11-26T22:59:59.999Z");
+const row={id:"txn_a",type:"charge",currency:"eur",fee:105,created:Date.parse("2026-11-20T11:00:00Z")/1000};
+const groups=groupStripeChargeFees([row,row,{...row,id:"txn_b",fee:95},{...row,id:"txn_c",currency:"usd"},{...row,id:"txn_d",type:"refund"},{...row,id:"txn_e",fee:0},{...row,id:"txn_f",created:Date.parse("2026-11-19T22:59:59Z")/1000}],start,end);
+assert.equal(groups.length,1);
+assert.equal(groups[0].amountCents,200);
+assert.equal(groups[0].sourceRef,"stripe-charge-fees:2026-11-20");
+assert.equal(groups[0].date,"2026-11-20");
+console.log("Stripe fee candidate contract: OK");
