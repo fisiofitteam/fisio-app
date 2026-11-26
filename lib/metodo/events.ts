@@ -5,10 +5,12 @@ export function validEvent(input: unknown) {
   const b=input as Record<string,unknown>;
   if(typeof b.sessionId!=="string"||!SESSION_PATTERN.test(b.sessionId)||typeof b.target!=="string"||!/^[a-zA-Z0-9_-]{1,64}$/.test(b.target))return null;
   const type=String(b.type),value=Number(b.value||0);
-  if(!["scroll","video_start","video_progress","case_open","case_filter","tool_open"].includes(type))return null;
+  if(!["scroll","video_start","video_progress","case_open","case_filter","tool_open","form_step"].includes(type))return null;
   if(type==="scroll"&&(![25,50,75,100].includes(value)||b.target!=="page"))return null;
   if(type==="video_progress"&&![25,50,75,100].includes(value))return null;
-  if(!["scroll","video_progress"].includes(type)&&value!==0)return null;
+  // Valoración form: highest step reached (1–4). Never carries the answers.
+  if(type==="form_step"&&(![1,2,3,4].includes(value)||b.target!=="form"))return null;
+  if(!["scroll","video_progress","form_step"].includes(type)&&value!==0)return null;
   return{sessionId:b.sessionId,type,target:b.target,value};
 }
 /** Count watched intervals, not seeking forwards. Union prevents replay inflating completion. */

@@ -10,4 +10,7 @@ export const METODO_MIGRATION = [
   `CREATE TABLE IF NOT EXISTS "MetodoAudit" ("id" TEXT PRIMARY KEY, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "actorId" TEXT NOT NULL, "action" TEXT NOT NULL, "reference" TEXT NOT NULL, "detail" TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS "MetodoRateLimit" ("key" TEXT PRIMARY KEY, "count" INTEGER NOT NULL DEFAULT 1, "expiresAt" TIMESTAMP(3) NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS "MetodoRateLimit_expiresAt_idx" ON "MetodoRateLimit"("expiresAt")`,
+  // Valoración form: operational contact request with explicit health-data consent. Not analytics.
+  `CREATE TABLE IF NOT EXISTS "MetodoRequest" ("id" TEXT PRIMARY KEY, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "name" TEXT NOT NULL, "phone" TEXT NOT NULL, "zone" TEXT NOT NULL, "duration" TEXT NOT NULL, "impact" TEXT NOT NULL, "sport" TEXT NOT NULL, "tried" TEXT NOT NULL, "detail" TEXT, "origin" TEXT, "reference" TEXT, "consentAt" TIMESTAMP(3) NOT NULL, "consentVersion" TEXT NOT NULL, "handledAt" TIMESTAMP(3), "handledById" TEXT)`,
+  `CREATE INDEX IF NOT EXISTS "MetodoRequest_createdAt_idx" ON "MetodoRequest"("createdAt")`,
 ] as const;
