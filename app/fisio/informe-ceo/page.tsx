@@ -2,7 +2,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
-import { GrokCeoExchangePanel } from "@/components/GrokCeoExchangePanel";
 import { CeoReportsClient } from "@/components/CeoReportsClient";
 
 export const dynamic = "force-dynamic";
@@ -46,7 +45,6 @@ export default async function CeoReportPage() {
       </header>
 
       <div className="mb-4"><Link href="/fisio/informe-ceo/semanal" className="inline-block text-sm font-medium underline">Ver dirección estratégica semanal</Link></div>
-      <div className="mb-6"><GrokCeoExchangePanel /></div>
       <CeoReportsClient initial={initialList} />
     </main>
   );

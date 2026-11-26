@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { GrokCeoExchangePanel } from "./GrokCeoExchangePanel";
 
 type ReportRow = {
   id: string;
@@ -59,6 +60,7 @@ export function CeoReportsClient({ initial }: { initial: ReportRow[] }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ReportDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const requestSequence = useRef(0);
 
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get("report");
@@ -100,16 +102,21 @@ export function CeoReportsClient({ initial }: { initial: ReportRow[] }) {
   }
 
   async function openReport(id: string) {
+    const request = ++requestSequence.current;
+    setError(null);
     setOpenId(id);
     setDetail(null);
     setLoadingDetail(true);
     try {
       const res = await fetch(`/api/ai/ceo-report/${id}`);
       const j = await res.json();
-      if (res.ok) setDetail(j);
+      if (request !== requestSequence.current) return;
+      if (res.ok && j?.narrative) setDetail(j);
       else setError("No se pudo abrir el informe.");
+    } catch {
+      if (request === requestSequence.current) setError("No se pudo abrir el informe.");
     } finally {
-      setLoadingDetail(false);
+      if (request === requestSequence.current) setLoadingDetail(false);
     }
   }
 
@@ -118,12 +125,13 @@ export function CeoReportsClient({ initial }: { initial: ReportRow[] }) {
     const res = await fetch(`/api/ai/ceo-report/${id}`, { method: "DELETE" });
     if (res.ok) {
       setReports((prev) => prev.filter((r) => r.id !== id));
-      if (openId === id) { setOpenId(null); setDetail(null); }
+      if (openId === id) { requestSequence.current++; setOpenId(null); setDetail(null); setLoadingDetail(false); }
     }
   }
 
   return (
     <div className="space-y-6">
+      <GrokCeoExchangePanel reportId={detail?.periodType === "grok_daily" ? detail.id : undefined} decisions={detail?.periodType === "grok_daily" ? detail.narrative.decisionesFounder : undefined} />
       {/* Generador */}
       <section className="border border-neutral-200 rounded-lg p-4 bg-white">
         <h2 className="text-lg font-semibold mb-3">Generar nuevo informe</h2>
@@ -188,7 +196,7 @@ export function CeoReportsClient({ initial }: { initial: ReportRow[] }) {
       {openId && (
         <section className="border-2 border-amber-400 rounded-lg p-5 bg-amber-50/40">
           {loadingDetail && <p className="text-sm text-neutral-500">Cargando informe…</p>}
-          {detail && <ReportDetailView detail={detail} onClose={() => { setOpenId(null); setDetail(null); }} />}
+          {detail && <ReportDetailView detail={detail} onClose={() => { requestSequence.current++; setOpenId(null); setDetail(null); setLoadingDetail(false); }} />}
         </section>
       )}
 
@@ -233,6 +241,11 @@ export function CeoReportsClient({ initial }: { initial: ReportRow[] }) {
 function ReportDetailView({ detail, onClose }: { detail: ReportDetail; onClose: () => void }) {
   const n = detail.narrative;
   const m = detail.metrics;
+  const grok = detail.periodType === "grok_daily";
+  const numeric = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+  const count = (v: unknown) => numeric(v) ? v.toLocaleString("es-ES") : "—";
+  const euro = (v: unknown) => numeric(v) ? v.toLocaleString("es-ES", { style: "currency", currency: "EUR" }) : "—";
+  const rate = (v: unknown) => numeric(v) ? v.toLocaleString("es-ES", { maximumFractionDigits: 1 }) + "%" : "—";
   return (
     <div>
       <div className="flex items-start justify-between mb-4">
@@ -256,8 +269,22 @@ function ReportDetailView({ detail, onClose }: { detail: ReportDetail; onClose: 
         <p className="text-sm text-neutral-800 leading-relaxed whitespace-pre-wrap">{n.resumenEjecutivo}</p>
       </div>
 
-      {/* KPIs rapidos del snapshot */}
-      {m && (
+      {/* KPIs del snapshot: distinguir ausencias de ceros y no inferir beneficio. */}
+      {grok && m && <div className="mb-5">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-neutral-600 mb-2">Últimos 7 días completos · datos guardados</h4>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <Kpi label="Cobrado" value={euro(m.finance?.income)} sub={"Anterior: " + euro(m.previous7?.finance?.income)} />
+          <Kpi label="Cierre comercial" value={rate(m.sales?.closeRate)} sub={"Anterior: " + rate(m.previous7?.sales?.closeRate)} />
+          <Kpi label="Ventas ganadas" value={count(m.sales?.won)} sub={"Anterior: " + count(m.previous7?.sales?.won)} />
+          <Kpi label="Renovación" value={rate(m.renewals?.renewalRate)} sub={"Anterior: " + rate(m.previous7?.renewals?.renewalRate)} />
+          <Kpi label="Registros CRM" value={count(m.leadsCreated)} />
+          <Kpi label="Ventas perdidas" value={count(m.sales?.lost)} />
+          <Kpi label="Renovaciones ganadas" value={count(m.renewals?.renewed)} />
+          <Kpi label="Renovaciones perdidas" value={count(m.renewals?.lost)} />
+        </div>
+        <p className="text-xs text-neutral-600 mt-2">— = dato no disponible. Gastos sin conciliación completa confirmada: cobrado no equivale a beneficio.</p>
+      </div>}
+      {!grok && m && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-5">
           <Kpi label="Ventas cerradas" value={m.sales?.won ?? 0} sub={m.sales?.revenue ? `${m.sales.revenue.toLocaleString("es-ES")}€` : undefined} />
           <Kpi label="No-show %" value={m.sales?.showUpRate != null ? `${100 - m.sales.showUpRate}%` : "—"} sub={m.sales?.no_show ? `${m.sales.no_show} llamadas` : undefined} />

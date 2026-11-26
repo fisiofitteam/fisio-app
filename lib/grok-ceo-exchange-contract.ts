@@ -8,7 +8,9 @@ export const founderSubmission = z.discriminatedUnion("kind", [
 export const advisoryReply = z.object({ id: z.string().uuid(), response: text }).strict();
 export function decisionQuestion(narrative: string, index: number): string | null {
   try {
-    const item = JSON.parse(narrative)?.decisionesFounder?.[index];
+    const decisions = JSON.parse(narrative)?.decisionesFounder;
+    if (!Array.isArray(decisions) || !Number.isInteger(index) || index < 0) return null;
+    const item = decisions[index];
     return typeof item === "string" && item.trim() && item.length <= 700 ? item : null;
   } catch { return null; }
 }

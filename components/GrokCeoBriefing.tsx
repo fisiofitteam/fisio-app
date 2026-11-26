@@ -72,7 +72,7 @@ export function GrokCeoBriefing() {
           <Metric label="Renovaciones perdidas" value={current.renewals?.lost} />
         </div>
         <p className="text-xs text-neutral-500 mt-2">Datos del momento de publicación. CRM no equivale a contactos únicos. Cierre por fecha de decisión.</p>
-        {(current.finance?.expense === 0 || !finite(current.finance?.expense)) && <p className="flex gap-2 text-xs text-amber-900 mt-2 bg-amber-50 border border-amber-200 rounded-lg p-3"><AlertTriangle size={16} className="shrink-0" /> Gastos sin cobertura confirmada: no interpretar el resultado de caja como beneficio real.</p>}
+        <p className="flex gap-2 text-xs text-amber-900 mt-2 bg-amber-50 border border-amber-200 rounded-lg p-3"><AlertTriangle size={16} className="shrink-0" /> Gastos sin conciliación completa confirmada: no interpretar el resultado de caja como beneficio real.</p>
       </div>}
       {!!n.alertas?.length && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3"><Items title="Alertas de negocio" items={n.alertas} /></div>}
       <div className="grid md:grid-cols-2 gap-4"><Items title="Luces" items={n.luces} /><Items title="Sombras" items={n.sombras} /></div>
