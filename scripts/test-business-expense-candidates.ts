@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+import { expenseCandidate, expenseReview, candidateDate, dayBounds } from "../lib/business-expense-candidate-contract";
+const base = {source:"gmail",sourceRef:"receipt-123",merchant:"Example",description:"Software",amountCents:1999,currency:"EUR",date:"2026-11-26",category:"software"};
+assert.ok(expenseCandidate.safeParse(base).success);
+for(const patch of [{amountCents:0},{amountCents:2.1},{currency:"USD"},{date:"2026-02-30"},{source:"unknown"},{approved:true}])assert.ok(!expenseCandidate.safeParse({...base,...patch}).success);
+assert.ok(expenseReview.safeParse({id:"x",action:"approve",category:"software"}).success);
+assert.ok(!expenseReview.safeParse({id:"x",action:"reject",note:" "}).success);
+assert.equal(candidateDate(base.date).toISOString(),"2026-11-26T12:00:00.000Z");
+assert.equal(dayBounds(candidateDate(base.date)).lt.toISOString(),"2026-11-27T00:00:00.000Z");
+console.log("Expense candidate contract: OK");

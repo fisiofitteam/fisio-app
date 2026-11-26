@@ -14,6 +14,7 @@ const TABS = [
   { href: `${BASE}/vias`, label: "🧭 Vías", key: "vias" },
 ];
 const TOOLS = [
+  { href: `${BASE}/gastos-pendientes`, label: "Gastos pendientes" },
   { href: `${BASE}/facturas`, label: "Facturas equipo" },
   { href: `${BASE}/facturas-pacientes`, label: "Facturas a pacientes" },
   { href: `${BASE}/anuncios`, label: "Anuncios" },
