@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
+import { viewerReportMetrics } from "@/lib/ceo-direction-contract";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   if (!report) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
 
   let metrics: any = null, narrative: any = null;
-  try { metrics = JSON.parse(report.metrics); } catch { /* ignore */ }
+  try { metrics = viewerReportMetrics(JSON.parse(report.metrics), user.id === process.env.GROK_CEO_FOUNDER_ID); } catch { /* ignore */ }
   try { narrative = JSON.parse(report.narrative); } catch { /* ignore */ }
 
   return NextResponse.json({

@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
-    "build:prod": "npm run test:ceo && npm run test:ponto && npm run test:support && node scripts/use-schema.js prod && prisma generate && npm run db:migrate:ceo && npm run db:migrate:support && next build",
+    "build:prod": "npm run test:ceo && npm run test:ponto && npm run test:direction && npm run test:support && node scripts/use-schema.js prod && prisma generate && npm run db:migrate:ceo && npm run db:migrate:support && next build",
     "start": "next start",
     "lint": "next lint",
     "db:push": "prisma db push",
@@ -26,7 +26,8 @@
     "db:migrate:ceo": "node scripts/migrate-ceo-production.cjs",
     "db:migrate:support": "node scripts/migrate-team-support.cjs",
     "test:support": "node --import tsx scripts/test-team-support.ts",
-    "test:ponto": "node --import tsx scripts/test-ponto-finance.ts"
+    "test:ponto": "node --import tsx scripts/test-ponto-finance.ts",
+    "test:direction": "node --import tsx scripts/test-ceo-direction.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.102.0",

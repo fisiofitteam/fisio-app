@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { GrokCeoExchangePanel } from "./GrokCeoExchangePanel";
+import { CeoDirectionSummary } from "./CeoDirectionSummary";
 import { BrainCircuit, AlertTriangle, Target, ChevronDown } from "lucide-react";
 type Period = { finance?: { income?: number | null; expense?: number | null }; sales?: { won?: number | null; lost?: number | null; closeRate?: number | null }; renewals?: { renewed?: number | null; lost?: number | null; renewalRate?: number | null }; leadsCreated?: number | null };
 type Snapshot = Period & { previous7?: Period | null; last30?: Period | null; previous30?: Period | null };
@@ -82,6 +83,7 @@ export function GrokCeoBriefing() {
 
       <details className="border-t pt-3"><summary className="cursor-pointer text-sm font-medium flex items-center gap-2"><ChevronDown size={16} /> Ver análisis completo de Grok</summary><p className="mt-3 text-sm whitespace-pre-wrap leading-relaxed">{n.resumenEjecutivo}</p><div className="grid md:grid-cols-2 gap-4 mt-4"><Items title="Tendencias" items={n.tendencias} /><Items title="Seguimiento" items={n.seguimiento} /></div></details>
     </div>}
+    <div className="mt-5"><CeoDirectionSummary /></div>
     <div className="mt-5"><GrokCeoExchangePanel reportId={report?.id} decisions={n?.decisionesFounder} /></div>
   </section>;
 }
