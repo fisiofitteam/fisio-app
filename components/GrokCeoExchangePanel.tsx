@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MessageSquare, Send, CheckCircle2, Clock } from "lucide-react";
-import { channelStatus, exchangeStatus, CONNECTION_TEST } from "@/lib/grok-ceo-channel-health";
+import { channelStatus, exchangeStatus, CONNECTION_TEST, GROK_CONNECTION_GUIDE } from "@/lib/grok-ceo-channel-health";
 type Exchange = { id: string; reportId: string | null; decisionIndex: number | null; kind: "analysis" | "decision"; decision: "approved" | "rejected" | null; question: string | null; message: string; createdAt: string; response: string | null; respondedAt: string | null; deliveredAt: string | null };
 type Inbox = { history: Exchange[]; reportDecisions: Exchange[]; channelConfigured: boolean; pendingCount: number; lastPollAt: string | null; lastReplyAt: string | null };
 const date = (value: string) => new Date(value).toLocaleString("es-ES", { timeZone: "Europe/Madrid", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -12,6 +12,7 @@ export function GrokCeoExchangePanel({ reportId, decisions = [] }: { reportId?: 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [copyNotice, setCopyNotice] = useState("");
   const retry = useRef<{ key: string; id: string } | null>(null);
   const currentReport = useRef(reportId);
   currentReport.current = reportId;
@@ -54,6 +55,7 @@ export function GrokCeoExchangePanel({ reportId, decisions = [] }: { reportId?: 
       <p className="text-xs text-neutral-600">Las fechas acreditan peticiones aceptadas por la app, no que la rutina externa esté programada ni que Grok haya leído cada mensaje.</p>
       <div className="flex flex-wrap gap-2"><button type="button" onClick={() => void load()} className="rounded-lg border bg-white px-3 py-1.5 text-xs">Actualizar estado</button>{inbox.channelConfigured && <button type="button" disabled={busy} onClick={() => void submit({kind:"analysis",message:CONNECTION_TEST})} className="rounded-lg border bg-white px-3 py-1.5 text-xs disabled:opacity-50">Enviar prueba de conexión</button>}</div>
     </div>}
+    {inbox && <details className="rounded-lg border border-neutral-200 p-3"><summary className="text-xs font-medium cursor-pointer">Conectar el buzón y el análisis de los lunes</summary><p className="mt-3 text-xs text-neutral-600">Estas instrucciones no contienen secretos. Copiarlas no cambia la rutina ni envía mensajes a Grok.</p><textarea readOnly aria-label="Instrucciones de conexión de Grok" value={GROK_CONNECTION_GUIDE} rows={8} className="mt-2 w-full rounded-lg border p-3 text-xs"/><button type="button" className="mt-2 rounded-lg border bg-white px-3 py-2 text-xs" onClick={async()=>{try{await navigator.clipboard.writeText(GROK_CONNECTION_GUIDE);setCopyNotice("Instrucciones copiadas.");}catch{setCopyNotice("Selecciona y copia el texto del cuadro.");}}}>Copiar instrucciones para Grok</button>{copyNotice&&<p role="status" className="mt-2 text-xs text-neutral-600">{copyNotice}</p>}</details>}
     {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
     {notice && <p role="status" className="text-sm text-emerald-700">{notice}</p>}
     {reportId && !!decisions.length && <div className="space-y-3">
