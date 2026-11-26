@@ -1,3 +1,4 @@
+import { bankAggregate } from "@/lib/bank-finance";
 import { prisma } from "@/lib/prisma";
 import { calculateSalesMetrics, calculateLeadOriginMetrics } from "@/lib/sales";
 import { calculateFinanceSummary } from "@/lib/finance";
@@ -36,6 +37,7 @@ export async function collectGrokSnapshot(now = new Date()) {
   return {
     version: 1, reportDay: madridDay(now), generatedAt: now.toISOString(), timezone: "Europe/Madrid",
     yesterday, last7, previous7, last30, previous30, activeClients,
+    banking: await bankAggregate(),
     capacity: numericFields(capacity.summary, ["coaches","assigned","active","paused","capacityTotal","freeTotal","renewsSoonTotal","expectedRenewTotal","saturatedCoaches"]),
     history: historyRows.flatMap(row => {
       try { const n = JSON.parse(row.narrative); return [{ day: row.id.slice(9), actions: n.accionesRecomendadas, decisions: n.decisionesFounder, summary: n.resumenEjecutivo }]; } catch { return []; }
@@ -46,7 +48,7 @@ export async function collectGrokSnapshot(now = new Date()) {
       leadOrigin: "Cohorte por fecha de cita; no mezclar con resultados por fecha de decisión.",
       finance: "income=cobrado, billed=facturado, profit=resultado de caja del periodo; no equivale a saldo bancario.",
       capacity: "Resumen actual del equipo; activeClients incluye activos no asignados.",
-      missing: "No disponibles todavía: saldo bancario, runway, impagos vencidos conciliados, satisfacción y leads cualificados. No inferirlos ni tratarlos como cero.",
+      missing: "Saldo bancario y previsión solo según el estado explícito de banking. No disponibles todavía: runway validado, impagos vencidos conciliados, satisfacción y leads cualificados. No inferirlos ni tratarlos como cero.",
     },
   };
 }

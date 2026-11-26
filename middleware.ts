@@ -121,7 +121,8 @@ export function middleware(req: NextRequest) {
   }
 
   // Exact machine-to-machine routes; authentication is mandatory in each handler.
-  if ((pathname === "/api/integrations/grok-ceo/metrics" && req.method === "GET") ||
+  if ((pathname === "/api/cron/ponto-sync" && req.method === "GET") ||
+      (pathname === "/api/integrations/grok-ceo/metrics" && req.method === "GET") ||
       (pathname === "/api/integrations/grok-ceo/report" && req.method === "POST") ||
       (pathname === "/api/integrations/grok-ceo/exchange" && ["GET", "POST"].includes(req.method)) ||
       (pathname === "/api/integrations/expense-candidates" && req.method === "POST")) {

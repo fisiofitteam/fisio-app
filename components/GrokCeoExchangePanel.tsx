@@ -1,8 +1,9 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MessageSquare, Send, CheckCircle2, Clock } from "lucide-react";
-type Exchange = { id: string; reportId: string | null; decisionIndex: number | null; kind: "analysis" | "decision"; decision: "approved" | "rejected" | null; question: string | null; message: string; createdAt: string; response: string | null; respondedAt: string | null };
-type Inbox = { history: Exchange[]; reportDecisions: Exchange[]; channelConfigured: boolean };
+import { channelStatus, exchangeStatus, CONNECTION_TEST } from "@/lib/grok-ceo-channel-health";
+type Exchange = { id: string; reportId: string | null; decisionIndex: number | null; kind: "analysis" | "decision"; decision: "approved" | "rejected" | null; question: string | null; message: string; createdAt: string; response: string | null; respondedAt: string | null; deliveredAt: string | null };
+type Inbox = { history: Exchange[]; reportDecisions: Exchange[]; channelConfigured: boolean; pendingCount: number; lastPollAt: string | null; lastReplyAt: string | null };
 const date = (value: string) => new Date(value).toLocaleString("es-ES", { timeZone: "Europe/Madrid", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 export function GrokCeoExchangePanel({ reportId, decisions = [] }: { reportId?: string; decisions?: string[] }) {
   const [inbox, setInbox] = useState<Inbox | null>(null);
@@ -47,7 +48,12 @@ export function GrokCeoExchangePanel({ reportId, decisions = [] }: { reportId?: 
   return <section id="buzon-ceo" className="rounded-xl border border-neutral-200 bg-white p-4 space-y-4">
     <div className="flex items-center gap-2"><MessageSquare size={20} className="text-amber-700" /><h3 className="font-semibold">Buzón de dirección</h3></div>
     <p className="text-xs text-neutral-600">Registra decisiones o solicita análisis al CEO IA. No incluyas datos personales de pacientes ni credenciales. Ningún mensaje autoriza operaciones automáticas.</p>
-    {inbox && !inbox.channelConfigured && <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">Puedes guardar encargos y decisiones. El canal de entrega a Grok aún no está configurado.</p>}
+    {inbox && <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 space-y-2">
+      <p className="font-medium text-sm">{({unconfigured:"Canal sin credencial",unverified:"Credencial configurada · conexión por verificar",poll_recorded:"Consulta autenticada registrada",reply_recorded:"Respuesta autenticada registrada"})[channelStatus(inbox)]}</p>
+      <div className="grid sm:grid-cols-3 gap-2 text-xs"><div><p className="text-neutral-500">Última consulta</p><p>{inbox.lastPollAt ? date(inbox.lastPollAt) : "Sin evidencia"}</p></div><div><p className="text-neutral-500">Última respuesta</p><p>{inbox.lastReplyAt ? date(inbox.lastReplyAt) : "Sin evidencia"}</p></div><div><p className="text-neutral-500">Sin responder</p><p>{inbox.pendingCount}</p></div></div>
+      <p className="text-xs text-neutral-600">Las fechas acreditan peticiones aceptadas por la app, no que la rutina externa esté programada ni que Grok haya leído cada mensaje.</p>
+      <div className="flex flex-wrap gap-2"><button type="button" onClick={() => void load()} className="rounded-lg border bg-white px-3 py-1.5 text-xs">Actualizar estado</button>{inbox.channelConfigured && <button type="button" disabled={busy} onClick={() => void submit({kind:"analysis",message:CONNECTION_TEST})} className="rounded-lg border bg-white px-3 py-1.5 text-xs disabled:opacity-50">Enviar prueba de conexión</button>}</div>
+    </div>}
     {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
     {notice && <p role="status" className="text-sm text-emerald-700">{notice}</p>}
     {reportId && !!decisions.length && <div className="space-y-3">
@@ -69,7 +75,7 @@ export function GrokCeoExchangePanel({ reportId, decisions = [] }: { reportId?: 
       <button disabled={!inbox || busy || !message.trim()} type="submit" className="flex items-center gap-2 rounded-lg bg-neutral-900 text-white px-4 py-2 text-sm disabled:opacity-50"><Send size={15} />{busy ? "Guardando…" : "Guardar encargo"}</button>
     </form>
     <div className="border-t pt-3"><h4 className="text-sm font-semibold mb-2">Historial de conversaciones y decisiones</h4>
-      {!inbox ? <p className="text-xs text-neutral-500">{error ? "No disponible." : "Cargando…"}</p> : !inbox.history.length ? <p className="text-xs text-neutral-500">Aún no hay mensajes.</p> : <div className="space-y-2">{inbox.history.map(item => <details key={item.id} className="rounded-lg border border-neutral-200 p-3"><summary className="cursor-pointer text-sm"><span className="inline-flex gap-1 items-center text-xs text-neutral-600 mr-2">{item.respondedAt ? <CheckCircle2 size={14} className="text-emerald-700" /> : <Clock size={14} />}{item.respondedAt ? "Respondido" : "Pendiente"}</span>{item.kind === "decision" ? (item.decision === "approved" ? "Aprobación" : "Rechazo") : "Encargo"} · {date(item.createdAt)}</summary>
+      {!inbox ? <p className="text-xs text-neutral-500">{error ? "No disponible." : "Cargando…"}</p> : !inbox.history.length ? <p className="text-xs text-neutral-500">Aún no hay mensajes.</p> : <div className="space-y-2">{inbox.history.map(item => <details key={item.id} className="rounded-lg border border-neutral-200 p-3"><summary className="cursor-pointer text-sm"><span className="inline-flex gap-1 items-center text-xs text-neutral-600 mr-2">{item.respondedAt ? <CheckCircle2 size={14} className="text-emerald-700" /> : <Clock size={14} />}{exchangeStatus(item)}</span>{item.kind === "decision" ? (item.decision === "approved" ? "Aprobación" : "Rechazo") : "Encargo"} · {date(item.createdAt)}</summary>
         {item.question && <p className="mt-2 text-sm font-medium whitespace-pre-wrap">{item.question}</p>}
         {item.message && <p className="mt-2 text-sm whitespace-pre-wrap">{item.message}</p>}
         {item.response && <div className="rounded-lg bg-neutral-50 border border-neutral-200 p-3 mt-3"><p className="text-xs font-semibold mb-1">Respuesta del CEO IA</p><p className="text-sm whitespace-pre-wrap">{item.response}</p></div>}

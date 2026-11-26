@@ -8,13 +8,17 @@ export async function GET(req: NextRequest) {
   if (!user) return json({ error: "Forbidden" }, 403);
   try {
     const reportId = req.nextUrl.searchParams.get("reportId");
-    const [history, reportDecisions] = await Promise.all([
+    const [history, reportDecisions, channel, pendingCount, latestResponse] = await Promise.all([
       prisma.grokCeoExchange.findMany({ where: { founderId: user.id }, orderBy: { createdAt: "desc" }, take: 60, select: exchangeSelect }),
       reportId && /^grok-ceo-\d{4}-\d{2}-\d{2}$/.test(reportId)
         ? prisma.grokCeoExchange.findMany({ where: { founderId: user.id, reportId, kind: "decision" }, select: exchangeSelect })
         : Promise.resolve([]),
+      prisma.grokCeoChannelState.findUnique({ where: { founderId: user.id }, select: { lastPollAt: true, lastReplyAt: true } }),
+      prisma.grokCeoExchange.count({ where: { founderId: user.id, respondedAt: null } }),
+      prisma.grokCeoExchange.findFirst({ where: { founderId: user.id, respondedAt: { not: null } }, orderBy: { respondedAt: "desc" }, select: { respondedAt: true } }),
     ]);
-    return json({ history, reportDecisions, channelConfigured: channelConfigured() });
+    return json({ history, reportDecisions, channelConfigured: channelConfigured(), pendingCount,
+      lastPollAt: channel?.lastPollAt ?? null, lastReplyAt: channel?.lastReplyAt ?? latestResponse?.respondedAt ?? null });
   } catch { return json({ error: "Buzón temporalmente no disponible." }, 503); }
 }
 export async function POST(req: NextRequest) {

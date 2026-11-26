@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ReceiptText, AlertTriangle, Plus } from "lucide-react";
 import { expenseCategories } from "@/lib/business-expense-candidate-contract";
@@ -73,8 +74,9 @@ export function BusinessExpenseCandidates() {
     }catch(e){setError(e instanceof Error?e.message:"Error de conexión.");}finally{setBusy(false);}
   }
   return <section className="space-y-5">
+    <Link href="/fisio/finanzas/banco" className="inline-block text-sm font-medium text-amber-800 underline">Banco y tesorería · Conectar Ponto</Link>
     <header className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-semibold flex items-center gap-2"><ReceiptText size={22} className="text-amber-700"/> Gastos pendientes de validar</h2><p className="text-sm text-neutral-500">Comprueba los candidatos antes de incorporarlos a tus finanzas.</p></div><button type="button" disabled={!data||busy} onClick={()=>setOpen(x=>!x)} className="flex items-center gap-2 rounded-lg bg-neutral-900 text-white px-3 py-2 text-sm disabled:opacity-50"><Plus size={16}/> Añadir candidato</button></header>
-    {data&&!data.ingestConfigured&&<p className="rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-sm p-3">Gmail y otras fuentes externas pendientes de conexión. La detección de Stripe se puede iniciar desde esta pantalla.</p>}
+    {data&&!data.ingestConfigured&&<p className="rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-sm p-3">Gmail y la ingestión externa están pendientes de conexión. Ponto dispone de su propia conexión en Banco y tesorería. La detección de Stripe se puede iniciar desde esta pantalla.</p>}
     <div className="rounded-xl border bg-white p-4 space-y-2"><h3 className="font-semibold text-sm">Detectar comisiones de Stripe</h3><p className="text-xs text-neutral-600">Consulta los últimos siete días completos. Agrupa solo comisiones de cobros en euros, sin datos de clientes. No incluye devoluciones, comisiones independientes ni otros movimientos. Comprueba si ya están descontadas de tus ingresos antes de contabilizar.</p><button type="button" disabled={!data||busy} onClick={()=>void scanStripe()} className="rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium disabled:opacity-50">Buscar candidatos en Stripe</button></div>
     {error&&<p role="alert" className="text-sm text-red-700">{error}</p>}{notice&&<p role="status" className="text-sm text-emerald-700">{notice}</p>}
     {open&&<form onSubmit={e=>{e.preventDefault();void add();}} className="border rounded-xl p-4 bg-white grid sm:grid-cols-2 gap-3">

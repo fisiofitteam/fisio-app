@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { founderSession } from "@/lib/grok-ceo-exchange";
 import { expenseCandidate, expenseReview, dayBounds } from "@/lib/business-expense-candidate-contract";
+import { normalizeMerchant } from "@/lib/bank-finance-contract";
 import { storeExpenseCandidate } from "@/lib/business-expense-candidate";
 export const dynamic = "force-dynamic";
 const json = (data: unknown, status = 200) => NextResponse.json(data, { status, headers: { "Cache-Control": "private, no-store" } });
@@ -48,8 +49,17 @@ export async function PATCH(req: NextRequest) {
       const now = new Date();
       if (d.action === "approve") {
         const amount = row.amountCents / 100;
-        const duplicate = await tx.transaction.count({ where: { type: "expense", occurredAt: dayBounds(row.occurredAt), amount: { gte: amount - 0.005, lt: amount + 0.005 } } });
-        if (duplicate && !d.confirmDuplicate) return { code: 409, error: "Existe un gasto por el mismo importe y fecha. Revisa el libro antes de añadirlo.", potentialDuplicate: true, matches: duplicate };
+        const bank = await tx.bankMovement.findUnique({ where: { candidateId: row.id } });
+        if (bank && (bank.personal || bank.conflict || bank.duplicateOfId)) return { code: 409, error: "Movimiento personal o modificado por el banco. Revísalo en Banco y tesorería." };
+        // Cross-source matches are warnings, never silent deduplication of legitimate equal charges.
+        const from = new Date(row.occurredAt.getTime() - 3 * 86400000);
+        const until = new Date(row.occurredAt.getTime() + 4 * 86400000);
+        const similar = await tx.businessExpenseCandidate.findMany({ where: { id: { not: row.id }, status: { in: ["pending", "approved"] }, amountCents: row.amountCents, occurredAt: { gte: from, lt: until } }, select: { merchant: true, description: true } });
+        const merchantKey = bank?.merchantKey || normalizeMerchant(row.merchant);
+        const crossSourceMatches = similar.filter(r => normalizeMerchant(r.merchant) === merchantKey).length;
+        const bankDuplicates = bank ? await tx.bankMovement.count({ where: { id: { not: bank.id }, duplicateOfId: null, accountId: bank.accountId, fingerprint: bank.fingerprint } }) : 0;
+        const duplicate = await tx.transaction.count({ where: { type: "expense", occurredAt: bank ? { gte: from, lt: until } : dayBounds(row.occurredAt), amount: { gte: amount - 0.005, lt: amount + 0.005 } } });
+        if ((duplicate || crossSourceMatches || bankDuplicates) && !d.confirmDuplicate) return { code: 409, error: "Hay un gasto o candidato similar por importe, proveedor o fecha cercana. Revisa la bandeja y el libro antes de añadirlo.", potentialDuplicate: true, matches: duplicate + crossSourceMatches + bankDuplicates };
         const transactionId = "expense-review:" + row.id;
         const updated = await tx.businessExpenseCandidate.updateMany({ where: { id: row.id, status: "pending" }, data: { status: "approved", category: d.category, transactionId, reviewedAt: now, reviewedById: user.id, reviewNote: d.note || null } });
         if (!updated.count) return { code: 409, error: "Otra revisión ha cambiado el gasto. Actualiza la bandeja." };
