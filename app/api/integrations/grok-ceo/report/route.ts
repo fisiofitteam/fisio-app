@@ -32,11 +32,16 @@ export async function POST(req: NextRequest) {
     const id = reportId(parsed.data.reportDay);
     const existing = await prisma.ceoReport.findUnique({ where: { id }, select: { id: true } });
     if (existing) return NextResponse.json({ ok: true, id, duplicate: true });
-    const metrics = await collectGrokPeriod(7);
-    const { start, end } = completeWindow(7);
+    const now = new Date();
+    const metrics = await collectGrokPeriod(7, 0, now);
+    // Additional comparisons must not prevent the existing daily report from being saved.
+    const comparisons = await Promise.allSettled([collectGrokPeriod(7, 7, now), collectGrokPeriod(30, 0, now), collectGrokPeriod(30, 30, now)]);
+    const [previous7, last30, previous30] = comparisons.map(result => result.status === "fulfilled" ? result.value : null);
+    const snapshot = { ...metrics, previous7, last30, previous30 };
+    const { start, end } = completeWindow(7, 0, now);
     const { reportDay, ...narrative } = parsed.data;
     await prisma.$transaction(async tx => {
-      await tx.ceoReport.create({ data: { id, periodType: "grok_daily", periodStart: start, periodEnd: end, periodLabel: "CEO IA · " + reportDay, metrics: JSON.stringify(metrics), narrative: JSON.stringify(narrative) } });
+      await tx.ceoReport.create({ data: { id, periodType: "grok_daily", periodStart: start, periodEnd: end, periodLabel: "CEO IA · " + reportDay, metrics: JSON.stringify(snapshot), narrative: JSON.stringify(narrative) } });
       await tx.teamNotification.create({ data: { targetProfessionalId: founder.id, type: "grok_ceo_daily", title: "Tu informe CEO IA está disponible", body: narrative.decisionesFounder.length ? "Incluye decisiones que requieren tu revisión." : "Consulta el diagnóstico y las prioridades de hoy.", actionUrl: "/fisio/informe-ceo?report=" + id, refKey: id } });
     });
     return NextResponse.json({ ok: true, id }, { status: 201 });

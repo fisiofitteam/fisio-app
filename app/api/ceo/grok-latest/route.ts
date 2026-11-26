@@ -5,8 +5,13 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const user = await getActiveProfessional();
   if (!user || user.role !== "ceo") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const row = await prisma.ceoReport.findFirst({ where: { periodType: "grok_daily" }, orderBy: { generatedAt: "desc" }, select: { id: true, periodLabel: true, generatedAt: true, narrative: true } });
+  const row = await prisma.ceoReport.findFirst({ where: { periodType: "grok_daily" }, orderBy: { generatedAt: "desc" }, select: { id: true, periodLabel: true, generatedAt: true, narrative: true, metrics: true } });
   if (!row) return NextResponse.json({ report: null });
-  try { return NextResponse.json({ report: { ...row, narrative: JSON.parse(row.narrative) } }); }
+  try {
+    const { metrics, narrative, ...meta } = row;
+    let snapshot = null;
+    try { snapshot = JSON.parse(metrics); } catch { /* legacy or malformed metrics */ }
+    return NextResponse.json({ report: { ...meta, narrative: JSON.parse(narrative), metrics: snapshot } });
+  }
   catch { return NextResponse.json({ report: null }); }
 }
