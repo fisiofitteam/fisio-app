@@ -32,8 +32,26 @@ const complete = makeSession("complete", blocks);
 assert.deepEqual(groupShoulderBatteries([...split, complete]).map(g => g.session.id), ["complete"], "Keep existing complete reports intact");
 assert.equal(groupShoulderBatteries([...split, makeSession("workout", [{ id: "w", type: "WORKOUT" }])])[0].sessions.length, 4);
 
-let sessions: any[] = split.map(s => ({ ...s }));
-const videos = split.flatMap(s => JSON.parse(s.tasksSnapshot)[0].assessment.tests.map((t: any) => ({
+// Reproduce calendar moves: one original block + three distinct standalone
+// assignments, all on the same day. No real patient data is used.
+const detached = split.map((s, i) => i === 0 ? s : ({ ...s, assignmentId: "detached-" + i,
+  assignment: { ...s.assignment, id: "detached-" + i, programId: "standalone-" + i, program: { isStandalone: true } } }));
+const recovered = groupShoulderBatteries(detached)[0];
+assert.equal(recovered.session.id, "session-0");
+assert.equal(recovered.sources.size, 15);
+assert.equal(groupShoulderBatteries(detached.map(s => s.id === "session-1" ? { ...s, id: "aaa-earlier" } : s))[0].session.id, "session-0", "Anchor is the original program, not the earliest standalone ID");
+assert.equal(groupShoulderBatteries(detached.map(s => s.id === "session-1" ? { ...s, assignment: { ...s.assignment, patientId: "other" } } : s)).length, 0);
+assert.equal(groupShoulderBatteries([...detached, { ...split[0], id: "other-initial", assignmentId: "other" }]).length, 0, "Two potential parent assignments are ambiguous");
+assert.equal(groupShoulderBatteries([...detached, { ...split[0], id: "same-day-retest", weekNumber: 14 }]).length, 0, "Never guess initial versus retest");
+assert.equal(groupShoulderBatteries([...detached, { ...detached[1], id: "duplicate" }]).length, 0);
+assert.equal(groupShoulderBatteries(detached.slice(1)).length, 0, "Standalone tests need an original program anchor");
+assert.deepEqual(groupShoulderBatteries([...detached, complete]).map(g => g.session.id), ["complete"]);
+const unrelated = makeSession("ankle", [{ id: "ankle-task", type: "ASSESSMENT", assessment: { tests: [{ id: "ankle-test" }] } }],
+  { assignmentId: "ankle", assignment: { ...split[0].assignment, programId: "ankle-program" } });
+assert.equal(groupShoulderBatteries([...detached, unrelated])[0].sources.size, 15);
+const fixture = process.env.SPLIT_STANDALONE === "1" ? detached : split;
+let sessions: any[] = fixture.map(s => ({ ...s }));
+const videos = fixture.flatMap(s => JSON.parse(s.tasksSnapshot)[0].assessment.tests.map((t: any) => ({
   id: "video-" + t.id, patientId: "patient", sessionId: s.id, taskId: JSON.parse(s.tasksSnapshot)[0].id, testId: t.id,
   url: "https://fixture.private.blob.vercel-storage.com/video.mp4", uploadedAt: new Date("2026-11-14T10:00:00Z"), reviewedAt: null,
 })));
@@ -43,12 +61,18 @@ let actor: any = { kind: "professional", pro: { id: "staff" } };
 let mutateDuringTransaction = false;
 let shared: any = null;
 const protocol = { rubricVersion: RUBRIC_VERSION, configJson: JSON.stringify(DEFAULT_PILOT_CONFIG) };
+function matchesSession(s: any, where: any): boolean {
+  if (where.OR && !where.OR.some((w: any) => matchesSession(s, w))) return false;
+  if (where.assignmentId && s.assignmentId !== where.assignmentId) return false;
+  if (where.assignment?.patientId && s.assignment.patientId !== where.assignment.patientId) return false;
+  if (where.assignment?.OR && !where.assignment.OR.some((w: any) => (w.programId && w.programId === s.assignment.programId) || (w.program && w.program.isStandalone === s.assignment.program?.isStandalone))) return false;
+  if (typeof where.weekNumber === "number" && s.weekNumber !== where.weekNumber) return false;
+  return !where.scheduledDate || s.scheduledDate >= where.scheduledDate.gte && s.scheduledDate < where.scheduledDate.lt;
+}
 const db: any = {
   programSession: {
     findUnique: async ({ where }: any) => sessions.find(s => s.id === where.id) ?? null,
-    findMany: async ({ where }: any) => sessions.filter(s => s.assignmentId === where.assignmentId &&
-      (typeof where.weekNumber !== "number" || s.weekNumber === where.weekNumber) &&
-      (!where.scheduledDate || s.scheduledDate >= where.scheduledDate.gte && s.scheduledDate < where.scheduledDate.lt))
+    findMany: async ({ where }: any) => sessions.filter(s => matchesSession(s, where))
       .map(s => ({ ...s, shoulderPilotReview: rows[s.id] ?? null })),
   },
   shoulderPilotProtocol: { findUnique: async () => protocol, upsert: async () => protocol },
@@ -128,7 +152,8 @@ async function main() {
   assert.equal((await service.getPilotView("session-1") as any).observations, undefined);
   actor = { kind: "professional", pro: { id: "staff" } };
   assert(await guards.groupedBatteryHasReview("session-3"));
-  assert.deepEqual(await guards.reviewedBatterySessionIds("assignment"), split.map(s => s.id));
+  for (const assignmentId of new Set(fixture.map(s => s.assignmentId)))
+    assert.deepEqual(await guards.reviewedBatterySessionIds(assignmentId), fixture.filter(s => s.assignmentId === assignmentId).map(s => s.id));
   const view: any = await service.getPilotView("session-2");
   const videoVersions = Object.fromEntries(view.videos.map((v: any) => [v.testId, v.id + "@" + v.uploadedAt]));
   const observations = { [testId]: { leftProgress: 50, rightProgress: 60 } };
@@ -152,14 +177,16 @@ async function main() {
   assert.equal((await sharing.getSharedShoulderReports(token))?.report.testFeedback?.[testId].pain,3);
   await sharing.revokeShoulderShare("session-1");
   assert.equal(await sharing.getSharedShoulderReports(token),null);
-  const retest=split.map(s=>({...s,id:"retest-"+s.id,weekNumber:14,scheduledDate:new Date("2027-02-15")}));
+  const retest=fixture.map(s=>({...s,id:"retest-"+s.id,weekNumber:s.assignmentId==="assignment"?14:1,scheduledDate:new Date("2027-02-15")}));
   sessions.push(...retest);
   const followup:any=await service.getPilotView(retest[3].id);
+  assert.equal(followup.weekNumber,14,"Standalone week 1 still resolves to the original week-14 retest");
   assert.equal(followup.baselineSessionId,"session-0");
   assert.equal(followup.baselineVideos.length,15,"Retest retrieves the complete split baseline");
   assert.equal(followup.baseline.testFeedback[testId].pain,3);
   mutateDuringTransaction = true;
   await assert.rejects(service.updatePilot("session-2", { ...save, version: rows["session-0"].version }), denied(409));
+  console.log(process.env.SPLIT_STANDALONE === "1" ? "LEGACY STANDALONE" : "SAME ASSIGNMENT");
   console.log("PASS: split battery, same-day grouping, all source videos, patient/assignment isolation, one draft, optimistic concurrency, publication and calendar protection");
 }
 main().catch(e => { console.error(e); process.exitCode = 1; }).finally(() => { (Module as any)._load = oldLoad; });

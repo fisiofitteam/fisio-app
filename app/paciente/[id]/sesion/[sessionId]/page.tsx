@@ -24,7 +24,7 @@ export default async function PatientSessionPage({
   if (session.assignment.patientId !== params.id) notFound();
 
   const battery = await resolveShoulderBattery(session);
-  const pilotWeek = battery ? session.weekNumber as 1 | 14 : undefined;
+  const pilotWeek = battery ? battery.session.weekNumber as 1 | 14 : undefined;
   const pilotTasks = battery?.sessions.flatMap(member => parseAndSortTasksSnapshot(member.tasksSnapshot)
     .filter(isShoulderPilotTask).map(task => ({ ...task, sourceSessionId: member.id })));
   const date = new Date(session.scheduledDate);
