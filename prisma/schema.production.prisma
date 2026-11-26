@@ -4424,3 +4424,21 @@ model MetodoRateLimit {
   expiresAt DateTime
   @@index([expiresAt])
 }
+
+ // Dedicated inbox for founder instructions and advisory responses. Never an execution queue.
+model GrokCeoExchange {
+  id             String   @id
+  founderId      String
+  reportId       String?
+  decisionIndex  Int?
+  kind           String
+  decision       String?
+  question       String?
+  message        String
+  createdAt      DateTime @default(now())
+  response       String?
+  respondedAt    DateTime?
+  @@unique([founderId, reportId, decisionIndex])
+  @@index([founderId, createdAt])
+  @@index([founderId, respondedAt, createdAt])
+}
