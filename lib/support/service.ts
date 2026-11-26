@@ -5,10 +5,10 @@ import { chatSchema, ticketSchema, updateTicketSchema, type ChatDTO, type Suppor
 import { buildSupportContext } from "./context";
 import { answerSupport } from "./answer";
 import { managesSupport } from "./guide";
+import { SupportError } from "./errors";
+import { claimSupportFiles, supportFileDTO } from "./materials";
+export { SupportError } from "./errors";
 
-export class SupportError extends Error {
-  constructor(public status: number, message: string) { super(message); }
-}
 const fail = (status: number, message: string): never => { throw new SupportError(status, message); };
 const parse = <T,>(raw: string | null, fallback: T): T => { try { return raw ? JSON.parse(raw) : fallback; } catch { return fallback; } };
 
@@ -65,7 +65,7 @@ export async function listSupportTickets(actor: ActiveProfessional, filters: { s
 }
 
 export async function readSupportTicket(actor: ActiveProfessional, id: string): Promise<TicketDTO> {
-  const row = await prisma.supportTicket.findFirst({ where: { id, ...ticketScope(actor) }, include: { events: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 200 }, _count: { select: { events: true } } } });
+  const row = await prisma.supportTicket.findFirst({ where: { id, ...ticketScope(actor) }, include: { attachments: { where: { eventId: null, status: "ready" }, orderBy: { createdAt: "asc" } }, events: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 200, include: { attachments: { where: { status: "ready" }, orderBy: { createdAt: "asc" } } } }, _count: { select: { events: true } } } });
   if (!row) return fail(404, "Aviso no disponible.");
   const people = await prisma.professional.findMany({ where: { id: { in: [...new Set([row.reporterId, ...row.events.map(e => e.authorId)])] } }, select: { id: true, fullName: true } });
   const name = (id: string) => people.find(p => p.id === id)?.fullName ?? "Profesional";
@@ -74,7 +74,8 @@ export async function readSupportTicket(actor: ActiveProfessional, id: string): 
     reporter: name(row.reporterId), context: parse(row.contextJson, {} as TicketDTO["context"]), conversation: parse(row.conversationJson, []),
     createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(),
     eventCount: row._count.events,
-    events: row.events.reverse().map(e => ({ id: e.id, body: e.body, author: name(e.authorId), createdAt: e.createdAt.toISOString(), status: e.status as TicketDTO["status"] | null, priority: e.priority as TicketDTO["priority"] | null })) };
+    attachments: row.attachments.map(supportFileDTO), links: parse(row.linksJson, []),
+    events: row.events.reverse().map(e => ({ id: e.id, body: e.body, author: name(e.authorId), createdAt: e.createdAt.toISOString(), status: e.status as TicketDTO["status"] | null, priority: e.priority as TicketDTO["priority"] | null, attachments: e.attachments.map(supportFileDTO), links: parse(e.linksJson, []) })) };
 }
 
 async function ceoIds() {
@@ -95,8 +96,9 @@ export async function createSupportTicket(actor: ActiveProfessional, input: z.in
   const ticket = await prisma.$transaction(async tx => {
     const row = await tx.supportTicket.create({ data: {
       requestId: input.requestId, reporterId: actor.id, kind: input.kind, title: input.title, description: input.description,
-      priority: input.priority, path: input.path, contextJson: JSON.stringify(context), conversationJson: JSON.stringify(history),
+      priority: input.priority, path: input.path, contextJson: JSON.stringify(context), conversationJson: JSON.stringify(history), linksJson: JSON.stringify(input.links ?? []),
     } });
+    await claimSupportFiles(tx, actor, input.attachmentIds ?? [], row.id, null);
     if (recipients.length) await tx.teamNotification.createMany({ data: recipients.map(id => ({
       targetProfessionalId: id, type: "support_new", title: input.kind === "problem" ? "Nuevo problema del equipo" : "Nueva propuesta de mejora",
       body: "Hay un aviso pendiente en Soporte y mejoras.", actionUrl: "/fisio/soporte?ticket=" + row.id, refKey: "support-new:" + row.id,
@@ -123,7 +125,8 @@ export async function updateSupportTicket(actor: ActiveProfessional, id: string,
       data: { ...(input.status ? { status: input.status } : {}), ...(input.priority ? { priority: input.priority } : {}), version: { increment: 1 }, updatedAt: new Date() } });
     if (result.count !== 1) fail(409, "El aviso ha cambiado. Actualízalo antes de guardar.");
     const event = await tx.supportTicketEvent.create({ data: { ticketId: id, requestId: input.requestId, authorId: actor.id,
-      body: input.body, status: input.status ?? null, priority: input.priority ?? null } });
+      body: input.body, status: input.status ?? null, priority: input.priority ?? null, linksJson: JSON.stringify(input.links ?? []) } });
+    await claimSupportFiles(tx, actor, input.attachmentIds ?? [], id, event.id);
     const targets = [...new Set(recipients)].filter(target => target !== actor.id);
     if (targets.length) await tx.teamNotification.createMany({ data: targets.map(target => ({
       targetProfessionalId: target, type: "support_update", title: "Novedades en tu aviso de soporte",

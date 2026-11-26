@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getActiveProfessional } from "@/lib/session";
-import { SupportError } from "./service";
+import { SupportError } from "./errors";
 import type { z } from "zod";
 
 export const supportJson = (data: unknown, status = 200) => NextResponse.json(data, { status, headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
@@ -14,7 +14,7 @@ export async function supportBody<T>(req: Request, schema: z.ZodType<T>): Promis
   if (origin && origin !== new URL(req.url).origin) throw new SupportError(403, "Origen no permitido.");
   if (!req.headers.get("content-type")?.startsWith("application/json")) throw new SupportError(400, "Formato no válido.");
   const raw = await req.text();
-  if (Buffer.byteLength(raw) > 16000) throw new SupportError(413, "El mensaje es demasiado largo.");
+  if (Buffer.byteLength(raw) > 48000) throw new SupportError(413, "El mensaje es demasiado largo.");
   let parsed: unknown;
   try { parsed = JSON.parse(raw); } catch { throw new SupportError(400, "Revisa el contenido del formulario."); }
   const result = schema.safeParse(parsed);

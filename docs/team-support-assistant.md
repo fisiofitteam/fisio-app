@@ -16,7 +16,11 @@ El equipo dispone de una burbuja **Ayuda** en el layout profesional. La conversa
 
 **Reportar un problema / Proponer una mejora** abre un formulario editable con título, descripción y prioridad. No se envía al hablar con el chat: requiere **Enviar al CEO**. Se guarda la pantalla, versión y contexto técnico. Adjuntar los últimos ocho mensajes es opcional y está desmarcado; se conserva una instantánea, nunca un enlace al chat futuro.
 
-En `/fisio/soporte`, accesible desde el menú y desde Mi CEO:
+En `/fisio/soporte`, accesible desde el menú y desde Mi CEO, **Nueva propuesta** y **Reportar un problema** abren un formulario manual: no requieren conversar antes con el asistente. El envío abre el aviso creado y actualiza la bandeja. El formulario admite hasta 8 archivos y 8 enlaces HTTPS por envío. Se pueden seleccionar o arrastrar archivos y pegar capturas desde el portapapeles; cada archivo tiene progreso y se confirma antes de habilitar el envío. Los enlaces tienen título opcional; Loom se reconoce visualmente. Las respuestas admiten también adjuntos y enlaces, incluso sin texto adicional.
+
+Los archivos se muestran con previsualización de imágenes, reproductor de vídeo/audio y descarga. Los documentos se sirven como descarga. Los enlaces se abren en otra pestaña: no se incrustan ni se consultan automáticamente y conservan los permisos del servicio de origen. Los adjuntos no se envían al modelo de IA.
+
+Permisos del panel:
 
 | Función | Profesional | CEO principal o adicional |
 | --- | --- | --- |
@@ -33,14 +37,18 @@ Resolver un aviso es seguimiento administrativo. No modifica código, pacientes,
 
 ## Persistencia y despliegue
 
-Cuatro tablas nuevas: `SupportConversation`, `SupportMessage`, `SupportTicket` y `SupportTicketEvent`. La conversación usa versión y bloqueo temporal de 90 s, con el proveedor fuera de la transacción. El proveedor tiene timeout de 45 s y no reintenta automáticamente. La ruta de chat permite hasta 60 s. Los avisos usan control de versión y eventos auditables; cada envío tiene clave de idempotencia. Tickets y sus notificaciones se guardan en la misma transacción.
+Tablas: `SupportConversation`, `SupportMessage`, `SupportTicket`, `SupportTicketEvent` y `SupportAttachment`. La conversación usa versión y bloqueo temporal de 90 s, con el proveedor fuera de la transacción. El proveedor tiene timeout de 45 s y no reintenta automáticamente. La ruta de chat permite hasta 60 s. Los avisos usan control de versión y eventos auditables; cada envío tiene clave de idempotencia. Tickets, vinculación de adjuntos y notificaciones se guardan en la misma transacción. La migración añade `linksJson` a tickets/eventos y la tabla de adjuntos sin modificar los avisos anteriores.
 
-Límites: 20 consultas/10 min, 10 avisos/hora y 30 actualizaciones/10 min por profesional. JSON máximo 16 KB, rutas locales validadas, cuerpos estrictos, autenticación profesional y respuestas `private, no-store`. El historial visible carga los últimos 60 mensajes; se conserva el historial anterior en base de datos.
+Límites: 20 consultas/10 min, 10 avisos/hora y 30 actualizaciones/10 min por profesional. JSON máximo 48 KB, rutas locales validadas, cuerpos estrictos, autenticación profesional y respuestas `private, no-store`. El historial visible carga los últimos 60 mensajes; se conserva el historial anterior en base de datos.
+
+Los adjuntos reutilizan el almacenamiento privado de grabaciones (`RECORDINGS_BLOB_READ_WRITE_TOKEN`, con fallback a `ASSESSMENT_BLOB_READ_WRITE_TOKEN`). No se usa el almacén público de imágenes. El servidor reserva un UUID/ruta sin nombres personales y emite un token limitado al propietario, MIME, tamaño y caducidad de una hora; máximo 100 MB por archivo, 20 reservas/hora. La subida va directamente a Blob, con multipart para archivos grandes; no atraviesa el límite de cuerpo de las funciones de Vercel. El navegador confirma por POST autenticado y el servidor comprueba los metadatos reales con `head`. No se añade un webhook público ni una excepción al middleware.
+
+Antes del envío, solo el propietario puede leer o retirar los archivos. Al enviar, la transacción solo acepta adjuntos propios, confirmados, vigentes y sin vincular; después, cada reproducción/descarga comprueba el acceso al ticket (autor o CEO). Las URLs Blob nunca se exponen. Se reutiliza el streaming con rangos de los vídeos, con MIME/disposición propios y `nosniff`. HTML, SVG y ejecutables no están admitidos. Retirar un archivo sin enviar elimina su objeto privado; las reservas abandonadas de más de 24 h se limpian para ese propietario al reservar nuevas subidas (hasta ocho por llamada). No se retiran adjuntos de avisos enviados.
 
 `build:prod` ejecuta `db:migrate:support` tras la migración CEO. `scripts/sql/team-support.sql` crea únicamente las nuevas tablas/índices dentro de una transacción, de forma idempotente. El script solo se ejecuta en `VERCEL_ENV=production` y no imprime secretos ni usa `prisma db push`. En desarrollo aislado se puede aplicar el SQL a PostgreSQL con `prisma db execute --schema prisma/schema.prisma --file scripts/sql/team-support.sql`. Nunca apuntar una prueba local a producción.
 
 ## Verificación
 
-`npm run test:support` prueba los handlers y servicios reales con almacenamiento transaccional simulado y proveedor simulado: sesión, roles adicionales, aislamiento, rutas/cuerpos maliciosos, acceso a pacientes, recuentos, minimización del contexto, errores de IA, enlaces permitidos, conversación persistente, concurrencia, reintentos, resumen editable, adjuntos opcionales, estados, respuestas y destinatarios. No consume IA ni escribe en producción.
+`npm run test:support` prueba los handlers y servicios reales con almacenamiento transaccional simulado y proveedor simulado: sesión, roles adicionales, aislamiento, rutas/cuerpos maliciosos, acceso a pacientes, recuentos, minimización del contexto, errores de IA, conversación persistente, concurrencia, reintentos, resumen editable, estados, respuestas y destinatarios. Incluye propuestas manuales, enlaces peligrosos, formatos/tamaños, tokens acotados, finalización, rechazo de almacenamiento público, acceso antes/después del envío, vinculación atómica, reintentos, retiradas y respuestas con archivos o solo enlace. No consume IA ni escribe en producción.
 
 Después de desplegar, comprobar burbuja, consulta de ayuda, navegación/recarga y apertura del formulario. Verificar que un aviso real llega a la bandeja CEO y una respuesta a la campanita del autor. No enviar avisos de prueba al equipo durante la comprobación visual.
