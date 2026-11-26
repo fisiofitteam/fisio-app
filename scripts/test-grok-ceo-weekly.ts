@@ -1,0 +1,13 @@
+import assert from "node:assert/strict";
+import { mondayForDay,weeklyAnchor,validDay,metricValue,weeklyStrategySchema } from "../lib/grok-ceo-weekly";
+assert.equal(mondayForDay("2026-11-26"),"2026-11-23");
+assert.equal(mondayForDay("2027-01-01"),"2026-12-28");
+assert.equal(weeklyAnchor("2026-11-26","2026-11-16"),"2026-11-16");
+assert.equal(weeklyAnchor("2026-11-26","2026-11-30"),"2026-11-23");
+assert.equal(weeklyAnchor("2026-11-26","invalid"),"2026-11-23");
+assert.equal(validDay("2026-02-30"),false);
+assert.equal(metricValue({finance:{income:0}},"finance.income"),0);
+assert.equal(metricValue({finance:{income:null}},"finance.income"),null);
+assert.equal(metricValue({},"finance.income"),null);
+assert.ok(weeklyStrategySchema.safeParse({summary:"Análisis",risks:[],focus:[],nextActions:[],decisions:[]}).success);
+console.log("Weekly strategy contract: OK");

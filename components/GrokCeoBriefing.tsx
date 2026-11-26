@@ -50,7 +50,7 @@ export function GrokCeoBriefing() {
     <div className="flex items-center gap-3 mb-4">
       <div className="bg-neutral-900 text-amber-400 rounded-xl p-2.5"><BrainCircuit size={24} /></div>
       <div className="flex-1"><h2 className="font-semibold">Tu CEO IA</h2><p className="text-xs text-neutral-500">{report ? new Date(report.generatedAt).toLocaleString("es-ES", { timeZone: "Europe/Madrid" }) : "Dirección empresarial"}</p></div>
-      <Link href={report ? "/fisio/informe-ceo?report=" + report.id : "/fisio/informe-ceo"} className="text-xs underline">Ver informes</Link>
+      <div className="flex flex-col gap-1 text-right"><Link href={report ? "/fisio/informe-ceo?report=" + report.id : "/fisio/informe-ceo"} className="text-xs underline">Ver informes</Link><Link href="/fisio/informe-ceo/semanal" className="text-xs underline">Estrategia semanal</Link></div>
     </div>
     {status === "error" && <p className="text-sm text-neutral-500">No se ha podido actualizar el informe.</p>}
     {!report || !n ? <p className="text-sm text-neutral-500">{status === "loading" ? "Cargando…" : "Aún no hay informes disponibles."}</p> : <div className="space-y-5">
