@@ -8,7 +8,7 @@ import { getCurrentPilotConfig } from "@/lib/shoulder-pilot-config-server";
 import { pilotSnapshotRefs } from "@/lib/shoulder-pilot-snapshot";
 import { batterySessionSelect, resolveShoulderBattery } from "./shoulder-battery-server";
 import type { BatterySource } from "./shoulder-battery";
-import { PILOT_PROGRAM_ID, RUBRIC_VERSION, HOLD_SCORING_VERSION, PILOT_TESTS, scorePilot, validatePilotConfig, legacyPositionLossNeedsReview, legacyHoldRangeNeedsReview, sanitizePilotObservations, validatePilotPain,
+import { RUBRIC_VERSION, HOLD_SCORING_VERSION, PILOT_TESTS, scorePilot, validatePilotConfig, legacyPositionLossNeedsReview, legacyHoldRangeNeedsReview, sanitizePilotObservations, validatePilotPain,
   type PilotObservations, type PilotPain, type PilotConfig } from "@/lib/shoulder-pilot";
 
 import { cleanShoulderNarrative, readReviewDraft, writeReviewDraft, type ShoulderNarrative } from "@/lib/shoulder-narrative";
@@ -36,7 +36,7 @@ export async function requirePilotAccess(sessionId: string, professionalOnly = f
   if (!actor) throw new PilotHttpError(401,"Inicia sesión.");
   if (professionalOnly && actor.kind !== "professional") throw new PilotHttpError(403,"Acceso reservado al equipo clínico.");
   let session = await prisma.programSession.findUnique({where:{id:sessionId}, select:batterySessionSelect});
-  if (!session || session.assignment.programId !== PILOT_PROGRAM_ID || ![1,14].includes(session.weekNumber)) throw unavailable();
+  if (!session) throw unavailable();
   if (actor.kind === "patient" ? actor.patient.id !== session.assignment.patientId :
         !await canAccessEvidencePatient(session.assignment.patientId,actor.pro)) throw unavailable();
   const battery=await resolveShoulderBattery(session);

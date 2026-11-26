@@ -1,6 +1,7 @@
 /**
  * Mueve UNA sola tarea de una sesión origen a otro día, creando una
- * ProgramSession standalone nueva en la fecha destino con solo esa tarea.
+ * ProgramSession nueva en la fecha destino con solo esa tarea. Los tests de
+ * la batería de hombro conservan su asignación y semana originales.
  *
  * Cubre el caso "el día tiene dos tareas y solo quiero mover una de ellas".
  * La sesión origen se queda con el resto de tareas (o se elimina si la
@@ -10,15 +11,15 @@
  * POST body: { sessionId, taskId, targetDate: "YYYY-MM-DDTHH:mm:ss" }
  *   → devuelve { sourceSessionId, newSessionId?, sourceDeleted }
  *
- * Nota: crea el mismo árbol Program → Week → Days → Assignment → Session
- * que /api/sessions POST usa para sesiones sueltas — así el nuevo item
- * aparece igual en el calendario y admite edición/borrado normal.
+ * Las demás actividades mantienen el árbol standalone del flujo histórico.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { groupedBatteryHasReview } from "@/lib/shoulder-battery-server";
 import { canAccessEvidencePatient } from "@/lib/patient-evidence";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
+import { shoulderBatteryKey } from "@/lib/shoulder-battery";
+import { isShoulderPilotTask } from "@/lib/patient-shoulder-session";
 
 export async function POST(req: NextRequest) {
   const user = await getActiveProfessional();
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
 
   const source = await prisma.programSession.findUnique({
     where: { id: sessionId },
-    include: { assignment: { select: { patientId: true } }, shoulderPilotReview:{select:{sessionId:true}} },
+    include: { assignment: { select: { patientId: true, programId: true } }, shoulderPilotReview:{select:{sessionId:true}} },
   });
   if (!source) return NextResponse.json({ error: "Sesión no encontrada" }, { status: 404 });
 
@@ -46,7 +47,9 @@ export async function POST(req: NextRequest) {
   const [movedRaw] = tasks.splice(idx, 1);
   const patientId = source.assignment.patientId;
   const newDate = new Date(targetDate);
+  if (Number.isNaN(newDate.getTime())) return NextResponse.json({ error: "Fecha inválida" }, { status: 400 });
   const dow = newDate.getDay() === 0 ? 7 : newDate.getDay();
+  const keepAssignment = !!shoulderBatteryKey(source) && isShoulderPilotTask(movedRaw);
 
   // Regeneramos el id de la tarea para evitar cualquier colisión futura
   // si el snapshot original se duplica en otra operación.
@@ -56,41 +59,45 @@ export async function POST(req: NextRequest) {
   };
 
   const result = await prisma.$transaction(async (tx) => {
-    // 1. Crear árbol standalone Program → Week → 7 Days → Assignment
-    //    para la sesión nueva. Reproducimos el patrón de /api/sessions POST.
-    const program = await tx.program.create({
-      data: {
-        name: `Sesión ${newDate.toLocaleDateString("es-ES")}`,
-        bodyZone: "otros",
-        type: "Suelta",
-        level: 1,
-        weeksCount: 1,
-        isStandalone: true,
-      },
-    });
-    const week = await tx.programWeek.create({
-      data: { programId: program.id, weekNumber: 1 },
-    });
-    for (let d = 1; d <= 7; d++) {
-      await tx.programDay.create({ data: { weekId: week.id, dayOfWeek: d } });
+    let targetAssignmentId = source.assignmentId;
+    if (!keepAssignment) {
+      // 1. Crear árbol standalone Program → Week → 7 Days → Assignment
+      //    para la sesión nueva. Reproducimos el patrón de /api/sessions POST.
+      const program = await tx.program.create({
+        data: {
+          name: `Sesión ${newDate.toLocaleDateString("es-ES")}`,
+          bodyZone: "otros",
+          type: "Suelta",
+          level: 1,
+          weeksCount: 1,
+          isStandalone: true,
+        },
+      });
+      const week = await tx.programWeek.create({
+        data: { programId: program.id, weekNumber: 1 },
+      });
+      for (let d = 1; d <= 7; d++) {
+        await tx.programDay.create({ data: { weekId: week.id, dayOfWeek: d } });
+      }
+      const startDate = new Date(newDate);
+      startDate.setDate(startDate.getDate() - (dow - 1));
+      startDate.setHours(0, 0, 0, 0);
+      const assignment = await tx.programAssignment.create({
+        data: {
+          patientId,
+          programId: program.id,
+          startDate,
+          weeksCount: 1,
+          isActive: true,
+        },
+      });
+      targetAssignmentId = assignment.id;
     }
-    const startDate = new Date(newDate);
-    startDate.setDate(startDate.getDate() - (dow - 1));
-    startDate.setHours(0, 0, 0, 0);
-    const assignment = await tx.programAssignment.create({
-      data: {
-        patientId,
-        programId: program.id,
-        startDate,
-        weeksCount: 1,
-        isActive: true,
-      },
-    });
     const created = await tx.programSession.create({
       data: {
-        assignmentId: assignment.id,
+        assignmentId: targetAssignmentId,
         scheduledDate: newDate,
-        weekNumber: 1,
+        weekNumber: keepAssignment ? source.weekNumber : 1,
         dayOfWeek: dow,
         tasksSnapshot: JSON.stringify([movedTask]),
       },

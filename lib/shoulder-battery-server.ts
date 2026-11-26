@@ -1,11 +1,12 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { groupShoulderBatteries, shoulderBatteryKey } from "./shoulder-battery";
+import { groupShoulderBatteries, shoulderBatteryKey, shoulderBatteryDayKey, type BatterySession } from "./shoulder-battery";
+import { PILOT_PROGRAM_ID } from "./shoulder-pilot";
 import { pilotSnapshotRefs } from "./shoulder-pilot-snapshot";
 
 export const batterySessionSelect = {
   id: true, assignmentId: true, scheduledDate: true, weekNumber: true, tasksSnapshot: true,
-  assignment: { select: { id: true, programId: true, patientId: true, patient: { select: { fullName: true } } } },
+  assignment: { select: { id: true, programId: true, patientId: true, program: { select: { isStandalone: true } }, patient: { select: { fullName: true } } } },
 } as const;
 type Reader = Pick<Prisma.TransactionClient, "programSession">;
 
@@ -15,12 +16,19 @@ export function batteryDayRange(date: Date) {
 }
 
 type SourceSession = Prisma.ProgramSessionGetPayload<{ select: typeof batterySessionSelect }>;
+export function batteryPeersWhere(session: BatterySession): Prisma.ProgramSessionWhereInput {
+  return {
+    assignment: { patientId: session.assignment.patientId,
+      OR: [{ programId: PILOT_PROGRAM_ID }, { program: { isStandalone: true } }] },
+    scheduledDate: batteryDayRange(session.scheduledDate), tasksSnapshot: { contains: "ASSESSMENT" },
+  };
+}
+
 export async function resolveShoulderBattery(session: SourceSession, db: Reader = prisma) {
-  if (!shoulderBatteryKey(session)) return null;
-  if (pilotSnapshotRefs(session.tasksSnapshot)) return groupShoulderBatteries([session])[0] ?? null;
+  if (!shoulderBatteryDayKey(session)) return null;
+  if (shoulderBatteryKey(session) && pilotSnapshotRefs(session.tasksSnapshot)) return groupShoulderBatteries([session])[0] ?? null;
   const siblings = await db.programSession.findMany({
-    where: { assignmentId: session.assignmentId, weekNumber: session.weekNumber,
-      scheduledDate: batteryDayRange(session.scheduledDate) },
+    where: batteryPeersWhere(session),
     select: batterySessionSelect,
   });
   return groupShoulderBatteries(siblings).find(g => g.sessions.some(s => s.id === session.id)) ?? null;
@@ -37,9 +45,15 @@ export async function groupedBatteryHasReview(sessionId: string) {
 
 export async function reviewedBatterySessionIds(assignmentId: string) {
   const sessions = await prisma.programSession.findMany({
-    where: { assignmentId, weekNumber: { in: [1, 14] }, tasksSnapshot: { contains: "ASSESSMENT" } },
+    where: { assignmentId, tasksSnapshot: { contains: "ASSESSMENT" } },
     select: { ...batterySessionSelect, shoulderPilotReview: { select: { sessionId: true } } },
   });
-  return groupShoulderBatteries(sessions).filter(g => g.sessions.some(s => s.shoulderPilotReview))
-    .flatMap(g => g.sessions.map(s => s.id));
+  const days = new Map(sessions.filter(s => shoulderBatteryDayKey(s)).map(s => [shoulderBatteryDayKey(s)!, s]));
+  if (!days.size) return [];
+  const peers = await prisma.programSession.findMany({
+    where: { OR: [...days.values()].map(batteryPeersWhere) },
+    select: { ...batterySessionSelect, shoulderPilotReview: { select: { sessionId: true } } },
+  });
+  return groupShoulderBatteries(peers).filter(g => g.sessions.some(s => s.shoulderPilotReview))
+    .flatMap(g => g.sessions.filter(s => s.assignmentId === assignmentId).map(s => s.id));
 }

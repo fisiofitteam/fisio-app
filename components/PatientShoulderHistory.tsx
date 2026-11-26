@@ -2,18 +2,24 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
 import { PILOT_PROGRAM_ID } from "@/lib/shoulder-pilot-snapshot";
-import { groupShoulderBatteries } from "@/lib/shoulder-battery";
+import { groupShoulderBatteries, shoulderBatteryDayKey } from "@/lib/shoulder-battery";
+import { batteryPeersWhere } from "@/lib/shoulder-battery-server";
 import { patientShoulderTitle } from "@/lib/patient-shoulder-session";
 
 // Authorize the patient before retrieving their shoulder assessment history.
 export async function PatientShoulderHistory({patientId}:{patientId:string}) {
   const actor=await getSessionUser();
   if(actor?.kind !== "patient" || actor.patient.id !== patientId)return null;
-  const sessions=await prisma.programSession.findMany({
-    where:{assignment:{patientId,programId:PILOT_PROGRAM_ID},weekNumber:{in:[1,14]},tasksSnapshot:{contains:"ASSESSMENT"}},
-    select:{id:true,assignmentId:true,scheduledDate:true,weekNumber:true,tasksSnapshot:true,assignment:{select:{programId:true}},shoulderPilotReview:{select:{publishedAt:true}}},
+  const select={id:true,assignmentId:true,scheduledDate:true,weekNumber:true,tasksSnapshot:true,
+    assignment:{select:{programId:true,patientId:true,program:{select:{isStandalone:true}}}},shoulderPilotReview:{select:{publishedAt:true}}} as const;
+  const selected=await prisma.programSession.findMany({
+    where:{assignment:{patientId,OR:[{programId:PILOT_PROGRAM_ID},{program:{isStandalone:true}}]},tasksSnapshot:{contains:"ASSESSMENT"}},
+    select,
     orderBy:[{scheduledDate:"desc"},{id:"asc"}],take:50
   });
+  const days=new Map(selected.filter(s=>shoulderBatteryDayKey(s)).map(s=>[shoulderBatteryDayKey(s)!,s]));
+  const peers=days.size?await prisma.programSession.findMany({where:{assignment:{patientId},OR:[...days.values()].map(batteryPeersWhere)},select}):[];
+  const sessions=[...new Map([...selected,...peers].map(s=>[s.id,s])).values()];
   const matching=groupShoulderBatteries(sessions).map(group=>group.session);
   if(!matching.length)return null;
   return <details className="rounded-2xl p-4 mb-4" style={{background:"var(--p-surface)",border:"1px solid var(--p-border)"}}>

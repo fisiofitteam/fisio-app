@@ -1,8 +1,8 @@
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { PILOT_PROGRAM_ID } from "@/lib/shoulder-pilot-snapshot";
-import { groupShoulderBatteries, shoulderBatteryKey } from "@/lib/shoulder-battery";
-import { batteryDayRange } from "@/lib/shoulder-battery-server";
+import { groupShoulderBatteries, shoulderBatteryDayKey } from "@/lib/shoulder-battery";
+import { batteryPeersWhere } from "@/lib/shoulder-battery-server";
 import { prisma } from "@/lib/prisma";
 import { parseAssessment } from "@/lib/assessments";
 import { partitionAssessmentHistory } from "@/lib/assessment-history";
@@ -39,7 +39,7 @@ export async function PatientAssessments({ patientId }: { patientId: string }) {
     id: true, assignmentId: true, weekNumber: true, scheduledDate: true, tasksSnapshot: true,
     completedAt: true, patientNotes: true,
     assessmentVideos: { where: { url: { not: null } }, select: { id: true }, take: 1 },
-    assignment: { select: { programId: true } },
+    assignment: { select: { programId: true, patientId: true, program: { select: { isStandalone: true } } } },
   } as const;
   // Future blank retests have their own limit and cannot displace received history.
   const [historySessions, futureSessions, videos] = await Promise.all([
@@ -50,11 +50,9 @@ export async function PatientAssessments({ patientId }: { patientId: string }) {
   // Fill any siblings that fell outside the history/future limit, including an
   // early upload whose other blocks still count as future blank sessions.
   const selected = [...historySessions, ...futureSessions];
-  const days = new Map(selected.filter(s => shoulderBatteryKey(s)).map(s => [shoulderBatteryKey(s)!, s]));
+  const days = new Map(selected.filter(s => shoulderBatteryDayKey(s)).map(s => [shoulderBatteryDayKey(s)!, s]));
   const siblings = days.size ? await prisma.programSession.findMany({
-    where: { assignment: { patientId }, OR: [...days.values()].map(s => ({
-      assignmentId: s.assignmentId, weekNumber: s.weekNumber, scheduledDate: batteryDayRange(s.scheduledDate),
-    })) }, select,
+    where: { assignment: { patientId }, OR: [...days.values()].map(batteryPeersWhere) }, select,
   }) : [];
   const sessions = [...new Map([...selected, ...siblings].map(s => [s.id, s])).values()];
   const batteries = groupShoulderBatteries(sessions);
