@@ -1,0 +1,16 @@
+import assert from "node:assert/strict";
+import { founderSubmission, advisoryReply, decisionQuestion } from "../lib/grok-ceo-exchange-contract";
+const id = "12345678-1234-4234-9234-123456789012";
+const reportId = "grok-ceo-2026-11-26";
+assert.ok(founderSubmission.safeParse({ id, kind: "analysis", message: "Analiza ventas", reportId }).success);
+assert.ok(!founderSubmission.safeParse({ id, kind: "analysis", message: "  " }).success);
+assert.ok(!founderSubmission.safeParse({ id, kind: "analysis", message: "test", execute: true }).success);
+assert.ok(founderSubmission.safeParse({ id, kind: "decision", reportId, decisionIndex: 0, decision: "approved", message: "" }).success);
+assert.ok(!founderSubmission.safeParse({ id, kind: "decision", reportId, decisionIndex: 3, decision: "approved", message: "" }).success);
+assert.ok(!founderSubmission.safeParse({ id, kind: "decision", reportId, decisionIndex: 0, decision: "execute", message: "" }).success);
+assert.equal(decisionQuestion(JSON.stringify({ decisionesFounder: ["Review pricing"] }), 0), "Review pricing");
+assert.equal(decisionQuestion("invalid JSON", 0), null);
+assert.equal(decisionQuestion(JSON.stringify({ decisionesFounder: [42] }), 0), null);
+assert.ok(advisoryReply.safeParse({ id, response: "Propuesta de análisis." }).success);
+assert.ok(!advisoryReply.safeParse({ id, response: "OK", action: "execute" }).success);
+console.log("Grok exchange contract: OK");

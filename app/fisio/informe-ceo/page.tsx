@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
+import { GrokCeoExchangePanel } from "@/components/GrokCeoExchangePanel";
 import { CeoReportsClient } from "@/components/CeoReportsClient";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +45,7 @@ export default async function CeoReportPage() {
         </p>
       </header>
 
+      <div className="mb-6"><GrokCeoExchangePanel /></div>
       <CeoReportsClient initial={initialList} />
     </main>
   );
