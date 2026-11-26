@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
     const { reportDay, ...narrative } = parsed.data;
     await prisma.$transaction(async tx => {
       await tx.ceoReport.create({ data: { id, periodType: "grok_daily", periodStart: start, periodEnd: end, periodLabel: "CEO IA · " + reportDay, metrics: JSON.stringify(snapshot), narrative: JSON.stringify(narrative) } });
-      await tx.teamNotification.create({ data: { targetProfessionalId: founder.id, type: "grok_ceo_daily", title: "Tu informe CEO IA está disponible", body: narrative.decisionesFounder.length ? "Incluye decisiones que requieren tu revisión." : "Consulta el diagnóstico y las prioridades de hoy.", actionUrl: "/fisio/informe-ceo?report=" + id, refKey: id } });
+      await tx.teamNotification.create({ data: { targetProfessionalId: founder.id, type: "grok_ceo_daily", title: "Tu informe CEO IA está disponible", body: narrative.decisionesFounder.length ? "Incluye decisiones que requieren tu revisión." : "Consulta el diagnóstico y las prioridades de hoy.", actionUrl: "/fisio/ceo-ia/informes?report=" + id, refKey: id } });
     });
     return NextResponse.json({ ok: true, id }, { status: 201 });
   } catch (e: unknown) {

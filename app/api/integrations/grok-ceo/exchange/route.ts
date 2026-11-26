@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
       }
       const now = new Date();
       await tx.grokCeoChannelState.upsert({ where: { founderId: founder.id }, create: { founderId: founder.id, lastReplyAt: now }, update: { lastReplyAt: now } });
-      await tx.teamNotification.create({ data: { targetProfessionalId: founder.id, type: "grok_ceo_reply", title: "Tu CEO IA ha respondido", body: "Consulta la respuesta en el buzón de dirección.", actionUrl: "/fisio/informe-ceo#buzon-ceo", refKey: id } });
+      await tx.teamNotification.create({ data: { targetProfessionalId: founder.id, type: "grok_ceo_reply", title: "Tu CEO IA ha respondido", body: "Consulta la respuesta en el buzón de dirección.", actionUrl: "/fisio/ceo-ia/comunicaciones", refKey: id } });
       return "saved";
     });
     return result === "missing" ? json({ error: "Not found" }, 404) : result === "conflict" ? json({ error: "Already answered" }, 409) : json({ ok: true, id, duplicate: result === "duplicate" });

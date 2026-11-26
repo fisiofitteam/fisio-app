@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { GrokCeoExchangePanel } from "./GrokCeoExchangePanel";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { CeoBankSnapshot } from "./CeoBankSnapshot";
 
 type ReportRow = {
@@ -51,7 +52,7 @@ const PERIOD_COLORS: Record<string, string> = {
   custom: "bg-neutral-200 text-neutral-800",
 };
 
-export function CeoReportsClient({ initial }: { initial: ReportRow[] }) {
+export function CeoReportsClient({ initial, isFounder = false }: { initial: ReportRow[]; isFounder?: boolean }) {
   const [reports, setReports] = useState<ReportRow[]>(initial);
   const [generating, setGenerating] = useState(false);
   const [periodType, setPeriodType] = useState<"week" | "month" | "quarter" | "custom">("week");
@@ -63,10 +64,11 @@ export function CeoReportsClient({ initial }: { initial: ReportRow[] }) {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const requestSequence = useRef(0);
 
+  const selectedReport = useSearchParams().get("report");
   useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get("report");
+    const id = selectedReport;
     if (id && /^grok-ceo-\d{4}-\d{2}-\d{2}$/.test(id)) void openReport(id);
-  }, []);
+  }, [selectedReport]);
 
   async function generate() {
     setError(null);
@@ -132,7 +134,7 @@ export function CeoReportsClient({ initial }: { initial: ReportRow[] }) {
 
   return (
     <div className="space-y-6">
-      <GrokCeoExchangePanel reportId={detail?.periodType === "grok_daily" ? detail.id : undefined} decisions={detail?.periodType === "grok_daily" ? detail.narrative.decisionesFounder : undefined} />
+      {isFounder && detail?.periodType === "grok_daily" && <Link className="inline-block rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium" href={"/fisio/ceo-ia/comunicaciones?report=" + detail.id}>Comentar este informe y registrar decisiones →</Link>}
       {/* Generador */}
       <section className="border border-neutral-200 rounded-lg p-4 bg-white">
         <h2 className="text-lg font-semibold mb-3">Generar nuevo informe</h2>
@@ -185,7 +187,7 @@ export function CeoReportsClient({ initial }: { initial: ReportRow[] }) {
         </div>
         {generating && (
           <p className="text-xs text-neutral-500 mt-3">
-            Recopilando métricas y llamando a Claude Sonnet… suele tardar 10-30 segundos.
+            Preparando el análisis con los datos del periodo… suele tardar 10-30 segundos.
           </p>
         )}
         {error && (

@@ -39,6 +39,7 @@ type Item = {
 };
 
 const PANEL: Item = { id: "panel", label: "Panel", Icon: LayoutDashboard, href: "/fisio", match: (p) => p === "/fisio" };
+const CEO_IA: Item = { id: "ceo-ia", label: "CEO IA", Icon: Brain, href: "/fisio/ceo-ia", match: p => p === "/fisio/ceo-ia" || p.startsWith("/fisio/ceo-ia/") || p === "/fisio/informe-ceo" || p.startsWith("/fisio/informe-ceo/") };
 const SOPORTE: Item = { id: "soporte", label: "Soporte y mejoras", Icon: LifeBuoy, href: "/fisio/soporte", match: p => p.startsWith("/fisio/soporte") };
 const TESTIMONIOS: Item = { id: "testimonios", label: "Testimonios", Icon: Sparkles, href: "/fisio/testimonios", match: (p) => p.startsWith("/fisio/testimonios") };
 const GRABACIONES: Item = { id: "grabaciones", label: "Grabaciones", Icon: Video, href: "/fisio/grabaciones", match: (p) => p === "/fisio/grabaciones" || p.startsWith("/fisio/grabaciones/") };
@@ -103,7 +104,7 @@ function itemsForRole(role: string, opts: { withResumenes: boolean }): Item[] {
     // CEO no ve el buzon de Alertas (lo gestionan head_success y fisios).
     // Lead magnets vive dentro de Contenido → Lead magnets, no en el
     // sidebar (para no ensuciar la navegación principal).
-    return [PANEL, PACIENTES, GRABACIONES, TESTIMONIOS, ...R, ADVANCE, LLAMADAS_VENTA, REFERIDOS, CONTENIDO, ANUNCIOS, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, RECURSOS, FINANZAS, EQUIPO, CHAT, FISIO_IA, SETTER_IA, AJUSTES];
+    return [PANEL, CEO_IA, PACIENTES, GRABACIONES, TESTIMONIOS, ...R, ADVANCE, LLAMADAS_VENTA, REFERIDOS, CONTENIDO, ANUNCIOS, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, RECURSOS, FINANZAS, EQUIPO, CHAT, FISIO_IA, SETTER_IA, AJUSTES];
   }
   if (role === "head_success") {
     return [PANEL, PACIENTES, GRABACIONES, TESTIMONIOS, ALERTAS, ...R, ADVANCE, BIBLIOTECA, REUNIONES, CALENDARIO, COMUNIDAD, TAREAS, LLAMADAS, RECURSOS, EQUIPO, CHAT, FISIO_IA, AJUSTES];
