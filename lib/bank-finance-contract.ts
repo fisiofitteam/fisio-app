@@ -25,6 +25,11 @@ export function cents(amount: number) {
   if (!Number.isSafeInteger(value) || Math.abs(value) > 100000000) throw new Error("amount_out_of_range");
   return value;
 }
+const bankDateFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit", day: "2-digit" });
+export function bankExpenseDate(instant: Date) {
+  const parts = Object.fromEntries(bankDateFormatter.formatToParts(instant).map(part => [part.type, part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
 export const bankAction = z.discriminatedUnion("action", [
   z.object({ action: z.literal("sync") }).strict(),
   z.object({ action: z.literal("discover") }).strict(),

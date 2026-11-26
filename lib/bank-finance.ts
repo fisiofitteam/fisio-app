@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { stripe } from "@/lib/stripe";
 import { PontoClient, PontoError, pontoConfiguration, type PontoTransaction } from "./ponto-client";
-import { cents, classifyMovement, detectSubscriptions, matchStripePayout, type BankRule, type Payout } from "./bank-finance-contract";
+import { bankExpenseDate, cents, classifyMovement, detectSubscriptions, matchStripePayout, type BankRule, type Payout } from "./bank-finance-contract";
 import { expenseCandidate } from "./business-expense-candidate-contract";
 import type { Prisma } from "@prisma/client";
 
@@ -36,7 +36,7 @@ function normalizedTransaction(accountId:string, row:PontoTransaction, rules:Ban
     fingerprint:createHash("sha256").update(JSON.stringify([amountCents,a.currency,occurredAt.toISOString(),description,classification.merchant])).digest("hex") };
 }
 async function candidateFor(tx:Prisma.TransactionClient, row:{id:string;accountId:string;externalId:string;amountCents:number;currency:string;occurredAt:Date;merchant:string;description:string;category:string}) {
-  const data=expenseCandidate.parse({source:"bank",sourceRef:`ponto:${row.accountId}:${row.externalId}`,merchant:row.merchant,description:row.description,amountCents:-row.amountCents,currency:row.currency,date:row.occurredAt.toISOString().slice(0,10),category:row.category});
+  const data=expenseCandidate.parse({source:"bank",sourceRef:`ponto:${row.accountId}:${row.externalId}`,merchant:row.merchant,description:row.description,amountCents:-row.amountCents,currency:row.currency,date:bankExpenseDate(row.occurredAt),category:row.category});
   const candidate=await tx.businessExpenseCandidate.upsert({where:{source_sourceRef:{source:data.source,sourceRef:data.sourceRef}},create:{source:data.source,sourceRef:data.sourceRef,merchant:data.merchant,description:data.description,amountCents:data.amountCents,occurredAt:new Date(data.date+"T12:00:00Z"),category:data.category},update:{}});
   await tx.bankMovement.update({where:{id:row.id},data:{candidateId:candidate.id}});
 }
@@ -47,6 +47,11 @@ export async function importBankRows(tx:Prisma.TransactionClient, accountId:stri
     const existing=await tx.bankMovement.findUnique({where:{accountId_externalId:{accountId,externalId:data.externalId}}});
     if(existing) {
       if(existing.fingerprint!==data.fingerprint) await tx.bankMovement.update({where:{id:existing.id},data:{conflict:true,reason:"Ponto ha modificado un movimiento ya importado; requiere revisión."}});
+      else if(existing.candidateId&&!existing.conflict) {
+        // Repair earlier UTC truncation only for pending bank candidates. Never change booked expenses.
+        const occurredAt=new Date(bankExpenseDate(data.occurredAt)+"T12:00:00Z");
+        await tx.businessExpenseCandidate.updateMany({where:{id:existing.candidateId,source:"bank",status:"pending",occurredAt:{not:occurredAt}},data:{occurredAt}});
+      }
       continue;
     }
     const row=await tx.bankMovement.create({data}); inserted++;
