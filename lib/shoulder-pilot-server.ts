@@ -56,7 +56,10 @@ type Access = Awaited<ReturnType<typeof requirePilotAccess>>;
 type ReadDb = Pick<Prisma.TransactionClient,"assessmentVideo">;
 async function media(db:ReadDb, sessionId:string, patientId:string, refs:Map<string,string>, preference:Pick<ShoulderPilotReview,"aiConsent"|"aiConsentAt">|null, sources?:Map<string,BatterySource>) {
   const rows=await db.assessmentVideo.findMany({where:{sessionId:sources&&new Set([...sources.values()].map(s=>s.sessionId)).size>1?{in:[...new Set([...sources.values()].map(s=>s.sessionId))]}:sessionId, patientId,uploadedAt:{not:null},url:{not:null}},select:{id:true,sessionId:true,testId:true,taskId:true,uploadedAt:true,url:true}});
-  return rows.filter(r=>refs.get(r.testId)===r.taskId && (!sources || sources.get(r.testId)?.sessionId===r.sessionId)).map(({url,...r})=>({...r,aiReviewBlocked:!canUseShoulderVideo(preference,r.id,url,{allowAssignedLegacy:true}),uploadedAt:r.uploadedAt!.toISOString(),url:"/api/assessments/media?id="+encodeURIComponent(r.id)+"&v="+r.uploadedAt!.getTime()}));
+  // The review UI and analysis queue scope their sources to the report session.
+  // Bind that DTO to the canonical report only AFTER checking the stored source
+  // session/task above. Keep the original source separately; no rows are moved.
+  return rows.filter(r=>refs.get(r.testId)===r.taskId && (!sources || sources.get(r.testId)?.sessionId===r.sessionId)).map(({url,...r})=>({...r,sourceSessionId:r.sessionId,sessionId,aiReviewBlocked:!canUseShoulderVideo(preference,r.id,url,{allowAssignedLegacy:true}),uploadedAt:r.uploadedAt!.toISOString(),url:"/api/assessments/media?id="+encodeURIComponent(r.id)+"&v="+r.uploadedAt!.getTime()}));
 }
 async function baselineMedia(previous:{sessionId:string;session:{tasksSnapshot:string};aiConsent:boolean;aiConsentAt:Date|null},patientId:string) {
   const refs=pilotSnapshotRefs(previous.session.tasksSnapshot);

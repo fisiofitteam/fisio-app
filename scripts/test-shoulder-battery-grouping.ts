@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import Module from "node:module";
 import { createHash } from "node:crypto";
 import { groupShoulderBatteries } from "../lib/shoulder-battery";
+import { pendingSources } from "../lib/shoulder-analysis-queue";
 import { PILOT_PROGRAM_ID, PILOT_TESTS, RUBRIC_VERSION, DEFAULT_PILOT_CONFIG } from "../lib/shoulder-pilot";
 
 const blocks = [...new Set(PILOT_TESTS.map(t => t.group))].map((group, i) => ({
@@ -53,7 +54,7 @@ const fixture = process.env.SPLIT_STANDALONE === "1" ? detached : split;
 let sessions: any[] = fixture.map(s => ({ ...s }));
 const videos = fixture.flatMap(s => JSON.parse(s.tasksSnapshot)[0].assessment.tests.map((t: any) => ({
   id: "video-" + t.id, patientId: "patient", sessionId: s.id, taskId: JSON.parse(s.tasksSnapshot)[0].id, testId: t.id,
-  url: "https://fixture.private.blob.vercel-storage.com/video.mp4", uploadedAt: new Date("2026-11-14T10:00:00Z"), reviewedAt: null,
+  url: `https://fixture.private.blob.vercel-storage.com/assessments/video-${t.id}/504587d4-c0f6-4f5b-a8e5-c54c7396fdca.mp4`, uploadedAt: new Date("2026-11-14T10:00:00Z"), reviewedAt: null,
 })));
 const videoIds = videos.map(v => v.id);
 const rows: Record<string, any> = {};
@@ -141,6 +142,15 @@ async function main() {
     assert.equal(view.sessionId, "session-0");
     assert.equal(view.videos.length, 15, "All 15 existing uploads, including Saturday deliveries for Monday");
     assert(!view.videos.some((v: any) => v.id === "wrong-source"));
+    assert.equal(pendingSources(view.videos, view.sessionId, [], {}, {}, false).length, 15,
+      "The client analysis queue must see every grouped delivery, not just the anchor's videos");
+    for (const test of PILOT_TESTS) {
+      // This is also the editor's source lookup for each video player.
+      const source = view.videos.find((v: any) => v.sessionId === view.sessionId && v.testId === test.id);
+      assert(source, "Every test must have a playable source in the report scope");
+      assert.equal(source.sourceSessionId, videos.find(v => v.id === source.id)!.sessionId,
+        "Retain the original stored source independently of the report scope");
+    }
   }
   actor = { kind: "patient", patient: { id: "someone-else" } };
   await assert.rejects(service.getPilotView("session-3"), denied(404));
@@ -183,6 +193,7 @@ async function main() {
   assert.equal(followup.weekNumber,14,"Standalone week 1 still resolves to the original week-14 retest");
   assert.equal(followup.baselineSessionId,"session-0");
   assert.equal(followup.baselineVideos.length,15,"Retest retrieves the complete split baseline");
+  assert(followup.baselineVideos.every((v:any)=>v.sessionId==="session-0"&&v.sourceSessionId),"Baseline players keep their own report scope and original source");
   assert.equal(followup.baseline.testFeedback[testId].pain,3);
   mutateDuringTransaction = true;
   await assert.rejects(service.updatePilot("session-2", { ...save, version: rows["session-0"].version }), denied(409));
