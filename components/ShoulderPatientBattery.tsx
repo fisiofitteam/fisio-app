@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Task } from "./SessionRunner";
 import { AssessmentUploader } from "./AssessmentUploader";
 import { isShoulderAttemptTest, type ShoulderTestFeedbackMap, type ShoulderTestFeedbackPatch } from "@/lib/shoulder-test-feedback";
@@ -32,7 +32,7 @@ function PainSelect({ text, value, set, disabled }: { text: string; value: strin
 export function ShoulderPatientBattery({sessionId,week,tasks,onBusyChange}: {sessionId:string;week:1|14;tasks:Task[];onBusyChange:(id:string,busy:boolean)=>void}) {
   const url = "/api/shoulder-pilot/"+encodeURIComponent(sessionId);
   const [data,setData] = useState<State|null>(null);
-  const [rows,setRows] = useState<{taskId:string;testId:string;url?:string}[]>([]);
+  const [rows,setRows] = useState<{sessionId:string;taskId:string;testId:string;url?:string}[]>([]);
   const [loadingRows,setLoadingRows] = useState(true);
   const [rowError,setRowError] = useState(false);
   const [status,setStatus] = useState("");
@@ -49,7 +49,7 @@ export function ShoulderPatientBattery({sessionId,week,tasks,onBusyChange}: {ses
   const [weights,setWeights] = useState<Record<string,{affectedKg:string;referenceKg:string}>>({});
   const [missedBaseline,setMissedBaseline] = useState(false);
   const [needsRefresh,setNeedsRefresh] = useState(false);
-  const tests=tasks.flatMap(task=>parseAssessment(task.assessment).tests.filter(t=>PILOT_TESTS.some(def=>def.id===t.id)).map(t=>({...t,taskId:task.id})));
+  const tests=tasks.flatMap(task=>parseAssessment(task.assessment).tests.filter(t=>PILOT_TESTS.some(def=>def.id===t.id)).map(t=>({...t,taskId:task.id,sourceSessionId:task.sourceSessionId??sessionId})));
   const busyCallback = useRef(onBusyChange);
   busyCallback.current = onBusyChange;
   const finalMissing = !data?.published && (data?.pain?.after == null || !Array.isArray(data?.pain?.painfulTestIds));
@@ -71,17 +71,22 @@ export function ShoulderPatientBattery({sessionId,week,tasks,onBusyChange}: {ses
     window.addEventListener("beforeunload",warn);
     return ()=>window.removeEventListener("beforeunload",warn);
   },[unsaved,saving]);
-  const count = tests.filter(t=>rows.some(r=>r.taskId===t.taskId&&r.testId===t.id&&r.url)).length;
+  const count = tests.filter(t=>rows.some(r=>r.sessionId===t.sourceSessionId&&r.taskId===t.taskId&&r.testId===t.id&&r.url)).length;
 
+  const sourceKey = JSON.stringify([...new Set(tasks.map(t=>t.sourceSessionId??sessionId))]);
+  const sourceSessionIds = useMemo<string[]>(()=>JSON.parse(sourceKey),[sourceKey]);
   async function reloadRows() {
     try {
-      const r=await fetch("/api/assessments?sessionId="+encodeURIComponent(sessionId),{cache:"no-store"});
-      if(!r.ok)throw Error("No se pudieron cargar tus entregas.");
-      setRows(await r.json());setRowError(false);
+      const results=await Promise.all(sourceSessionIds.map(async id=>{
+        const r=await fetch("/api/assessments?sessionId="+encodeURIComponent(id),{cache:"no-store"});
+        if(!r.ok)throw Error("No se pudieron cargar tus entregas.");
+        return r.json();
+      }));
+      setRows(results.flat());setRowError(false);
     } catch(e) {setRowError(true);throw e;}
     finally {setLoadingRows(false);}
   }
-  useEffect(()=>{void reloadRows().catch(()=>{});},[sessionId]);
+  useEffect(()=>{void reloadRows().catch(()=>{});},[sourceSessionIds]);
   useEffect(()=>{
     const ctrl=new AbortController();
     setData(null);setError("");setStatus("");setNeedsRefresh(false);
@@ -170,10 +175,10 @@ export function ShoulderPatientBattery({sessionId,week,tasks,onBusyChange}: {ses
         <p className="text-xs" style={dim}>Abre cada bloque para anotar cuánto te ha dolido cada prueba y dejar un comentario. Puedes subir el vídeo más tarde. Recorta cada uno a un minuto como máximo (hasta 1 GB) y mantén abierta la pantalla hasta que termine la subida.</p>
         {tasks.map((t,i)=>{
           const ts=parseAssessment(t.assessment).tests;
-          const received=ts.filter(x=>rows.some(r=>r.taskId===t.id&&r.testId===x.id&&r.url)).length;
-          return <details key={t.id} className="border rounded-xl p-3" style={{borderColor:"var(--p-border)"}}>
+          const received=ts.filter(x=>rows.some(r=>r.sessionId===(t.sourceSessionId??sessionId)&&r.taskId===t.id&&r.testId===x.id&&r.url)).length;
+          return <details key={(t.sourceSessionId??sessionId)+"/"+t.id} className="border rounded-xl p-3" style={{borderColor:"var(--p-border)"}}>
             <summary className="cursor-pointer font-semibold text-sm">{i+1}. {t.title}<span className="text-xs font-normal ml-1" style={dim}>{loadingRows||rowError?"":received+" / "+ts.length}</span></summary>
-            <div className="mt-3"><AssessmentUploader sessionId={sessionId} task={t} group={group} uploadFlow={SHOULDER_UPLOAD_FLOW} readOnly={!!data.published} renderExtra={testInputs} onBusyChange={b=>onBusyChange(t.id,b)}/></div>
+            <div className="mt-3"><AssessmentUploader sessionId={t.sourceSessionId??sessionId} task={t} group={{...group,rows:rows.filter(r=>r.sessionId===(t.sourceSessionId??sessionId))}} uploadFlow={SHOULDER_UPLOAD_FLOW} readOnly={!!data.published} renderExtra={testInputs} onBusyChange={b=>onBusyChange((t.sourceSessionId??sessionId)+"/"+t.id,b)}/></div>
           </details>;
         })}
         {!data.published&&<section className="space-y-3">

@@ -14,6 +14,7 @@ export type Exercise = { id: string; name: string; category: string; youtubeUrl:
 
 export type Task = {
   id: string;
+  sourceSessionId?: string;
   assessment?: import("@/lib/assessments").Assessment;
   type: "ASSESSMENT" | "WORKOUT" | "VIDEO" | "FORM" | "EVOLUTION";
   title: string;
@@ -46,6 +47,8 @@ export function SessionRunner({
   tasks,
   completed,
   pilotWeek,
+  pilotTasks,
+  pilotSessionId,
   existingResponses,
   existingPatientNotes = null,
   whatsappUrl = null,
@@ -54,6 +57,8 @@ export function SessionRunner({
   patientId: string;
   tasks: Task[];
   pilotWeek?: 1 | 14;
+  pilotTasks?: Task[];
+  pilotSessionId?: string;
   completed: boolean;
   existingResponses: string | null;
   /** Notas ya guardadas por el paciente (si la sesión ya está completada).
@@ -161,8 +166,8 @@ export function SessionRunner({
 
       {tasks.map((task) => pilotWeek && isShoulderPilotTask(task) ?
         (task === tasks.find(isShoulderPilotTask) ? <ShoulderPatientBattery
-          key={sessionId} sessionId={sessionId} week={pilotWeek}
-          tasks={tasks.filter(isShoulderPilotTask)}
+          key={pilotSessionId ?? sessionId} sessionId={pilotSessionId ?? sessionId} week={pilotWeek}
+          tasks={pilotTasks ?? tasks.filter(isShoulderPilotTask)}
           onBusyChange={(key, busy) => setUploads(prev => ({ ...prev, [key]: busy }))}
         /> : null) : (
         <div

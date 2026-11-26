@@ -6,6 +6,8 @@ import { canAccessEvidencePatient } from "@/lib/patient-evidence";
 import { getOnboardingConfig } from "@/lib/onboarding-config";
 import { getCurrentPilotConfig } from "@/lib/shoulder-pilot-config-server";
 import { pilotSnapshotRefs } from "@/lib/shoulder-pilot-snapshot";
+import { batterySessionSelect, resolveShoulderBattery } from "./shoulder-battery-server";
+import type { BatterySource } from "./shoulder-battery";
 import { PILOT_PROGRAM_ID, RUBRIC_VERSION, HOLD_SCORING_VERSION, PILOT_TESTS, scorePilot, validatePilotConfig, legacyPositionLossNeedsReview, legacyHoldRangeNeedsReview, sanitizePilotObservations, validatePilotPain,
   type PilotObservations, type PilotPain, type PilotConfig } from "@/lib/shoulder-pilot";
 
@@ -33,28 +35,35 @@ export async function requirePilotAccess(sessionId: string, professionalOnly = f
   const actor = await getSessionUser();
   if (!actor) throw new PilotHttpError(401,"Inicia sesión.");
   if (professionalOnly && actor.kind !== "professional") throw new PilotHttpError(403,"Acceso reservado al equipo clínico.");
-  const session = await prisma.programSession.findUnique({where:{id:sessionId}, select:{
-    id:true,assignmentId:true,scheduledDate:true,weekNumber:true,tasksSnapshot:true,
-    assignment:{select:{id:true,programId:true,patientId:true,patient:{select:{fullName:true}}}}
-  }});
+  let session = await prisma.programSession.findUnique({where:{id:sessionId}, select:batterySessionSelect});
   if (!session || session.assignment.programId !== PILOT_PROGRAM_ID || ![1,14].includes(session.weekNumber)) throw unavailable();
   if (actor.kind === "patient" ? actor.patient.id !== session.assignment.patientId :
         !await canAccessEvidencePatient(session.assignment.patientId,actor.pro)) throw unavailable();
-  const refs=pilotSnapshotRefs(session.tasksSnapshot);
-  if (!refs) throw unavailable();
+  const battery=await resolveShoulderBattery(session);
+  if (!battery) throw unavailable();
+  session=battery.session;
+  sessionId=session.id;
+  const refs=battery.refs;
   const [row,protocol]=await Promise.all([
     prisma.shoulderPilotReview.findUnique({where:{sessionId}}),
     prisma.shoulderPilotProtocol.findUnique({where:{assignmentId:session.assignmentId}}),
   ]);
   if (protocol && protocol.rubricVersion !== RUBRIC_VERSION) throw new PilotHttpError(409,"Esta valoración usa otra versión del baremo.");
   const config=protocol ? validatePilotConfig(JSON.parse(protocol.configJson)) : await getCurrentPilotConfig();
-  return {actor,session,row,config,refs,testIds:new Set(refs.keys())};
+  return {actor,session,row,config,refs,sourceRefs:battery.sources,sessionIds:battery.sessions.map(s=>s.id),testIds:new Set(refs.keys())};
 }
 type Access = Awaited<ReturnType<typeof requirePilotAccess>>;
 type ReadDb = Pick<Prisma.TransactionClient,"assessmentVideo">;
-async function media(db:ReadDb, sessionId:string, patientId:string, refs:Map<string,string>, preference:Pick<ShoulderPilotReview,"aiConsent"|"aiConsentAt">|null) {
-  const rows=await db.assessmentVideo.findMany({where:{sessionId, patientId,uploadedAt:{not:null},url:{not:null}},select:{id:true,sessionId:true,testId:true,taskId:true,uploadedAt:true,url:true}});
-  return rows.filter(r=>refs.get(r.testId)===r.taskId).map(({url,...r})=>({...r,aiReviewBlocked:!canUseShoulderVideo(preference,r.id,url,{allowAssignedLegacy:true}),uploadedAt:r.uploadedAt!.toISOString(),url:"/api/assessments/media?id="+encodeURIComponent(r.id)+"&v="+r.uploadedAt!.getTime()}));
+async function media(db:ReadDb, sessionId:string, patientId:string, refs:Map<string,string>, preference:Pick<ShoulderPilotReview,"aiConsent"|"aiConsentAt">|null, sources?:Map<string,BatterySource>) {
+  const rows=await db.assessmentVideo.findMany({where:{sessionId:sources&&new Set([...sources.values()].map(s=>s.sessionId)).size>1?{in:[...new Set([...sources.values()].map(s=>s.sessionId))]}:sessionId, patientId,uploadedAt:{not:null},url:{not:null}},select:{id:true,sessionId:true,testId:true,taskId:true,uploadedAt:true,url:true}});
+  return rows.filter(r=>refs.get(r.testId)===r.taskId && (!sources || sources.get(r.testId)?.sessionId===r.sessionId)).map(({url,...r})=>({...r,aiReviewBlocked:!canUseShoulderVideo(preference,r.id,url,{allowAssignedLegacy:true}),uploadedAt:r.uploadedAt!.toISOString(),url:"/api/assessments/media?id="+encodeURIComponent(r.id)+"&v="+r.uploadedAt!.getTime()}));
+}
+async function baselineMedia(previous:{sessionId:string;session:{tasksSnapshot:string};aiConsent:boolean;aiConsentAt:Date|null},patientId:string) {
+  const refs=pilotSnapshotRefs(previous.session.tasksSnapshot);
+  if(refs)return media(prisma,previous.sessionId,patientId,refs,previous);
+  const session=await prisma.programSession.findUnique({where:{id:previous.sessionId},select:batterySessionSelect});
+  const battery=session&&await resolveShoulderBattery(session);
+  return battery?media(prisma,battery.session.id,patientId,battery.refs,previous,battery.sources):[];
 }
 const sourceMap=(videos:Awaited<ReturnType<typeof media>>): Record<string,string> =>
   Object.fromEntries(videos.map(v=>[v.testId,v.id+"@"+v.uploadedAt]));
@@ -88,6 +97,7 @@ async function contextFields(patientId:string) {
 export async function getPilotView(sessionId:string) {
   const a=await requirePilotAccess(sessionId);
   const {row,session,actor,config}=a, patientId=session.assignment.patientId;
+  sessionId=session.id;
   const raw=unpack(row,config);
   const previous=session.weekNumber===14?await prisma.shoulderPilotReview.findFirst({
     where:{publishedAt:{not:null},session:{assignmentId:session.assignmentId,weekNumber:1,scheduledDate:{lte:session.scheduledDate}}},
@@ -97,8 +107,8 @@ export async function getPilotView(sessionId:string) {
   const common={sessionId,weekNumber:session.weekNumber,scheduledDate:session.scheduledDate.toISOString(),assignmentId:session.assignmentId,patientId,patientName:session.assignment.patient.fullName,version:row?.version||0,aiReviewBlocked:wasShoulderReviewWithdrawn(row),
     pain:raw.pain,legacyPainfulTestIds:raw.globalPain.painfulTestIds??null,testFeedback:raw.testFeedback,loads:raw.loads,config,rubricVersion:RUBRIC_VERSION,published:decode<Published|null>(row?.publishedJson,null),baseline:decode<Published|null>(previous?.publishedJson,null)};
   if(actor.kind==="patient")return common;
-  const [videos,initialFormContext,baselineVideos]=await Promise.all([media(prisma,sessionId,patientId,a.refs,row),contextFields(patientId),
-    previous?media(prisma,previous.sessionId,patientId,pilotSnapshotRefs(previous.session.tasksSnapshot)||new Map(),previous):Promise.resolve([])]);
+  const [videos,initialFormContext,baselineVideos]=await Promise.all([media(prisma,sessionId,patientId,a.refs,row,a.sourceRefs),contextFields(patientId),
+    previous?baselineMedia(previous,patientId):Promise.resolve([])]);
   // Never present a replacement upload as the evidence for a previously published baseline.
   const baselineEvidence=baselineVideos.filter(v=>common.baseline?.videoVersions?.[v.testId]===v.id+"@"+v.uploadedAt);
   return {...common,narrative:raw.narrative,observations:raw.observations,reviewedTestIds:validMarks(raw.marks,sourceMap(videos)),notAssessable:raw.notAssessable,initialFormContext,videos,baselineVideos:baselineEvidence,baselineSessionId:previous?.sessionId||null};
@@ -114,7 +124,7 @@ export async function getShoulderNarrativeEvidence(sessionId:string,version:numb
     where:{publishedAt:{not:null},session:{assignmentId:a.session.assignmentId,weekNumber:1,scheduledDate:{lte:a.session.scheduledDate}}},
     orderBy:[{session:{scheduledDate:"desc"}},{sessionId:"asc"}],select:{publishedJson:true}
   }):null;
-  const videos=await media(prisma,sessionId,a.session.assignment.patientId,a.refs,a.row);
+  const videos=await media(prisma,a.session.id,a.session.assignment.patientId,a.refs,a.row,a.sourceRefs);
   const sources=sourceMap(videos);
   // A replacement video invalidates any measurement verified against the previous revision.
   const observations=Object.fromEntries(Object.entries(d.observations).filter(([id])=>
@@ -141,10 +151,16 @@ export async function updatePilot(sessionId:string, input:unknown) {
   if (!object(input)) throw new PilotHttpError(400,"Formulario no válido.");
   const b=input, a=await requirePilotAccess(sessionId);
   const {actor,session,refs,testIds}=a;
+  sessionId=session.id;
   if(actor.kind==="patient" ? b.action!=="patient" : !["save","publish"].includes(String(b.action))) throw new PilotHttpError(403,"Acción no permitida.");
   if(!Number.isSafeInteger(b.version)||Number(b.version)<0)throw new PilotHttpError(400,"Falta la versión de la valoración.");
   try {
     await prisma.$transaction(async tx=>{
+      // A concurrent calendar edit must not detach evidence while saving the group.
+      if(a.sessionIds.length>1){
+        const fresh=await resolveShoulderBattery(session,tx);
+        if(!fresh || fresh.session.id!==sessionId || JSON.stringify([...fresh.sources])!==JSON.stringify([...a.sourceRefs]))throw conflict();
+      }
       // First writer pins the protocol for this assignment, including its week-14 retest.
       const protocol=await tx.shoulderPilotProtocol.upsert({where:{assignmentId:session.assignmentId},create:{assignmentId:session.assignmentId,rubricVersion:RUBRIC_VERSION,configJson:JSON.stringify(a.config)},update:{}});
       const config=validatePilotConfig(JSON.parse(protocol.configJson));
@@ -189,7 +205,7 @@ export async function updatePilot(sessionId:string, input:unknown) {
           data.loadsJson=JSON.stringify(raw.loads);data.observationsJson=writeReviewDraft(raw.observations,raw.narrative);data.reviewedJson=JSON.stringify(raw.marks);
         }
       }else{
-        const videos=await media(tx,sessionId,session.assignment.patientId,refs,row), sources=sourceMap(videos);
+        const videos=await media(tx,sessionId,session.assignment.patientId,refs,row,a.sourceRefs), sources=sourceMap(videos);
         if(b.action==="save"){
           allowedKeys(b,["action","version","observations","reviewedTestIds","notAssessable","videoVersions","narrative"]);
           const reasons=parseReasons(b.notAssessable??{},testIds);
@@ -219,7 +235,7 @@ export async function updatePilot(sessionId:string, input:unknown) {
           const when=new Date();
           const published:Published={holdScoringVersion:HOLD_SCORING_VERSION,weekNumber:session.weekNumber,scheduledDate:session.scheduledDate.toISOString(),publishedAt:when.toISOString(),rubricVersion:RUBRIC_VERSION,config,videoVersions:sources,observations:raw.observations,pain:raw.pain,testFeedback:raw.testFeedback,narrative:raw.narrative,notAssessable:raw.notAssessable,scores};
           // A reviewed upload uses the normal assessment locking rules; a pending replacement cannot silently replace it.
-          if(videos.length)await tx.assessmentVideo.updateMany({where:{id:{in:videos.map(v=>v.id)},sessionId,patientId:session.assignment.patientId,reviewedAt:null},data:{
+          if(videos.length)await tx.assessmentVideo.updateMany({where:{id:{in:videos.map(v=>v.id)},sessionId:{in:a.sessionIds},patientId:session.assignment.patientId,reviewedAt:null},data:{
             reviewedAt:when,reviewedById:actor.pro.id,pendingPath:null,pendingUntil:null,pendingMime:null,pendingSize:null,
           }});
           data.publishedJson=JSON.stringify(published);data.publishedAt=when;data.publishedById=actor.pro.id;

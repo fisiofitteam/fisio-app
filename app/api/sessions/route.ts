@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { canAccessEvidencePatient, canUseEvidence } from "@/lib/patient-evidence";
 import { getActiveProfessional } from "@/lib/session";
 import { validateAssessment } from "@/lib/assessments";
+import { groupedBatteryHasReview } from "@/lib/shoulder-battery-server";
 import { prisma } from "@/lib/prisma";
 
 // Crea una o varias sesiones sueltas (no atadas a un programa de la
@@ -159,6 +160,7 @@ export async function PATCH(req: NextRequest) {
 
   const owner = await prisma.programSession.findUnique({ where: { id }, select: { assignment: { select: { patientId: true } }, shoulderPilotReview:{ select:{sessionId:true} } } });
   if (!owner || !await canAccessEvidencePatient(owner.assignment.patientId)) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  if (await groupedBatteryHasReview(id)) return NextResponse.json({error:"Esta actividad forma parte de una valoración con datos guardados. Conserva sus pruebas juntas para mantener el informe."},{status:409});
   if (owner.shoulderPilotReview && tasksSnapshot !== undefined) return NextResponse.json({error:"La valoración ya tiene datos. No se pueden sustituir sus pruebas."},{status:409});
   try { for (const t of tasksSnapshot || []) if (t.type === "ASSESSMENT") validateAssessment(t.assessment); } catch { return NextResponse.json({ error: "Revisa los test de la valoración" }, { status: 400 }); }
   const data: any = {};
@@ -192,6 +194,8 @@ export async function DELETE(req: NextRequest) {
   });
   if (!session || !await canAccessEvidencePatient(session.assignment.patientId)) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   if (!session) return NextResponse.json({ error: "not found" }, { status: 404 });
+
+  if (await groupedBatteryHasReview(id)) return NextResponse.json({error:"Esta actividad forma parte de una valoración con datos guardados. No se puede eliminar por separado."},{status:409});
 
   const wasStandalone = session.assignment.program.isStandalone;
   const wasOnlySession = session.assignment.sessions.length === 1;

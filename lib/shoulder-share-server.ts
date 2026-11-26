@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { PilotHttpError, requirePilotAccess } from "@/lib/shoulder-pilot-server";
 import { PILOT_PROGRAM_ID } from "./shoulder-pilot";
 import { matchesPilotSnapshot } from "./shoulder-pilot-snapshot";
+import { batterySessionSelect, resolveShoulderBattery } from "./shoulder-battery-server";
 import { publicShoulderSnapshot,type SharedShoulderReports } from "./shoulder-shared-snapshot";
 
 type Access=Awaited<ReturnType<typeof requirePilotAccess>>;
@@ -39,6 +40,7 @@ export async function getPublishedShoulderReports(sessionId:string,professionalO
 }
 export async function getShoulderShareStatus(sessionId:string){
  const a=await requirePilotAccess(sessionId,true);
+ sessionId=a.session.id;
  const [rows,base]=await Promise.all([
    prisma.$queryRaw<StateRow[]>`SELECT "expiresAt","publishedAt","baselinePublishedAt" FROM "ShoulderReportShare"
      WHERE "sessionId"=${sessionId} AND "assignmentId"=${a.session.assignmentId} AND "patientId"=${a.session.assignment.patientId} AND "expiresAt"> CAST(${utc(new Date())} AS timestamp)`,
@@ -50,6 +52,7 @@ export async function getShoulderShareStatus(sessionId:string){
 }
 export async function issueShoulderShare(sessionId:string,expectedPublishedAt:string){
  const a=await requirePilotAccess(sessionId,true);
+ sessionId=a.session.id;
  if(!a.row?.publishedAt) throw new PilotHttpError(409,"Publica el informe antes de compartirlo.");
  const token=randomBytes(32).toString("base64url"),now=new Date(),expiresAt=new Date(now.getTime()+SHARE_LIFETIME);
  try{return await prisma.$transaction(async tx=>{
@@ -67,6 +70,7 @@ export async function issueShoulderShare(sessionId:string,expectedPublishedAt:st
 }
 export async function revokeShoulderShare(sessionId:string){
  const a=await requirePilotAccess(sessionId,true);
+ sessionId=a.session.id;
  await prisma.$executeRaw`DELETE FROM "ShoulderReportShare" WHERE "sessionId"=${sessionId} AND "patientId"=${a.session.assignment.patientId} AND "assignmentId"=${a.session.assignmentId}`;
  return none;
 }
@@ -74,12 +78,17 @@ export async function getSharedShoulderReports(token:string):Promise<SharedShoul
  if(!/^[A-Za-z0-9_-]{43}$/.test(token))return null;
  // Only the published report is returned to the visitor. The source snapshot is used
  // server-side solely to confirm that this is still the complete assigned battery.
- const rows=await prisma.$queryRaw<{reportJson:string;tasksSnapshot:string}[]>`SELECT sh."reportJson",s."tasksSnapshot" FROM "ShoulderReportShare" sh
+ const rows=await prisma.$queryRaw<{reportJson:string;tasksSnapshot:string;sessionId:string}[]>`SELECT sh."reportJson",s."tasksSnapshot",s."id" AS "sessionId" FROM "ShoulderReportShare" sh
  JOIN "ProgramSession" s ON s."id"=sh."sessionId" AND s."assignmentId"=sh."assignmentId"
  JOIN "ProgramAssignment" a ON a."id"=s."assignmentId" AND a."patientId"=sh."patientId"
  JOIN "Patient" p ON p."id"=a."patientId"
  WHERE sh."tokenHash"=${digest(token)} AND sh."expiresAt"> CAST(${utc(new Date())} AS timestamp) AND a."programId"=${PILOT_PROGRAM_ID} AND s."weekNumber" IN (1,14) LIMIT 1`;
- if(!rows.length||!matchesPilotSnapshot(rows[0].tasksSnapshot))return null;
+ if(!rows.length)return null;
+ if(!matchesPilotSnapshot(rows[0].tasksSnapshot)){
+   const session=await prisma.programSession.findUnique({where:{id:rows[0].sessionId},select:batterySessionSelect});
+   const battery=session&&await resolveShoulderBattery(session);
+   if(!battery||battery.session.id!==rows[0].sessionId)return null;
+ }
  const payload=JSON.parse(rows[0].reportJson);
  return {report:publicShoulderSnapshot(payload.report),previous:payload.previous?publicShoulderSnapshot(payload.previous):null};
 }

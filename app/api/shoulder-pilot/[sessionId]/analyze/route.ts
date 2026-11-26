@@ -20,7 +20,7 @@ async function checked(a:Awaited<ReturnType<typeof requirePilotAccess>>,v:{video
   const item=await prisma.assessmentVideo.findUnique({where:{id:v.videoId},select:{
     patientId:true,sessionId:true,taskId:true,testId:true,uploadedAt:true,url:true,
   }});
-  if(!item||item.patientId!==a.session.assignment.patientId||item.sessionId!==a.session.id||
+  if(!item||item.patientId!==a.session.assignment.patientId||item.sessionId!==(a.sourceRefs?.get(v.testId)?.sessionId??a.session.id)||
       item.testId!==v.testId||item.taskId!==a.refs.get(v.testId)||!item.url)throw new VideoError(404,"Entrega no disponible.");
   if(!item.uploadedAt||item.uploadedAt.toISOString()!==v.uploadedAt)throw new VideoError(409,"El vídeo ha cambiado. Recarga la revisión.");
   // Access and immutable patient/session/task/test/version bindings above also cover
@@ -48,7 +48,7 @@ export async function POST(req:NextRequest,{params}:RouteCtx){
     // Recheck the assigned source revision and its review policy immediately before and after inference.
     const fresh=await requirePilotAccess(params.sessionId,true);
     await checked(fresh,input);
-    const key=params.sessionId+"/"+input.videoId;
+    const key=fresh.session.id+"/"+input.videoId;
     if(inFlight.has(key))throw new VideoError(409,"Este vídeo ya se está analizando.");
     inFlight.add(key);activeKey=key;
     // Contact probes are isolated observations, never clinical draft fields.

@@ -3,8 +3,10 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { PatientNav } from "@/components/PatientNav";
-import { patientShoulderWeek, patientShoulderTitle } from "@/lib/patient-shoulder-session";
+import { patientShoulderTitle } from "@/lib/patient-shoulder-session";
 import { SessionRunner } from "@/components/SessionRunner";
+import { resolveShoulderBattery } from "@/lib/shoulder-battery-server";
+import { isShoulderPilotTask } from "@/lib/patient-shoulder-session";
 import { parseAndSortTasksSnapshot } from "@/lib/task-order";
 
 const DAY_NAMES = ["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
@@ -21,7 +23,10 @@ export default async function PatientSessionPage({
   if (!session) notFound();
   if (session.assignment.patientId !== params.id) notFound();
 
-  const pilotWeek = patientShoulderWeek(session.assignment.programId, session.weekNumber, session.tasksSnapshot);
+  const battery = await resolveShoulderBattery(session);
+  const pilotWeek = battery ? session.weekNumber as 1 | 14 : undefined;
+  const pilotTasks = battery?.sessions.flatMap(member => parseAndSortTasksSnapshot(member.tasksSnapshot)
+    .filter(isShoulderPilotTask).map(task => ({ ...task, sourceSessionId: member.id })));
   const date = new Date(session.scheduledDate);
   const dow = date.getDay() === 0 ? 7 : date.getDay();
   const tasks = parseAndSortTasksSnapshot(session.tasksSnapshot);
@@ -49,7 +54,7 @@ export default async function PatientSessionPage({
         <SessionRunner
           sessionId={session.id}
           patientId={params.id}
-          tasks={tasks} pilotWeek={pilotWeek}
+          tasks={tasks} pilotWeek={pilotWeek} pilotTasks={pilotTasks} pilotSessionId={battery?.session.id}
           completed={!!session.completedAt}
           existingResponses={session.responses}
           existingPatientNotes={session.patientNotes ?? null}

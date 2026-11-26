@@ -1,3 +1,4 @@
+import { reviewedBatterySessionIds } from "./shoulder-battery-server";
 import { parseAssessment } from "./assessments";
 import { prisma } from "./prisma";
 
@@ -52,9 +53,10 @@ export async function generateSessions(assignmentId: string) {
   });
   if (!assignment) throw new Error("Assignment not found");
 
+  const protectedSessionIds = await reviewedBatterySessionIds(assignmentId);
   // Borrar futuras no completadas
   await prisma.programSession.deleteMany({
-    where: { assignmentId, completedAt: null, assessmentVideos: { none: {} }, shoulderPilotReview: null },
+    where: { assignmentId, id: { notIn: protectedSessionIds }, completedAt: null, assessmentVideos: { none: {} }, shoulderPilotReview: null },
   });
 
   // startDate ya NO se alinea al lunes. Es el día real que el fisio
