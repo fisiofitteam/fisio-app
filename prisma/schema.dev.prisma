@@ -3733,6 +3733,7 @@ model GrokCeoExchange {
   createdAt      DateTime @default(now())
   response       String?
   respondedAt    DateTime?
+  deliveredAt    DateTime?
   @@unique([founderId, reportId, decisionIndex])
   @@index([founderId, createdAt])
   @@index([founderId, respondedAt, createdAt])
@@ -3817,6 +3818,75 @@ model SupportTicketEvent {
   priority   String?
   createdAt  DateTime @default(now())
   @@index([ticketId, createdAt])
+}
+
+// Metadata of authenticated advisory channel access, not evidence of an automatic routine.
+model GrokCeoChannelState {
+  founderId   String   @id
+  lastPollAt  DateTime?
+  lastReplyAt DateTime?
+}
+
+// Bank information only; no relation to patient or clinical tables.
+model PontoBankAccount {
+  id                 String @id
+  label              String
+  maskedReference    String
+  currency           String
+  currentBalanceCents Int?
+  availableBalanceCents Int?
+  balanceAt          DateTime?
+  authorizationExpiresAt DateTime?
+  transactionsAt     DateTime?
+  lastImportedAt     DateTime?
+  active             Boolean @default(true)
+}
+model BankMovement {
+  duplicateOfId String?
+  id            String @id @default(cuid())
+  accountId     String
+  externalId    String
+  fingerprint   String
+  amountCents   Int
+  currency      String
+  occurredAt    DateTime
+  merchant      String
+  merchantKey   String
+  description   String
+  category      String
+  personal      Boolean @default(false)
+  reason        String
+  conflict      Boolean @default(false)
+  candidateId   String? @unique
+  stripePayoutId String? @unique
+  reviewedById  String?
+  reviewedAt    DateTime?
+  createdAt     DateTime @default(now())
+  @@unique([accountId, externalId])
+  @@index([accountId, occurredAt])
+  @@index([merchantKey, occurredAt])
+}
+model BankClassificationRule {
+  id          String @id @default(cuid())
+  merchantKey String
+  amountCents Int?
+  category    String
+  personal    Boolean @default(false)
+  enabled     Boolean @default(true)
+  createdById String
+  createdAt   DateTime @default(now())
+  @@index([merchantKey])
+}
+model BankSyncState {
+  selectedAccountIds String @default("[]")
+  id             String @id
+  paused         Boolean @default(false)
+  leaseId        String?
+  leaseUntil     DateTime?
+  lastAttemptAt  DateTime?
+  lastSuccessAt  DateTime?
+  lastError      String?
+  stripeStatus   String?
 }
 
 model SupportAttachment {

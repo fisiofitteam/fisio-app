@@ -7,7 +7,13 @@ export async function GET(req: NextRequest) {
   const founder = await integrationFounder(req.headers.get("authorization"));
   if (!founder) return json({ error: "Unauthorized" }, 401);
   try {
-    const pending = await prisma.grokCeoExchange.findMany({ where: { founderId: founder.id, respondedAt: null }, orderBy: { createdAt: "asc" }, take: 25, select: exchangeSelect });
+    const pending = await prisma.$transaction(async tx => {
+      const now = new Date();
+      const rows = await tx.grokCeoExchange.findMany({ where: { founderId: founder.id, respondedAt: null }, orderBy: { createdAt: "asc" }, take: 25, select: exchangeSelect });
+      if (rows.length) await tx.grokCeoExchange.updateMany({ where: { founderId: founder.id, id: { in: rows.map(row => row.id) }, deliveredAt: null }, data: { deliveredAt: now } });
+      await tx.grokCeoChannelState.upsert({ where: { founderId: founder.id }, create: { founderId: founder.id, lastPollAt: now }, update: { lastPollAt: now } });
+      return rows.map(row => ({ ...row, deliveredAt: row.deliveredAt ?? now }));
+    });
     return json({ version: 1, scope: "advisory_only", pending, notice: "Respond with analysis only. Founder decisions are records, not permission to execute operations." });
   } catch { return json({ error: "Exchange unavailable" }, 503); }
 }
@@ -29,6 +35,8 @@ export async function POST(req: NextRequest) {
         const row = await tx.grokCeoExchange.findFirst({ where: { id, founderId: founder.id }, select: { response: true } });
         return row ? row.response === response ? "duplicate" : "conflict" : "missing";
       }
+      const now = new Date();
+      await tx.grokCeoChannelState.upsert({ where: { founderId: founder.id }, create: { founderId: founder.id, lastReplyAt: now }, update: { lastReplyAt: now } });
       await tx.teamNotification.create({ data: { targetProfessionalId: founder.id, type: "grok_ceo_reply", title: "Tu CEO IA ha respondido", body: "Consulta la respuesta en el buzón de dirección.", actionUrl: "/fisio/informe-ceo#buzon-ceo", refKey: id } });
       return "saved";
     });

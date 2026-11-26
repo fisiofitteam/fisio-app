@@ -15,4 +15,4 @@ export async function integrationFounder(header: string | null) {
   return prisma.professional.findFirst({ where: { id, role: "ceo", active: true }, select: { id: true } });
 }
 export const channelConfigured = () => (process.env.GROK_CEO_EXCHANGE_TOKEN?.length ?? 0) >= 32;
-export const exchangeSelect = { id: true, reportId: true, decisionIndex: true, kind: true, decision: true, question: true, message: true, createdAt: true, response: true, respondedAt: true } as const;
+export const exchangeSelect = { id: true, reportId: true, decisionIndex: true, kind: true, decision: true, question: true, message: true, createdAt: true, response: true, respondedAt: true, deliveredAt: true } as const;
