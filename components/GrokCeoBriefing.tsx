@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { GrokCeoExchangePanel } from "./GrokCeoExchangePanel";
 import { BrainCircuit, AlertTriangle, Target, ChevronDown } from "lucide-react";
 type Period = { finance?: { income?: number | null; expense?: number | null }; sales?: { won?: number | null; lost?: number | null; closeRate?: number | null }; renewals?: { renewed?: number | null; lost?: number | null; renewalRate?: number | null }; leadsCreated?: number | null };
 type Snapshot = Period & { previous7?: Period | null; last30?: Period | null; previous30?: Period | null };
@@ -49,7 +50,7 @@ export function GrokCeoBriefing() {
     <div className="flex items-center gap-3 mb-4">
       <div className="bg-neutral-900 text-amber-400 rounded-xl p-2.5"><BrainCircuit size={24} /></div>
       <div className="flex-1"><h2 className="font-semibold">Tu CEO IA</h2><p className="text-xs text-neutral-500">{report ? new Date(report.generatedAt).toLocaleString("es-ES", { timeZone: "Europe/Madrid" }) : "Dirección empresarial"}</p></div>
-      <Link href={report ? "/fisio/informe-ceo?report=" + report.id : "/fisio/informe-ceo"} className="text-xs underline">Ver informes</Link>
+      <div className="flex flex-col gap-1 text-right"><Link href={report ? "/fisio/informe-ceo?report=" + report.id : "/fisio/informe-ceo"} className="text-xs underline">Ver informes</Link><Link href="/fisio/informe-ceo/semanal" className="text-xs underline">Estrategia semanal</Link></div>
     </div>
     {status === "error" && <p className="text-sm text-neutral-500">No se ha podido actualizar el informe.</p>}
     {!report || !n ? <p className="text-sm text-neutral-500">{status === "loading" ? "Cargando…" : "Aún no hay informes disponibles."}</p> : <div className="space-y-5">
@@ -71,15 +72,16 @@ export function GrokCeoBriefing() {
           <Metric label="Renovaciones perdidas" value={current.renewals?.lost} />
         </div>
         <p className="text-xs text-neutral-500 mt-2">Datos del momento de publicación. CRM no equivale a contactos únicos. Cierre por fecha de decisión.</p>
-        {(current.finance?.expense === 0 || !finite(current.finance?.expense)) && <p className="flex gap-2 text-xs text-amber-900 mt-2 bg-amber-50 border border-amber-200 rounded-lg p-3"><AlertTriangle size={16} className="shrink-0" /> Gastos sin cobertura confirmada: no interpretar el resultado de caja como beneficio real.</p>}
+        <p className="flex gap-2 text-xs text-amber-900 mt-2 bg-amber-50 border border-amber-200 rounded-lg p-3"><AlertTriangle size={16} className="shrink-0" /> Gastos sin conciliación completa confirmada: no interpretar el resultado de caja como beneficio real.</p>
       </div>}
       {!!n.alertas?.length && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3"><Items title="Alertas de negocio" items={n.alertas} /></div>}
       <div className="grid md:grid-cols-2 gap-4"><Items title="Luces" items={n.luces} /><Items title="Sombras" items={n.sombras} /></div>
       <div className="border-t pt-4"><h3 className="flex items-center gap-2 font-semibold text-sm mb-3"><Target size={17} /> Prioridades de hoy</h3>
         <ol className="space-y-2">{n.accionesRecomendadas.map((a,i) => <li key={i} className="flex items-start gap-3 rounded-lg border border-neutral-200 p-3 text-sm"><span className="font-semibold text-amber-800 tabular-nums">{String(i+1).padStart(2,"0")}</span><span>{a}</span></li>)}</ol>
       </div>
-      {!!n.decisionesFounder?.length && <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4"><Items title="Requiere tu decisión" items={n.decisionesFounder} /></div>}
+
       <details className="border-t pt-3"><summary className="cursor-pointer text-sm font-medium flex items-center gap-2"><ChevronDown size={16} /> Ver análisis completo de Grok</summary><p className="mt-3 text-sm whitespace-pre-wrap leading-relaxed">{n.resumenEjecutivo}</p><div className="grid md:grid-cols-2 gap-4 mt-4"><Items title="Tendencias" items={n.tendencias} /><Items title="Seguimiento" items={n.seguimiento} /></div></details>
     </div>}
+    <div className="mt-5"><GrokCeoExchangePanel reportId={report?.id} decisions={n?.decisionesFounder} /></div>
   </section>;
 }

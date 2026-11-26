@@ -3719,3 +3719,41 @@ model MetodoRateLimit {
   expiresAt DateTime
   @@index([expiresAt])
 }
+
+ // Dedicated inbox for founder instructions and advisory responses. Never an execution queue.
+model GrokCeoExchange {
+  id             String   @id
+  founderId      String
+  reportId       String?
+  decisionIndex  Int?
+  kind           String
+  decision       String?
+  question       String?
+  message        String
+  createdAt      DateTime @default(now())
+  response       String?
+  respondedAt    DateTime?
+  @@unique([founderId, reportId, decisionIndex])
+  @@index([founderId, createdAt])
+  @@index([founderId, respondedAt, createdAt])
+}
+
+ // Unverified business expense suggestions. Only explicit founder review writes the ledger.
+model BusinessExpenseCandidate {
+  id            String   @id @default(cuid())
+  source        String
+  sourceRef     String
+  merchant      String
+  description   String
+  amountCents   Int
+  occurredAt    DateTime
+  category      String
+  status        String   @default("pending")
+  createdAt     DateTime @default(now())
+  reviewedAt    DateTime?
+  reviewedById  String?
+  reviewNote    String?
+  transactionId String? @unique
+  @@unique([source, sourceRef])
+  @@index([status, occurredAt])
+}

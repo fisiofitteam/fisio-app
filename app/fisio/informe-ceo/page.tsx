@@ -44,6 +44,7 @@ export default async function CeoReportPage() {
         </p>
       </header>
 
+      <div className="mb-4"><Link href="/fisio/informe-ceo/semanal" className="inline-block text-sm font-medium underline">Ver dirección estratégica semanal</Link></div>
       <CeoReportsClient initial={initialList} />
     </main>
   );

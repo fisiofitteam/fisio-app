@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { authorizeGrok, madridDay, completeWindow, reportId } from "@/lib/grok-ceo-contract";
 import { collectGrokPeriod } from "@/lib/grok-ceo";
+import { mondayForDay, weeklyStrategySchema } from "@/lib/grok-ceo-weekly";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 const items = z.array(z.string().trim().min(1).max(700)).max(6);
@@ -12,6 +13,7 @@ const schema = z.object({
   luces: items, sombras: items, accionesRecomendadas: items.max(3),
   alertas: items, tendencias: items, seguimiento: items,
   decisionesFounder: items.max(3),
+  weeklyStrategy: weeklyStrategySchema.optional(),
 }).strict();
 export async function POST(req: NextRequest) {
   if (!authorizeGrok(req.headers.get("authorization"), process.env.GROK_CEO_WRITE_TOKEN))
@@ -24,6 +26,8 @@ export async function POST(req: NextRequest) {
   try { parsed = schema.safeParse(JSON.parse(raw)); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
   if (!parsed.success || parsed.data.reportDay !== madridDay())
     return NextResponse.json({ error: "Invalid report or date" }, { status: 400 });
+  if (parsed.data.weeklyStrategy && mondayForDay(parsed.data.reportDay) !== parsed.data.reportDay)
+    return NextResponse.json({ error: "Weekly strategy is accepted on Mondays only" }, { status: 400 });
   const founderId = process.env.GROK_CEO_FOUNDER_ID;
   if (!founderId) return NextResponse.json({ error: "Not configured" }, { status: 503 });
   try {
