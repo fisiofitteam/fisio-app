@@ -1,0 +1,35 @@
+import assert from "node:assert/strict";
+import { ceoIaLegacyDestination, ceoIaSections } from "../lib/ceo-ia-navigation";
+import { itemsForRoles } from "../lib/sidebar-items";
+import { normalizeSidebarLayout, flattenSidebarLayout } from "../lib/sidebar-layout";
+import { sidebarIdsForRole } from "../lib/sidebar-order";
+const id = "grok-ceo-2026-11-26";
+assert.equal(ceoIaLegacyDestination("?report="+id, ""), "/fisio/ceo-ia/informes?report="+id);
+assert.equal(ceoIaLegacyDestination("?report="+id, "#buzon-ceo"), "/fisio/ceo-ia/comunicaciones?report="+id);
+assert.equal(ceoIaLegacyDestination("", "#buzon-ceo"), "/fisio/ceo-ia/comunicaciones");
+assert.equal(ceoIaLegacyDestination("?report=https://example.com&redirect=//example.com", "#other"), "/fisio/ceo-ia/informes");
+assert.equal(ceoIaSections.filter(s=>!s.founderOnly).length, 2);
+const opts = { withResumenes: true };
+const ceo = itemsForRoles("ceo", [], opts);
+const entry = ceo.find(i=>i.id==="ceo-ia")!;
+assert.ok(entry);
+assert.equal(ceo[1].id, "ceo-ia");
+assert.ok(entry.match("/fisio/ceo-ia/objetivos"));
+assert.ok(entry.match("/fisio/informe-ceo"));
+assert.ok(!entry.match("/fisio/ceo-ia-fake"));
+for (const role of ["fisio","head_success","setter","closer"]) {
+  assert.ok(!itemsForRoles(role,[],opts).some(i=>i.id==="ceo-ia"), role);
+}
+const allowed = sidebarIdsForRole("ceo");
+const folder = {type:"folder",id:"folder-business",label:"Empresa",icon:"briefcase",pages:["finanzas","equipo"]};
+const old = normalizeSidebarLayout({version:1,items:[{type:"page",id:"panel"},folder]}, allowed);
+assert.deepEqual(old.items.slice(0,2),[{type:"page",id:"panel"},folder]);
+assert.ok(old.items.some(x=>x.type==="page" && x.id==="ceo-ia"));
+assert.equal(flattenSidebarLayout(old).filter(x=>x==="ceo-ia").length,1);
+const custom = {...folder,pages:["finanzas","ceo-ia","equipo"]};
+const kept = normalizeSidebarLayout({version:1,items:[{type:"page",id:"panel"},custom]},allowed);
+assert.deepEqual(kept.items[1],custom);
+assert.equal(flattenSidebarLayout(kept).filter(x=>x==="ceo-ia").length,1);
+const staff = normalizeSidebarLayout(old,sidebarIdsForRole("fisio"));
+assert.ok(!flattenSidebarLayout(staff).includes("ceo-ia"));
+console.log("CEO IA navigation: old notifications, report links, role visibility and saved menus OK");

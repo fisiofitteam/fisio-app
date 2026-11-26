@@ -652,11 +652,11 @@ export default async function FisioPanelPage({
         {kpis}
         <div className="mb-4 flex justify-end">
           <Link
-            href="/fisio/informe-ceo"
+            href="/fisio/ceo-ia"
             className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-sm font-medium px-4 py-2 rounded-lg shadow-sm transition-colors"
           >
             <span>🧠</span>
-            <span>Informe CEO</span>
+            <span>CEO IA</span>
           </Link>
         </div>
         <CEOPanelTabs

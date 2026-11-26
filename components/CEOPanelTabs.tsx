@@ -4,7 +4,6 @@ import { useState } from "react";
 import type { FinanceSummary } from "@/lib/finance";
 import Link from "next/link";
 import { CeoPersonalView } from "@/components/CeoPersonalView";
-import { GrokCeoBriefing } from "@/components/GrokCeoBriefing";
 import { CapacityReportLazy } from "@/components/CapacityReportLazy";
 
 type FinanceResumen = FinanceSummary & { periodLabel: string };
@@ -31,7 +30,7 @@ export function CEOPanelTabs({
   return (
     <>
       <div className="mb-4 flex gap-1 border-b border-neutral-200 overflow-x-auto">
-        <TabButton active={tab === "mi-ceo"} onClick={() => setTab("mi-ceo")} label="🎯 Mi CEO" />
+        <TabButton active={tab === "mi-ceo"} onClick={() => setTab("mi-ceo")} label="🎯 Mi día" />
         <TabButton active={tab === "sales"} onClick={() => setTab("sales")} label="📈 Métricas de venta" />
         <TabButton active={tab === "team"} onClick={() => setTab("team")} label="📊 Métricas equipo" />
         <TabButton active={tab === "capacity"} onClick={() => setTab("capacity")} label="🧭 Capacidad operativa" />
@@ -39,7 +38,7 @@ export function CEOPanelTabs({
         <TabButton active={tab === "finance"} onClick={() => setTab("finance")} label="💰 Finanzas" />
       </div>
 
-      {tab === "mi-ceo" && <><Link href="/fisio/soporte" className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm"><span><strong>Soporte y mejoras</strong><span className="block text-xs text-neutral-600 mt-1">Problemas y propuestas del equipo, con prioridad y seguimiento.</span></span><span aria-hidden>→</span></Link><GrokCeoBriefing /><CeoPersonalView userFullName={userFullName} /></>}
+      {tab === "mi-ceo" && <><Link href="/fisio/soporte" className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm"><span><strong>Soporte y mejoras</strong><span className="block text-xs text-neutral-600 mt-1">Problemas y propuestas del equipo, con prioridad y seguimiento.</span></span><span aria-hidden>→</span></Link><CeoPersonalView userFullName={userFullName} /></>}
       {tab === "sales" && salesBlock}
       {tab === "team" && teamBlock}
       {tab === "capacity" && <CapacityReportLazy />}

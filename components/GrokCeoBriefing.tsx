@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { GrokCeoExchangePanel } from "./GrokCeoExchangePanel";
 import { CeoDirectionSummary } from "./CeoDirectionSummary";
 import { BrainCircuit, AlertTriangle, Target, ChevronDown } from "lucide-react";
 type Period = { finance?: { income?: number | null; expense?: number | null }; sales?: { won?: number | null; lost?: number | null; closeRate?: number | null }; renewals?: { renewed?: number | null; lost?: number | null; renewalRate?: number | null }; leadsCreated?: number | null };
@@ -24,7 +23,7 @@ function Items({ title, items }: { title: string; items?: string[] }) {
   if (!items?.length) return null;
   return <div><h3 className="text-xs font-semibold text-neutral-600 uppercase tracking-wide mb-2">{title}</h3><ul className="space-y-2 text-sm">{items.map((item,i) => <li key={i} className="flex gap-2"><span aria-hidden="true" className="text-neutral-400">•</span><span>{item}</span></li>)}</ul></div>;
 }
-export function GrokCeoBriefing() {
+export function GrokCeoBriefing({ isFounder = false }: { isFounder?: boolean }) {
   const [report, setReport] = useState<Brief | null>(null);
   const [status, setStatus] = useState("loading");
   const [period, setPeriod] = useState<7 | 30>(30);
@@ -50,8 +49,8 @@ export function GrokCeoBriefing() {
   return <section className="card mb-4 border border-amber-200 p-4 md:p-5">
     <div className="flex items-center gap-3 mb-4">
       <div className="bg-neutral-900 text-amber-400 rounded-xl p-2.5"><BrainCircuit size={24} /></div>
-      <div className="flex-1"><h2 className="font-semibold">Tu CEO IA</h2><p className="text-xs text-neutral-500">{report ? new Date(report.generatedAt).toLocaleString("es-ES", { timeZone: "Europe/Madrid" }) : "Dirección empresarial"}</p></div>
-      <div className="flex flex-col gap-1 text-right"><Link href={report ? "/fisio/informe-ceo?report=" + report.id : "/fisio/informe-ceo"} className="text-xs underline">Ver informes</Link><Link href="/fisio/informe-ceo/semanal" className="text-xs underline">Estrategia semanal</Link></div>
+      <div className="flex-1"><h2 className="font-semibold">Último informe</h2><p className="text-xs text-neutral-500">{report ? new Date(report.generatedAt).toLocaleString("es-ES", { timeZone: "Europe/Madrid" }) : "Dirección empresarial"}</p></div>
+      <div className="flex flex-col gap-1 text-right"><Link href={report ? "/fisio/ceo-ia/informes?report=" + report.id : "/fisio/ceo-ia/informes"} className="text-xs underline">Ver informes</Link>{isFounder && <Link href="/fisio/ceo-ia/semanal" className="text-xs underline">Estrategia semanal</Link>}</div>
     </div>
     {status === "error" && <p className="text-sm text-neutral-500">No se ha podido actualizar el informe.</p>}
     {!report || !n ? <p className="text-sm text-neutral-500">{status === "loading" ? "Cargando…" : "Aún no hay informes disponibles."}</p> : <div className="space-y-5">
@@ -83,7 +82,9 @@ export function GrokCeoBriefing() {
 
       <details className="border-t pt-3"><summary className="cursor-pointer text-sm font-medium flex items-center gap-2"><ChevronDown size={16} /> Ver análisis completo de Grok</summary><p className="mt-3 text-sm whitespace-pre-wrap leading-relaxed">{n.resumenEjecutivo}</p><div className="grid md:grid-cols-2 gap-4 mt-4"><Items title="Tendencias" items={n.tendencias} /><Items title="Seguimiento" items={n.seguimiento} /></div></details>
     </div>}
-    <div className="mt-5"><CeoDirectionSummary /></div>
-    <div className="mt-5"><GrokCeoExchangePanel reportId={report?.id} decisions={n?.decisionesFounder} /></div>
+    {isFounder && <div className="mt-5"><CeoDirectionSummary /></div>}
+    {isFounder && <Link href={"/fisio/ceo-ia/comunicaciones" + (report ? "?report=" + report.id : "")} className="mt-4 flex flex-wrap justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
+      <span><strong>Comunicaciones con tu CEO IA</strong><span className="block text-xs text-neutral-600 mt-1">{n?.decisionesFounder?.length ? n.decisionesFounder.length + " decisiones propuestas en este informe. Consulta el buzón para revisarlas." : "Envía encargos, consulta respuestas y registra tus decisiones."}</span></span><span className="font-medium">Abrir buzón →</span>
+    </Link>}
   </section>;
 }
