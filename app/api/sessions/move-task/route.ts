@@ -15,6 +15,8 @@
  * aparece igual en el calendario y admite edición/borrado normal.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { groupedBatteryHasReview } from "@/lib/shoulder-battery-server";
+import { canAccessEvidencePatient } from "@/lib/patient-evidence";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
 
@@ -33,7 +35,8 @@ export async function POST(req: NextRequest) {
   });
   if (!source) return NextResponse.json({ error: "Sesión no encontrada" }, { status: 404 });
 
-  if (source.shoulderPilotReview) return NextResponse.json({error:"La valoración ya tiene datos. Conserva sus pruebas juntas para mantener el informe."},{status:409});
+  if (!await canAccessEvidencePatient(source.assignment.patientId, user)) return NextResponse.json({error:"No autorizado"},{status:403});
+  if (source.shoulderPilotReview || await groupedBatteryHasReview(sessionId)) return NextResponse.json({error:"La valoración ya tiene datos. Conserva sus pruebas juntas para mantener el informe."},{status:409});
 
   let tasks: any[] = [];
   try { tasks = JSON.parse(source.tasksSnapshot); } catch { return NextResponse.json({ error: "snapshot inválido" }, { status: 500 }); }

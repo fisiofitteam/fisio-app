@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
-import { pilotSnapshotRefs, PILOT_PROGRAM_ID } from "@/lib/shoulder-pilot-snapshot";
+import { PILOT_PROGRAM_ID } from "@/lib/shoulder-pilot-snapshot";
+import { groupShoulderBatteries, shoulderBatteryKey } from "@/lib/shoulder-battery";
+import { batteryDayRange } from "@/lib/shoulder-battery-server";
 import { prisma } from "@/lib/prisma";
 import { parseAssessment } from "@/lib/assessments";
 import { partitionAssessmentHistory } from "@/lib/assessment-history";
@@ -34,7 +36,7 @@ export async function PatientAssessments({ patientId }: { patientId: string }) {
     ],
   };
   const select = {
-    id: true, weekNumber: true, scheduledDate: true, tasksSnapshot: true,
+    id: true, assignmentId: true, weekNumber: true, scheduledDate: true, tasksSnapshot: true,
     completedAt: true, patientNotes: true,
     assessmentVideos: { where: { url: { not: null } }, select: { id: true }, take: 1 },
     assignment: { select: { programId: true } },
@@ -45,11 +47,41 @@ export async function PatientAssessments({ patientId }: { patientId: string }) {
     prisma.programSession.findMany({ where: { AND: [baseWhere, { NOT: activeWhere }] }, orderBy: { scheduledDate: "asc" }, take: 100, select }),
     prisma.assessmentVideo.findMany({ where: { patientId }, orderBy: { assessedAt: "desc" }, take: 500 }),
   ]);
+  // Fill any siblings that fell outside the history/future limit, including an
+  // early upload whose other blocks still count as future blank sessions.
+  const selected = [...historySessions, ...futureSessions];
+  const days = new Map(selected.filter(s => shoulderBatteryKey(s)).map(s => [shoulderBatteryKey(s)!, s]));
+  const siblings = days.size ? await prisma.programSession.findMany({
+    where: { assignment: { patientId }, OR: [...days.values()].map(s => ({
+      assignmentId: s.assignmentId, weekNumber: s.weekNumber, scheduledDate: batteryDayRange(s.scheduledDate),
+    })) }, select,
+  }) : [];
+  const sessions = [...new Map([...selected, ...siblings].map(s => [s.id, s])).values()];
+  const batteries = groupShoulderBatteries(sessions);
   const groups: AssessmentGroup[] = [];
   const included = new Set<string>();
-  for (const s of [...historySessions, ...futureSessions]) {
-    const refs = s.assignment.programId === PILOT_PROGRAM_ID && [1, 14].includes(s.weekNumber)
-      ? pilotSnapshotRefs(s.tasksSnapshot) : null;
+  const groupedSources = new Set<string>();
+  for (const battery of batteries) {
+    const s = battery.session;
+    const title = s.weekNumber === 14 ? "Revaloración de hombro · semana 14" : "Valoración inicial de hombro · semana 1";
+    const tests = [...battery.sources].map(([testId, source]) => {
+      groupedSources.add(JSON.stringify([source.sessionId, source.taskId, testId]));
+      const member = battery.sessions.find(item => item.id === source.sessionId)!;
+      const task = JSON.parse(member.tasksSnapshot).find((t: any) => t.id === source.taskId && t.type === "ASSESSMENT");
+      const test = parseAssessment(task.assessment).tests.find(t => t.id === testId)!;
+      const row = videos.find(v => v.sessionId === source.sessionId && v.taskId === source.taskId && v.testId === testId);
+      if (row) included.add(row.id);
+      return { id: testId, name: test.name, row };
+    });
+    const completed = battery.sessions.every(item => item.completedAt);
+    groups.push({ key: "pilot:" + s.id, title, sessionTitle: title, sessionId: s.id, pilotSessionId: s.id,
+      date: s.scheduledDate, tests,
+      hasDelivery: battery.sessions.some(item => item.assessmentVideos.length > 0),
+      completedAt: completed ? new Date(Math.max(...battery.sessions.map(item => item.completedAt!.getTime()))) : null,
+      patientNotes: [...new Set(battery.sessions.map(item => item.patientNotes).filter(Boolean))].join("\n\n"),
+    });
+  }
+  for (const s of sessions) {
     const knownShoulderWeek = s.assignment.programId === PILOT_PROGRAM_ID && [1, 14].includes(s.weekNumber);
     const sessionInfo = {
       sessionId: s.id, date: s.scheduledDate, completedAt: s.completedAt, patientNotes: s.patientNotes,
@@ -58,20 +90,15 @@ export async function PatientAssessments({ patientId }: { patientId: string }) {
         ? (s.weekNumber === 14 ? "Revaloración de hombro · semana 14" : "Valoración inicial de hombro · semana 1")
         : "Valoración",
     };
-    const battery: AssessmentGroup | null = refs
-      ? { ...sessionInfo, key: "pilot:" + s.id, title: sessionInfo.sessionTitle, pilotSessionId: s.id, tests: [] }
-      : null;
-    if (battery) groups.push(battery);
-    let tasks: any[] = []; try { tasks = JSON.parse(s.tasksSnapshot); } catch {}
+    let tasks: any[] = []; try { const raw = JSON.parse(s.tasksSnapshot); if (Array.isArray(raw)) tasks = raw; } catch {}
     for (const t of tasks.filter(t => t.type === "ASSESSMENT")) {
-      const tests = parseAssessment(t.assessment).tests.map(test => {
+      const tests = parseAssessment(t.assessment).tests.filter(test =>
+        !groupedSources.has(JSON.stringify([s.id, t.id, test.id]))).map(test => {
         const row = videos.find(v => v.sessionId === s.id && v.taskId === t.id && v.testId === test.id);
         if (row) included.add(row.id);
         return { id: test.id, name: test.name, row };
       });
-      if (battery && refs) battery.tests.push(...tests.filter(test => refs.get(test.id) === t.id));
-      const rest = refs ? tests.filter(test => refs.get(test.id) !== t.id) : tests;
-      if (rest.length || !refs) groups.push({ ...sessionInfo, key: s.id + t.id, title: t.title, tests: rest });
+      if (tests.length || !parseAssessment(t.assessment).tests.length) groups.push({ ...sessionInfo, key: s.id + t.id, title: t.title, tests });
     }
   }
   // Keep deliveries accessible after a session/test is removed from the calendar.

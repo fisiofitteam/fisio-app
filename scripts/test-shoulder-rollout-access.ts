@@ -15,7 +15,7 @@ const video:any={id:"video",patientId:"patient",sessionId:"session",taskId:"task
   uploadedAt:new Date("2026-11-14T11:00:00Z"),url:"https://fixture.private.blob.vercel-storage.com/assessments/video/504587d4-c0f6-4f5b-a8e5-c54c7396fdca.mp4"};
 const protocol={rubricVersion:RUBRIC_VERSION,configJson:JSON.stringify(DEFAULT_PILOT_CONFIG)};
 const db:any={
-  programSession:{findUnique:async({where}:any)=>found&&where.id===session.id?session:null},
+  programSession:{findMany:async()=>found?[session]:[],findUnique:async({where}:any)=>found&&where.id===session.id?session:null},
   shoulderPilotReview:{findUnique:async()=>row,findFirst:async()=>null},
   shoulderPilotProtocol:{findUnique:async()=>protocol},
   assessmentVideo:{findMany:async({where}:any)=>where.sessionId===video.sessionId&&where.patientId===video.patientId?[video]:[]},

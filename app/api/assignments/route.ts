@@ -1,3 +1,4 @@
+import { reviewedBatterySessionIds } from "@/lib/shoulder-battery-server";
 import { NextRequest, NextResponse } from "next/server";
 import { getActiveProfessional } from "@/lib/session";
 import { canUseEvidence, canAccessEvidencePatient } from "@/lib/patient-evidence";
@@ -70,6 +71,7 @@ export async function PATCH(req: NextRequest) {
   if (!current) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   if (!await canAccessEvidencePatient(current.patientId)) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  const protectedSessionIds = startDate !== undefined || isActive === false ? await reviewedBatterySessionIds(id) : [];
   const data: any = {};
 
   // Cambio de fecha → mover sesiones futuras no completadas
@@ -85,6 +87,7 @@ export async function PATCH(req: NextRequest) {
       const sessions = await prisma.programSession.findMany({
         where: {
           assignmentId: id,
+          id: { notIn: protectedSessionIds },
           completedAt: null,
           shoulderPilotReview: null,
           scheduledDate: { gte: today },
@@ -110,6 +113,7 @@ export async function PATCH(req: NextRequest) {
       await prisma.programSession.deleteMany({
         where: {
           assignmentId: id,
+          id: { notIn: protectedSessionIds },
           scheduledDate: { gte: today },
           completedAt: null,
           shoulderPilotReview: null,
