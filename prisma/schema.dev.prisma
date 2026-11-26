@@ -3719,25 +3719,6 @@ model MetodoRateLimit {
   expiresAt DateTime
   @@index([expiresAt])
 }
-model MetodoRequest {
-  id String @id
-  createdAt DateTime @default(now())
-  name String
-  phone String
-  zone String
-  duration String
-  impact String
-  sport String
-  tried String
-  detail String?
-  origin String?
-  reference String?
-  consentAt DateTime
-  consentVersion String
-  handledAt DateTime?
-  handledById String?
-  @@index([createdAt])
-}
 
  // Dedicated inbox for founder instructions and advisory responses. Never an execution queue.
 model GrokCeoExchange {

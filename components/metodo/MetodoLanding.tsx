@@ -3,11 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import teamLogo from "@/public/brand/fisiofitteam.png";
-import { ArrowRight, Check, CircleCheck, MessageCircle, Play, X } from "lucide-react";
+import { Check, CircleCheck, MessageCircle, Play, X } from "lucide-react";
 import { ZONES, youtubeId, type PublicMetodo, type Section } from "@/lib/metodo/content";
-import { ORIGINS } from "@/lib/metodo/request";
+import { ORIGINS } from "@/lib/metodo/origins";
 import { MetodoJourney } from "./MetodoJourney";
-import { MetodoRequestForm } from "./MetodoRequestForm";
 import { MetodoVideo } from "./MetodoVideo";
 import { useMetodoAnalytics } from "./useMetodoAnalytics";
 import { useMetodoMotion } from "./useMetodoMotion";
@@ -25,10 +24,10 @@ function Intro({ section }: { section: Section }) {
   </div>;
 }
 
-/** Repeated call to action after each section: same label, one short reassurance. */
+/** Repeated call to action after each section: straight to WhatsApp, one short reassurance. */
 function InlineCta({ href, label, note, dark = false }: { href: string; label: string; note: string; dark?: boolean }) {
   return <div className={`mf-inline-cta${dark ? " mf-inline-cta-dark" : ""}`}>
-    <a className="mf-button mf-button-yellow" href={href}>{label}<ArrowRight size={18} aria-hidden="true" /></a>
+    <a className="mf-button mf-button-yellow" href={href}><MessageCircle size={18} aria-hidden="true" />{label}</a>
     <span>{note}</span>
   </div>;
 }
@@ -37,13 +36,13 @@ function Brand() {
   return <span className="mf-brand"><Image src={teamLogo} alt="FisioFitTeam" width={500} height={500} sizes="140px" priority /></span>;
 }
 
-/** Mobile call to action: appears once the hero is behind; hides over the form, other buttons, footer and privacy banner. */
-function useStickyCta(enabled: boolean) {
+/** Mobile call to action: appears once the hero is behind; hides over other buttons, the footer and the privacy banner. */
+function useStickyCta() {
   const heroRef = useRef<HTMLElement>(null), [visible, setVisible] = useState(false);
   useEffect(() => {
-    if (!enabled || typeof IntersectionObserver === "undefined") return;
+    if (typeof IntersectionObserver === "undefined") return;
     // Also hide while another call to action is on screen, so two yellow buttons never stack.
-    const targets = [heroRef.current, document.getElementById("valoracion"), document.querySelector<HTMLElement>(".mf-footer"), ...Array.from(document.querySelectorAll<HTMLElement>(".mf-inline-cta, .mf-final"))].filter((el): el is HTMLElement => !!el);
+    const targets = [heroRef.current, document.querySelector<HTMLElement>(".mf-footer"), ...Array.from(document.querySelectorAll<HTMLElement>(".mf-inline-cta, .mf-final"))].filter((el): el is HTMLElement => !!el);
     const inView = new Map<Element, boolean>();
     const observer = new IntersectionObserver(entries => {
       for (const entry of entries) inView.set(entry.target, entry.isIntersecting);
@@ -52,7 +51,7 @@ function useStickyCta(enabled: boolean) {
     }, { threshold: 0 });
     targets.forEach(t => observer.observe(t));
     return () => observer.disconnect();
-  }, [enabled]);
+  }, []);
   return { heroRef, visible };
 }
 
@@ -60,11 +59,10 @@ export function MetodoLanding({ content, preview = false, origin = null }: { con
   const { sections: s, media: m, buttons } = content;
   const analytics = useMetodoAnalytics(preview);
   const pageRef = useMetodoMotion();
-  // Ad links (`?origen=hombro`) adapt the hero copy and pre-select the zone; nothing else changes.
+  // Ad links (`?origen=hombro`) adapt the hero copy and add the zone to the WhatsApp message.
   const variant = origin && s.hero.visible ? ORIGINS[origin] || null : null;
   const heroCopy = variant || s.hero;
-  const hasForm = s.request.visible;
-  const sticky = useStickyCta(hasForm || s.cta.visible);
+  const sticky = useStickyCta();
   const showSticky = sticky.visible && !analytics.showPreferences && !analytics.error;
   const [zone, setZone] = useState("Todos");
   const stories = content.stories.filter(story => zone === "Todos" || story.zone === zone);
@@ -73,13 +71,13 @@ export function MetodoLanding({ content, preview = false, origin = null }: { con
   // This is the public DTO: private/hidden source media never enter this component.
   const hero = m.hero.url ? m.hero : m.team.url ? m.team : m.athlete;
   const heroIsTeam = !m.hero.url && !!m.team.url;
-  // With the form visible every call to action leads to it; otherwise straight to WhatsApp as before.
-  const whatsapp = (placement: string) => preview ? "#contacto" : `/api/metodo/contact?placement=${placement}`;
-  const contact = (placement: string) => hasForm ? "#valoracion" : whatsapp(placement);
-  const ctaNote = hasForm ? "4 preguntas · menos de 1 minuto" : "Te respondemos por WhatsApp";
+  // Every call to action opens WhatsApp directly: no intermediate steps.
+  const originParam = variant && origin ? `&origen=${encodeURIComponent(origin)}` : "";
+  const contact = (placement: string) => preview ? "#contacto" : `/api/metodo/contact?placement=${placement}${originParam}`;
+  const ctaNote = "Te respondemos por WhatsApp";
   const cta = (placement: string, dark = false) => <InlineCta href={contact(placement)} label={buttons.contact} note={ctaNote} dark={dark} />;
-  const contactButton = (placement: string, quiet = false) => <a className={quiet ? "mf-text-link" : "mf-button"} href={contact(placement)}>
-    {!quiet && <MessageCircle size={18} aria-hidden="true" />}{quiet ? buttons.secondary : buttons.contact}
+  const contactButton = (placement: string) => <a className="mf-button" href={contact(placement)}>
+    <MessageCircle size={18} aria-hidden="true" />{buttons.contact}
   </a>;
 
   return <div className="mf-page" ref={pageRef}>
@@ -101,13 +99,8 @@ export function MetodoLanding({ content, preview = false, origin = null }: { con
           <h1>{heroCopy.title}</h1>
           {heroCopy.body && <p className="mf-hero-description">{heroCopy.body}</p>}
           <div className="mf-hero-actions">
-            {hasForm ? <>
-              <a className="mf-button mf-button-yellow" href="#valoracion">{buttons.contact}<ArrowRight size={18} aria-hidden="true" /></a>
-              {s.method.visible && <a className="mf-text-link" href="#metodologia">{buttons.discover}</a>}
-            </> : <>
-              <a className="mf-button mf-button-yellow" href={s.method.visible ? "#metodologia" : "#contacto"}>{buttons.discover}</a>
-              {contactButton("hero", true)}
-            </>}
+            <a className="mf-button mf-button-yellow" href={contact("hero")}><MessageCircle size={18} aria-hidden="true" />{buttons.contact}</a>
+            {s.method.visible && <a className="mf-text-link" href="#metodologia">{buttons.discover}</a>}
           </div>
           {s.founder.visible && m.introduction.url && <a className="mf-watch-intro" href="#presentacion"><Play size={16} aria-hidden="true" />Conoce al equipo en vídeo</a>}
         </div>
@@ -121,8 +114,6 @@ export function MetodoLanding({ content, preview = false, origin = null }: { con
       {s.trust.visible && s.trust.items.length > 0 && <section className="mf-trust" aria-label="Lo que encontrarás en FisioFitTeam"><ul>
         {s.trust.items.map((item, i) => <li key={i}><CircleCheck size={20} aria-hidden="true" /><div><strong>{item.title}</strong>{item.body && <span>{item.body}</span>}</div></li>)}
       </ul></section>}
-
-      {hasForm && <MetodoRequestForm section={s.request} origin={variant ? origin : null} initialZone={variant?.zone} preview={preview} track={analytics.track} directHref={whatsapp("direct")} directLabel={buttons.secondary} />}
 
       {s.founder.visible && m.introduction.url && <section id="presentacion" className="mf-section mf-presentation" data-mf-reveal>
         <div><p className="mf-eyebrow">CONOCE A FISIOFITTEAM</p><h2>{m.introduction.alt || "Te contamos cómo trabajamos."}</h2>{cta("presentation")}</div>
@@ -207,9 +198,9 @@ export function MetodoLanding({ content, preview = false, origin = null }: { con
       <div className="mf-footer-top"><Brand /><p>Fisioterapia para volver a tu deporte.</p></div>
       <div className="mf-footer-bottom"><span>De atletas para atletas.</span><div><a href="/privacidad">Privacidad</a><a href="/terminos">Términos</a><button type="button" onClick={analytics.openPreferences}>Preferencias de privacidad</button></div></div>
     </footer>
-    {(hasForm || s.cta.visible) && <a className="mf-sticky-cta" href={contact("sticky")} data-visible={showSticky} aria-hidden={!showSticky} tabIndex={showSticky ? undefined : -1}>
+    <a className="mf-sticky-cta" href={contact("sticky")} data-visible={showSticky} aria-hidden={!showSticky} tabIndex={showSticky ? undefined : -1}>
       <MessageCircle size={18} aria-hidden="true" />{buttons.contact}
-    </a>}
+    </a>
     {analytics.error && <p className="mf-privacy-error" role="status">{analytics.error}</p>}
     {analytics.showPreferences && <aside className="mf-consent" aria-label="Medición opcional">
       <h2>Tu privacidad, tu decisión.</h2>

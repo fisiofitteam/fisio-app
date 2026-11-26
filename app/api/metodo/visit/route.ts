@@ -17,10 +17,6 @@ export async function POST(req:NextRequest){try{
 export async function DELETE(req:NextRequest){try{
   requireOrigin(req);await ensureMetodoSchema();const token=req.cookies.get(COOKIE)?.value;
   const v=token&&/^[A-Za-z0-9_-]{32}$/.test(token)?await prisma.metodoVisitor.findUnique({where:{tokenHash:hash(token)}}):null;
-  if(v){
-    // Valoración requests stay (they are the athlete's contact request), but lose the link to this browser's measurement.
-    const refs=(await prisma.metodoContact.findMany({where:{visitorId:v.id},select:{reference:true}})).map(r=>r.reference);
-    await prisma.$transaction([...(refs.length?[prisma.metodoRequest.updateMany({where:{reference:{in:refs}},data:{reference:null}})]:[]),prisma.metodoContact.deleteMany({where:{visitorId:v.id}}),prisma.metodoVisitor.delete({where:{id:v.id}})]);
-  }
+  if(v)await prisma.$transaction([prisma.metodoContact.deleteMany({where:{visitorId:v.id}}),prisma.metodoVisitor.delete({where:{id:v.id}})]);
   const res=json({ok:true});res.cookies.set(COOKIE,"",{path:"/",maxAge:0,httpOnly:true,sameSite:"lax",secure:process.env.NODE_ENV==="production"});return res;
 }catch(e){return failure(e);}}

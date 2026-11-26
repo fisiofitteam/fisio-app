@@ -1,6 +1,6 @@
 /** Public copy is explicit: no patient records, clinical notes or source IDs cross this boundary. */
 export const ZONES = ["Hombro", "Lumbar", "Rodilla", "Otros"] as const;
-export const SECTION_IDS = ["hero", "trust", "request", "empathy", "compare", "founder", "education", "method", "results", "fit", "faq", "cta", "tools"] as const;
+export const SECTION_IDS = ["hero", "trust", "empathy", "compare", "founder", "education", "method", "results", "fit", "faq", "cta", "tools"] as const;
 export type SectionId = typeof SECTION_IDS[number];
 export type Section = { visible: boolean; eyebrow: string; title: string; body: string; items: { title: string; body: string }[] };
 export type Media = { url: string; alt: string; poster: string };
@@ -27,7 +27,6 @@ export const DEFAULT_METODO: MetodoConfig = {
       { title: "Entrenamiento adaptado", body: "Ajustamos tus WODs a tu situación" },
       { title: "Seguimiento de tu fisio", body: "Revisa tu evolución en la app" },
     ]),
-    request: section("VALORA TU CASO", "Cuéntanos tu caso en un minuto.", "Cuatro preguntas rápidas. Al terminar se abre WhatsApp con tu caso ya escrito: solo tienes que enviarlo y el equipo lo revisará contigo."),
     empathy: section("SABEMOS QUE NO ES SOLO EL DOLOR", "Quieres entrenar. Pero el dolor te frena.", "Llevas tiempo haciendo ajustes. Lo que buscas es saber cómo avanzar.", [
       { title: "Llevas meses adaptando entrenamientos.", body: "Cambias un ejercicio, bajas el peso… pero sigues sin saber cómo volver." },
       { title: "Hay movimientos que ya evitas.", body: "A veces por dolor. Otras, por miedo a que vuelva a aparecer." },

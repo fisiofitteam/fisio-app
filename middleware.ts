@@ -47,7 +47,7 @@ export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // Exact public surface for the methodology. Admin endpoints never share this allowlist.
-  if (["/metodo", "/metodo/privacidad", "/metodo/og", "/api/metodo/visit", "/api/metodo/event", "/api/metodo/contact", "/api/metodo/solicitud", "/api/cron/metodo-retention"].includes(pathname.replace(/\/$/, ""))) {
+  if (["/metodo", "/metodo/privacidad", "/metodo/og", "/api/metodo/visit", "/api/metodo/event", "/api/metodo/contact", "/api/cron/metodo-retention"].includes(pathname.replace(/\/$/, ""))) {
     const page = pathname === "/metodo" || pathname.startsWith("/metodo/");
     if (page && req.method !== "GET" && req.method !== "HEAD") return new NextResponse("Método no permitido.", { status: 405 });
     const res = NextResponse.next();
