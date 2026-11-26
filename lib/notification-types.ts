@@ -9,6 +9,8 @@ export type NotificationTypeDef = {
 };
 
 export const NOTIFICATION_TYPES: NotificationTypeDef[] = [
+  { value: "support_new", label: "Problemas y mejoras del equipo", description: "Nuevos avisos enviados al CEO desde el asistente.", roles: ["ceo"] },
+  { value: "support_update", label: "Respuestas de soporte", description: "Respuestas y cambios de estado de tus avisos.", roles: ["ceo", "head_success", "fisio", "setter", "closer"] },
   { value: "grok_ceo_daily", label: "Informe diario CEO IA", description: "Diagnóstico y prioridades del día.", roles: ["ceo"] },
   { value: "lead_new", label: "Lead nuevo sin contactar", description: "Cuando entra un lead por la agenda o la landing.", roles: ["setter"] },
   { value: "lead_assigned", label: "Lead asignado para llamar", description: "Cuando un setter te asigna un lead para contactar.", roles: ["closer", "ceo"] },
