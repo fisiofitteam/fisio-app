@@ -26,6 +26,7 @@ import {
   Bot,
   TrafficCone,
   Video,
+  LifeBuoy,
   LucideIcon,
 } from "lucide-react";
 
@@ -38,6 +39,7 @@ type Item = {
 };
 
 const PANEL: Item = { id: "panel", label: "Panel", Icon: LayoutDashboard, href: "/fisio", match: (p) => p === "/fisio" };
+const SOPORTE: Item = { id: "soporte", label: "Soporte y mejoras", Icon: LifeBuoy, href: "/fisio/soporte", match: p => p.startsWith("/fisio/soporte") };
 const TESTIMONIOS: Item = { id: "testimonios", label: "Testimonios", Icon: Sparkles, href: "/fisio/testimonios", match: (p) => p.startsWith("/fisio/testimonios") };
 const GRABACIONES: Item = { id: "grabaciones", label: "Grabaciones", Icon: Video, href: "/fisio/grabaciones", match: (p) => p === "/fisio/grabaciones" || p.startsWith("/fisio/grabaciones/") };
 const PACIENTES: Item = { id: "pacientes", label: "Pacientes", Icon: Users, href: "/fisio/pacientes", match: (p) => p.startsWith("/fisio/pacientes") || p.startsWith("/fisio/paciente/") };
@@ -139,6 +141,7 @@ export function itemsForRoles(mainRole: string, extraRoles: string[], opts: { wi
       out.push(item);
     }
   }
+  if (!seen.has(SOPORTE.id)) out.push(SOPORTE);
   return out;
 }
 

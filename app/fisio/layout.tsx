@@ -9,6 +9,7 @@ import { ActivityHeartbeat } from "@/components/ActivityHeartbeat";
 import { getActiveProfessional } from "@/lib/session";
 import { RecordingWorkspace } from "@/components/RecordingWorkspace";
 import { getThemeFromCookie } from "@/lib/theme";
+import { SupportAssistant } from "@/components/support/SupportAssistant";
 
 export default async function FisioLayout({ children }: { children: React.ReactNode }) {
   const user = await getActiveProfessional();
@@ -49,6 +50,7 @@ export default async function FisioLayout({ children }: { children: React.ReactN
           </div>
         </div>
       </div>
+      <SupportAssistant key={user.id} />
     </div>
     </RecordingWorkspace>
   );

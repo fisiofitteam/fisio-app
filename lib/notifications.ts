@@ -63,7 +63,7 @@ export async function countUnreadForUser(user: NotifierUser): Promise<number> {
  */
 function visibilityWhereFor(user: NotifierUser): any {
   if (user.role === "setter") {
-    return { targetRole: "setter" };
+    return { OR: [{ targetRole: "setter" }, { targetProfessionalId: user.id }] };
   }
   if (user.role === "fisio") {
     return { targetProfessionalId: user.id };
