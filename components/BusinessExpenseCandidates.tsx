@@ -47,6 +47,16 @@ export function BusinessExpenseCandidates() {
       retry.current=null;setForm(initial());setOpen(false);setNotice("Gasto guardado para revisión. Todavía no contabilizado.");await load();
     }catch(e){setError(e instanceof Error?e.message:"Error de conexión.");}finally{setBusy(false);}
   }
+  async function scanStripe() {
+    if(busy)return;
+    setBusy(true);setError("");setNotice("");
+    try{
+      const res=await fetch("/api/ceo/expense-candidates/stripe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({days:7})});
+      const result=await res.json();if(!res.ok)throw new Error(result.error||"No se pudo consultar Stripe.");
+      setNotice("Stripe: "+result.available+" días con candidatos disponibles; "+result.conflicts+" conflictos que requieren conciliación. No se ha contabilizado ningún gasto.");
+      await load();
+    }catch(e){setError(e instanceof Error?e.message:"Error de conexión.");}finally{setBusy(false);}
+  }
   async function review(row:Candidate, action:"approve"|"reject") {
     if(busy)return;
     const values=edits[row.id] ?? {};
@@ -64,7 +74,8 @@ export function BusinessExpenseCandidates() {
   }
   return <section className="space-y-5">
     <header className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-semibold flex items-center gap-2"><ReceiptText size={22} className="text-amber-700"/> Gastos pendientes de validar</h2><p className="text-sm text-neutral-500">Comprueba los candidatos antes de incorporarlos a tus finanzas.</p></div><button type="button" disabled={!data||busy} onClick={()=>setOpen(x=>!x)} className="flex items-center gap-2 rounded-lg bg-neutral-900 text-white px-3 py-2 text-sm disabled:opacity-50"><Plus size={16}/> Añadir candidato</button></header>
-    {data&&!data.ingestConfigured&&<p className="rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-sm p-3">Fuentes automáticas pendientes de conexión. Puedes registrar candidatos manualmente.</p>}
+    {data&&!data.ingestConfigured&&<p className="rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-sm p-3">Gmail y otras fuentes externas pendientes de conexión. La detección de Stripe se puede iniciar desde esta pantalla.</p>}
+    <div className="rounded-xl border bg-white p-4 space-y-2"><h3 className="font-semibold text-sm">Detectar comisiones de Stripe</h3><p className="text-xs text-neutral-600">Consulta los últimos siete días completos. Agrupa solo comisiones de cobros en euros, sin datos de clientes. No incluye devoluciones, comisiones independientes ni otros movimientos. Comprueba si ya están descontadas de tus ingresos antes de contabilizar.</p><button type="button" disabled={!data||busy} onClick={()=>void scanStripe()} className="rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium disabled:opacity-50">Buscar candidatos en Stripe</button></div>
     {error&&<p role="alert" className="text-sm text-red-700">{error}</p>}{notice&&<p role="status" className="text-sm text-emerald-700">{notice}</p>}
     {open&&<form onSubmit={e=>{e.preventDefault();void add();}} className="border rounded-xl p-4 bg-white grid sm:grid-cols-2 gap-3">
       <label className="text-xs text-neutral-600">Proveedor<input required maxLength={180} value={form.merchant} onChange={e=>setForm({...form,merchant:e.target.value})} className="block w-full border rounded-lg p-2 mt-1 text-sm"/></label>
