@@ -44,7 +44,7 @@ function JourneyMark({ phase }: { phase: number }) {
   );
 }
 
-export function MetodoJourney({ section }: { section: Section }) {
+export function MetodoJourney({ section, cta }: { section: Section; cta?: React.ReactNode }) {
   const [selected, setSelected] = useState(0);
   const componentId = useId();
   const active = Math.min(selected, Math.max(section.items.length - 1, 0));
@@ -133,6 +133,7 @@ export function MetodoJourney({ section }: { section: Section }) {
             </nav>
           </div>
         )}
+        {cta}
       </div>
     </section>
   );

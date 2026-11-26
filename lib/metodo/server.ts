@@ -47,6 +47,21 @@ export function sourceData(raw:unknown){
 }
 export async function visitor(req:NextRequest){const token=req.cookies.get(COOKIE)?.value;if(!token||!/^[A-Za-z0-9_-]{32}$/.test(token))return null;const v=await prisma.metodoVisitor.findUnique({where:{tokenHash:hash(token)}});return v&&Date.now()-v.createdAt.getTime()<180*86400000?v:null;}
 export function setVisitorCookie(res:NextResponse,token:string){res.cookies.set(COOKIE,token,{httpOnly:true,secure:process.env.NODE_ENV==="production",sameSite:"lax",path:"/",maxAge:180*86400});}
+export const CONTACT_PLACEMENTS=["header","hero","final","sticky","presentation","empathy","compare","method","stories","team","fit"] as const;
+/** Consented visitors only: a random MF reference ties this contact to the visit. Never throws. */
+export async function contactReference(req:NextRequest,rawPlacement:string|null){
+  if(req.cookies.get("ff-metodo-consent")?.value!=="v1.accepted"||req.headers.get("sec-fetch-site")!=="same-origin")return "";
+  try{await rateLimit(req,"contact",15);const v=await visitor(req);if(!v)return "";
+    const placement=(CONTACT_PLACEMENTS as readonly string[]).includes(rawPlacement||"")?rawPlacement!:"other";
+    // Repeated navigation within 30 seconds reuses the reference (double-tap / browser retry).
+    return await prisma.$transaction(async tx=>{
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${v.id}),20261128)`;
+      const previous=await tx.metodoContact.findFirst({where:{visitorId:v.id,createdAt:{gte:new Date(Date.now()-30000)}},orderBy:{createdAt:"desc"}});
+      if(previous)return previous.reference;
+      const next="MF-"+randomBytes(6).toString("hex").toUpperCase();await tx.metodoContact.create({data:{reference:next,visitorId:v.id,sourceJson:v.sourceJson,placement}});return next;
+    });
+  }catch{return "";/* Analytics must never prevent contacting the team. */}
+}
 export async function getMetodoConfig(){const row=await prisma.landingConfig.findUnique({where:{id:"metodo"}});let parsed:unknown;try{parsed=JSON.parse(row?.content||"null");}catch{}return{config:normalizeMetodo(parsed),revision:row?.updatedAt.toISOString()||null};}
 export async function effectiveWhatsapp(config:MetodoConfig){const shared=await getAgendaGraciasCopy();const number=config.whatsapp.number||(shared.whatsappNumber||process.env.NEXT_PUBLIC_SEMAFORO_WHATSAPP||"").replace(/\D/g,"");return{number,message:config.whatsapp.message};}
 export async function sourceRecords(stories:Story[]){

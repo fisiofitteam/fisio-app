@@ -1,6 +1,6 @@
 /** Public copy is explicit: no patient records, clinical notes or source IDs cross this boundary. */
 export const ZONES = ["Hombro", "Lumbar", "Rodilla", "Otros"] as const;
-export const SECTION_IDS = ["hero", "empathy", "founder", "education", "method", "results", "fit", "faq", "cta", "tools"] as const;
+export const SECTION_IDS = ["hero", "trust", "empathy", "compare", "founder", "education", "method", "results", "fit", "faq", "cta", "tools"] as const;
 export type SectionId = typeof SECTION_IDS[number];
 export type Section = { visible: boolean; eyebrow: string; title: string; body: string; items: { title: string; body: string }[] };
 export type Media = { url: string; alt: string; poster: string };
@@ -20,12 +20,27 @@ export const DEFAULT_METODO: MetodoConfig = {
   published: true,
   sections: {
     hero: section("FISIOTERAPIA PARA ATLETAS DE CROSSTRAINING", "Que el dolor no decida cómo entrenas.", "Fisioterapia, ejercicio y entrenamiento adaptado a ti. Un equipo que conoce tu deporte y te acompaña en tu recuperación."),
+    // Shown as a compact strip under the hero: only the items are rendered.
+    trust: section("", "", "", [
+      { title: "100 % online", body: "Estés donde estés" },
+      { title: "Especialistas en crosstraining", body: "Fisios que conocen el box" },
+      { title: "Entrenamiento adaptado", body: "Ajustamos tus WODs a tu situación" },
+      { title: "Seguimiento de tu fisio", body: "Revisa tu evolución en la app" },
+    ]),
     empathy: section("SABEMOS QUE NO ES SOLO EL DOLOR", "Quieres entrenar. Pero el dolor te frena.", "Llevas tiempo haciendo ajustes. Lo que buscas es saber cómo avanzar.", [
       { title: "Llevas meses adaptando entrenamientos.", body: "Cambias un ejercicio, bajas el peso… pero sigues sin saber cómo volver." },
       { title: "Hay movimientos que ya evitas.", body: "A veces por dolor. Otras, por miedo a que vuelva a aparecer." },
       { title: "Has probado tratamientos.", body: "Quizá has sentido alivio, pero no el cambio duradero que buscabas." },
       { title: "Sientes que pierdes capacidad física.", body: "Te cuesta reconocerte en lo que ahora puedes hacer." },
       { title: "No quieres dejar el deporte que te gusta.", body: "Quieres encontrar una forma de seguir y recuperar tus objetivos." },
+    ]),
+    // Each item: title = "lo de siempre", body = how FisioFitTeam works instead.
+    compare: section("POR QUÉ ES DIFERENTE", "Lo de siempre, frente a un proceso con tu fisio.", "", [
+      { title: "Parar y esperar a que se pase.", body: "Buscamos ajustes que puedas tolerar para seguir entrenando mientras te recuperas." },
+      { title: "Tratamientos sueltos que alivian unos días.", body: "Un plan progresivo que tu fisioterapeuta revisa y ajusta contigo." },
+      { title: "Ejercicios genéricos en una hoja.", body: "Tu trabajo organizado en la app, adaptado a tu caso, tu material y tu box." },
+      { title: "Profesionales que no saben qué es un WOD.", body: "Un equipo que entrena y conoce las exigencias del crosstraining." },
+      { title: "Volver sin saber si estás preparado.", body: "Volvemos a tus movimientos de forma progresiva, revisando cómo respondes." },
     ]),
     founder: section("EL EQUIPO DETRÁS DE TU PROCESO", "Tu recuperación tiene un equipo detrás.", "Somos un equipo de fisioterapeutas especializado en crosstraining. Unimos valoración, ejercicio y entrenamiento adaptado para construir contigo un proceso que encaje en tu vida y en tu deporte. Tu fisioterapeuta sigue tu evolución y ajusta el trabajo contigo."),
     education: section("ADAPTAR ES PARTE DEL CAMINO", "Seguir entrenando. Recuperar lo que te falta.", "Adaptar puede ayudarte a entrenar dentro de tus posibilidades. Para volver a un movimiento, a menudo también necesitamos trabajar las capacidades que ese movimiento exige.", [
