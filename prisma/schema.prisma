@@ -4440,6 +4440,7 @@ model GrokCeoExchange {
   createdAt      DateTime @default(now())
   response       String?
   respondedAt    DateTime?
+  deliveredAt    DateTime?
   @@unique([founderId, reportId, decisionIndex])
   @@index([founderId, createdAt])
   @@index([founderId, respondedAt, createdAt])
@@ -4463,4 +4464,11 @@ model BusinessExpenseCandidate {
   transactionId String? @unique
   @@unique([source, sourceRef])
   @@index([status, occurredAt])
+}
+
+// Metadata of authenticated advisory channel access, not evidence of an automatic routine.
+model GrokCeoChannelState {
+  founderId   String   @id
+  lastPollAt  DateTime?
+  lastReplyAt DateTime?
 }

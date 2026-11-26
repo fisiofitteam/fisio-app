@@ -1,0 +1,12 @@
+import assert from "node:assert/strict";
+import { channelStatus, exchangeStatus, CONNECTION_TEST } from "../lib/grok-ceo-channel-health";
+const now="2026-11-26T09:00:00.000Z";
+assert.equal(channelStatus({channelConfigured:false,lastPollAt:null,lastReplyAt:null}),"unconfigured");
+assert.equal(channelStatus({channelConfigured:true,lastPollAt:null,lastReplyAt:null}),"unverified");
+assert.equal(channelStatus({channelConfigured:true,lastPollAt:now,lastReplyAt:null}),"poll_recorded");
+assert.equal(channelStatus({channelConfigured:true,lastPollAt:now,lastReplyAt:now}),"reply_recorded");
+assert.equal(exchangeStatus({respondedAt:null,deliveredAt:null}),"Pendiente de consulta");
+assert.equal(exchangeStatus({respondedAt:null,deliveredAt:now}),"Consultado · sin respuesta");
+assert.equal(exchangeStatus({respondedAt:now,deliveredAt:now}),"Respondido");
+assert.ok(CONNECTION_TEST.includes("No realices ninguna otra operación"));
+console.log("Grok channel status: OK");
