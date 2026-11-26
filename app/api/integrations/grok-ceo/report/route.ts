@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { authorizeGrok, madridDay, completeWindow, reportId } from "@/lib/grok-ceo-contract";
 import { collectGrokPeriod } from "@/lib/grok-ceo";
+import { bankAggregate } from "@/lib/bank-finance";
 import { mondayForDay, weeklyStrategySchema } from "@/lib/grok-ceo-weekly";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -41,7 +42,8 @@ export async function POST(req: NextRequest) {
     // Additional comparisons must not prevent the existing daily report from being saved.
     const comparisons = await Promise.allSettled([collectGrokPeriod(7, 7, now), collectGrokPeriod(30, 0, now), collectGrokPeriod(30, 30, now)]);
     const [previous7, last30, previous30] = comparisons.map(result => result.status === "fulfilled" ? result.value : null);
-    const snapshot = { ...metrics, previous7, last30, previous30 };
+    const banking = await bankAggregate().catch(() => ({ status: "unavailable", currency: "EUR", currentBalanceCents: null }));
+    const snapshot = { ...metrics, previous7, last30, previous30, banking };
     const { start, end } = completeWindow(7, 0, now);
     const { reportDay, ...narrative } = parsed.data;
     await prisma.$transaction(async tx => {

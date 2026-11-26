@@ -3907,3 +3907,46 @@ model SupportAttachment {
   @@index([createdById, createdAt])
   @@index([ticketId, eventId])
 }
+
+
+// Founder-owned strategic follow-up. No execution or team delegation capability.
+model CeoPriority {
+  id String @id
+  founderId String
+  reportId String
+  actionIndex Int
+  title String
+  requestHash String
+  status String @default("planned")
+  dueDate DateTime?
+  resultNote String @default("")
+  baselineJson String
+  outcomeJson String?
+  version Int @default(0)
+  closedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  events CeoPriorityEvent[]
+  @@unique([founderId, reportId, actionIndex])
+  @@index([founderId, updatedAt])
+}
+model CeoPriorityEvent {
+  id String @id
+  requestId String @unique
+  requestHash String
+  priorityId String
+  priority CeoPriority @relation(fields: [priorityId], references: [id], onDelete: Restrict)
+  authorId String
+  version Int
+  status String
+  detailJson String
+  createdAt DateTime @default(now())
+  @@unique([priorityId, version])
+  @@index([priorityId, createdAt])
+}
+model CeoDirectionSettings {
+  founderId String @id
+  targetsJson String @default("[]")
+  version Int @default(0)
+  updatedAt DateTime @updatedAt
+}

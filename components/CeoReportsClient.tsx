@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { GrokCeoExchangePanel } from "./GrokCeoExchangePanel";
+import { CeoBankSnapshot } from "./CeoBankSnapshot";
 
 type ReportRow = {
   id: string;
@@ -270,6 +271,7 @@ function ReportDetailView({ detail, onClose }: { detail: ReportDetail; onClose: 
       </div>
 
       {/* KPIs del snapshot: distinguir ausencias de ceros y no inferir beneficio. */}
+      {grok && <div className="mb-4"><CeoBankSnapshot banking={m?.banking} historical /></div>}
       {grok && m && <div className="mb-5">
         <h4 className="text-xs font-semibold uppercase tracking-wide text-neutral-600 mb-2">Últimos 7 días completos · datos guardados</h4>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
