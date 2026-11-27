@@ -35,6 +35,7 @@ async function teamEstimate(now: Date) {
     prisma.payrollAdjustment.aggregate({ where: { year, month: m, professional: { active: true, deletedAt: null } }, _sum: { amountCents: true } }),
     prisma.professionalLeave.findMany({ where: { status: { not: "cancelled" }, startDate: { lt: end }, endDate: { gte: start } }, select: { professionalId: true, startDate: true, endDate: true } }),
   ]);
+  if (!configs.length) return null;
   const counts = await Promise.all(configs.map(c => prisma.patient.count({ where: { assignedProfessionalId: c.professionalId, isTest: false, ...activePatientCondition(), NOT: currentlyPausedCondition() } })));
   let total = 0, variable = 0;
   const durationDays = (end.getTime() - start.getTime()) / 86400000;
@@ -81,10 +82,11 @@ export async function collectEvidence(founderId: string, agent: AgentId, now = n
         fact("validatedBankExpense30", "Gastos Ponto validados", approved._sum.amountCents || 0, "EUR_cents", "confirmed", "Subconjunto del gasto registrado, no volver a sumarlo."),
         fact("cashResult30", "Cobros menos gastos registrados", cents(totals.profit), "EUR_cents", "estimated", "Resultado parcial de caja; no beneficio contable ni variación del saldo."),
         fact("teamPaid30", "Coste de equipo registrado", cents(payroll._sum.amount || 0), "EUR_cents", "confirmed", "Categoría sueldos; ya incluida en gastos registrados."),
-        fact("teamBaseMonthly", "Base fija mensual configurada", cents(base._sum.baseSalary || 0), "EUR_cents", "estimated", `Configuración de ${base._count} miembros de ${activeTeam} activos. Excluye variables, vacaciones e impuestos. No sumar a los gastos pagados.`, asOf, "Mes de configuración actual"),
+        fact("teamBaseMonthly", "Base fija mensual configurada", base._count ? cents(base._sum.baseSalary || 0) : null, "EUR_cents", "estimated", `Configuración de ${base._count} miembros de ${activeTeam} activos. Excluye variables, vacaciones e impuestos. No sumar a los gastos pagados.`, asOf, "Mes de configuración actual"),
         fact("teamMonthEstimate", "Coste de equipo estimado del mes", team?.totalCents ?? null, "EUR_cents", "estimated", "Base + clientes activos + comisiones estimadas desde contratos atribuidos + ajustes − ausencias. No nómina validada; no sumar al gasto pagado.", asOf, team?.period || "Mes actual"),
         fact("teamVariableEstimate", "Componente variable estimado", team?.variableCents ?? null, "EUR_cents", "estimated", "Incluido en el coste estimado del equipo; no añadir de nuevo.", asOf, team?.period || "Mes actual"),
         fact("unverifiedContracts", "Registros financieros por verificar", ledger.legacyUnverified.length, "count", "pending"),
+        fact("receivablesOutstanding", "Saldo exigible pendiente de cobro", null, "EUR_cents", "unavailable", "NO se obtiene restando billed30 menos income30: contratos y cobros pertenecen a cohortes distintas."),
         fact("contributionMargin", "Margen de contribución", null, "percent", "unavailable", "Faltan ingreso devengado neto y costes variables atribuidos."),
       ], limitations: ["Gastos completos, impuestos devengados, márgenes y runway todavía sin conciliación integral acreditada.", "Coste de equipo estimado con la configuración y atribución del libro; puede diferir de la nómina final. Requiere validación humana.", ...(ledger.warnings.length ? ["El libro contiene advertencias de calidad o vínculos históricos pendientes."] : [])] };
     }),

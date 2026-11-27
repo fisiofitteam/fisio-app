@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { madridDay } from "@/lib/grok-ceo-contract";
 import { collectEvidence } from "./evidence";
 import { callGrok, MODEL, providerBody, ProviderError } from "./provider";
-import { AGENT_IDS, AgentError, allFacts, budgetAllows, canTransition, deterministicReport, MONTHLY_BUDGET_MICROS, registry, REQUEST_RESERVE_MICROS, safeBusinessText, scopeEvidence, type AgentId, type AgentReport, type Command, type Evidence } from "./contract";
+import { AGENT_IDS, AgentError, allFacts, budgetAllows, canTransition, deterministicReport, MONTHLY_BUDGET_MICROS, registry, REQUEST_RESERVE_MICROS, safeBusinessText, scopeEvidence, reportEvidenceViolations, reportSchema, type AgentId, type AgentReport, type Command, type Evidence } from "./contract";
 const hash = (v: unknown) => createHash("sha256").update(JSON.stringify(v)).digest("hex");
 const parse = <T,>(v: string | null, fallback: T): T => { try { return JSON.parse(v || "null") ?? fallback; } catch { return fallback; } };
 const deps = (v: string) => parse<string[]>(v, []);
@@ -35,7 +35,7 @@ export function createAgentEngine(db = prisma, evidenceSource = collectEvidence,
     const [preferences, due, recent] = await Promise.all([
       db.ceoBusinessMemory.findMany({ where: { founderId, scope, author: "founder", kind: "preference", status: "approved" }, orderBy: { updatedAt: "desc" }, take: 6 }),
       db.ceoBusinessMemory.findMany({ where: { founderId, scope, status: { in: ["approved", "running"] }, reviewAt: { lte: new Date() } }, orderBy: { reviewAt: "asc" }, take: 6 }),
-      db.ceoBusinessMemory.findMany({ where: { founderId, scope, status: { not: "rejected" } }, orderBy: { updatedAt: "desc" }, take: 6 }),
+      db.ceoBusinessMemory.findMany({ where: { founderId, scope, status: { notIn: ["rejected", "quarantined"] } }, orderBy: { updatedAt: "desc" }, take: 6 }),
     ]);
     return [...new Map([...preferences, ...due, ...recent].map(r => [r.id, r])).values()].map(r => ({ id: r.id, kind: r.kind, scope: r.scope, title: r.title, detail: r.detail.slice(0, 350), status: r.status, author: r.author, metricKey: r.metricKey, baseline: r.baselineValue, target: r.targetValue, outcome: r.outcomeValue, outcomeNote: r.outcomeNote?.slice(0, 350), reviewAt: r.reviewAt?.toISOString() || null }));
   }
@@ -67,6 +67,21 @@ export function createAgentEngine(db = prisma, evidenceSource = collectEvidence,
       await event(tx, founderId, row.id, "system", "worker_interrupted", {});
     });
   }
+  async function quarantineInvalidReports(founderId: string) {
+    const runs = await db.ceoAgentRun.findMany({ where: { founderId, status: "completed", model: { in: [MODEL, "cached"] } }, orderBy: { startedAt: "desc" }, take: 100 });
+    for (const run of runs) {
+      const parsed = reportSchema.safeParse(parse(run.resultJson, null)), evidence = parse<Evidence>(run.evidenceJson, { version: 1, tools: {} });
+      const violations = parsed.success ? reportEvidenceViolations(parsed.data, evidence) : ["invalid_report"];
+      if (!violations.length) continue;
+      await db.$transaction(async tx => {
+        const ok = await tx.ceoAgentRun.updateMany({ where: { id: run.id, founderId, status: "completed" }, data: { status: "rejected", errorCode: "financial_evidence_validation" } });
+        if (!ok.count) return;
+        await tx.ceoAgentTask.updateMany({ where: { id: run.taskId, founderId, status: "done" }, data: { status: "failed", errorCode: "financial_evidence_validation" } });
+        await tx.ceoBusinessMemory.updateMany({ where: { founderId, sourceRunId: run.id, status: "proposed" }, data: { status: "quarantined", outcomeNote: "Retirada automáticamente por control de calidad de evidencia; no aprobada ni ejecutada.", version: { increment: 1 } } });
+        await event(tx, founderId, run.id, "system", "report_quarantined", { violations, originalPreserved: true });
+      });
+    }
+  }
   async function dispatchCompleted(founderId: string) {
     const runs = await db.ceoAgentRun.findMany({ where: { founderId, status: "completed", dispatchedAt: null }, orderBy: { startedAt: "asc" }, take: 12 });
     for (const run of runs) {
@@ -84,7 +99,7 @@ export function createAgentEngine(db = prisma, evidenceSource = collectEvidence,
     }
   }
   async function processOne(founderId: string) {
-    await ensure(founderId); await recoverExpired(founderId);
+    await ensure(founderId); await recoverExpired(founderId); await quarantineInvalidReports(founderId);
     await dispatchCompleted(founderId);
     const candidates = await db.ceoAgentTask.findMany({ where: { founderId, status: { in: ["queued", "blocked"] } }, orderBy: [{ priority: "desc" }, { createdAt: "asc" }], take: 40 });
     let task: typeof candidates[number] | undefined;
@@ -128,6 +143,7 @@ export function createAgentEngine(db = prisma, evidenceSource = collectEvidence,
         }
         if (await reserve(founderId, runId)) {
           const result = await infer(body, process.env.XAI_API_KEY); report = result.report; usage = result; mode = "grok";
+          if (reportEvidenceViolations(report, evidence).length) throw new ProviderError("financial_evidence_validation", result);
           const keys = new Set(allFacts(evidence).map(f => f.key));
           if (report.recommendations.some(r => r.evidenceKeys.some(k => !keys.has(k)))) throw new ProviderError("unknown_evidence_reference", result);
         } else { report = deterministicReport(evidence, agentId); report.summary = `${registry[agentId].name}: evidencia disponible; análisis bloqueado por el presupuesto mensual o una revisión de consumo pendiente.`; mode = "budget_blocked"; }
@@ -178,7 +194,7 @@ export function createAgentEngine(db = prisma, evidenceSource = collectEvidence,
     return tasks.length;
   }
   async function command(founderId: string, c: Command) {
-    await ensure(founderId);
+    await ensure(founderId); await quarantineInvalidReports(founderId);
     if (c.action === "process") return processOne(founderId);
     if (c.action === "run") return enqueue(founderId, { agentId: c.agentId, title: c.question, key: c.requestId, origin: "founder", priority: c.priority, dependencies: c.dependencies });
     if (c.action === "council") {
@@ -223,7 +239,7 @@ export function createAgentEngine(db = prisma, evidenceSource = collectEvidence,
     }
   }
   async function overview(founderId: string) {
-    await ensure(founderId);
+    await ensure(founderId); await quarantineInvalidReports(founderId);
     const [configs, runs, tasks, memories, events, messages, budget] = await Promise.all([
       db.ceoAgentConfig.findMany({ where: { founderId } }), db.ceoAgentRun.findMany({ where: { founderId }, orderBy: { startedAt: "desc" }, take: 60 }),
       db.ceoAgentTask.findMany({ where: { founderId }, orderBy: { createdAt: "desc" }, take: 100 }),
@@ -232,7 +248,7 @@ export function createAgentEngine(db = prisma, evidenceSource = collectEvidence,
     ]);
     return { agents: AGENT_IDS.map(id => ({ id, ...registry[id], config: configs.find(c => c.agentId === id) })),
       provider: { configured: !!process.env.XAI_API_KEY, model: MODEL, monthlyLimitUsd: MONTHLY_BUDGET_MICROS / 1e6, month: monthKey(), spentUsd: (budget?.spentMicros || 0) / 1e6, reservedUsd: (budget?.reservedMicros || 0) / 1e6, halted: budget?.halted || false },
-      runs: runs.map(({ evidenceJson, resultJson, ...r }) => ({ ...r, evidence: parse<Evidence>(evidenceJson, { version: 1, tools: {} }), result: parse<AgentReport | null>(resultJson, null) })),
+      runs: runs.map(({ evidenceJson, resultJson, ...r }) => ({ ...r, evidence: parse<Evidence>(evidenceJson, { version: 1, tools: {} }), result: r.status === "rejected" ? null : parse<AgentReport | null>(resultJson, null) })),
       tasks: tasks.map(({ requestHash: _, leaseToken: _token, dependenciesJson, ...t }) => ({ ...t, dependencies: deps(dependenciesJson) })), memories, events: events.map(({ detailJson, ...e }) => ({ ...e, detail: parse(detailJson, {}) })), messages };
   }
   return { ensure, enqueue, command, processOne, schedule, overview };

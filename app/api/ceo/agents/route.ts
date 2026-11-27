@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 const json = (v: unknown, status = 200) => NextResponse.json(v, { status, headers: { "Cache-Control": "private, no-store" } });
 export async function GET() {
+  if (process.env.VERCEL_ENV && process.env.VERCEL_ENV !== "production") return json({ error: "Datos de agentes desactivados en previews." }, 403);
   const user = await founderSession(); if (!user) return json({ error: "Forbidden" }, 403);
   try { return json(await agentEngine.overview(user.id)); } catch { return json({ error: "Motor temporalmente no disponible." }, 503); }
 }
