@@ -22,6 +22,11 @@ async function main() {
   assert.equal(canTransition("approved", "running"), true);
   assert.equal(canTransition("evaluated", "approved"), false);
   assert.deepEqual(Object.keys(scopeEvidence(evidence, "cso").tools), ["commercial"]);
+  const targeted: Evidence = { ...evidence, tools: { ...evidence.tools, objectives: { facts: [{ ...evidence.tools.finance!.facts[0], key: "target_income30" }], limitations: [] } } };
+  assert.equal(scopeEvidence(targeted, "cto").tools.objectives!.facts.length, 0);
+  assert.equal(scopeEvidence(targeted, "cfo").tools.objectives!.facts.length, 1);
+  assert.equal(scopeEvidence(targeted, "ceo").tools.objectives!.facts.length, 1);
+  assert.equal(targeted.tools.objectives!.facts.length, 1, "scoping must not mutate shared evidence");
   assert.equal(reportSchema.safeParse({ ...report, permissions: ["transfer"] }).success, false);
   assert.equal(commandSchema.safeParse({ action: "run", requestId: randomUUID(), agentId: "bank_payment", question: "Transferir", dependencies: [], priority: 1 }).success, false);
   assert(reportEvidenceViolations({ ...report, findings: ["Billed30 13458 EUR vs income30 9073 EUR muestra 4395 EUR contractual pendiente de cobro."] }, evidence).length > 0);
