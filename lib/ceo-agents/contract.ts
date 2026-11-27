@@ -38,7 +38,12 @@ export const commandSchema = z.discriminatedUnion("action", [
 export type Command = z.infer<typeof commandSchema>;
 export class AgentError extends Error { constructor(message: string, public status = 409) { super(message); } }
 export function scopeEvidence(evidence: Evidence, id: AgentId): Evidence {
-  return { version: 1, tools: Object.fromEntries(registry[id].tools.filter(k => evidence.tools[k]).map(k => [k, evidence.tools[k]])) };
+  const tools = Object.fromEntries(registry[id].tools.filter(k => evidence.tools[k]).map(k => [k, evidence.tools[k]]));
+  if (id !== "ceo" && tools.objectives) {
+    const ownKeys = new Set(Object.entries(tools).filter(([key]) => key !== "objectives").flatMap(([, tool]) => tool?.facts.map(f => f.key) || []));
+    tools.objectives = { ...tools.objectives, facts: tools.objectives.facts.filter(f => ownKeys.has(f.key.replace(/^(?:target_|deviation_)/, ""))) };
+  }
+  return { version: 1, tools };
 }
 export function allFacts(e: Evidence) { return Object.values(e.tools).flatMap(t => t?.facts || []); }
 export function safeBusinessText(text: string) {

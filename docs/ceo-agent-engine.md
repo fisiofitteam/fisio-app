@@ -64,11 +64,17 @@ Las referencias de evidencia se restringen en el JSON Schema a los indicadores d
 
 Los informes anteriores que incumplen el control se retiran del contexto y de las entregas al CEO, y sus propuestas pasan a cuarentena. Se conserva el original en auditoría y su coste. Una validación automática no demuestra corrección semántica total: siguen siendo recomendaciones revisables, no contabilidad ni autoridad operativa. Pruebas sintéticas reproducen ambos errores y comprueban cuarentena, aislamiento y consumo conservado.
 
+## Validación en producción — 27/11/2026
+
+Despliegues #86–#90 verificados. La API real está activa con la clave sensible de producción; no fue necesario compartirla en el chat. El consejo inicial completó CFO, CMO, CSO, COO, CXO y CTO antes de la síntesis del CEO. Se comprobó que la síntesis esperaba una dependencia fallida y continuó después de su reintento correcto. La conversación directa recuperó el consejo y diferenció datos disponibles en la empresa de restricciones departamentales. Consumo acumulado a las 13:01 de Madrid: 0,1453 USD, sin reservas pendientes, incluyendo todos los fallos.
+
+La validación detectó errores semánticos del modelo y falsos positivos del filtro que se reprodujeron en pruebas y se corrigieron. Se conservan ejecuciones antiguas rechazadas y propuestas retiradas en el historial; no son decisiones del fundador ni acciones ejecutadas. Los especialistas solo reciben objetivos asociados a sus fuentes, y el CEO recibe el alcance de cada departamento para contrastar limitaciones. Esta comprobación funcional no convierte todas las afirmaciones del modelo en hechos verificados: las recomendaciones requieren revisión y las limitaciones de fuentes siguen vigentes.
+
 ## Backlog priorizado, sin confundir límites con funcionalidades terminadas
 
 | Prioridad | Siguiente capacidad | Dependencia/criterio de finalización |
 | --- | --- | --- |
-| P0 | Verificación real de API y CFO→CEO | Tras despliegue: respuesta válida, consumo medido, datos bien etiquetados, UI autenticada. |
+| Completado | Verificación real de API, seis departamentos, consejo y chat | El 27/11 a las 13:01 (Madrid): seis análisis completados, síntesis dependiente del CEO y conversación con memoria verificadas en producción. Consumo acumulado observado: 0,1453 USD, incluidas pruebas fallidas. |
 | P1 | Previsión por vencimientos a 13 semanas y escenarios | Agenda completa de compromisos de caja y criterios de escenarios. Hoy existe extrapolación provisional, no caja comprometida. |
 | P1 | Margen y rentabilidad contable | Ingreso devengado neto, costes variables atribuibles y cobertura contable acordados; hoy se informa como no disponible. |
 | P1 | Nómina final conciliada | Contrastar estimación con liquidación final; no contabilizar desde agentes. |
