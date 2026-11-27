@@ -60,6 +60,8 @@ Migración `scripts/sql/ceo-agent-engine.sql`, aditiva e idempotente, en la tran
 
 La primera prueba real confirmó conexión y medición de consumo, pero detectó una inferencia inválida del modelo: tratar contratado menos cobrado de periodos/cohortes distintos como deuda pendiente. También inventó un porcentaje con costes de equipo. Ninguna recomendación fue aprobada ni ejecutada. Se añadió validación previa a publicación: importes y porcentajes deben existir en la evidencia; se rechazan inferencias de deuda no acreditada. Los cálculos nuevos corresponden a adaptadores deterministas, no al texto del modelo.
 
+Las referencias de evidencia se restringen en el JSON Schema a los indicadores disponibles para cada agente. Los importes se entregan al modelo en euros y las desviaciones de tasas en puntos porcentuales. Se impide describir una previsión positiva como caja negativa. Los fallos guardan sus diagnósticos y su respuesta original para auditoría, sin mostrarlos como recomendaciones. La reutilización de resultados incluye el encargo y, en el CEO, las conclusiones departamentales.
+
 Los informes anteriores que incumplen el control se retiran del contexto y de las entregas al CEO, y sus propuestas pasan a cuarentena. Se conserva el original en auditoría y su coste. Una validación automática no demuestra corrección semántica total: siguen siendo recomendaciones revisables, no contabilidad ni autoridad operativa. Pruebas sintéticas reproducen ambos errores y comprueban cuarentena, aislamiento y consumo conservado.
 
 ## Backlog priorizado, sin confundir límites con funcionalidades terminadas

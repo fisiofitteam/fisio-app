@@ -59,7 +59,7 @@ export function budgetAllows(spent: number, reserved: number, halted: boolean) {
 export function deterministicReport(e: Evidence, id: AgentId): AgentReport {
   const facts = allFacts(e), missing = facts.filter(f => f.value === null || f.quality !== "confirmed");
   return { summary: `${registry[id].name}: evidencia recopilada. El análisis de Grok está pendiente de activación o presupuesto.`,
-    findings: facts.filter(f => f.value !== null).slice(0, 8).map(f => `${f.label}: ${f.unit === "EUR_cents" ? (f.value! / 100).toFixed(2) + " EUR" : f.value + (f.unit === "percent" ? "%" : "")}. ${f.quality}. ${f.period}.`),
+    findings: facts.filter(f => f.value !== null).slice(0, 8).map(f => `${f.label}: ${f.unit === "EUR_cents" ? (f.value! / 100).toFixed(2) + " EUR" : f.value + (f.unit === "percent" ? (f.key.startsWith("deviation_") ? " pp" : "%") : "")}. ${f.quality}. ${f.period}.`),
     limitations: [...new Set(Object.values(e.tools).flatMap(t => t?.limitations || []))].slice(0, 6).concat(missing.length ? [`${missing.length} indicadores estimados, pendientes, antiguos o no disponibles.`] : []).slice(0, 8),
     recommendations: [], assignments: [], learning: "Sin evaluación generativa. Esta ejecución no aprueba ni ejecuta actuaciones empresariales." };
 }
@@ -69,11 +69,14 @@ export function reportEvidenceViolations(report: AgentReport, evidence: Evidence
   const text = [report.summary, ...report.findings, ...report.limitations, ...report.assignments.map(a => a.question), ...report.recommendations.flatMap(r => [r.title, r.rationale]), report.learning].join("\n");
   const facts = allFacts(evidence), failures: string[] = [];
   const number = (raw: string) => { let s = raw.replace(/\s/g, ""); if (s.includes(",") && s.includes(".")) s = s.lastIndexOf(",") > s.lastIndexOf(".") ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, ""); else if (s.includes(",")) s = /,\d{3}$/.test(s) ? s.replace(/,/g, "") : s.replace(",", "."); else if (/\.\d{3}$/.test(s)) s = s.replace(/\./g, ""); return Number(s); };
-  for (const m of text.matchAll(/([-+]?\d[\d.,]*(?:\s\d{3})*)\s*(EUR\b|€|%|\bpp\b)/gi)) {
+  for (const m of text.matchAll(/([-+]?\d[\d.,]*(?:\s\d{3})*)\s*(EUR\b|euros?\b|€|%|\bpp\b|puntos? porcentuales?\b)/gi)) {
     const v = number(m[1]), monetary = /EUR|€/i.test(m[2]);
-    const values = facts.filter(f => f.unit === (monetary ? "EUR_cents" : "percent") && f.value !== null).map(f => monetary ? f.value! / 100 : f.value!);
-    if (!values.some(n => Math.abs((m[2].toLowerCase() === "pp" ? Math.abs(n) : n) - (m[2].toLowerCase() === "pp" ? Math.abs(v) : v)) <= (monetary ? 1 : 0.51))) failures.push("unsupported_numeric_claim: " + m[0]);
+    const isPoints = /pp|puntos?/i.test(m[2]);
+    const values = facts.filter(f => f.unit === (monetary ? "EUR_cents" : "percent") && f.value !== null && (monetary || f.key.startsWith("deviation_") === isPoints)).map(f => monetary ? f.value! / 100 : f.value!);
+    if (!values.some(n => Math.abs((isPoints ? Math.abs(n) : n) - (isPoints ? Math.abs(v) : v)) <= (monetary ? 1 : 0.51))) failures.push("unsupported_numeric_claim: " + m[0]);
   }
+  const forecast = facts.find(f => f.key === "forecast30")?.value;
+  if (forecast != null && forecast >= 0 && /(?:la )?previsi[oó]n de caja negativa/i.test(text)) failures.push("positive_forecast_described_as_negative");
   const hasReceivables = facts.some(f => f.key === "receivablesOutstanding" && f.value !== null && f.quality === "confirmed");
   if (!hasReceivables) {
     // Reject positive claims about outstanding debt from period billing vs cash, including claims without a currency suffix.
