@@ -72,7 +72,7 @@ export function reportEvidenceViolations(report: AgentReport, evidence: Evidence
   for (const m of text.matchAll(/([-+]?\d[\d.,]*(?:\s\d{3})*)\s*(EUR\b|€|%|\bpp\b)/gi)) {
     const v = number(m[1]), monetary = /EUR|€/i.test(m[2]);
     const values = facts.filter(f => f.unit === (monetary ? "EUR_cents" : "percent") && f.value !== null).map(f => monetary ? f.value! / 100 : f.value!);
-    if (!values.some(n => Math.abs(n - v) <= (monetary ? 1 : 0.51))) failures.push("unsupported_numeric_claim");
+    if (!values.some(n => Math.abs((m[2].toLowerCase() === "pp" ? Math.abs(n) : n) - (m[2].toLowerCase() === "pp" ? Math.abs(v) : v)) <= (monetary ? 1 : 0.51))) failures.push("unsupported_numeric_claim: " + m[0]);
   }
   const hasReceivables = facts.some(f => f.key === "receivablesOutstanding" && f.value !== null && f.quality === "confirmed");
   if (!hasReceivables) {
@@ -80,7 +80,7 @@ export function reportEvidenceViolations(report: AgentReport, evidence: Evidence
     const paragraphs = text.split(/[\n.!?]+/);
     for (const p of paragraphs) {
       if (/\b(?:gap|brecha|diferencia|pendiente[s]? de cobro|contractual pendiente)\b/i.test(p) && /\b(?:billed|contratad|factur|cobro|cobrad|income)/i.test(p)
-        && !/\b(?:no permite|no demuestra|no equivale|no mide|no se puede|no debe|no implica|no representa|no deducir|no inferir|desconocid|sin acreditar|sin poder|no cuantific)/i.test(p)) failures.push("unverified_receivables_claim");
+        && !/\b(?:no disponible|no consta|no valid|no acredit|no hay|sin datos|no se obtiene|no calcul|no permite|no demuestra|no equivale|no mide|no se puede|no debe|no implica|no representa|no deducir|no inferir|desconocid|sin acreditar|sin poder|no cuantific)/i.test(p)) failures.push("unverified_receivables_claim: " + p.trim().slice(0, 180));
     }
   }
   return [...new Set(failures)];

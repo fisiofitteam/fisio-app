@@ -143,9 +143,10 @@ export function createAgentEngine(db = prisma, evidenceSource = collectEvidence,
         }
         if (await reserve(founderId, runId)) {
           const result = await infer(body, process.env.XAI_API_KEY); report = result.report; usage = result; mode = "grok";
-          if (reportEvidenceViolations(report, evidence).length) throw new ProviderError("financial_evidence_validation", result);
+          const violations = reportEvidenceViolations(report, evidence);
+          if (violations.length) throw new ProviderError("financial_evidence_validation", result, report, violations);
           const keys = new Set(allFacts(evidence).map(f => f.key));
-          if (report.recommendations.some(r => r.evidenceKeys.some(k => !keys.has(k)))) throw new ProviderError("unknown_evidence_reference", result);
+          if (report.recommendations.some(r => r.evidenceKeys.some(k => !keys.has(k)))) throw new ProviderError("unknown_evidence_reference", result, report, ["unknown_evidence_reference"]);
         } else { report = deterministicReport(evidence, agentId); report.summary = `${registry[agentId].name}: evidencia disponible; análisis bloqueado por el presupuesto mensual o una revisión de consumo pendiente.`; mode = "budget_blocked"; }
       }
       if (agentId !== "ceo" || task.depth >= 2 || deps(task.dependenciesJson).length) report.assignments = [];
@@ -170,9 +171,9 @@ export function createAgentEngine(db = prisma, evidenceSource = collectEvidence,
         if (!ok.count) { await event(tx, founderId, taskId, "system", "dispatch_incomplete", { code }); return; }
         if (runId) {
           const run = await tx.ceoAgentRun.findUniqueOrThrow({ where: { id: runId } });
-          await tx.ceoAgentRun.update({ where: { id: runId }, data: { status: "failed", errorCode: code, finishedAt: new Date(), ...await settle(tx, run, error instanceof ProviderError ? error.usage : undefined, code === "provider_model_changed") } });
+          await tx.ceoAgentRun.update({ where: { id: runId }, data: { status: "failed", errorCode: code, finishedAt: new Date(), ...(error instanceof ProviderError && error.rejectedReport ? { resultJson: JSON.stringify(error.rejectedReport) } : {}), ...await settle(tx, run, error instanceof ProviderError ? error.usage : undefined, code === "provider_model_changed") } });
         }
-        await event(tx, founderId, taskId, "system", "analysis_failed", { code });
+        await event(tx, founderId, taskId, "system", "analysis_failed", { code, ...(error instanceof ProviderError && error.violations.length ? { violations: error.violations } : {}) });
       });
       return { status: "failed", taskId, code };
     }
@@ -248,7 +249,7 @@ export function createAgentEngine(db = prisma, evidenceSource = collectEvidence,
     ]);
     return { agents: AGENT_IDS.map(id => ({ id, ...registry[id], config: configs.find(c => c.agentId === id) })),
       provider: { configured: !!process.env.XAI_API_KEY, model: MODEL, monthlyLimitUsd: MONTHLY_BUDGET_MICROS / 1e6, month: monthKey(), spentUsd: (budget?.spentMicros || 0) / 1e6, reservedUsd: (budget?.reservedMicros || 0) / 1e6, halted: budget?.halted || false },
-      runs: runs.map(({ evidenceJson, resultJson, ...r }) => ({ ...r, evidence: parse<Evidence>(evidenceJson, { version: 1, tools: {} }), result: r.status === "rejected" ? null : parse<AgentReport | null>(resultJson, null) })),
+      runs: runs.map(({ evidenceJson, resultJson, ...r }) => ({ ...r, evidence: parse<Evidence>(evidenceJson, { version: 1, tools: {} }), result: r.status === "completed" ? parse<AgentReport | null>(resultJson, null) : null })),
       tasks: tasks.map(({ requestHash: _, leaseToken: _token, dependenciesJson, ...t }) => ({ ...t, dependencies: deps(dependenciesJson) })), memories, events: events.map(({ detailJson, ...e }) => ({ ...e, detail: parse(detailJson, {}) })), messages };
   }
   return { ensure, enqueue, command, processOne, schedule, overview };
