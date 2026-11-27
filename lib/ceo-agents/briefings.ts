@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { reportSchema, reportEvidenceViolations, safeBusinessText, type Evidence, type AgentId, AGENT_IDS } from "./contract";
+import { reportSchema, reportEvidenceViolations, scopeEvidence, allFacts, safeBusinessText, type Evidence, type AgentId, AGENT_IDS } from "./contract";
 /** Existing read-only Grok channel: department conclusions, never source records or founder-only notes. */
 export async function departmentBriefings() {
   const founderId = process.env.GROK_CEO_FOUNDER_ID;
@@ -11,7 +11,8 @@ export async function departmentBriefings() {
       let raw: unknown; try { raw = JSON.parse(row.resultJson || "null"); } catch { return []; }
       const parsed = reportSchema.safeParse(raw); if (!parsed.success) return [];
       let evidence: Evidence; try { evidence = JSON.parse(row.evidenceJson); } catch { return []; }
-      if (reportEvidenceViolations(parsed.data, evidence).length) return [];
+      const scoped = scopeEvidence(evidence, row.agentId as AgentId), keys = new Set(allFacts(scoped).map(f => f.key));
+      if (reportEvidenceViolations(parsed.data, scoped).length || parsed.data.recommendations.some(r => r.evidenceKeys.some(k => !keys.has(k)))) return [];
       return [{ runId: row.id, department: row.agentId as AgentId, asOf: row.startedAt.toISOString(), mode: row.model, summary: safeBusinessText(parsed.data.summary), limitations: parsed.data.limitations, recommendations: parsed.data.recommendations.map(r => ({ title: safeBusinessText(r.title), rationale: safeBusinessText(r.rationale), evidenceKeys: r.evidenceKeys, state: "recommendation_only" })) }];
     }) };
   } catch { return { status: "unavailable", reports: [] }; }
