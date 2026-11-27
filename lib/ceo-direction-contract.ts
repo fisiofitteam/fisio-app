@@ -55,7 +55,7 @@ export function evaluateTargets(observations: Observation[], targets: Target[]) 
 }
 export function viewerReportMetrics(metrics: unknown, isFounder: boolean) {
   const result = { ...record(metrics) };
-  if (!isFounder) delete result.banking;
+  if (!isFounder) { delete result.banking; delete result.departments; }
   return result;
 }
 export const statusLabels: Record<typeof priorityStatuses[number], string> = { planned: "Planificada", in_progress: "En marcha", blocked: "Bloqueada", done: "Completada", discarded: "Descartada" };

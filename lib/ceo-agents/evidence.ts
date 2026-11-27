@@ -1,3 +1,4 @@
+import { normalizeOpsConfig } from "@/lib/ops-config";
 /** Only this adapter can read business sources. Agent/model code receives this numeric contract, never Prisma or source rows. */
 import { prisma } from "@/lib/prisma";
 import { activePatientCondition, currentlyPausedCondition } from "@/lib/patient-active";
@@ -9,6 +10,20 @@ import { directionSettings, parseObject, record } from "@/lib/ceo-direction-cont
 import { allFacts, registry, type AgentId, type Evidence, type Fact, type ToolId } from "./contract";
 const num = (v: unknown) => typeof v === "number" && Number.isFinite(v) ? v : null;
 const cents = (v: unknown) => num(v) === null ? null : Math.round(Number(v) * 100);
+async function operationsAggregate(now: Date) {
+  const [stored, coaches, activeClients] = await Promise.all([
+    prisma.opsConfig.findUnique({ where: { id: "singleton" } }),
+    prisma.professional.findMany({ where: { active: true, deletedAt: null, OR: [{ role: { in: ["fisio", "head_success"] } }, { extraRoles: { hasSome: ["fisio", "head_success"] } }] }, select: { id: true, maxPatients: true } }),
+    prisma.patient.count({ where: { isTest: false, ...activePatientCondition() } }),
+  ]);
+  const config = normalizeOpsConfig(stored ? { ...stored, occupancyBasis: stored.occupancyBasis === "assigned" ? "assigned" : "active" } : {});
+  const threshold = new Date(now.getTime() + config.expectedRenewDays * 86400000), ids = coaches.map(c => c.id);
+  const [occupancy, due] = await Promise.all([
+    prisma.patient.groupBy({ by: ["assignedProfessionalId"], where: { isTest: false, assignedProfessionalId: { in: ids }, ...(config.occupancyBasis === "assigned" ? {} : activePatientCondition()) }, _count: true }),
+    prisma.patient.count({ where: { isTest: false, assignedProfessionalId: { in: ids }, AND: [{ renewals: { some: { status: "active", endDate: { gt: now, lte: threshold } } } }, { renewals: { none: { status: "active", endDate: { gt: threshold } } } }] } }),
+  ]);
+  return { capacity: coaches.reduce((n, c) => n + (c.maxPatients ?? config.defaultMaxPatients), 0), free: coaches.reduce((n, c) => n + Math.max(0, (c.maxPatients ?? config.defaultMaxPatients) - (occupancy.find(o => o.assignedProfessionalId === c.id)?._count || 0)), 0), activeClients, due, days: config.expectedRenewDays, basis: config.occupancyBasis };
+}
 async function teamEstimate(now: Date) {
   const month = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit" }).format(now);
   const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit" }).formatToParts(now);
@@ -45,6 +60,7 @@ export async function collectEvidence(founderId: string, agent: AgentId, now = n
   const report = await prisma.ceoReport.findFirst({ where: { periodType: "grok_daily" }, orderBy: { generatedAt: "desc" }, select: { metrics: true, generatedAt: true } });
   const snapshot = parseObject(report?.metrics), month = record(snapshot.last30), previous = record(snapshot.previous30);
   const fresh = !!report && now.getTime() - report.generatedAt.getTime() < 48 * 3600000 && now >= report.generatedAt;
+  const operations = allowed.some(k => k === "operations" || k === "retention") ? operationsAggregate(now).catch(() => null) : Promise.resolve(null);
   const reportQuality = fresh ? "confirmed" : "stale", reportAt = report?.generatedAt.toISOString() || null;
   const reportPeriod = typeof month.start === "string" && typeof month.end === "string" ? `${month.start} / ${month.end}` : "Periodo del informe no disponible";
   const rf = (key: string, label: string, value: unknown, unit: Fact["unit"] = "count", definition = "") => fact(key, label, num(value), unit, reportQuality, definition, reportAt, reportPeriod);
@@ -73,7 +89,7 @@ export async function collectEvidence(founderId: string, agent: AgentId, now = n
       ], limitations: ["Gastos completos, impuestos devengados, márgenes y runway todavía sin conciliación integral acreditada.", "Coste de equipo estimado con la configuración y atribución del libro; puede diferir de la nómina final. Requiere validación humana.", ...(ledger.warnings.length ? ["El libro contiene advertencias de calidad o vínculos históricos pendientes."] : [])] };
     }),
     tool("banking", async () => {
-      const b = record(await bankAggregate()), at = typeof b.asOf === "string" ? b.asOf : null;
+      const b = record(await bankAggregate()), at = b.asOf instanceof Date ? b.asOf.toISOString() : typeof b.asOf === "string" ? b.asOf : null;
       const q = b.status === "available" ? "confirmed" : "stale";
       const projection = Array.isArray(b.forecast) ? b.forecast.find(x => record(x).days === 30) : null;
       return { facts: [fact("cash", "Saldo bancario", num(b.currentBalanceCents), "EUR_cents", q, "Saldo de cuentas autorizadas. No beneficio.", at, "Saldo actual"),
@@ -101,8 +117,10 @@ export async function collectEvidence(founderId: string, agent: AgentId, now = n
         fact("contentShares", "Compartidos de la muestra", content._sum.metricsShares, "count", q, "Acumulado de las publicaciones seleccionadas", at, contentPeriod),
         fact("attributedROAS", "ROAS atribuible", null, "percent")], limitations: ["Gasto/atribución publicitaria todavía no conectados a este motor. No inferir CAC/ROAS.", "Métricas del calendario pueden ser manuales o sincronizadas; contenido sin medición no equivale a cero."] };
     }),
-    tool("operations", async () => { const c = record(snapshot.capacity); return { facts: [rf("capacity", "Plazas configuradas", c.capacityTotal), rf("freeCapacity", "Plazas libres teóricas", c.freeTotal), rf("activeClients", "Clientes activos", snapshot.activeClients)], limitations: ["Plazas configuradas no prueban horas disponibles ni calidad del servicio. No se accede a información clínica."] }; }),
-    tool("retention", async () => { const r = record(month.renewals), c = record(snapshot.capacity); return { facts: [rf("renewed30", "Renovaciones ganadas", r.renewed), rf("lostRenewals30", "Renovaciones perdidas", r.lost), rf("renewalRate30", "Tasa de renovación", r.renewalRate, "percent"), rf("renewalsDue", "Renovaciones próximas", c.renewsSoonTotal), { ...rf("renewalsExpected", "Renovaciones esperadas", c.expectedRenewTotal), quality: fresh ? "estimated" : "stale", definition: "Modelo operativo; sin histórico puede asumir renovación total. No son cobros." }, fact("renewalsCash", "Cobros futuros por renovación", null, "EUR_cents")], limitations: ["Satisfacción y adherencia agregadas aún no disponibles. Renovaciones esperadas no son compromisos de cobro."] }; }),
+    tool("operations", async () => { const o = await operations; return { facts: [fact("capacity", "Plazas configuradas", o?.capacity ?? null, "count", "confirmed", "Capacidad del equipo según configuración", asOf, "Estado actual"), fact("freeCapacity", "Plazas libres teóricas", o?.free ?? null, "count", "confirmed", "Ocupación según criterio configurado: " + (o?.basis || "no disponible"), asOf, "Estado actual"), fact("activeClients", "Clientes activos", o?.activeClients ?? null, "count", "confirmed", "Incluye activos no asignados", asOf, "Estado actual")], limitations: ["Plazas configuradas no prueban horas disponibles ni calidad del servicio. Solo consultas agregadas de suscripciones, sin fichas ni información clínica."] }; }),
+    tool("retention", async () => { const r = record(month.renewals), o = await operations, rate = num(r.renewalRate); return { facts: [rf("renewed30", "Renovaciones ganadas", r.renewed), rf("lostRenewals30", "Renovaciones perdidas", r.lost), rf("renewalRate30", "Tasa de renovación", r.renewalRate, "percent"),
+      fact("renewalsDue", "Renovaciones próximas", o?.due ?? null, "count", "confirmed", "Último vencimiento activo de clientes asignados; no contratos nuevos", asOf, `Próximos ${o?.days ?? "?"} días`),
+      fact("renewalsExpected", "Escenario de renovaciones esperadas", o && fresh && rate !== null ? Math.round(o.due * rate / 100) : null, "count", "estimated", "Vencimientos próximos × tasa global observada a 30 días. No compromisos ni cobros; hipótesis de persistencia de la tasa.", asOf, `Próximos ${o?.days ?? "?"} días`), fact("renewalsCash", "Cobros futuros por renovación", null, "EUR_cents")], limitations: ["Satisfacción y adherencia agregadas aún no disponibles. Renovaciones esperadas no son compromisos de cobro."] }; }),
     tool("technology", async () => {
       const [tickets, failed] = await Promise.all([prisma.supportTicket.count({ where: { status: { notIn: ["resolved", "declined"] } } }), prisma.ceoAgentRun.count({ where: { founderId, status: "failed", startedAt: { gte: window.start, lte: window.end } } })]);
       return { facts: [fact("openTickets", "Tickets sin resolver", tickets, "count", "confirmed", "Recuento; no se leen textos ni adjuntos"), fact("failedRuns", "Ejecuciones fallidas", failed, "count")], limitations: ["No equivale a disponibilidad del servicio. No se inspeccionan logs con datos de usuarios."] };
