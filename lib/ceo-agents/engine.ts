@@ -71,7 +71,8 @@ export function createAgentEngine(db = prisma, evidenceSource = collectEvidence,
     const runs = await db.ceoAgentRun.findMany({ where: { founderId, status: "completed", model: { in: [MODEL, "cached"] } }, orderBy: { startedAt: "desc" }, take: 100 });
     for (const run of runs) {
       const parsed = reportSchema.safeParse(parse(run.resultJson, null)), evidence = parse<Evidence>(run.evidenceJson, { version: 1, tools: {} });
-      const violations = parsed.success ? reportEvidenceViolations(parsed.data, evidence) : ["invalid_report"];
+      const scoped = scopeEvidence(evidence, run.agentId as AgentId), keys = new Set(allFacts(scoped).map(f => f.key));
+      const violations = parsed.success ? [...reportEvidenceViolations(parsed.data, scoped), ...(parsed.data.recommendations.some(r => r.evidenceKeys.some(k => !keys.has(k))) ? ["evidence_outside_current_scope"] : [])] : ["invalid_report"];
       if (!violations.length) continue;
       await db.$transaction(async tx => {
         const ok = await tx.ceoAgentRun.updateMany({ where: { id: run.id, founderId, status: "completed" }, data: { status: "rejected", errorCode: "financial_evidence_validation" } });

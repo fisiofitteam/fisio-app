@@ -135,6 +135,21 @@ async function main() {
     const qualityView = await engine.overview(badOwner);
     assert(qualityView.runs.every(r => r.result === null));
     assert(qualityView.events.some(e => e.action === "analysis_failed" && JSON.stringify(e.detail).includes("unsupported_numeric_claim")));
+    // A narrower role policy also withdraws old reports and their proposed memories.
+    const oldScopeOwner = "old-scope-owner";
+    const oldScopeTask = await engine.enqueue(oldScopeOwner, { agentId: "cto", title: "Old broad targets", key: randomUUID(), origin: "test" });
+    await db.ceoAgentTask.update({ where: { id: oldScopeTask.id }, data: { status: "done" } });
+    const oldScopeEvidence: Evidence = { version: 1, tools: { technology: { facts: [], limitations: [] }, objectives: { facts: [{ ...evidence.tools.finance!.facts[0], key: "target_income30", value: 900000 }], limitations: [] } } };
+    const oldScopeReport = { ...report, summary: "Objetivo de 9000 euros sin datos financieros para CTO", recommendations: [{ ...report.recommendations[0], evidenceKeys: ["target_income30"] }] };
+    const oldScopeRun = await db.ceoAgentRun.create({ data: { id: randomUUID(), founderId: oldScopeOwner, taskId: oldScopeTask.id, agentId: "cto", model: MODEL, status: "completed", fingerprint: "old-policy", costMicros: 1000, resultJson: JSON.stringify(oldScopeReport), evidenceJson: JSON.stringify(oldScopeEvidence) } });
+    await db.ceoBusinessMemory.create({ data: { id: randomUUID(), founderId: oldScopeOwner, scope: "cto", kind: "decision", title: "Pedir finanzas", detail: "Objetivo de 9000 euros", author: "cto", sourceRunId: oldScopeRun.id, status: "proposed" } });
+    const policyView = await engine.overview(oldScopeOwner);
+    assert.equal(policyView.runs[0].result, null); assert.equal(policyView.memories[0].status, "quarantined");
+    let nextContext = "";
+    const isolatedHistoryEngine = createAgentEngine(db, async () => structuredClone(oldScopeEvidence), async body => { nextContext = body.input[1].content; return { report: { ...report, recommendations: [] }, costMicros: 1000, model: MODEL, inputTokens: 1, outputTokens: 1 }; });
+    await engine.command(oldScopeOwner, { action: "retry", id: oldScopeTask.id });
+    assert.equal((await isolatedHistoryEngine.processOne(oldScopeOwner)).status, "completed");
+    assert(!nextContext.includes("9000"), "old targets must not survive in history or memory after scope restriction");
     // A provider failure remains billed conservatively, with explicit retry and error state.
     const failEngine = createAgentEngine(db, async () => structuredClone(evidence), async () => { throw new ProviderError("provider_timeout_or_network"); });
     const failed = await engine.enqueue(other, { agentId: "cfo", title: "Simular timeout", key: randomUUID(), origin: "test" });

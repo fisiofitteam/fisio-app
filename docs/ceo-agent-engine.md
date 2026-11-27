@@ -62,6 +62,8 @@ La primera prueba real confirmó conexión y medición de consumo, pero detectó
 
 Las referencias de evidencia se restringen en el JSON Schema a los indicadores disponibles para cada agente. Los importes se entregan al modelo en euros y las desviaciones de tasas en puntos porcentuales. Se impide describir una previsión positiva como caja negativa. Los fallos guardan sus diagnósticos y su respuesta original para auditoría, sin mostrarlos como recomendaciones. La reutilización de resultados incluye el encargo y, en el CEO, las conclusiones departamentales.
 
+La revisión de históricos usa el alcance vigente del agente, no sus antiguos objetivos más amplios, e impide que referencias retiradas sobrevivan en memorias propuestas o entregas externas.
+
 Los informes anteriores que incumplen el control se retiran del contexto y de las entregas al CEO, y sus propuestas pasan a cuarentena. Se conserva el original en auditoría y su coste. Una validación automática no demuestra corrección semántica total: siguen siendo recomendaciones revisables, no contabilidad ni autoridad operativa. Pruebas sintéticas reproducen ambos errores y comprueban cuarentena, aislamiento y consumo conservado.
 
 ## Validación en producción — 27/11/2026
