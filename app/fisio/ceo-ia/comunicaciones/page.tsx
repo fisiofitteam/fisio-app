@@ -1,3 +1,4 @@
+import { CeoAgentWorkspace } from "@/components/CeoAgentWorkspace";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { founderSession } from "@/lib/grok-ceo-exchange";
@@ -17,6 +18,8 @@ export default async function CommunicationsPage({ searchParams }: { searchParam
     <div><h2 className="text-xl font-semibold">Comunicaciones</h2><p className="mt-1 text-sm text-neutral-500">Encargos, respuestas y decisiones con tu CEO IA, en un único buzón.</p></div>
     {report && <p className="text-xs text-neutral-500">Decisiones vinculadas a: {report.periodLabel}</p>}
     {id && !report && <p className="text-sm text-amber-800">El informe de origen ya no está disponible. Puedes consultar el historial o enviar un nuevo encargo.</p>}
-    <GrokCeoExchangePanel key={report?.id || "general"} reportId={report?.id} decisions={decisions} />
+    <CeoAgentWorkspace mode="chat" />
+    <details className="rounded-xl border p-4"><summary className="cursor-pointer font-medium">Buzón anterior · informes y respuestas del bot externo</summary>
+    <GrokCeoExchangePanel key={report?.id || "general"} reportId={report?.id} decisions={decisions} /></details>
   </div>;
 }

@@ -11,7 +11,7 @@ if (!process.env.DATABASE_URL) {
   process.exit(1);
 }
 const root = path.resolve(__dirname, "..");
-const names = ["grok-ceo-exchange.sql", "business-expense-candidate.sql", "grok-ceo-channel-health.sql", "ponto-bank-finance.sql", "ceo-direction.sql"];
+const names = ["grok-ceo-exchange.sql", "business-expense-candidate.sql", "grok-ceo-channel-health.sql", "ponto-bank-finance.sql", "ceo-direction.sql", "ceo-agent-engine.sql"];
 // Both files are controlled additive migrations, each with its own explicit
 // transaction. Wrap the complete migration in one transaction instead.
 const statements = names.map(name => fs.readFileSync(path.join(__dirname, "sql", name), "utf8").replace(/^BEGIN;\s*$/m, "").replace(/^COMMIT;\s*$/m, ""));

@@ -1,3 +1,4 @@
+import { departmentBriefings } from "@/lib/ceo-agents/briefings";
 import { bankAggregate } from "@/lib/bank-finance";
 import { directionAggregate } from "@/lib/ceo-direction";
 import { prisma } from "@/lib/prisma";
@@ -40,6 +41,7 @@ export async function collectGrokSnapshot(now = new Date()) {
     yesterday, last7, previous7, last30, previous30, activeClients,
     banking: await bankAggregate(),
     direction: await directionAggregate(),
+    departments: await departmentBriefings(),
     capacity: numericFields(capacity.summary, ["coaches","assigned","active","paused","capacityTotal","freeTotal","renewsSoonTotal","expectedRenewTotal","saturatedCoaches"]),
     history: historyRows.flatMap(row => {
       try { const n = JSON.parse(row.narrative); return [{ day: row.id.slice(9), actions: n.accionesRecomendadas, decisions: n.decisionesFounder, summary: n.resumenEjecutivo }]; } catch { return []; }

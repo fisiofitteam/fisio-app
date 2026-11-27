@@ -1,3 +1,4 @@
+import { CeoAgentWorkspace } from "@/components/CeoAgentWorkspace";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getActiveProfessional } from "@/lib/session";
@@ -36,6 +37,7 @@ export default async function CeoReportPage() {
   return <div className="space-y-5">
     <header><h2 className="text-xl font-semibold">Informes</h2>
       <p className="text-sm text-neutral-500 mt-1">Informes diarios, análisis por periodo e histórico del CEO IA.</p></header>
+    {user.id === process.env.GROK_CEO_FOUNDER_ID && <CeoAgentWorkspace mode="reports" />}
     <CeoReportsClient initial={initialList} isFounder={user.id === process.env.GROK_CEO_FOUNDER_ID} />
   </div>;
 }

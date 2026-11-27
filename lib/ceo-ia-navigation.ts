@@ -1,6 +1,13 @@
 export const CEO_IA_ROOT = "/fisio/ceo-ia";
 export const ceoIaSections = [
   { href: CEO_IA_ROOT, label: "Resumen", founderOnly: false },
+  { href: CEO_IA_ROOT + "/agentes", label: "Equipo IA", founderOnly: true },
+  { href: CEO_IA_ROOT + "/encargos", label: "Encargos y consejo", founderOnly: true },
+  { href: CEO_IA_ROOT + "/decisiones", label: "Decisiones", founderOnly: true },
+  { href: CEO_IA_ROOT + "/memoria", label: "Memoria", founderOnly: true },
+  { href: CEO_IA_ROOT + "/experimentos", label: "Experimentos", founderOnly: true },
+  { href: CEO_IA_ROOT + "/finanzas", label: "Finanzas", founderOnly: true },
+  { href: CEO_IA_ROOT + "/actividad", label: "Actividad y costes", founderOnly: true },
   { href: CEO_IA_ROOT + "/informes", label: "Informes", founderOnly: false },
   { href: CEO_IA_ROOT + "/comunicaciones", label: "Comunicaciones", founderOnly: true },
   { href: CEO_IA_ROOT + "/objetivos", label: "Objetivos y seguimiento", founderOnly: true },

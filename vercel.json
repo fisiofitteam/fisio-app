@@ -101,6 +101,10 @@
     {
       "path": "/api/cron/ponto-sync",
       "schedule": "20 */6 * * *"
+    },
+    {
+      "path": "/api/cron/ceo-agents",
+      "schedule": "35 * * * *"
     }
   ]
 }
