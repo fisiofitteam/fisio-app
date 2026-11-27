@@ -56,6 +56,12 @@ Sesión exacta del fundador y rol CEO en API/páginas nuevas; origen estricto en
 
 Migración `scripts/sql/ceo-agent-engine.sql`, aditiva e idempotente, en la transacción de build de producción. No `db push` sobre Neon ni cambios en tablas históricas. Pruebas en SQLite efímera con exclusivamente las nuevas tablas y fixtures ficticios: contrato, proveedor, errores/costes desconocidos, tamaño de contexto, aislamiento, concurrencia, idempotencia, dependencias, entrega CFO→CEO, consejos, aprobaciones, versiones, experimentos, presupuesto y recuperación tras caída. Suites existentes de CEO, Ponto, dirección y soporte pasan. `next build` verificado. TypeScript global conserva errores previos ajenos al cambio; no nuevos errores en este módulo.
 
+## Control de calidad financiera
+
+La primera prueba real confirmó conexión y medición de consumo, pero detectó una inferencia inválida del modelo: tratar contratado menos cobrado de periodos/cohortes distintos como deuda pendiente. También inventó un porcentaje con costes de equipo. Ninguna recomendación fue aprobada ni ejecutada. Se añadió validación previa a publicación: importes y porcentajes deben existir en la evidencia; se rechazan inferencias de deuda no acreditada. Los cálculos nuevos corresponden a adaptadores deterministas, no al texto del modelo.
+
+Los informes anteriores que incumplen el control se retiran del contexto y de las entregas al CEO, y sus propuestas pasan a cuarentena. Se conserva el original en auditoría y su coste. Una validación automática no demuestra corrección semántica total: siguen siendo recomendaciones revisables, no contabilidad ni autoridad operativa. Pruebas sintéticas reproducen ambos errores y comprueban cuarentena, aislamiento y consumo conservado.
+
 ## Backlog priorizado, sin confundir límites con funcionalidades terminadas
 
 | Prioridad | Siguiente capacidad | Dependencia/criterio de finalización |

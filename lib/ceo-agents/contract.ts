@@ -63,3 +63,25 @@ export function deterministicReport(e: Evidence, id: AgentId): AgentReport {
     limitations: [...new Set(Object.values(e.tools).flatMap(t => t?.limitations || []))].slice(0, 6).concat(missing.length ? [`${missing.length} indicadores estimados, pendientes, antiguos o no disponibles.`] : []).slice(0, 8),
     recommendations: [], assignments: [], learning: "Sin evaluación generativa. Esta ejecución no aprueba ni ejecuta actuaciones empresariales." };
 }
+
+/** Fail closed on invented financial arithmetic. All calculations belong in evidence adapters. */
+export function reportEvidenceViolations(report: AgentReport, evidence: Evidence): string[] {
+  const text = [report.summary, ...report.findings, ...report.limitations, ...report.assignments.map(a => a.question), ...report.recommendations.flatMap(r => [r.title, r.rationale]), report.learning].join("\n");
+  const facts = allFacts(evidence), failures: string[] = [];
+  const number = (raw: string) => { let s = raw.replace(/\s/g, ""); if (s.includes(",") && s.includes(".")) s = s.lastIndexOf(",") > s.lastIndexOf(".") ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, ""); else if (s.includes(",")) s = /,\d{3}$/.test(s) ? s.replace(/,/g, "") : s.replace(",", "."); else if (/\.\d{3}$/.test(s)) s = s.replace(/\./g, ""); return Number(s); };
+  for (const m of text.matchAll(/([-+]?\d[\d.,]*(?:\s\d{3})*)\s*(EUR\b|€|%|\bpp\b)/gi)) {
+    const v = number(m[1]), monetary = /EUR|€/i.test(m[2]);
+    const values = facts.filter(f => f.unit === (monetary ? "EUR_cents" : "percent") && f.value !== null).map(f => monetary ? f.value! / 100 : f.value!);
+    if (!values.some(n => Math.abs(n - v) <= (monetary ? 1 : 0.51))) failures.push("unsupported_numeric_claim");
+  }
+  const hasReceivables = facts.some(f => f.key === "receivablesOutstanding" && f.value !== null && f.quality === "confirmed");
+  if (!hasReceivables) {
+    // Reject positive claims about outstanding debt from period billing vs cash, including claims without a currency suffix.
+    const paragraphs = text.split(/[\n.!?]+/);
+    for (const p of paragraphs) {
+      if (/\b(?:gap|brecha|diferencia|pendiente[s]? de cobro|contractual pendiente)\b/i.test(p) && /\b(?:billed|contratad|factur|cobro|cobrad|income)/i.test(p)
+        && !/\b(?:no permite|no demuestra|no equivale|no mide|no se puede|no debe|no implica|no representa|no deducir|no inferir|desconocid|sin acreditar|sin poder|no cuantific)/i.test(p)) failures.push("unverified_receivables_claim");
+    }
+  }
+  return [...new Set(failures)];
+}
