@@ -73,7 +73,8 @@ export function reportEvidenceViolations(report: AgentReport, evidence: Evidence
     const v = number(m[1]), monetary = /EUR|€/i.test(m[2]);
     const isPoints = /pp|puntos?/i.test(m[2]);
     const values = facts.filter(f => f.unit === (monetary ? "EUR_cents" : "percent") && f.value !== null && (monetary || f.key.startsWith("deviation_") === isPoints)).map(f => monetary ? f.value! / 100 : f.value!);
-    if (!values.some(n => Math.abs((isPoints ? Math.abs(n) : n) - (isPoints ? Math.abs(v) : v)) <= (monetary ? 1 : 0.51))) failures.push("unsupported_numeric_claim: " + m[0]);
+    const deviationMagnitude = monetary && facts.some(f => f.unit === "EUR_cents" && f.key.startsWith("deviation_") && f.value !== null && Math.abs(Math.abs(f.value / 100) - Math.abs(v)) <= 1);
+    if (!deviationMagnitude && !values.some(n => Math.abs((isPoints ? Math.abs(n) : n) - (isPoints ? Math.abs(v) : v)) <= (monetary ? 1 : 0.51))) failures.push("unsupported_numeric_claim: " + m[0]);
   }
   const forecast = facts.find(f => f.key === "forecast30")?.value;
   if (forecast != null && forecast >= 0 && /(?:la )?previsi[oó]n de caja negativa/i.test(text)) failures.push("positive_forecast_described_as_negative");
