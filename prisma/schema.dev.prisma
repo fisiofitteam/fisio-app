@@ -3950,3 +3950,108 @@ model CeoDirectionSettings {
   version Int @default(0)
   updatedAt DateTime @updatedAt
 }
+
+// Business agents: isolated from clinical models; strings hold validated JSON contracts.
+model CeoAgentConfig {
+  founderId String
+  agentId String
+  enabled Boolean @default(true)
+  cadenceHours Int @default(24)
+  instructions String @default("")
+  version Int @default(0)
+  lastScheduledAt DateTime?
+  updatedAt DateTime @updatedAt
+  @@id([founderId, agentId])
+}
+model CeoAgentTask {
+  id String @id
+  founderId String
+  agentId String
+  requestKey String
+  requestHash String
+  title String
+  origin String
+  priority Int @default(1)
+  status String @default("queued")
+  dependenciesJson String @default("[]")
+  parentId String?
+  depth Int @default(0)
+  leaseToken String?
+  leaseUntil DateTime?
+  attempts Int @default(0)
+  errorCode String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([founderId, requestKey])
+  @@index([founderId, status, priority, createdAt])
+}
+model CeoAgentRun {
+  id String @id
+  founderId String
+  taskId String
+  agentId String
+  status String
+  fingerprint String
+  evidenceJson String
+  resultJson String?
+  model String?
+  dispatchedAt DateTime?
+  budgetMonth String?
+  reservedMicros Int @default(0)
+  costMicros Int?
+  costKind String @default("none")
+  inputTokens Int @default(0)
+  outputTokens Int @default(0)
+  errorCode String?
+  startedAt DateTime @default(now())
+  finishedAt DateTime?
+  @@index([founderId, agentId, startedAt])
+  @@index([taskId])
+}
+model CeoAgentBudget {
+  founderId String
+  month String
+  spentMicros Int @default(0)
+  reservedMicros Int @default(0)
+  halted Boolean @default(false)
+  @@id([founderId, month])
+}
+model CeoBusinessMemory {
+  id String @id
+  founderId String
+  scope String @default("shared")
+  kind String
+  title String
+  detail String
+  status String @default("proposed")
+  author String
+  sourceRunId String?
+  metricKey String?
+  baselineValue Float?
+  targetValue Float?
+  outcomeValue Float?
+  outcomeNote String?
+  reviewAt DateTime?
+  version Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([founderId, scope, status, reviewAt])
+}
+model CeoAgentEvent {
+  id String @id
+  founderId String
+  entityId String
+  actor String
+  action String
+  detailJson String
+  createdAt DateTime @default(now())
+  @@index([founderId, createdAt])
+}
+model CeoAgentMessage {
+  id String @id
+  founderId String
+  taskId String @unique
+  text String
+  createdAt DateTime @default(now())
+  @@index([founderId, createdAt])
+}
